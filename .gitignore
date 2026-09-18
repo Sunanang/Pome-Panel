@@ -1,0 +1,31 @@
+.DS_Store
+node_modules/
+dist/
+dist.noindex/
+*.log
+*.tmp
+.claude/settings.local.json
+.vscode/settings.json
+.idea/
+.cache/
+.tools/
+coverage/
+.worktrees/
+*.swp
+
+# 由应用图标源文件生成的中间 iconset
+build/pome-panel-icon.iconset/
+
+# Swift Package Manager 构建目录（体积可达数百 MB，绝不入库）
+native/.build/
+
+website/node_modules/
+website/dist/
+website/.vinext/
+website/.next/
+website/.wrangler/
+website/public/product-captures/raw/
+
+.env
+.env.*
+!.env.example

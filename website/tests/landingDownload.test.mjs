@@ -1,0 +1,57 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+
+const moduleUrl = new URL("../app/landingDownload.mjs", import.meta.url);
+
+test("Windows download selects only the current x64 installer in a mixed release", async () => {
+  const { selectWindowsDownloadUrl } = await import(moduleUrl.href);
+  const asset = (name) => ({ name, state: 'uploaded', browser_download_url: `https://example.com/${name}` });
+  const release = { tag_name: 'v1.1.0', assets: [
+    asset('Pome-Panel-1.0.7-windows-x64-setup.exe'),
+    asset('Pome-Panel-1.1.0-arm64.dmg'),
+    asset('Pome-Panel-1.1.0-windows-x64-setup.exe.sha256'),
+    asset('Pome-Panel-1.1.0-windows-arm64-setup.exe'),
+    asset('Pome-Panel-1.1.0-windows-x64-setup.exe'),
+  ] };
+  assert.equal(selectWindowsDownloadUrl(release), 'https://example.com/Pome-Panel-1.1.0-windows-x64-setup.exe');
+  assert.equal(selectWindowsDownloadUrl({ ...release, assets: release.assets.slice(0, 4) }), null);
+  assert.equal(selectWindowsDownloadUrl(null), null);
+  assert.equal(selectWindowsDownloadUrl({ ...release, assets: [{ ...release.assets[4], state: 'new' }] }), null);
+});
+
+test("latest release selection returns the installable Apple Silicon DMG", async () => {
+  assert.ok(existsSync(moduleUrl), "landingDownload.mjs must resolve the current installable asset");
+  const { selectMacDownloadUrl } = await import(moduleUrl.href);
+  const release = {
+    tag_name: "v1.0.4",
+    assets: [
+      {
+        name: "Pome-Panel-1.0.2-arm64.dmg.sha256",
+        content_type: "application/octet-stream",
+        state: "uploaded",
+        browser_download_url: "https://example.com/checksum",
+      },
+      {
+        name: "Pome-Panel-1.0.2-arm64.dmg",
+        content_type: "application/x-apple-diskimage",
+        state: "uploaded",
+        browser_download_url: "https://example.com/Pome-Panel-1.0.2-arm64.dmg",
+      },
+      {
+        name: "Pome-Panel-1.0.4-arm64.dmg",
+        content_type: "application/x-apple-diskimage",
+        state: "uploaded",
+        browser_download_url: "https://example.com/Pome-Panel-1.0.4-arm64.dmg",
+      },
+    ],
+  };
+
+  assert.equal(selectMacDownloadUrl(release), "https://example.com/Pome-Panel-1.0.4-arm64.dmg");
+});
+
+test("latest release selection safely falls back when no DMG is published", async () => {
+  const { selectMacDownloadUrl } = await import(moduleUrl.href);
+  assert.equal(selectMacDownloadUrl({ assets: [] }), null);
+  assert.equal(selectMacDownloadUrl(null), null);
+});
