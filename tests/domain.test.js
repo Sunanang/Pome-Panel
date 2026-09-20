@@ -107,6 +107,12 @@ function assertExactHomeCover(layout, expectedIds) {
   assert.deepEqual(cells, Array(48).fill(1));
 }
 
+function assertSafeHomeLayout(layout, expectedIds) {
+  assert.ok(layout);
+  assert.equal(validateHomeWidgetLayout(layout, expectedIds, 12, 4), true);
+  assert.deepEqual(Object.keys(layout.placements).sort(), [...expectedIds].sort());
+}
+
 test('clipboard history preserves repeated copies of identical text', () => {
   const previous = [{ id: 'first', type: 'text', text: '同一段内容', timestamp: 100 }];
   const next = { id: 'second', type: 'text', text: '同一段内容', timestamp: 200 };
@@ -721,8 +727,7 @@ test('homepage visibility refuses to hide the final visible module', () => {
   );
 });
 
-test('every non-empty homepage widget subset exactly covers the bento grid', () => {
-  // Exhaustive cover stays on the original seven-module set (2^7-1 packs).
+test('every non-empty homepage widget subset keeps saved card sizes without overlap', () => {
   const order = ['music', 'pomodoro', 'windows', 'recorder', 'mirror', 'note', 'commands'];
   const sizes = {
     music: 'medium', pomodoro: 'mini', windows: 'large', recorder: 'small',
@@ -733,7 +738,11 @@ test('every non-empty homepage widget subset exactly covers the bento grid', () 
     const expectedIds = order.filter((id) => !hiddenIds.includes(id));
     const before = JSON.stringify({ order, sizes, hiddenIds });
     const layout = resolveHomeWidgetLayout(order, sizes, hiddenIds, 12, 4);
-    assertExactHomeCover(layout, expectedIds);
+    assertSafeHomeLayout(layout, expectedIds);
+    expectedIds.forEach((id) => {
+      const area = { mini: 2, small: 4, medium: 8, large: 16 };
+      assert.equal(layout.placements[id].width * layout.placements[id].height, area[sizes[id]]);
+    });
     assert.equal(JSON.stringify({ order, sizes, hiddenIds }), before, 'resolver mutated its inputs');
   }
 });
@@ -746,25 +755,25 @@ test('cursor usage module packs into the full eight-module homepage', () => {
   };
   const layout = resolveHomeWidgetLayout(order, sizes, [], 12, 4);
   assertExactHomeCover(layout, order);
-  // Hiding cursor restores the classic 7-module size map so the grid stays gapless.
   const sevenSizes = {
     music: 'medium', pomodoro: 'mini', cursor: 'small', windows: 'large',
     recorder: 'small', mirror: 'medium', note: 'medium', commands: 'mini',
   };
   const withoutCursor = resolveHomeWidgetLayout(order, sevenSizes, ['cursor'], 12, 4);
-  assertExactHomeCover(withoutCursor, order.filter((id) => id !== 'cursor'));
+  assertSafeHomeLayout(withoutCursor, order.filter((id) => id !== 'cursor'));
 });
 
-test('five-widget layout chooses the largest preference and breaks ties by saved order', () => {
+test('five-widget layout preserves saved order and selected footprints', () => {
   const order = ['music', 'pomodoro', 'cursor', 'windows', 'recorder', 'mirror', 'note', 'commands'];
   const sizes = {
     music: 'small', pomodoro: 'mini',
     cursor: 'small', windows: 'large', recorder: 'small',
     mirror: 'large', note: 'medium', commands: 'mini',
   };
-  // Hide enough modules to leave five visible, matching the original packing assertion.
   const layout = resolveHomeWidgetLayout(order, sizes, ['pomodoro', 'cursor', 'commands'], 12, 4);
-  assert.deepEqual(layout.placements.windows, { column: 0, row: 0, width: 4, height: 4 });
+  assertSafeHomeLayout(layout, ['music', 'windows', 'recorder', 'mirror', 'note']);
+  assert.deepEqual(layout.placements.music, { column: 0, row: 0, width: 2, height: 2 });
+  assert.equal(layout.placements.windows.width * layout.placements.windows.height, 16);
   assert.equal(layout.variants.windows, 'tall');
 });
 

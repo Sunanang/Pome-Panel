@@ -2,6 +2,7 @@
 node_modules/
 dist/
 dist.noindex/
+dist.run-local/
 *.log
 *.tmp
 .claude/settings.local.json

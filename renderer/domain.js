@@ -680,7 +680,7 @@
     return sizes;
   }
 
-  function packHomeWidgetLayout(order, sizes, columns = 12, rows = 4) {
+  function packHomeWidgetLayout(order, sizes, columns = 12, rows = 4, requireFull = true) {
     const ids = Array.isArray(order) ? order.filter((id) => Object.prototype.hasOwnProperty.call(sizes || {}, id)) : [];
     if (!ids.length || columns < 1 || rows < 1) return null;
     const dimensions = {
@@ -709,7 +709,9 @@
     }
 
     function place(index) {
-      if (index >= ids.length) return occupied.every((row) => row.every(Boolean));
+      if (index >= ids.length) {
+        return !requireFull || occupied.every((row) => row.every(Boolean));
+      }
       const id = ids[index];
       const dimension = dimensions[sizes[id]] || dimensions.small;
       for (let row = 0; row <= rows - dimension.height; row += 1) {
@@ -820,7 +822,9 @@
         }
       }
     }
-    return cells.every((count) => count === 1);
+    return layout.allowGaps === true
+      ? cells.every((count) => count <= 1)
+      : cells.every((count) => count === 1);
   }
 
   function resolveHomeWidgetLayout(order, sizes, hiddenIds, columns = 12, rows = 4) {
@@ -833,33 +837,20 @@
     const visibleOrder = ids.filter((id) => !hidden.has(id));
     if (!visibleOrder.length) return null;
 
-    let placements;
-    const capacity = columns * rows;
-    const fitVisibleSizes = () => {
-      const visibleSizes = Object.fromEntries(visibleOrder.map((id) => [id, sizes[id] || 'medium']));
-      const defaults = Object.fromEntries(visibleOrder.map((id) => [id, visibleSizes[id]]));
-      return normalizeHomeWidgetSizes(visibleSizes, defaults, '', capacity);
-    };
-    if (visibleOrder.length === 7 || visibleOrder.length >= 8) {
-      // Packers require a gapless fill. Fit only the currently visible tiles to the
-      // full grid capacity so hiding one of eight modules does not leave holes.
-      placements = packHomeWidgetLayout(visibleOrder, fitVisibleSizes(), columns, rows);
-    } else {
-      const template = HOME_GAPLESS_TEMPLATES[visibleOrder.length];
-      if (!template) return null;
-      let slotOrder = [...visibleOrder];
-      if (visibleOrder.length === 5) {
-        const rank = { mini: 0, small: 1, medium: 2, large: 3 };
-        const primary = [...visibleOrder].sort((left, right) => (
-          (rank[sizes[right]] ?? 0) - (rank[sizes[left]] ?? 0)
-          || visibleOrder.indexOf(left) - visibleOrder.indexOf(right)
-        ))[0];
-        slotOrder = [primary, ...visibleOrder.filter((id) => id !== primary)];
-      }
-      placements = Object.fromEntries(slotOrder.map((id, index) => [id, { ...template[index] }]));
-    }
+    // User-authored layouts preserve each card's selected footprint. Empty cells are
+    // valid and preferable to silently stretching or reshuffling unrelated modules.
+    const allowGaps = true;
+    const visibleSizes = Object.fromEntries(visibleOrder.map((id) => [id, sizes[id] || 'medium']));
+    const placements = packHomeWidgetLayout(
+      visibleOrder,
+      visibleSizes,
+      columns,
+      rows,
+      !allowGaps
+    );
     if (!placements) return null;
     const result = {
+      allowGaps,
       visibleOrder: [...visibleOrder],
       placements: Object.fromEntries(Object.entries(placements).map(([id, item]) => [id, { ...item }])),
       variants: Object.fromEntries(Object.entries(placements).map(([id, item]) => (

@@ -682,11 +682,10 @@ async function main() {
         return {
           surface: { left: surface.left, top: surface.top, right: surface.right, bottom: surface.bottom },
           tiles,
-          sizeControls: [...document.querySelectorAll('#home-bento [data-widget-size-cycle]')].map((control) => ({
-            hidden: control.hidden,
+          sizeControls: [...document.querySelectorAll('#home-bento [data-widget-size-value]')].map((control) => ({
+            tileHidden: control.closest('[data-home-module]').hidden,
             disabled: control.disabled,
             tabIndex: control.tabIndex,
-            size: control.dataset.currentSize,
           })),
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
           ghostCount: document.querySelectorAll('.home-layout-ghost').length,
@@ -703,7 +702,7 @@ async function main() {
 
     function assertHomepageMeasurement(measurement, visibleCount) {
       assert.equal(measurement.tiles.length, visibleCount);
-      assert.equal(measurement.tiles.reduce((total, tile) => total + tile.area, 0), 48);
+      assert.ok(measurement.tiles.reduce((total, tile) => total + tile.area, 0) <= 48);
       const outside = measurement.tiles.filter((tile) => !tile.controlsInside)
         .map((tile) => `${tile.id}(${tile.variant}): ${JSON.stringify(tile.outsideControls)} tile=${JSON.stringify(tile.rect)}`);
       assert.deepEqual(outside, [], `组件控件必须保持在各自卡片内：${outside.join('; ')}`);
@@ -738,11 +737,11 @@ async function main() {
           assert.equal(overlaps, false, '首页组件矩形不得重叠');
         }
       }
-      if (visibleCount < 7) {
-        assert.ok(measurement.sizeControls.every((control) => control.hidden && control.disabled && control.tabIndex === -1));
-      } else {
-        assert.ok(measurement.sizeControls.every((control) => !control.hidden && !control.disabled && control.tabIndex === 0));
-      }
+      assert.ok(measurement.sizeControls.every((control) => (
+        control.tileHidden
+          ? control.disabled && control.tabIndex === -1
+          : !control.disabled && control.tabIndex === 0
+      )));
     }
 
     for (const [width, height] of [[1240, 616], [1000, 576]]) {
@@ -752,13 +751,13 @@ async function main() {
           const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
           ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
           const results = [];
-          for (let count = 7; count >= 1; count -= 1) {
+          for (let count = 8; count >= 1; count -= 1) {
             document.getElementById('tab-button-home').click();
             await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             results.push(window.__measureHomepage());
             if (count > 1) {
               document.getElementById('tab-button-settings').click();
-              const input = document.querySelector('[data-settings-home-module="' + ids[7 - count] + '"]');
+              const input = document.querySelector('[data-settings-home-module="' + ids[8 - count] + '"]');
               input.checked = false;
               input.dispatchEvent(new Event('change', { bubbles: true }));
               await new Promise((resolve) => setTimeout(resolve, 20));
@@ -767,7 +766,7 @@ async function main() {
           return results;
         })()
       `);
-      matrix.forEach((measurement, index) => assertHomepageMeasurement(measurement, 7 - index));
+      matrix.forEach((measurement, index) => assertHomepageMeasurement(measurement, 8 - index));
 
       const finalWidgetGuard = await window.webContents.executeJavaScript(`
         (async () => {
@@ -786,7 +785,7 @@ async function main() {
       `);
       assert.equal(finalWidgetGuard.checked, true);
       assert.equal(finalWidgetGuard.visibleCount, 1);
-      assert.equal(finalWidgetGuard.storedCount, 6);
+      assert.equal(finalWidgetGuard.storedCount, 7);
       assert.match(finalWidgetGuard.message, /至少保留一个/);
     }
 
@@ -904,7 +903,7 @@ async function main() {
         window.NotchHome.setModuleVisible('note', false);
         const focusReleased = !noteTile.contains(document.activeElement)
           && noteTile.hidden
-          && noteTile.querySelector('[data-widget-size-cycle]').tabIndex === -1;
+          && noteTile.querySelector('[data-widget-size-value]').tabIndex === -1;
         window.NotchHome.setModuleVisible('note', true);
         return {
           degraded,
@@ -1101,8 +1100,10 @@ async function main() {
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         document.getElementById('tab-button-home').click();
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const sizeButton = document.querySelector('[data-widget-size-cycle="music"]');
-        const beforeSize = sizeButton.dataset.currentSize;
+        document.getElementById('home-layout-edit').click();
+        const musicTile = document.querySelector('[data-home-module="music"]');
+        const sizeButton = musicTile.querySelector('[data-widget-size-value="medium"]');
+        const beforeSize = musicTile.dataset.widgetSize;
         sizeButton.click();
         await new Promise((resolve) => requestAnimationFrame(resolve));
         const ghosts = [...document.querySelectorAll('.home-layout-ghost')];
@@ -1121,7 +1122,7 @@ async function main() {
           )));
         const during = {
           beforeSize,
-          afterSize: sizeButton.dataset.currentSize,
+          afterSize: musicTile.dataset.widgetSize,
           ghostCount: ghosts.length,
           tileDurations,
           minimumTileOpacity,
@@ -1131,8 +1132,8 @@ async function main() {
         const ghostsAfter = document.querySelectorAll('.home-layout-ghost').length;
         const tileAnimationsAfter = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
           .reduce((count, tile) => count + tile.getAnimations().length, 0);
-        sizeButton.click();
-        sizeButton.click();
+        musicTile.querySelector('[data-widget-size-value="small"]').click();
+        musicTile.querySelector('[data-widget-size-value="large"]').click();
         await new Promise((resolve) => requestAnimationFrame(resolve));
         const rapidGhostIds = [...document.querySelectorAll('.home-layout-ghost')]
           .map((ghost) => ghost.dataset.homeLayoutGhost);

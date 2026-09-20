@@ -585,6 +585,7 @@ async function setMode(expanded) {
         if (activeTab === 'clip') renderClipList();
       }, HEAVY_LOAD_AFTER_OPEN_MS);
     } else {
+      document.dispatchEvent(new CustomEvent('notch:will-collapse'));
       const motion = waitForPanelMotion();
       syncPanelAccessibility(false);
       // 隐私优先：不要把摄像头释放放在 rAF 之后，隐藏窗口可能暂停动画帧。
@@ -1671,6 +1672,7 @@ const notesList = document.getElementById('notes-list');
 const notesSearch = document.getElementById('notes-search');
 const notesDetail = document.getElementById('notes-detail');
 const notesCount = document.getElementById('notes-count');
+const notesNewButton = document.getElementById('notes-new');
 const noteFormatActions = document.getElementById('note-format-actions');
 const noteModeButtons = Array.from(document.querySelectorAll('[data-note-mode]'));
 const noteEditButton = document.getElementById('note-edit-btn');
@@ -2348,7 +2350,7 @@ function renderNotesDetail(notes = loadNoteArchive()) {
     const hasArchive = loadNoteArchive().length > 0;
     empty.innerHTML = hasArchive
       ? '<span class="notes-empty-mark" aria-hidden="true">⌕</span><strong>没有匹配的笔记</strong><p>试试搜索其他关键词。</p>'
-      : '<span class="notes-empty-mark" aria-hidden="true">✎</span><strong>还没有保存的笔记</strong><p>在首页的「随笔记」中写下内容，点击保存后会出现在这里。</p>';
+      : '<span class="notes-empty-mark" aria-hidden="true">✎</span><strong>还没有保存的笔记</strong><p>点击「新建」即可开始记录。</p>';
     notesDetail.append(empty);
     return;
   }
@@ -2560,6 +2562,29 @@ function renderNotesLibrary() {
   });
   renderNotesDetail(notes);
 }
+
+notesNewButton?.addEventListener('click', () => {
+  flushNotesEditorSave();
+  const now = Date.now();
+  const note = {
+    id: generateId(),
+    title: '',
+    titleSource: '',
+    content: '',
+    createdAt: now,
+    updatedAt: now,
+  };
+  const notes = [note, ...loadNoteArchive()].slice(0, 200);
+  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
+  selectedNoteId = note.id;
+  notesDetailMode = 'edit';
+  if (notesSearch) notesSearch.value = '';
+  renderNotesLibrary();
+  requestAnimationFrame(() => {
+    notesDetail?.querySelector('#notes-editor')?.focus({ preventScroll: true });
+  });
+  showStatusToast('已新建笔记');
+});
 
 noteSaveButton?.addEventListener('click', () => {
   const content = noteInput?.value.trim() || '';
@@ -2825,6 +2850,7 @@ if (document.getElementById('home-cursor')) {
 // ============ 首页 · 自适应 Bento 布局（长按换位 + 迷你/小/中/大组件） ============
 const HOME_ORDER_KEY = 'notch-home-order-v3';
 const HOME_SIZES_KEY = 'notch-home-widget-sizes-v2';
+const HOME_PLACEMENTS_KEY = 'notch-home-placements-v1';
 const HOME_HIDDEN_MODULES_KEY = 'notch-home-hidden-modules-v1';
 const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
 const unavailableHomeModules = window.NotchPlatform.capabilities(window.notchAPI?.platform || 'darwin').unavailableHomeModules;
@@ -2842,6 +2868,8 @@ const HOME_SIZE_DEFAULTS = {
 };
 const HOME_SIZE_LABELS = { mini: '迷你', small: '小', medium: '中', large: '大' };
 const homeBento = document.getElementById('home-bento');
+const homeContextMenu = document.getElementById('home-context-menu');
+const homeTabPanel = document.getElementById('tab-home');
 
 function bindHomeTilePointerGlow(bento) {
   if (!bento || bento.dataset.tileGlowBound === 'true') return;
@@ -2907,8 +2935,7 @@ function loadHomeSizes() {
     return window.NotchDomain.normalizeHomeWidgetSizes(
       JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || 'null'),
       HOME_SIZE_DEFAULTS,
-      '',
-      48
+      ''
     );
   } catch (error) {
     return { ...HOME_SIZE_DEFAULTS };
@@ -2930,21 +2957,73 @@ function loadHiddenHomeModules() {
   }
 }
 
+function cloneHomeLayout(layout) {
+  if (!layout || !layout.placements) return null;
+  return {
+    allowGaps: layout.allowGaps !== false,
+    placements: Object.fromEntries(
+      Object.entries(layout.placements).map(([id, item]) => [id, { ...item }])
+    ),
+    variants: { ...(layout.variants || {}) },
+  };
+}
+
+function sizeFromPlacement(placement) {
+  const width = Number(placement?.width) || 0;
+  const height = Number(placement?.height) || 0;
+  if (width <= 2 && height <= 1) return 'mini';
+  if (width <= 2 && height <= 2) return 'small';
+  if (width <= 4 && height <= 2) return 'medium';
+  return 'large';
+}
+
+function loadHomePlacements() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HOME_PLACEMENTS_KEY) || 'null');
+    if (!raw || typeof raw !== 'object') return null;
+    const placements = {};
+    Object.entries(raw).forEach(([id, item]) => {
+      if (!HOME_MODULE_REGISTRY.includes(id) || !item || typeof item !== 'object') return;
+      const column = Number(item.column);
+      const row = Number(item.row);
+      const width = Number(item.width);
+      const height = Number(item.height);
+      if (![column, row, width, height].every(Number.isInteger)) return;
+      if (width < 1 || height < 1) return;
+      placements[id] = { column, row, width, height };
+    });
+    if (!Object.keys(placements).length) return null;
+    return {
+      allowGaps: true,
+      placements,
+      variants: Object.fromEntries(
+        Object.entries(placements).map(([id, item]) => [id, window.NotchDomain.layoutVariantForPlacement(item)])
+      ),
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
 let homeOrder = loadHomeOrder();
 let homeSizes = loadHomeSizes();
+let homeWorkingLayout = loadHomePlacements();
 const loadedHomeVisibility = loadHiddenHomeModules();
 let hiddenHomeModules = loadedHomeVisibility.hiddenIds;
 let homeVisibilityPersisted = true;
 let homeLayoutReadOnly = false;
 let homeLayoutMotionGeneration = 0;
 let homeLayoutMotionAnimations = [];
-const HOME_LAYOUT_MOTION_MS = 560;
+const HOME_LAYOUT_MOTION_MS = 780;
 const HOME_LAYOUT_MOTION_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 function saveHomeLayout() {
   try {
     localStorage.setItem(HOME_ORDER_KEY, JSON.stringify(homeOrder));
     localStorage.setItem(HOME_SIZES_KEY, JSON.stringify(homeSizes));
+    if (homeWorkingLayout?.placements) {
+      localStorage.setItem(HOME_PLACEMENTS_KEY, JSON.stringify(homeWorkingLayout.placements));
+    }
   } catch (error) {
     // LocalStorage 不可用时仍保留当前会话内的布局。
   }
@@ -2963,13 +3042,35 @@ function saveHiddenHomeModules() {
 
 if (loadedHomeVisibility.needsRepair) saveHiddenHomeModules();
 
-function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSizes) {
+function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSizes, { forcePack = false } = {}) {
   hiddenIds = effectiveHomeHidden(hiddenIds);
   const visibleIds = HOME_MODULE_REGISTRY.filter((id) => !hiddenIds.includes(id));
+
+  if (!forcePack && homeWorkingLayout?.placements) {
+    const candidate = cloneHomeLayout(homeWorkingLayout);
+    Object.keys(candidate.placements).forEach((id) => {
+      if (!visibleIds.includes(id)) delete candidate.placements[id];
+    });
+    const placementIds = Object.keys(candidate.placements);
+    const complete = visibleIds.length === placementIds.length
+      && visibleIds.every((id) => candidate.placements[id]);
+    if (complete) {
+      candidate.variants = Object.fromEntries(
+        visibleIds.map((id) => [id, window.NotchDomain.layoutVariantForPlacement(candidate.placements[id])])
+      );
+      if (window.NotchDomain.validateHomeWidgetLayout(candidate, visibleIds, 12, 4)) {
+        homeWorkingLayout = candidate;
+        return candidate;
+      }
+    }
+  }
+
   const layout = window.NotchDomain.resolveHomeWidgetLayout(order, sizes, hiddenIds, 12, 4);
-  return window.NotchDomain.validateHomeWidgetLayout(layout, visibleIds, 12, 4)
-    ? layout
-    : null;
+  if (window.NotchDomain.validateHomeWidgetLayout(layout, visibleIds, 12, 4)) {
+    homeWorkingLayout = cloneHomeLayout(layout);
+    return layout;
+  }
+  return null;
 }
 
 function cancelHomeLayoutMotion() {
@@ -2997,11 +3098,24 @@ function captureHomeLayoutVisualState() {
 
 function animateCommittedHomeLayout(reason, beforeState) {
   if (!homeBento || !beforeState || reason === 'initial' || reason === 'rollback'
+    || reason === 'size-preview' || reason === 'drag-commit'
     || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const generation = homeLayoutMotionGeneration;
+  const isPreview = reason === 'reorder-preview';
+  const duration = isPreview
+    ? 560
+    : reason === 'reorder'
+      ? Math.round(HOME_LAYOUT_MOTION_MS * 1.2)
+      : HOME_LAYOUT_MOTION_MS;
+  const easing = isPreview
+    ? 'cubic-bezier(0.22, 1, 0.36, 1)'
+    : reason === 'reorder'
+      ? 'cubic-bezier(0.33, 1, 0.32, 1)'
+      : HOME_LAYOUT_MOTION_EASING;
   const finalTiles = new Map();
   homeTiles.forEach((tile) => {
     if (tile.hidden) return;
+    if (tile.classList.contains('is-dragging')) return;
     const rect = tile.getBoundingClientRect();
     if (rect.width && rect.height) finalTiles.set(tile.dataset.homeModule, { tile, rect });
   });
@@ -3016,17 +3130,23 @@ function animateCommittedHomeLayout(reason, beforeState) {
     const moved = Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5;
     const resized = Math.abs(scaleX - 1) >= 0.01 || Math.abs(scaleY - 1) >= 0.01;
     if (previous && !moved && !resized) return;
+    // 预览让位只做平移，避免缩放造成顿挫；正式提交才允许轻微缩放
+    const useScale = !isPreview && resized;
+    const fromTransform = useScale
+      ? `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`
+      : `translate(${dx}px, ${dy}px)`;
+    const toTransform = useScale ? 'translate(0, 0) scale(1, 1)' : 'translate(0, 0)';
     const animation = tile.animate(
       previous
         ? [
-          { opacity: 1, transform: `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})` },
-          { opacity: 1, transform: 'translate(0, 0) scale(1, 1)' },
+          { transform: fromTransform },
+          { transform: toTransform },
         ]
         : [
-          { opacity: 0.72, transform: 'translateY(8px) scale(0.98)' },
-          { opacity: 1, transform: 'translateY(0) scale(1)' },
+          { opacity: 0.72, transform: 'translateY(8px)' },
+          { opacity: 1, transform: 'translateY(0)' },
         ],
-      { duration: HOME_LAYOUT_MOTION_MS, easing: HOME_LAYOUT_MOTION_EASING }
+      { duration, easing, fill: 'none' }
     );
     homeLayoutMotionAnimations.push(animation);
   });
@@ -3041,10 +3161,12 @@ function animateCommittedHomeLayout(reason, beforeState) {
 
 function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   if (!homeBento || !layout) throw new Error('A validated homepage layout is required.');
-  cancelHomeLayoutMotion();
+  // 先采样当前可见位置（含进行中的 FLIP），再取消旧动画，避免先闪回再起步。
   const beforeState = reason === 'initial' || reason === 'rollback'
+    || reason === 'size-preview' || reason === 'drag-commit'
     ? null
     : captureHomeLayoutVisualState();
+  cancelHomeLayoutMotion();
   const automaticLayout = !homeLayoutReadOnly && effectiveHomeHidden(hiddenHomeModules).length > 0;
   homeBento.dataset.layoutMode = homeLayoutReadOnly ? 'safe' : automaticLayout ? 'automatic' : 'preferred';
   homeTiles.forEach((tile) => {
@@ -3074,27 +3196,24 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
       tile.style.removeProperty('grid-column');
       tile.style.removeProperty('grid-row');
     }
-    const sizeButton = tile.querySelector('[data-widget-size-cycle]');
-    if (sizeButton) {
-      sizeButton.dataset.currentSize = size;
-      sizeButton.setAttribute('aria-label', `${HOME_SIZE_LABELS[size]}组件，点击切换尺寸`);
-      sizeButton.title = `组件尺寸：${HOME_SIZE_LABELS[size]}`;
-      sizeButton.hidden = automaticLayout || homeLayoutReadOnly;
-      sizeButton.disabled = automaticLayout || homeLayoutReadOnly;
-      sizeButton.tabIndex = automaticLayout || homeLayoutReadOnly ? -1 : 0;
+    tile.querySelectorAll('[data-widget-size-value]').forEach((sizeButton) => {
+      const requestedSize = sizeButton.dataset.widgetSizeValue;
+      const selected = size === requestedSize;
+      sizeButton.setAttribute('aria-pressed', String(selected));
+      sizeButton.disabled = homeLayoutReadOnly || !placement;
+      sizeButton.tabIndex = placement ? 0 : -1;
+    });
+    const dragHandle = tile.querySelector('[data-widget-drag-handle]');
+    if (dragHandle) {
+      dragHandle.disabled = homeLayoutReadOnly || !placement;
+      dragHandle.tabIndex = placement ? 0 : -1;
     }
   });
   animateCommittedHomeLayout(reason, beforeState);
 }
 
-homeTiles.forEach((tile) => {
-  const sizeButton = document.createElement('button');
-  sizeButton.type = 'button';
-  sizeButton.className = 'widget-size-control motion-icon';
-  sizeButton.dataset.widgetSizeCycle = tile.dataset.homeModule;
-  sizeButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>';
-  tile.appendChild(sizeButton);
-});
+/* layout chrome removed: right-click menu + whole-tile drag in edit mode */
+
 
 const homeModuleIds = new Set(homeTiles.map((tile) => tile.dataset.homeModule));
 if (homeTiles.length !== HOME_MODULE_REGISTRY.length
@@ -3104,7 +3223,7 @@ if (homeTiles.length !== HOME_MODULE_REGISTRY.length
 }
 
 // Ensure newly added homepage modules (e.g. cursor) are present in saved sizes.
-homeSizes = window.NotchDomain.normalizeHomeWidgetSizes(homeSizes, HOME_SIZE_DEFAULTS, '', 48);
+homeSizes = window.NotchDomain.normalizeHomeWidgetSizes(homeSizes, HOME_SIZE_DEFAULTS, '');
 if (!HOME_ORDER_DEFAULTS.every((id) => homeOrder.includes(id))
   || homeOrder.length !== HOME_ORDER_DEFAULTS.length) {
   homeOrder = loadHomeOrder();
@@ -3118,8 +3237,7 @@ if (!initialHomeLayout) {
   homeSizes = window.NotchDomain.normalizeHomeWidgetSizes(
     { ...HOME_SIZE_DEFAULTS },
     HOME_SIZE_DEFAULTS,
-    '',
-    48
+    ''
   );
   saveHomeLayout();
   initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules);
@@ -3170,9 +3288,13 @@ function setHomeModuleVisible(moduleId, visible) {
     && window.NotchWorkspace?.isRecordingActive?.()) {
     return { ok: false, changed: false, error: 'recording_active', hiddenIds: current, persisted: homeVisibilityPersisted };
   }
-  const layout = resolveValidatedHomeLayout(next.hiddenIds);
-  const currentLayout = resolveValidatedHomeLayout(current);
+  const previousWorking = cloneHomeLayout(homeWorkingLayout);
+  homeWorkingLayout = null;
+  const layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, homeSizes, { forcePack: true });
+  const currentLayout = previousWorking
+    || resolveValidatedHomeLayout(current, homeOrder, homeSizes, { forcePack: true });
   if (!layout || !currentLayout) {
+    homeWorkingLayout = previousWorking;
     return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
   }
   if (moduleId === 'mirror' && visible === false) stopMirror();
@@ -3208,91 +3330,440 @@ if (homeBento) {
   let pendingLongPress = null;
   let dragState = null;
   let suppressHomeClickUntil = 0;
+  let homeLayoutEditing = false;
+  let contextModuleId = '';
+
+  const hideHomeContextMenu = () => {
+    if (!homeContextMenu || homeContextMenu.hidden) return;
+    homeContextMenu.hidden = true;
+  };
+
+  const homeLayoutEditBar = document.getElementById('home-layout-edit-bar');
+  const homeLayoutSaveBtn = document.getElementById('home-layout-save');
+  const homeLayoutCancelBtn = document.getElementById('home-layout-cancel');
+  let homeLayoutEditSnapshot = null;
+
+  const syncHomeContextMenu = () => {
+    if (!homeContextMenu) return;
+    const editBtn = homeContextMenu.querySelector('[data-home-ctx="toggle-edit"]');
+    if (editBtn) {
+      // 编辑中：右键只调尺寸，不出现编辑项
+      editBtn.hidden = homeLayoutEditing;
+      editBtn.removeAttribute('aria-pressed');
+      editBtn.textContent = '编辑布局';
+    }
+    const size = contextModuleId
+      ? (homeSizes[contextModuleId] || HOME_SIZE_DEFAULTS[contextModuleId] || 'medium')
+      : '';
+    homeContextMenu.querySelectorAll('[data-home-ctx-size]').forEach((btn) => {
+      const value = btn.dataset.homeCtxSize;
+      const enabled = Boolean(contextModuleId) && !homeLayoutReadOnly;
+      btn.disabled = !enabled;
+      btn.setAttribute('aria-pressed', String(enabled && value === size));
+      btn.hidden = !contextModuleId;
+    });
+    const showSizes = Boolean(contextModuleId);
+    const sep = homeContextMenu.querySelector('.home-context-sep');
+    const label = homeContextMenu.querySelector('.home-context-label');
+    if (sep) sep.hidden = homeLayoutEditing || !showSizes;
+    if (label) label.hidden = !showSizes;
+  };
+
+  const syncHomeLayoutEditBar = () => {
+    if (!homeLayoutEditBar) return;
+    homeLayoutEditBar.hidden = !homeLayoutEditing;
+  };
+
+  const showHomeContextMenu = (clientX, clientY, moduleId) => {
+    if (!homeContextMenu || homeLayoutReadOnly) return;
+    contextModuleId = moduleId || '';
+    // 编辑中且未点到模块：没有可展示项
+    if (homeLayoutEditing && !contextModuleId) return;
+    syncHomeContextMenu();
+    // Keep menu outside clipped panel ancestors (body portal in HTML).
+    if (homeContextMenu.parentElement !== document.body) {
+      document.body.appendChild(homeContextMenu);
+    }
+    homeContextMenu.hidden = false;
+    homeContextMenu.style.left = '0px';
+    homeContextMenu.style.top = '0px';
+    homeContextMenu.style.visibility = 'hidden';
+    const pad = 8;
+    const rect = homeContextMenu.getBoundingClientRect();
+    const panelEl = document.getElementById('panel') || homeBento || document.documentElement;
+    const bounds = panelEl.getBoundingClientRect();
+    const clipLeft = Math.max(pad, bounds.left + pad);
+    const clipTop = Math.max(pad, bounds.top + pad);
+    const clipRight = Math.min(window.innerWidth - pad, bounds.right - pad);
+    const clipBottom = Math.min(window.innerHeight - pad, bounds.bottom - pad);
+    const maxLeft = Math.max(clipLeft, clipRight - rect.width);
+    const maxTop = Math.max(clipTop, clipBottom - rect.height);
+    let left = clientX;
+    let top = clientY;
+    // Prefer opening to the right/below the cursor; flip when it would clip.
+    if (left + rect.width > clipRight) left = clientX - rect.width;
+    if (top + rect.height > clipBottom) top = clientY - rect.height;
+    left = Math.min(Math.max(clipLeft, left), maxLeft);
+    top = Math.min(Math.max(clipTop, top), maxTop);
+    homeContextMenu.style.left = `${Math.round(left)}px`;
+    homeContextMenu.style.top = `${Math.round(top)}px`;
+    homeContextMenu.style.visibility = '';
+  };
+
+  const setHomeLayoutEditing = (editing, { silent = false, action = 'enter' } = {}) => {
+    const next = Boolean(editing) && !homeLayoutReadOnly;
+    const wasEditing = homeLayoutEditing;
+    if (next && !wasEditing) {
+      homeLayoutEditSnapshot = {
+        order: [...homeOrder],
+        sizes: { ...homeSizes },
+        layout: cloneHomeLayout(homeWorkingLayout || resolveValidatedHomeLayout(hiddenHomeModules)),
+      };
+    }
+    if (!next && wasEditing) {
+      if (action === 'cancel' && homeLayoutEditSnapshot) {
+        homeOrder = [...homeLayoutEditSnapshot.order];
+        homeSizes = { ...homeLayoutEditSnapshot.sizes };
+        homeWorkingLayout = cloneHomeLayout(homeLayoutEditSnapshot.layout);
+        const layout = homeWorkingLayout || resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, { forcePack: true });
+        if (layout) applyHomeLayout(layout, { reason: 'rollback' });
+        saveHomeLayout();
+      } else if (action === 'save') {
+        saveHomeLayout();
+      }
+      homeLayoutEditSnapshot = null;
+    }
+    homeLayoutEditing = next;
+    homeBento.dataset.layoutEditing = String(homeLayoutEditing);
+    homeTabPanel?.classList.toggle('layout-editing', homeLayoutEditing);
+    syncHomeLayoutEditBar();
+    syncHomeContextMenu();
+    if (!silent && next && !wasEditing) {
+      showStatusToast('已进入编辑：拖动卡片互换位置，完成后点保存');
+    } else if (!silent && !next && wasEditing) {
+      showStatusToast(action === 'cancel' ? '已取消布局修改' : '布局已保存');
+    }
+  };
+  setHomeLayoutEditing(false, { silent: true });
 
   const clearDropTarget = () => {
-    homeTiles.filter((tile) => !tile.hidden).forEach((tile) => tile.classList.remove('layout-drop-target'));
+    homeTiles.forEach((tile) => tile.classList.remove('layout-drop-target'));
   };
+
+  const ordersEqual = (a, b) => Array.isArray(a) && Array.isArray(b)
+    && a.length === b.length && a.every((id, index) => id === b[index]);
+
+  const swappedOrderFrom = (baseOrder, sourceId, targetId) => {
+    const next = [...baseOrder];
+    const sourceIndex = next.indexOf(sourceId);
+    const targetIndex = next.indexOf(targetId);
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return null;
+    [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
+    return next;
+  };
+
+  const applyHomeOrder = (nextOrder, reason, { forcePack = false } = {}) => {
+    const previous = [...homeOrder];
+    const previousLayout = cloneHomeLayout(homeWorkingLayout);
+    homeOrder = [...nextOrder];
+    if (forcePack) homeWorkingLayout = null;
+    const layout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, { forcePack });
+    if (!layout) {
+      homeOrder = previous;
+      homeWorkingLayout = previousLayout;
+      return false;
+    }
+    applyHomeLayout(layout, { reason });
+    return true;
+  };
+
+  // 只交换两个模块的格子，绝不重新打包，避免第 3 个模块被挤动
+  const commitSwap = (sourceId, targetId, { fromDrag = false } = {}) => {
+    if (!sourceId || !targetId || sourceId === targetId) return false;
+    const current = resolveValidatedHomeLayout(hiddenHomeModules);
+    if (!current?.placements?.[sourceId] || !current?.placements?.[targetId]) return false;
+
+    const next = cloneHomeLayout(current);
+    const sourcePlacement = next.placements[sourceId];
+    const targetPlacement = next.placements[targetId];
+    next.placements[sourceId] = { ...targetPlacement };
+    next.placements[targetId] = { ...sourcePlacement };
+    next.variants[sourceId] = window.NotchDomain.layoutVariantForPlacement(next.placements[sourceId]);
+    next.variants[targetId] = window.NotchDomain.layoutVariantForPlacement(next.placements[targetId]);
+
+    const visibleIds = HOME_MODULE_REGISTRY.filter(
+      (id) => !effectiveHomeHidden(hiddenHomeModules).includes(id)
+    );
+    if (!window.NotchDomain.validateHomeWidgetLayout(next, visibleIds, 12, 4)) return false;
+
+    const previousSizes = { ...homeSizes };
+    homeSizes = {
+      ...homeSizes,
+      [sourceId]: sizeFromPlacement(next.placements[sourceId]),
+      [targetId]: sizeFromPlacement(next.placements[targetId]),
+    };
+    const nextOrder = swappedOrderFrom(homeOrder, sourceId, targetId);
+    if (nextOrder) homeOrder = nextOrder;
+    homeWorkingLayout = next;
+    // 拖动预览已完成让位：松手只落格，不再播一次互换动画
+    applyHomeLayout(next, { reason: fromDrag ? 'drag-commit' : 'reorder' });
+    if (!homeLayoutEditing) saveHomeLayout();
+    else {
+      void previousSizes;
+    }
+    return true;
+  };
+
+  const captureOriginRects = () => {
+    const rects = new Map();
+    homeTiles.forEach((tile) => {
+      if (tile.hidden) return;
+      const rect = tile.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      rects.set(tile.dataset.homeModule, {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      });
+    });
+    return rects;
+  };
+
+  const clearDisplacePreview = () => {
+    homeTiles.forEach((tile) => {
+      tile.classList.remove('layout-displacing');
+      tile.style.removeProperty('--home-displace-x');
+      tile.style.removeProperty('--home-displace-y');
+    });
+  };
+
+  // 拖动中不改 grid：只用 transform 把目标模块挪到被拖模块的原位，避免全场重排乱跑
+  const previewDisplaceTarget = (sourceId, targetId) => {
+    if (!dragState?.originRects) return;
+    clearDisplacePreview();
+    clearDropTarget();
+    dragState.previewTargetId = targetId || null;
+    dragState.target = null;
+    if (!targetId) return;
+    const sourceRect = dragState.originRects.get(sourceId);
+    const targetRect = dragState.originRects.get(targetId);
+    const targetTile = homeBento.querySelector(`[data-home-module="${targetId}"]`);
+    if (!sourceRect || !targetRect || !targetTile) return;
+    const dx = sourceRect.left - targetRect.left;
+    const dy = sourceRect.top - targetRect.top;
+    targetTile.style.setProperty('--home-displace-x', `${dx}px`);
+    targetTile.style.setProperty('--home-displace-y', `${dy}px`);
+    targetTile.classList.add('layout-displacing', 'layout-drop-target');
+    dragState.target = targetTile;
+  };
+
+  const findDropTargetAt = (clientX, clientY, draggedTile) => {
+    const rects = dragState?.originRects;
+    if (!rects) return null;
+    const draggedId = draggedTile?.dataset?.homeModule;
+    const sourceRect = draggedId ? rects.get(draggedId) : null;
+    let best = null;
+    let bestScore = Infinity;
+    rects.forEach((rect, id) => {
+      if (!id || id === draggedId) return;
+      // 不能用大模块的外扩命中：会把旁边大卡片（如 Cursor 用量）误当成落点
+      const pad = 4;
+      const inRange = clientX >= rect.left - pad
+        && clientX <= rect.right + pad
+        && clientY >= rect.top - pad
+        && clientY <= rect.bottom + pad;
+      if (!inRange) return;
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      let score = Math.hypot(clientX - cx, clientY - cy);
+      // 与被拖模块原位相邻的优先，减少跨列误吸
+      if (sourceRect) {
+        const shareColumn = Math.min(rect.right, sourceRect.right) - Math.max(rect.left, sourceRect.left) > 8;
+        const shareRow = Math.min(rect.bottom, sourceRect.bottom) - Math.max(rect.top, sourceRect.top) > 8;
+        const touching = shareColumn || shareRow;
+        if (!touching) score += 120;
+      }
+      if (score < bestScore) {
+        bestScore = score;
+        best = homeBento.querySelector(`[data-home-module="${id}"]`);
+      }
+    });
+    return best && !best.hidden ? best : null;
+  };
+
+  const applyContextSize = (moduleId, requested) => {
+    if (!moduleId || homeLayoutReadOnly) return;
+    const previousSizes = homeSizes;
+    const previousLayout = cloneHomeLayout(homeWorkingLayout);
+    homeSizes = window.NotchDomain.normalizeHomeWidgetSizes({
+      ...homeSizes,
+      [moduleId]: requested,
+    }, HOME_SIZE_DEFAULTS, moduleId);
+    homeWorkingLayout = null;
+    const layout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, { forcePack: true });
+    if (!layout) {
+      homeSizes = previousSizes;
+      homeWorkingLayout = previousLayout;
+      showStatusToast('当前空间不足，请先缩小其他模块');
+      return;
+    }
+    applyHomeLayout(layout, { reason: 'size' });
+    if (!homeLayoutEditing) saveHomeLayout();
+    showStatusToast(`已设为${HOME_SIZE_LABELS[homeSizes[moduleId]]}组件`);
+  };
+
+  homeContextMenu?.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-home-ctx="toggle-edit"]');
+    if (toggle) {
+      if (!homeLayoutEditing) setHomeLayoutEditing(true);
+      hideHomeContextMenu();
+      return;
+    }
+    const sizeBtn = event.target.closest('[data-home-ctx-size]');
+    if (sizeBtn) {
+      applyContextSize(contextModuleId, sizeBtn.dataset.homeCtxSize);
+      hideHomeContextMenu();
+    }
+  });
+
+  homeLayoutSaveBtn?.addEventListener('click', () => {
+    setHomeLayoutEditing(false, { action: 'save' });
+  });
+  homeLayoutCancelBtn?.addEventListener('click', () => {
+    setHomeLayoutEditing(false, { action: 'cancel' });
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (!homeContextMenu || homeContextMenu.hidden) return;
+    if (homeContextMenu.contains(event.target)) return;
+    hideHomeContextMenu();
+  }, true);
+
+  window.addEventListener('blur', hideHomeContextMenu);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hideHomeContextMenu();
+      if (homeLayoutEditing) setHomeLayoutEditing(false, { action: 'cancel' });
+    }
+  });
+
+  const dismissHomeLayoutChrome = ({ cancelEdit = false } = {}) => {
+    hideHomeContextMenu();
+    if (dragState) {
+      clearDisplacePreview();
+      clearDropTarget();
+      const { tile, pointerId } = dragState;
+      if (tile.hasPointerCapture?.(pointerId)) tile.releasePointerCapture(pointerId);
+      tile.classList.remove('is-dragging', 'hit-test-off');
+      tile.style.removeProperty('--home-drag-x');
+      tile.style.removeProperty('--home-drag-y');
+      homeBento.classList.remove('layout-dragging');
+      dragState = null;
+    } else {
+      clearDisplacePreview();
+    }
+    if (cancelEdit && homeLayoutEditing) {
+      setHomeLayoutEditing(false, { action: 'cancel', silent: true });
+    }
+  };
+
+  // 收起一开始就关掉右键菜单；编辑中则取消本次修改
+  document.addEventListener('notch:will-collapse', () => {
+    dismissHomeLayoutChrome({ cancelEdit: true });
+  });
+  document.addEventListener('notch:modechange', (event) => {
+    if (event.detail?.expanded) return;
+    dismissHomeLayoutChrome({ cancelEdit: true });
+  });
+
+  homeBento.addEventListener('contextmenu', (event) => {
+    if (homeLayoutReadOnly) return;
+    event.preventDefault();
+    const tile = event.target.closest('[data-home-module]');
+    const moduleId = tile && !tile.hidden && homeBento.contains(tile) ? tile.dataset.homeModule : '';
+    showHomeContextMenu(event.clientX, event.clientY, moduleId);
+  });
 
   const finishHomeDrag = (event, cancelled = false) => {
     if (pendingLongPress) clearTimeout(pendingLongPress.timer);
     pendingLongPress = null;
     if (!dragState) return;
-    const { tile, target, pointerId } = dragState;
+    const { tile, pointerId, previewTargetId } = dragState;
     if (tile.hasPointerCapture?.(pointerId)) tile.releasePointerCapture(pointerId);
+    const sourceId = tile.dataset.homeModule;
+    const finalTargetId = previewTargetId || null;
+
+    // 先关掉位移过渡，避免清 transform 时又滑回去再播落格动画
+    homeTiles.forEach((item) => {
+      item.style.transition = 'none';
+    });
+
+    let swapped = false;
+    if (!cancelled && finalTargetId) {
+      swapped = commitSwap(sourceId, finalTargetId, { fromDrag: true });
+    }
+
+    clearDisplacePreview();
+    clearDropTarget();
     tile.classList.remove('is-dragging', 'hit-test-off');
     tile.style.removeProperty('--home-drag-x');
     tile.style.removeProperty('--home-drag-y');
     homeBento.classList.remove('layout-dragging');
-    clearDropTarget();
-    if (!cancelled && target && target !== tile) {
-      const sourceId = tile.dataset.homeModule;
-      const targetId = target.dataset.homeModule;
-      const sourceIndex = homeOrder.indexOf(sourceId);
-      const targetIndex = homeOrder.indexOf(targetId);
-      [homeOrder[sourceIndex], homeOrder[targetIndex]] = [homeOrder[targetIndex], homeOrder[sourceIndex]];
-      const layout = resolveValidatedHomeLayout(hiddenHomeModules);
-      if (layout) {
-        applyHomeLayout(layout, { reason: 'reorder' });
-        saveHomeLayout();
-        showStatusToast('首页布局已更新');
-      } else {
-        [homeOrder[sourceIndex], homeOrder[targetIndex]] = [homeOrder[targetIndex], homeOrder[sourceIndex]];
-        showStatusToast('布局未更新，请重试');
-      }
-    }
     dragState = null;
-    suppressHomeClickUntil = Date.now() + 260;
+    suppressHomeClickUntil = Date.now() + 280;
+
+    requestAnimationFrame(() => {
+      homeTiles.forEach((item) => {
+        item.style.removeProperty('transition');
+      });
+    });
+
+    if (cancelled || !finalTargetId) return;
+    if (swapped) showStatusToast('已互换位置');
+    else showStatusToast('无法互换，请换一个位置试试');
   };
 
   homeBento.addEventListener('pointerdown', (event) => {
     if (event.button !== 0 || event.isPrimary === false) return;
+    hideHomeContextMenu();
+    if (!homeLayoutEditing || homeLayoutReadOnly) return;
     const tile = event.target.closest('[data-home-module]');
-    if (!tile || tile.hidden || event.target.closest('button, input, textarea, select, a, audio, [contenteditable]')) return;
+    if (!tile || tile.hidden || !homeBento.contains(tile)) return;
+    // 编辑布局时整卡可拖（含随笔记 textarea、镜子 button、工具条）
+    if (event.target.closest('input, textarea, select, [contenteditable]')) {
+      event.preventDefault();
+    }
+
     const startX = event.clientX;
     const startY = event.clientY;
+    const startDrag = () => {
+      if (!pendingLongPress) return;
+      tile.setPointerCapture?.(event.pointerId);
+      homeBento.classList.add('layout-dragging');
+      tile.classList.add('is-dragging');
+      dragState = {
+        tile,
+        target: null,
+        pointerId: event.pointerId,
+        startX,
+        startY,
+        originOrder: [...homeOrder],
+        originRects: captureOriginRects(),
+        previewTargetId: null,
+      };
+      pendingLongPress = null;
+    };
+    // Short delay so click/press still feels intentional, but whole-tile drag in edit mode
     pendingLongPress = {
       tile,
       startX,
       startY,
       pointerId: event.pointerId,
-      timer: setTimeout(() => {
-        if (!pendingLongPress) return;
-        tile.setPointerCapture?.(event.pointerId);
-        homeBento.classList.add('layout-dragging');
-        tile.classList.add('is-dragging');
-        dragState = {
-          tile,
-          target: null,
-          pointerId: event.pointerId,
-          startX,
-          startY,
-        };
-        pendingLongPress = null;
-        if (navigator.vibrate) navigator.vibrate(18);
-      }, 420),
+      timer: setTimeout(startDrag, 120),
     };
-  });
-
-  homeBento.addEventListener('click', (event) => {
-    const sizeButton = event.target.closest('[data-widget-size-cycle]');
-    if (!sizeButton) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (effectiveHomeHidden(hiddenHomeModules).length > 0 || homeLayoutReadOnly) return;
-    const moduleId = sizeButton.dataset.widgetSizeCycle;
-    const sequence = ['mini', 'small', 'medium', 'large'];
-    const current = homeSizes[moduleId] || HOME_SIZE_DEFAULTS[moduleId];
-    const requested = sequence[(sequence.indexOf(current) + 1) % sequence.length];
-    homeSizes = window.NotchDomain.normalizeHomeWidgetSizes({
-      ...homeSizes,
-      [moduleId]: requested,
-    }, HOME_SIZE_DEFAULTS, moduleId, 48);
-    const layout = resolveValidatedHomeLayout(hiddenHomeModules);
-    if (layout) {
-      applyHomeLayout(layout, { reason: 'size' });
-      saveHomeLayout();
-      showStatusToast(`${HOME_SIZE_LABELS[homeSizes[moduleId]]}组件 · 其他模块已自适应`);
-    }
   });
 
   homeBento.addEventListener('pointermove', (event) => {
@@ -3301,26 +3772,45 @@ if (homeBento) {
         event.clientX - pendingLongPress.startX,
         event.clientY - pendingLongPress.startY
       );
-      if (moved > 8) {
+      if (moved > 6 && pendingLongPress.timer) {
+        // start immediately once user clearly drags
+        clearTimeout(pendingLongPress.timer);
+        pendingLongPress.timer = null;
+        const tile = pendingLongPress.tile;
+        tile.setPointerCapture?.(event.pointerId);
+        homeBento.classList.add('layout-dragging');
+        tile.classList.add('is-dragging');
+        dragState = {
+          tile,
+          target: null,
+          pointerId: event.pointerId,
+          startX: pendingLongPress.startX,
+          startY: pendingLongPress.startY,
+          originOrder: [...homeOrder],
+          originRects: captureOriginRects(),
+          previewTargetId: null,
+        };
+        pendingLongPress = null;
+      } else if (moved > 6) {
         clearTimeout(pendingLongPress.timer);
         pendingLongPress = null;
       }
-      return;
+      if (!dragState) return;
     }
     if (!dragState || dragState.pointerId !== event.pointerId) return;
     event.preventDefault();
-    const { tile, startX, startY } = dragState;
-    tile.style.setProperty('--home-drag-x', `${event.clientX - startX}px`);
-    tile.style.setProperty('--home-drag-y', `${event.clientY - startY}px`);
-    tile.classList.add('hit-test-off');
-    const hovered = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-home-module]');
-    tile.classList.remove('hit-test-off');
-    clearDropTarget();
-    dragState.target = hovered && !hovered.hidden && hovered !== tile && homeBento.contains(hovered) ? hovered : null;
-    dragState.target?.classList.add('layout-drop-target');
+    const { tile } = dragState;
+    const target = findDropTargetAt(event.clientX, event.clientY, tile);
+    const nextTargetId = target ? target.dataset.homeModule : null;
+    // 指针离开目标原位就取消让位，避免误吸到旁列大模块后一直粘着
+    if (nextTargetId !== dragState.previewTargetId) {
+      previewDisplaceTarget(tile.dataset.homeModule, nextTargetId);
+    }
+    tile.style.setProperty('--home-drag-x', `${event.clientX - dragState.startX}px`);
+    tile.style.setProperty('--home-drag-y', `${event.clientY - dragState.startY}px`);
   });
 
-  homeBento.addEventListener('pointerup', (event) => finishHomeDrag(event));
+  homeBento.addEventListener('pointerup', (event) => finishHomeDrag(event, false));
   homeBento.addEventListener('pointercancel', (event) => finishHomeDrag(event, true));
   homeBento.addEventListener('pointerleave', () => {
     if (!dragState && pendingLongPress) {
@@ -3334,6 +3824,7 @@ if (homeBento) {
     event.stopImmediatePropagation();
   }, true);
 }
+
 
 // ============ 距离感应 Dock 悬浮 ============
 function bindDockSurface(surface, selector, maxScale = 1.14) {
@@ -3822,6 +4313,8 @@ if (mirrorStage) {
     setMirrorZoom(window.NotchDomain.adjustMirrorZoom(mirrorZoom, event.deltaY));
   }, { passive: false });
   mirrorStage.addEventListener('click', async () => {
+    if (homeBento?.classList.contains('layout-dragging')) return;
+    if (homeBento?.dataset?.layoutEditing === 'true') return;
     if (mirrorStream || mirrorStarting) {
       stopMirror();
       return;

@@ -2399,7 +2399,7 @@
   }
 
   homeMusic?.addEventListener('click', async (event) => {
-    if (event.target.closest('[data-widget-size-cycle]') || !window.notchAPI) return;
+    if (event.target.closest('.widget-layout-control') || !window.notchAPI) return;
     const control = event.target.closest('[data-music-action]') || musicPlayToggle;
     if (!control) return;
     event.stopPropagation();
