@@ -101,4 +101,9 @@ contextBridge.exposeInMainWorld('notchAPI', {
   syncClearBinding: () => ipcRenderer.invoke('sync:clear-binding'),
   syncListDevices: (payload) => ipcRenderer.invoke('sync:list-devices', payload || {}),
   syncRevokeDevice: (payload) => ipcRenderer.invoke('sync:revoke-device', payload || {}),
+  syncTodosLocalWrite: (payload) => ipcRenderer.invoke('sync:todos-local-write', payload || {}),
+  syncTodosRunCycle: () => ipcRenderer.invoke('sync:todos-run-cycle'),
+  syncTodosGetProjection: () => ipcRenderer.invoke('sync:todos-get-projection'),
+  onSyncTodosProjection: (cb) =>
+    subscribe('sync:todos-projection', (event, projection) => cb(projection)),
 });

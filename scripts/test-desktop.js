@@ -31,6 +31,7 @@ for (const file of [
   'preload.js',
   'sqliteProbe.js',
   'sync-store.js',
+  'todos-sync.js',
   'packages/sync-protocol/index.js',
   'packages/sync-protocol/schema.js',
   'packages/sync-protocol/collections.js',

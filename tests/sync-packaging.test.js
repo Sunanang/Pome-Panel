@@ -33,12 +33,17 @@ test('electron-builder build.files whitelists packages/sync-protocol', () => {
     files.includes('sync-store.js'),
     'build.files must include sync-store.js (T4 SyncStore + outbox)'
   );
+  assert.ok(
+    files.includes('todos-sync.js'),
+    'build.files must include todos-sync.js (T5 todos dual-write + push/pull)'
+  );
 });
 
 test('test-desktop.js node --check list covers sync-protocol, sqliteProbe, and sync-store', () => {
   const source = fs.readFileSync(testDesktopPath, 'utf8');
   assert.match(source, /sqliteProbe\.js/);
   assert.match(source, /sync-store\.js/);
+  assert.match(source, /todos-sync\.js/);
   assert.match(source, /packages\/sync-protocol\/index\.js/);
   assert.match(source, /packages\/sync-protocol\/schema\.js/);
   assert.match(source, /packages\/sync-protocol\/collections\.js/);
