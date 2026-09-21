@@ -164,6 +164,15 @@ function normalizeTodoItems(value) {
 }
 
 function saveData(data) {
+  if (window.NasSyncMigration && typeof window.NasSyncMigration.isReadonly === 'function') {
+    // Prefer live UI state if workspace exposed it
+  }
+  if (window.__nasTodoReadonly === true) {
+    if (typeof showStatusToast === 'function') {
+      showStatusToast('迁移中，稍候', { kind: 'warning' });
+    }
+    return false;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
@@ -173,6 +182,7 @@ function saveData(data) {
     const reminders = PRIORITIES.flatMap((priority) => data[priority] || []);
     window.notchAPI.scheduleTodoReminders(reminders).catch(() => {});
   }
+  return true;
 }
 
 let data = loadData();
@@ -193,11 +203,18 @@ function loadTodoCategoryNames() {
 }
 
 function persistTodoCategoryNames() {
+  if (window.__nasTodoReadonly === true) {
+    if (typeof showStatusToast === 'function') {
+      showStatusToast('迁移中，稍候', { kind: 'warning' });
+    }
+    return false;
+  }
   try {
     localStorage.setItem(TODO_CATEGORY_KEY, JSON.stringify(todoCategoryNames));
   } catch (error) {
     // LocalStorage 不可用时仍保留当前会话中的分类名。
   }
+  return true;
 }
 
 function applyTodoCategoryNames() {
@@ -371,6 +388,10 @@ function flashCheckboxPop(priority, id) {
 }
 
 function addTodo(priority, text, deadline) {
+  if (window.__nasTodoReadonly === true) {
+    if (typeof showStatusToast === 'function') showStatusToast('迁移中，稍候', { kind: 'warning' });
+    return false;
+  }
   const item = window.NotchDomain.createTodo(text, deadline, generateId(), Date.now());
   if (!item) return false;
   const previousPositions = captureTodoPositions(priority);
@@ -4902,6 +4923,18 @@ if (window.notchAPI && typeof window.notchAPI.onNewClipEntry === 'function') {
 }
 
 renderAll();
+
+document.addEventListener('nas-sync:todos-projection', (event) => {
+  const todosJson = event && event.detail && event.detail.todosJson;
+  if (typeof todosJson !== 'string') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, todosJson);
+  } catch (error) {
+    /* ignore */
+  }
+  data = loadData();
+  renderAll();
+});
 renderClipList(); // 首屏确保 clip-list DOM 就绪时渲染一次（幂等）
 renderClipFavs(); // 首屏渲染收藏剪贴块
 initTab();

@@ -6582,3 +6582,30 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
 #settings-nas-sync-status[data-state="bound"] { color: var(--accent-green); }
 #settings-nas-sync-status[data-state="insecure"] { color: var(--accent-orange); }
 #settings-nas-sync-status[data-state="empty"] { color: var(--text-4); }
+
+/* T5b migration banner + actions — token-only, no new palette */
+.settings-nas-migration-banner {
+  margin: 0 0 var(--s-3, 12px);
+  padding: var(--s-2, 8px) var(--s-3, 12px);
+  border-radius: var(--r-input, 9px);
+  border: 1px solid var(--hairline, rgba(255, 255, 255, 0.12));
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  color: var(--text-2);
+  font-size: var(--fs-caption, 11px);
+  line-height: 1.4;
+}
+.settings-nas-migration-banner[hidden] { display: none !important; }
+.settings-nas-migration-actions {
+  margin-top: var(--s-3, 12px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2, 8px);
+}
+.settings-nas-migration-actions[hidden] { display: none !important; }
+#tab-todo.is-migration-readonly .add-row input,
+#tab-todo.is-migration-readonly .todo-category-name,
+#tab-todo.is-migration-readonly .todo-deadline-trigger,
+#tab-todo.is-migration-readonly .todo-bulk-delete {
+  pointer-events: none;
+  opacity: 0.55;
+}

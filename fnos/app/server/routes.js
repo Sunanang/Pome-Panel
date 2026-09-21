@@ -334,6 +334,9 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
         const result = store.commitMigration(id.uid, {
           migrationId: body.migrationId,
           expectedServerRev: body.expectedServerRev,
+          authority: body.authority,
+          entities: body.entities,
+          deviceId: body.deviceId || id.deviceId,
         });
         if (result.error === 'not_found') {
           sendJson(res, 404, { error: 'migration_not_found' });

@@ -327,6 +327,27 @@ function createSyncStore(db, meta = {}) {
         pull_cursor = excluded.pull_cursor,
         server_rev = excluded.server_rev
     `),
+    upsertMigration: db.prepare(`
+      INSERT INTO migrations (
+        migration_id, account_id, state, snapshot_server_rev, created_at, updated_at
+      ) VALUES (
+        @migration_id, @account_id, @state, @snapshot_server_rev, @created_at, @updated_at
+      )
+      ON CONFLICT(migration_id) DO UPDATE SET
+        state = excluded.state,
+        snapshot_server_rev = excluded.snapshot_server_rev,
+        updated_at = excluded.updated_at
+    `),
+    getMigration: db.prepare('SELECT * FROM migrations WHERE migration_id = ?'),
+    listMigrations: db.prepare(`
+      SELECT * FROM migrations WHERE account_id = ? ORDER BY updated_at DESC
+    `),
+    deleteEntitiesForAccount: db.prepare(`
+      DELETE FROM entities WHERE account_id = ? AND collection = ?
+    `),
+    deleteOutboxForAccount: db.prepare(`
+      DELETE FROM outbox WHERE account_id = ? AND collection = ?
+    `),
   };
 
   function runInTransaction(work) {
@@ -708,6 +729,96 @@ function createSyncStore(db, meta = {}) {
     };
   }
 
+  function upsertMigration(row) {
+    if (!row || !isNonEmptyString(row.migrationId) || !isNonEmptyString(row.accountId)) {
+      throw new Error('migration_row_invalid');
+    }
+    const now = Date.now();
+    statements.upsertMigration.run({
+      migration_id: row.migrationId,
+      account_id: row.accountId,
+      state: row.state || 'pending',
+      snapshot_server_rev:
+        row.snapshotServerRev == null ? null : Number(row.snapshotServerRev),
+      created_at: Number.isFinite(row.createdAt) ? row.createdAt : now,
+      updated_at: Number.isFinite(row.updatedAt) ? row.updatedAt : now,
+    });
+    return getMigration(row.migrationId);
+  }
+
+  function getMigration(migrationId) {
+    const row = statements.getMigration.get(String(migrationId));
+    return row ? mapMigrationRow(row) : null;
+  }
+
+  function updateMigrationState(migrationId, state, extra = {}) {
+    const existing = getMigration(migrationId);
+    if (!existing) {
+      throw new Error('migration_not_found');
+    }
+    return upsertMigration({
+      migrationId,
+      accountId: existing.accountId,
+      state,
+      snapshotServerRev:
+        extra.snapshotServerRev != null ? extra.snapshotServerRev : existing.snapshotServerRev,
+      createdAt: existing.createdAt,
+      updatedAt: Date.now(),
+    });
+  }
+
+  function listMigrations(accountId) {
+    return statements.listMigrations.all(accountId).map(mapMigrationRow);
+  }
+
+  /**
+   * Replace all todos entities for an account inside one transaction (migration apply).
+   * Does NOT enqueue outbox — migration is not post-migration dual-queue.
+   */
+  function replaceTodosFromEntities(accountId, entities, serverRev = 0) {
+    if (!isNonEmptyString(accountId)) {
+      return { ok: false, reason: 'account_id_required' };
+    }
+    const collection = COLLECTIONS.TODOS;
+    const now = Date.now();
+    const rev = Number.isInteger(serverRev) && serverRev >= 0 ? serverRev : 0;
+    try {
+      runInTransaction(() => {
+        const account = statements.getAccount.get(accountId);
+        if (!account) {
+          throw Object.assign(new Error('account_missing'), { code: 'account_missing' });
+        }
+        statements.deleteEntitiesForAccount.run(accountId, collection);
+        statements.deleteOutboxForAccount.run(accountId, collection);
+        for (const ent of entities || []) {
+          if (!ent || !isNonEmptyString(ent.entityId)) continue;
+          if (ent.op === 'delete') continue;
+          statements.upsertEntity.run({
+            account_id: accountId,
+            collection,
+            entity_id: ent.entityId,
+            payload_json: JSON.stringify(ent.payload || {}),
+            server_rev: rev,
+            deleted_at: null,
+            updated_at: now,
+          });
+        }
+        statements.upsertSyncState.run({
+          account_id: accountId,
+          collection,
+          pull_cursor: String(rev),
+          server_rev: rev,
+        });
+      });
+    } catch (error) {
+      if (error && error.code === 'account_missing') {
+        return { ok: false, reason: 'account_missing' };
+      }
+      throw error;
+    }
+    return { ok: true, serverRev: rev };
+  }
+
   function close() {
     db.close();
   }
@@ -724,9 +835,26 @@ function createSyncStore(db, meta = {}) {
     acknowledgeOutbox,
     getEntity,
     buildTodosLocalStorageProjection,
+    upsertMigration,
+    getMigration,
+    updateMigrationState,
+    listMigrations,
+    replaceTodosFromEntities,
     close,
     // exposed for tests
     _runInTransaction: runInTransaction,
+  };
+}
+
+function mapMigrationRow(row) {
+  return {
+    migrationId: row.migration_id,
+    accountId: row.account_id,
+    state: row.state,
+    snapshotServerRev:
+      row.snapshot_server_rev == null ? null : Number(row.snapshot_server_rev),
+    createdAt: Number(row.created_at) || 0,
+    updatedAt: Number(row.updated_at) || 0,
   };
 }
 

@@ -244,7 +244,13 @@ function createMemoryStore(options = {}) {
     return bucket(uid).migrations.get(String(migrationId)) || null;
   }
 
-  function commitMigration(uid, { migrationId, expectedServerRev }) {
+  function commitMigration(uid, {
+    migrationId,
+    expectedServerRev,
+    authority,
+    entities,
+    deviceId,
+  } = {}) {
     const b = bucket(uid);
     const row = b.migrations.get(String(migrationId));
     if (!row) return { error: 'not_found' };
@@ -254,8 +260,51 @@ function createMemoryStore(options = {}) {
     if (row.state === 'committed' || row.state === 'applied') {
       return { ok: true, migration: { ...row } };
     }
-    row.state = 'committed';
+
     row.backupId = row.backupId || `bak-${migrationId}`;
+    row.authority = authority === 'local' || authority === 'nas' ? authority : 'nas';
+
+    if (row.authority === 'local' && Array.isArray(entities)) {
+      // Snapshot current NAS live into change-log as deletes, then upsert local entities.
+      const ts = nowFn();
+      for (const entityId of [...b.live.keys()]) {
+        b.serverRev += 1;
+        b.live.delete(entityId);
+        b.tombstones.set(entityId, { entityId, serverRev: b.serverRev, deletedAt: ts });
+        b.changeLog.push({
+          serverRev: b.serverRev,
+          entityId,
+          collection: 'todos',
+          op: 'delete',
+          clientMutationId: `mig-del-${migrationId}-${entityId}`,
+          deviceId: deviceId || 'migration',
+        });
+      }
+      for (const ent of entities) {
+        if (!ent || !ent.entityId) continue;
+        if (ent.op === 'delete') continue;
+        b.serverRev += 1;
+        b.tombstones.delete(ent.entityId);
+        b.live.set(ent.entityId, {
+          entityId: ent.entityId,
+          collection: ent.collection || 'todos',
+          payload: ent.payload || {},
+          serverRev: b.serverRev,
+          updatedAt: ts,
+        });
+        b.changeLog.push({
+          serverRev: b.serverRev,
+          entityId: ent.entityId,
+          collection: ent.collection || 'todos',
+          op: 'upsert',
+          clientMutationId: `mig-up-${migrationId}-${ent.entityId}`,
+          deviceId: deviceId || 'migration',
+          payload: ent.payload || {},
+        });
+      }
+    }
+
+    row.state = 'committed';
     row.serverRev = b.serverRev;
     return { ok: true, migration: { ...row } };
   }

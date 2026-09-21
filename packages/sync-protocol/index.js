@@ -17,6 +17,7 @@ const collections = require('./collections');
 const mutation = require('./mutation');
 const pull = require('./pull');
 const pairing = require('./pairing');
+const migration = require('./migration');
 
 module.exports = {
   ...schema,
@@ -24,4 +25,5 @@ module.exports = {
   ...mutation,
   ...pull,
   ...pairing,
+  ...migration,
 };
