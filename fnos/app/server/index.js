@@ -1,13 +1,16 @@
 'use strict';
 
 /**
- * FPK process entry: Unix gateway socket + optional device TCP port (ephemeral by default).
- * Ports are never hardcoded (no 5001).
+ * FPK / local process entry: Unix gateway socket + optional device TCP.
+ * Strips FNOS_GATEWAY_PREFIX so routes keep matching /api/v1/*.
+ * Serves static UI under GATEWAY_PREFIX for iframe entry.
+ * NEVER embed frp endpoints, tokens, or credentials.
  */
 const fs = require('node:fs');
 const path = require('node:path');
 const { createApp } = require('./createApp');
 const { createMemoryStore } = require('./store');
+const { wrapWithGatewayPrefix, stripGatewayPrefix } = require('./gatewayHttp');
 
 function readOrCreateServerId(filePath) {
   try {
@@ -28,22 +31,34 @@ function readOrCreateServerId(filePath) {
 }
 
 async function main() {
+  const gatewayPrefix = process.env.FNOS_GATEWAY_PREFIX || '/app/pome-panel';
   const socketPath = process.env.FNOS_SOCKET_PATH || path.join(process.cwd(), 'runtime', 'pomepanel-sync.sock');
   const serverIdFile = process.env.FNOS_SERVER_ID_FILE || '';
   const devicePortEnv = process.env.FNOS_DEVICE_PORT;
   const devicePortFile = process.env.FNOS_DEVICE_PORT_FILE || '';
   const enableDevicePort = process.env.FNOS_ENABLE_DEVICE_PORT !== '0';
+  const wwwRoot = path.join(__dirname, '..', 'www');
+  const uiRoot = path.join(__dirname, '..', 'ui');
+  const staticRoot = process.env.FNOS_STATIC_ROOT
+    || (fs.existsSync(wwwRoot) ? wwwRoot : uiRoot);
+  const resolvedStatic = fs.existsSync(staticRoot) ? staticRoot : uiRoot;
 
   const store = createMemoryStore({ serverId: readOrCreateServerId(serverIdFile) });
 
-  // Gateway listener (Unix) — trusts X-Trim-* after gateway hygiene.
-  const gateway = createApp({ listenMode: 'gateway', store });
+  const gatewayBase = createApp({ listenMode: 'gateway', store });
+  const gateway = wrapWithGatewayPrefix(gatewayBase, {
+    gatewayPrefix,
+    staticRoot: resolvedStatic,
+  });
   await gateway.listenUnix(socketPath);
-  console.log(JSON.stringify({ event: 'gateway_listen', socketPath, serverId: store.serverId }));
+  console.log(JSON.stringify({
+    event: 'gateway_listen',
+    socketPath,
+    gatewayPrefix,
+    serverId: store.serverId,
+  }));
 
   if (enableDevicePort) {
-    // Separate process would be ideal; for skeleton we start a second app instance
-    // sharing the same in-memory store reference (same process).
     const device = createApp({ listenMode: 'device-port', store });
     const port = devicePortEnv === undefined || devicePortEnv === '' ? 0 : Number(devicePortEnv);
     const info = await device.listenDevicePort(Number.isFinite(port) ? port : 0, '127.0.0.1');
@@ -67,4 +82,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, readOrCreateServerId };
+module.exports = { main, readOrCreateServerId, stripGatewayPrefix };

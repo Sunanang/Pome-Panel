@@ -47,6 +47,19 @@ function createCsrfStore({ ttlMs = CSRF_TTL_MS } = {}) {
  * @param {string|undefined} origin
  * @param {{ allowedOrigins?: string[], requestHost?: string }} [opts]
  */
+function hostVariants(requestHost) {
+  const host = String(requestHost || '').replace(/\/$/, '').trim();
+  if (!host) return [];
+  const variants = new Set([host]);
+  // Host: example.com:443 → also allow Origin without default ports.
+  const bare = host.replace(/:(?:80|443)$/, '');
+  if (bare) variants.add(bare);
+  // Strip any non-default port for hostname-only compare later.
+  const noPort = host.replace(/:\d+$/, '');
+  if (noPort) variants.add(noPort);
+  return [...variants];
+}
+
 function validatePairOrigin(origin, opts = {}) {
   if (origin == null || origin === '') {
     return { ok: false, reason: 'origin_missing' };
@@ -56,13 +69,26 @@ function validatePairOrigin(origin, opts = {}) {
     ...(opts.allowedOrigins || DEFAULT_ALLOWED_ORIGINS),
   ]);
   if (opts.requestHost) {
-    const host = String(opts.requestHost).replace(/\/$/, '');
-    allowed.add(`http://${host}`);
-    allowed.add(`https://${host}`);
+    for (const host of hostVariants(opts.requestHost)) {
+      allowed.add(`http://${host}`);
+      allowed.add(`https://${host}`);
+    }
   }
   // Exact match or same-origin host match for NAS LAN URLs passed via allowedOrigins.
   if (allowed.has(value) || value === 'null') {
     return { ok: true, origin: value };
+  }
+  // Allow Origin whose hostname matches request Host (scheme-agnostic same host).
+  try {
+    const originUrl = new URL(value);
+    for (const host of hostVariants(opts.requestHost)) {
+      const hostName = host.replace(/:\d+$/, '');
+      if (originUrl.hostname === hostName || originUrl.host === host) {
+        return { ok: true, origin: value };
+      }
+    }
+  } catch {
+    /* not a URL */
   }
   // Allow explicit list entries that are full origins.
   for (const entry of allowed) {
