@@ -194,9 +194,9 @@ body {
   white-space: nowrap;
 }
 
-.nas-web-status-pill[data-state="ok"] {
-  border-color: var(--accent-green);
-  color: var(--accent-green);
+.nas-web-status-pill[data-state="unknown"] {
+  border-color: var(--hairline);
+  color: var(--text-3);
 }
 
 .nas-web-status-pill[data-state="error"] {
@@ -214,10 +214,17 @@ body {
 
 .nas-web-code {
   margin: 0;
-  font: 600 28px/1.2 var(--font-mono);
-  letter-spacing: 0.22em;
+  font: 600 36px/1.2 var(--font-mono);
+  letter-spacing: 0.28em;
   color: var(--text-1);
   text-align: center;
+}
+
+#pair-expiry {
+  margin-top: var(--s-2);
+  text-align: center;
+  color: var(--text-3);
+  font-size: var(--fs-small);
 }
 
 .settings-nas-device-list {
