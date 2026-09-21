@@ -29,11 +29,16 @@ test('electron-builder build.files whitelists packages/sync-protocol', () => {
     files.includes('sqliteProbe.js'),
     'build.files must include sqliteProbe.js for SyncStore selection'
   );
+  assert.ok(
+    files.includes('sync-store.js'),
+    'build.files must include sync-store.js (T4 SyncStore + outbox)'
+  );
 });
 
-test('test-desktop.js node --check list covers sync-protocol and sqliteProbe', () => {
+test('test-desktop.js node --check list covers sync-protocol, sqliteProbe, and sync-store', () => {
   const source = fs.readFileSync(testDesktopPath, 'utf8');
   assert.match(source, /sqliteProbe\.js/);
+  assert.match(source, /sync-store\.js/);
   assert.match(source, /packages\/sync-protocol\/index\.js/);
   assert.match(source, /packages\/sync-protocol\/schema\.js/);
   assert.match(source, /packages\/sync-protocol\/collections\.js/);
