@@ -6582,3 +6582,4 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
 #settings-nas-sync-status[data-state="bound"] { color: var(--accent-green); }
 #settings-nas-sync-status[data-state="insecure"] { color: var(--accent-orange); }
 #settings-nas-sync-status[data-state="empty"] { color: var(--text-4); }
+#settings-nas-sync-status[data-state="error"] { color: var(--p0); }

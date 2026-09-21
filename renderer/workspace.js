@@ -1697,7 +1697,16 @@
     const status = nasPairUi.status;
     const bound = Boolean(status && status.bound);
     if (settingsNasSyncStatus) {
-      if (!bound) {
+      if (status && status.schemaIncompatible) {
+        const target = status.schemaUpgradeTarget;
+        settingsNasSyncStatus.textContent = target === 'desktop'
+          ? '协议不兼容 · 请升级桌面端'
+          : target === 'fpk'
+            ? '协议不兼容 · 请升级 NAS 应用'
+            : '协议不兼容 · 请升级';
+        settingsNasSyncStatus.dataset.state = 'error';
+        if (status.schemaMessage) setNasSyncHint(status.schemaMessage, 'error');
+      } else if (!bound) {
         settingsNasSyncStatus.textContent = status && status.needsReauth
           ? '需重新认证 · 安全存储不可用'
           : '未绑定';
@@ -1709,6 +1718,9 @@
         settingsNasSyncStatus.textContent = '已绑定';
         settingsNasSyncStatus.dataset.state = 'bound';
       }
+    }
+    if (nasPairUi.error && !(status && status.schemaIncompatible)) {
+      setNasSyncHint(nasPairUi.error, 'error');
     }
     if (settingsNasPairReauth) settingsNasPairReauth.hidden = !bound;
     if (settingsNasPairSubmit) {
@@ -1953,6 +1965,14 @@
     });
   }
   void refreshNasSyncStatus();
+  if (window.notchAPI && typeof window.notchAPI.onSyncStatus === 'function') {
+    window.notchAPI.onSyncStatus((status) => {
+      applyNasPairUi({ type: 'set_status', status });
+      if (status && status.schemaIncompatible && status.schemaMessage) {
+        setNasSyncHint(status.schemaMessage, 'error');
+      }
+    });
+  }
 
   if (settingsApiConfigure) settingsApiConfigure.addEventListener('click', openTranscriptionSettings);
   if (transcriptionSettingsClose) transcriptionSettingsClose.addEventListener('click', closeTranscriptionSettings);

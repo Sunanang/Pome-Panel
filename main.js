@@ -63,6 +63,9 @@ const {
 } = require('./main-services');
 const {
   INSECURE_DEVICE_TOKEN_TTL_MS,
+  SCHEMA_UI_STATE_INCOMPATIBLE,
+  MIN_SUPPORTED_SCHEMA_VERSION,
+  MAX_SUPPORTED_SCHEMA_VERSION,
 } = require('./packages/sync-protocol');
 const {
   resolveSyncDbPath,
@@ -75,6 +78,7 @@ const {
   writeCategoryUpsert,
   runTodosSyncCycle,
   notesCollectionIsNotWired,
+  gateSchemaCompatibility,
 } = require('./todos-sync');
 
 // Keep the historical data directory so upgrading users retain notes, links,
@@ -2833,6 +2837,89 @@ let todosSyncStore = null;
 let todosSyncCycleTimer = null;
 const TODOS_SYNC_CYCLE_INTERVAL_MS = 15_000;
 
+/**
+ * In-memory schema negotiation outcome for the bound session (T7).
+ * Cleared on rebind / clear; not persisted (revalidated on next sync).
+ * @type {null | {
+ *   incompatible: boolean,
+ *   uiState: string | null,
+ *   upgradeTarget: string | null,
+ *   message: string | null,
+ *   reason: string | null,
+ *   schemaVersion?: number,
+ *   minSupported?: number,
+ *   maxSupported?: number,
+ *   checkedAt: number,
+ * }}
+ */
+let syncSchemaRuntime = null;
+
+function clearSyncSchemaRuntime() {
+  syncSchemaRuntime = null;
+}
+
+function setSyncSchemaRuntimeFromEvaluation(evaluation) {
+  if (!evaluation) {
+    clearSyncSchemaRuntime();
+    return null;
+  }
+  if (evaluation.ok) {
+    syncSchemaRuntime = {
+      incompatible: false,
+      uiState: null,
+      upgradeTarget: null,
+      message: null,
+      reason: null,
+      schemaVersion: evaluation.schemaVersion,
+      minSupported: evaluation.minSupported,
+      maxSupported: evaluation.maxSupported,
+      checkedAt: Date.now(),
+    };
+    return syncSchemaRuntime;
+  }
+  syncSchemaRuntime = {
+    incompatible: true,
+    uiState: evaluation.uiState || SCHEMA_UI_STATE_INCOMPATIBLE,
+    upgradeTarget: evaluation.upgradeTarget || 'unknown',
+    message: evaluation.message || null,
+    reason: evaluation.reason || 'schema_incompatible',
+    schemaVersion: evaluation.schemaVersion,
+    minSupported: evaluation.minSupported,
+    maxSupported: evaluation.maxSupported,
+    checkedAt: Date.now(),
+  };
+  return syncSchemaRuntime;
+}
+
+function buildSyncPublicStatus() {
+  const base = syncCredentialsStore.getStatus();
+  if (!syncSchemaRuntime || !syncSchemaRuntime.incompatible) {
+    return {
+      ...base,
+      schemaIncompatible: false,
+      schemaUiState: null,
+      schemaUpgradeTarget: null,
+      schemaMessage: null,
+    };
+  }
+  return {
+    ...base,
+    schemaIncompatible: true,
+    schemaUiState: syncSchemaRuntime.uiState,
+    schemaUpgradeTarget: syncSchemaRuntime.upgradeTarget,
+    schemaMessage: syncSchemaRuntime.message,
+    schemaReason: syncSchemaRuntime.reason,
+    schemaVersion: syncSchemaRuntime.schemaVersion,
+    schemaMinSupported: syncSchemaRuntime.minSupported,
+    schemaMaxSupported: syncSchemaRuntime.maxSupported,
+  };
+}
+
+function broadcastSyncStatus() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('sync:status', buildSyncPublicStatus());
+}
+
 function getTodosSyncStore() {
   if (todosSyncStore) return todosSyncStore;
   const dbPath = resolveSyncDbPath(app.getPath('userData'));
@@ -2901,6 +2988,7 @@ function createTodosSyncTransport(record) {
           ok: false,
           error: (response.body && response.body.error) || response.error || 'pull_failed',
           status: response.status,
+          body: response.body,
         };
       }
       return { ok: true, body: response.body };
@@ -2917,12 +3005,14 @@ function createTodosSyncTransport(record) {
           error: (response.body && response.body.error) || response.error || 'push_failed',
           status: response.status,
           applied: response.body && response.body.applied,
+          body: response.body,
         };
       }
       return {
         ok: true,
         applied: response.body && response.body.applied,
         serverRev: response.body && response.body.serverRev,
+        body: response.body,
       };
     },
   };
@@ -2938,7 +3028,26 @@ async function runBoundTodosSyncCycle({ broadcast = true } = {}) {
     accountId: ctx.accountId,
     pullPage: transport.pullPage,
     pushMutations: transport.pushMutations,
+    localSchema: {
+      minSupported: MIN_SUPPORTED_SCHEMA_VERSION,
+      maxSupported: MAX_SUPPORTED_SCHEMA_VERSION,
+    },
   });
+  if (result.error === SCHEMA_UI_STATE_INCOMPATIBLE || result.stopPull || result.stopPush) {
+    setSyncSchemaRuntimeFromEvaluation(result);
+    broadcastSyncStatus();
+    return result;
+  }
+  if (result.ok) {
+    // Compatible cycle clears any prior mismatch latch.
+    setSyncSchemaRuntimeFromEvaluation({
+      ok: true,
+      schemaVersion: result.schemaVersion,
+      minSupported: MIN_SUPPORTED_SCHEMA_VERSION,
+      maxSupported: MAX_SUPPORTED_SCHEMA_VERSION,
+    });
+    broadcastSyncStatus();
+  }
   if (result.ok && broadcast) {
     broadcastTodosProjection(result.projection);
   }
@@ -3021,7 +3130,7 @@ function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutM
   });
 }
 
-ipcMain.handle('sync:get-status', () => syncCredentialsStore.getStatus());
+ipcMain.handle('sync:get-status', () => buildSyncPublicStatus());
 
 ipcMain.handle('sync:pair-http-policy', (event, baseUrl) => {
   const policy = syncPairHttpPolicy(baseUrl);
@@ -3074,6 +3183,28 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
   }
 
   const body = response.body || {};
+  const schemaGate = gateSchemaCompatibility(body, {
+    minSupported: MIN_SUPPORTED_SCHEMA_VERSION,
+    maxSupported: MAX_SUPPORTED_SCHEMA_VERSION,
+  });
+  if (!schemaGate.ok) {
+    setSyncSchemaRuntimeFromEvaluation(schemaGate);
+    broadcastSyncStatus();
+    return {
+      ok: false,
+      error: SCHEMA_UI_STATE_INCOMPATIBLE,
+      reason: schemaGate.reason,
+      stopPull: true,
+      stopPush: true,
+      uiState: schemaGate.uiState,
+      upgradeTarget: schemaGate.upgradeTarget,
+      message: schemaGate.message,
+      schemaVersion: schemaGate.schemaVersion,
+      minSupported: schemaGate.minSupported,
+      maxSupported: schemaGate.maxSupported,
+    };
+  }
+
   if (!body.deviceToken) {
     return { ok: false, error: 'missing_device_token' };
   }
@@ -3092,6 +3223,8 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
   if (!saved.ok) {
     return { ok: false, error: saved.error || 'save_failed', refusedPlaintext: saved.refusedPlaintext };
   }
+  clearSyncSchemaRuntime();
+  setSyncSchemaRuntimeFromEvaluation(schemaGate);
   try {
     ensureBoundAccount(getTodosSyncStore(), record);
     scheduleTodosSyncCycle();
@@ -3100,13 +3233,15 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
   } catch {
     // Binding still succeeds even if SyncStore open fails; next write will retry.
   }
-  return { ok: true, status: saved.status };
+  return { ok: true, status: { ...saved.status, ...buildSyncPublicStatus() } };
 });
 
 ipcMain.handle('sync:clear-binding', () => {
   const cleared = syncCredentialsStore.clear();
+  clearSyncSchemaRuntime();
   closeTodosSyncStore();
-  return cleared.ok ? { ok: true, status: cleared.status } : { ok: false, error: cleared.error };
+  broadcastSyncStatus();
+  return cleared.ok ? { ok: true, status: buildSyncPublicStatus() } : { ok: false, error: cleared.error };
 });
 
 ipcMain.handle('sync:todos-local-write', (event, payload = {}) => {
@@ -3171,6 +3306,12 @@ ipcMain.handle('sync:todos-run-cycle', async () => {
       error: result.error || result.reason || 'sync_failed',
       phase: result.phase,
       pendingCount: result.pendingCount,
+      stopPull: result.stopPull === true,
+      stopPush: result.stopPush === true,
+      uiState: result.uiState || null,
+      upgradeTarget: result.upgradeTarget || null,
+      message: result.message || null,
+      status: buildSyncPublicStatus(),
     };
   }
   return {
@@ -3178,6 +3319,7 @@ ipcMain.handle('sync:todos-run-cycle', async () => {
     pendingCount: result.pendingCount,
     pushed: result.pushed,
     pulledChanges: result.pulledChanges,
+    status: buildSyncPublicStatus(),
     projection: {
       todosJson: result.projection.todosJson,
       categoryNamesJson: result.projection.categoryNamesJson,
