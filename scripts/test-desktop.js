@@ -24,6 +24,27 @@ for (const file of ['notch-focus', 'retained-workspace', 'startup']) {
   run(require('electron'), [`tests/${file}.electron.js`]);
   fs.rmSync(testProfile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
-for (const file of ['main.js', 'main-services.js', 'platform.js', 'preload.js', 'renderer/domain.js', 'renderer/effects.js', 'renderer/app.js', 'renderer/workspace.js', 'renderer/icon-motion.js', 'renderer/notification.js', 'build/afterPack.js', 'scripts/codex-notify.js', 'scripts/claude-notify.js', 'scripts/smoke-app.js']) {
+for (const file of [
+  'main.js',
+  'main-services.js',
+  'platform.js',
+  'preload.js',
+  'sqliteProbe.js',
+  'packages/sync-protocol/index.js',
+  'packages/sync-protocol/schema.js',
+  'packages/sync-protocol/collections.js',
+  'packages/sync-protocol/mutation.js',
+  'packages/sync-protocol/pull.js',
+  'renderer/domain.js',
+  'renderer/effects.js',
+  'renderer/app.js',
+  'renderer/workspace.js',
+  'renderer/icon-motion.js',
+  'renderer/notification.js',
+  'build/afterPack.js',
+  'scripts/codex-notify.js',
+  'scripts/claude-notify.js',
+  'scripts/smoke-app.js',
+]) {
   run(process.execPath, ['--check', file]);
 }

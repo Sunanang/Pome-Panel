@@ -24,11 +24,12 @@ test('notes have a dedicated top-level tab and management panel', () => {
 
 test('homepage exposes an explicit layout editor with all four card sizes', () => {
   assert.match(html, /id="home-layout-edit"/);
-  assert.match(appJs, /\['mini', '迷你'\]/);
-  assert.match(appJs, /\['small', '小'\]/);
-  assert.match(appJs, /\['medium', '中'\]/);
-  assert.match(appJs, /\['large', '大'\]/);
-  assert.match(appJs, /dataset\.widgetDragHandle/);
+  assert.match(html, /data-home-ctx-size="mini"/);
+  assert.match(html, /data-home-ctx-size="small"/);
+  assert.match(html, /data-home-ctx-size="medium"/);
+  assert.match(html, /data-home-ctx-size="large"/);
+  assert.match(appJs, /HOME_SIZE_LABELS\s*=\s*\{\s*mini:\s*'迷你',\s*small:\s*'小',\s*medium:\s*'中',\s*large:\s*'大'\s*\}/);
+  assert.match(appJs, /\[data-widget-drag-handle\]/);
 });
 
 test('home scratch note keeps only the save action', () => {
