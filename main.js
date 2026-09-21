@@ -83,6 +83,21 @@ const {
   runTodosSyncCycle,
   notesCollectionIsNotWired,
 } = require('./todos-sync');
+const {
+  createSyncSettingsStore,
+  SYNC_SETTINGS_FILE,
+} = require('./sync-settings');
+const {
+  canonicalizeEndpointUrl,
+  canRequestEndpoint,
+  selectEndpointsForAttempt,
+  shouldFailover,
+  classifyTransportError,
+  deriveSyncUiState,
+  syncUiStateLabel,
+  endpointHttpPolicy,
+  HTTP_INSECURE_CONFIRM_TEXT,
+} = require('./packages/sync-protocol/endpoints');
 
 // Keep the historical data directory so upgrading users retain notes, links,
 // recordings and encrypted settings after the public product rename.
@@ -2835,6 +2850,13 @@ const syncCredentialsStore = createSyncCredentialsStore({
   fileName: SYNC_CREDENTIALS_FILE_NAME,
 });
 
+const syncSettingsStore = createSyncSettingsStore({
+  getUserDataPath: () => app.getPath('userData'),
+  fs,
+  path,
+  fileName: SYNC_SETTINGS_FILE,
+});
+
 /** @type {ReturnType<typeof openSyncStore> | null} */
 let todosSyncStore = null;
 let todosSyncCycleTimer = null;
@@ -2894,43 +2916,57 @@ function broadcastTodosProjection(projection) {
 }
 
 function createTodosSyncTransport(record) {
-  const baseUrl = record.baseUrl;
   const token = record.deviceToken;
+  const fallbackBaseUrl = record.baseUrl;
   return {
     async pullPage({ cursor }) {
       const query = cursor == null || cursor === '' ? '' : `?cursor=${encodeURIComponent(cursor)}`;
-      const response = await fetchSyncJson(joinSyncApiUrl(baseUrl, `api/v1/sync/pull${query}`), {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        return {
-          ok: false,
-          error: (response.body && response.body.error) || response.error || 'pull_failed',
-          status: response.status,
-        };
-      }
-      return { ok: true, body: response.body };
+      return withEndpointFailover(async (endpoint) => {
+        const response = await fetchSyncJson(
+          joinSyncApiUrl(endpoint.baseUrl || fallbackBaseUrl, `api/v1/sync/pull${query}`),
+          {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        if (!response.ok) {
+          return {
+            ok: false,
+            error: (response.body && response.body.error) || response.error || 'pull_failed',
+            status: response.status,
+            certificateError: response.certificateError,
+            code: response.code,
+          };
+        }
+        return { ok: true, body: response.body };
+      }, { token });
     },
     async pushMutations(mutations) {
-      const response = await fetchSyncJson(joinSyncApiUrl(baseUrl, 'api/v1/sync/push'), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: { mutations },
-      });
-      if (!response.ok) {
+      return withEndpointFailover(async (endpoint) => {
+        const response = await fetchSyncJson(
+          joinSyncApiUrl(endpoint.baseUrl || fallbackBaseUrl, 'api/v1/sync/push'),
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: { mutations },
+          },
+        );
+        if (!response.ok) {
+          return {
+            ok: false,
+            error: (response.body && response.body.error) || response.error || 'push_failed',
+            status: response.status,
+            applied: response.body && response.body.applied,
+            certificateError: response.certificateError,
+            code: response.code,
+          };
+        }
         return {
-          ok: false,
-          error: (response.body && response.body.error) || response.error || 'push_failed',
-          status: response.status,
+          ok: true,
           applied: response.body && response.body.applied,
+          serverRev: response.body && response.body.serverRev,
         };
-      }
-      return {
-        ok: true,
-        applied: response.body && response.body.applied,
-        serverRev: response.body && response.body.serverRev,
-      };
+      }, { token });
     },
   };
 }
@@ -3018,17 +3054,279 @@ function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutM
     );
     req.on('timeout', () => {
       req.destroy();
-      resolve({ ok: false, error: 'timeout' });
+      resolve({ ok: false, error: 'timeout', transferable: true });
     });
     req.on('error', (error) => {
-      resolve({ ok: false, error: error && error.message || 'network_error' });
+      const message = (error && error.message) || 'network_error';
+      const code = (error && error.code) || message;
+      const classified = classifyTransportError(code);
+      resolve({
+        ok: false,
+        error: classified.kind === 'certificate_error' ? 'certificate_error' : message,
+        code,
+        transferable: classified.transferable === true,
+        certificateError: classified.kind === 'certificate_error',
+        uiState: classified.uiState || null,
+      });
     });
     if (payload) req.write(payload);
     req.end();
   });
 }
 
+function buildNasSyncDashboard() {
+  const credStatus = syncCredentialsStore.getStatus();
+  const view = syncSettingsStore.getPublicView();
+  let outboxCount = 0;
+  let accountId = null;
+  if (credStatus.bound) {
+    try {
+      const ctx = readBoundSyncContext();
+      if (ctx.ok) {
+        accountId = ctx.accountId;
+        outboxCount = ctx.store.listPendingOutbox(ctx.accountId).length;
+      }
+    } catch {
+      outboxCount = 0;
+    }
+  }
+  const certificateError = Boolean(
+    view.lastError &&
+      (view.lastError.code === 'certificate_error' || view.lastUiState === 'certificate_error'),
+  );
+  const endpointDisabled = Boolean(
+    view.currentEndpoint &&
+      (view.currentEndpoint.disabledByPolicy || canRequestEndpoint(view.currentEndpoint).ok === false),
+  );
+  const migrating = Boolean(migrationSession && migrationSession.readonly);
+  const migrationFailed = Boolean(migrationSession && migrationSession.phase === 'failed');
+  const uiState = deriveSyncUiState({
+    bound: credStatus.bound,
+    needsReauth: credStatus.needsReauth,
+    migrating,
+    migrationFailed,
+    syncing: false,
+    outboxCount,
+    offline: Boolean(view.lastError),
+    lastSuccessAt: view.lastSuccessAt,
+    lastError: view.lastError,
+    certificateError,
+    endpointDisabled,
+    schemaIncompatible: view.lastUiState === 'schema_incompatible',
+  });
+  syncSettingsStore.recordSyncMeta({ lastUiState: uiState });
+  return {
+    ok: true,
+    credentials: credStatus,
+    settings: view,
+    outboxCount,
+    accountId,
+    uiState,
+    uiLabel: syncUiStateLabel(uiState),
+    channelLabel: (view.currentEndpoint && view.currentEndpoint.baseUrl) || '',
+    lastSuccessAt: view.lastSuccessAt,
+    insecureHttpWarning: view.insecureHttpWarning,
+    devicePortGuidance: view.devicePortGuidance,
+    httpConfirmText: HTTP_INSECURE_CONFIRM_TEXT,
+  };
+}
+
+async function probeEndpointHealth(endpoint, token) {
+  const gate = canRequestEndpoint(endpoint);
+  if (!gate.ok) {
+    return { ok: false, error: gate.error, uiState: gate.uiState || null };
+  }
+  const response = await fetchSyncJson(joinSyncApiUrl(endpoint.baseUrl, 'api/v1/health'), {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    timeoutMs: 4000,
+  });
+  if (!response.ok) {
+    if (response.certificateError) {
+      return {
+        ok: false,
+        error: 'certificate_error',
+        certificateError: true,
+        transferable: false,
+        uiState: 'certificate_error',
+      };
+    }
+    const classified = classifyTransportError(response.status || response.error || response.code);
+    return {
+      ok: false,
+      error: response.error || 'health_failed',
+      status: response.status,
+      transferable: classified.transferable,
+      certificateError: classified.kind === 'certificate_error',
+      uiState: classified.uiState || null,
+    };
+  }
+  return {
+    ok: true,
+    serverId: response.body && response.body.serverId,
+    schemaVersion: response.body && response.body.schemaVersion,
+    body: response.body,
+  };
+}
+
+async function withEndpointFailover(runFn) {
+  const view = syncSettingsStore.getPublicView();
+  const ordered = selectEndpointsForAttempt(view.endpoints, {
+    currentEndpointId: view.currentEndpointId,
+  });
+  if (ordered.length === 0 && view.endpoints.length === 0) {
+    // Fall back to credentials baseUrl as a transient single endpoint when settings empty.
+    return runFn({
+      endpointId: 'legacy',
+      baseUrl: syncCredentialsStore.getStatus().baseUrl || '',
+      enabled: true,
+      allowInsecureHttp: true,
+      disabledByPolicy: false,
+      priority: 0,
+    });
+  }
+  if (ordered.length === 0) {
+    return { ok: false, error: 'no_endpoint', uiState: 'endpoint_disabled' };
+  }
+  let lastFailure = null;
+  for (const endpoint of ordered) {
+    const gate = canRequestEndpoint(endpoint);
+    if (!gate.ok) {
+      lastFailure = { ok: false, error: gate.error, endpointId: endpoint.endpointId };
+      continue;
+    }
+    const result = await runFn(endpoint);
+    if (result && result.ok) {
+      syncSettingsStore.setCurrentEndpoint(endpoint.endpointId);
+      syncSettingsStore.updateEndpointHealth(endpoint.endpointId, {
+        ok: true,
+        serverId: result.serverId || null,
+      });
+      syncSettingsStore.recordSyncMeta({
+        lastSuccessAt: Date.now(),
+        lastError: null,
+        currentEndpointId: endpoint.endpointId,
+        lastUiState: 'synced',
+      });
+      return { ...result, endpointId: endpoint.endpointId, endpoint };
+    }
+    lastFailure = { ...result, endpointId: endpoint.endpointId };
+    if (result && result.certificateError) {
+      syncSettingsStore.recordSyncMeta({
+        lastError: { code: 'certificate_error', at: Date.now() },
+        lastUiState: 'certificate_error',
+      });
+      return {
+        ok: false,
+        error: 'certificate_error',
+        certificateError: true,
+        transferable: false,
+        uiState: 'certificate_error',
+        endpointId: endpoint.endpointId,
+      };
+    }
+    if (!shouldFailover(result && (result.status || result.error || result.code))) {
+      syncSettingsStore.recordSyncMeta({
+        lastError: { code: (result && result.error) || 'request_failed', at: Date.now() },
+      });
+      return lastFailure;
+    }
+  }
+  return lastFailure || { ok: false, error: 'all_endpoints_failed' };
+}
+
 ipcMain.handle('sync:get-status', () => syncCredentialsStore.getStatus());
+
+ipcMain.handle('sync:get-dashboard', () => buildNasSyncDashboard());
+
+ipcMain.handle('sync:list-endpoints', () => syncSettingsStore.getPublicView());
+
+ipcMain.handle('sync:add-endpoint', (event, payload = {}) => {
+  const result = syncSettingsStore.addEndpoint(payload);
+  return result;
+});
+
+ipcMain.handle('sync:update-endpoint', (event, payload = {}) => {
+  const endpointId = String(payload.endpointId || '');
+  if (!endpointId) return { ok: false, error: 'endpoint_id_required' };
+  return syncSettingsStore.updateEndpoint(endpointId, payload);
+});
+
+ipcMain.handle('sync:delete-endpoint', (event, payload = {}) => {
+  const endpointId = String(payload.endpointId || '');
+  if (!endpointId) return { ok: false, error: 'endpoint_id_required' };
+  return syncSettingsStore.deleteEndpoint(endpointId);
+});
+
+ipcMain.handle('sync:reorder-endpoint', (event, payload = {}) => {
+  const endpointId = String(payload.endpointId || '');
+  if (!endpointId) return { ok: false, error: 'endpoint_id_required' };
+  return syncSettingsStore.reorderEndpoint(endpointId, payload.direction === 'up' ? 'up' : 'down');
+});
+
+ipcMain.handle('sync:set-current-endpoint', (event, payload = {}) => {
+  return syncSettingsStore.setCurrentEndpoint(String(payload.endpointId || ''));
+});
+
+ipcMain.handle('sync:set-gateway-bearer-blocked', (event, payload = {}) => {
+  return syncSettingsStore.setGatewayBearerBlocked(payload && payload.blocked === true);
+});
+
+ipcMain.handle('sync:test-endpoint', async (event, payload = {}) => {
+  const endpointId = String(payload.endpointId || '');
+  const view = syncSettingsStore.getPublicView();
+  const endpoint = (view.endpoints || []).find((ep) => ep.endpointId === endpointId);
+  if (!endpoint) return { ok: false, error: 'not_found' };
+  const token = syncCredentialsStore.getDeviceToken();
+  const result = await probeEndpointHealth(endpoint, token);
+  syncSettingsStore.updateEndpointHealth(endpointId, result);
+  if (result.certificateError) {
+    syncSettingsStore.recordSyncMeta({
+      lastError: { code: 'certificate_error', at: Date.now() },
+      lastUiState: 'certificate_error',
+    });
+  }
+  return result;
+});
+
+ipcMain.handle('sync:retry', async () => {
+  const result = await runBoundTodosSyncCycle({ broadcast: true });
+  return { ...result, dashboard: buildNasSyncDashboard() };
+});
+
+ipcMain.handle('sync:export-todos-backup', async () => {
+  const ctx = readBoundSyncContext();
+  let todosJson = '{}';
+  let categoryNamesJson = '{}';
+  if (ctx.ok) {
+    const projection = ctx.store.buildTodosLocalStorageProjection(ctx.accountId);
+    todosJson = projection.todosJson;
+    categoryNamesJson = projection.categoryNamesJson;
+  } else {
+    // Unbound: export current renderer-held data is not available in main;
+    // fall back to empty shell so dialog still works for UX.
+    todosJson = JSON.stringify({ P0: [], P1: [], P2: [], P3: [] });
+  }
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  const save = await dialog.showSaveDialog(win, {
+    title: '导出待办备份',
+    defaultPath: `pome-todos-backup-${Date.now()}.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  });
+  if (save.canceled || !save.filePath) {
+    return { ok: false, error: 'cancelled' };
+  }
+  try {
+    fs.writeFileSync(
+      save.filePath,
+      `${JSON.stringify({ todos: JSON.parse(todosJson), categoryNames: JSON.parse(categoryNamesJson), exportedAt: Date.now() }, null, 2)}\n`,
+      'utf8',
+    );
+    return { ok: true, path: save.filePath };
+  } catch (error) {
+    return { ok: false, error: 'write_failed', message: error && error.message };
+  }
+});
 
 ipcMain.handle('sync:pair-http-policy', (event, baseUrl) => {
   const policy = syncPairHttpPolicy(baseUrl);
@@ -3100,6 +3398,12 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
     return { ok: false, error: saved.error || 'save_failed', refusedPlaintext: saved.refusedPlaintext };
   }
   try {
+    syncSettingsStore.ensureEndpointFromPairing(baseUrl, {
+      kind: 'gateway',
+      allowInsecureHttp: allowInsecureHttp === true,
+      serverId: body.serverId,
+      uid: body.uid,
+    });
     ensureBoundAccount(getTodosSyncStore(), record);
     scheduleTodosSyncCycle();
     // Kick an immediate cycle (pull→push). Migration four-state is T5b — not here.

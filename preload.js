@@ -96,6 +96,18 @@ contextBridge.exposeInMainWorld('notchAPI', {
   taskNotificationHover: (paused) =>
     ipcRenderer.send('task-notification:hover', paused === true),
   syncGetStatus: () => ipcRenderer.invoke('sync:get-status'),
+  syncGetDashboard: () => ipcRenderer.invoke('sync:get-dashboard'),
+  syncListEndpoints: () => ipcRenderer.invoke('sync:list-endpoints'),
+  syncAddEndpoint: (payload) => ipcRenderer.invoke('sync:add-endpoint', payload || {}),
+  syncUpdateEndpoint: (payload) => ipcRenderer.invoke('sync:update-endpoint', payload || {}),
+  syncDeleteEndpoint: (payload) => ipcRenderer.invoke('sync:delete-endpoint', payload || {}),
+  syncReorderEndpoint: (payload) => ipcRenderer.invoke('sync:reorder-endpoint', payload || {}),
+  syncSetCurrentEndpoint: (payload) => ipcRenderer.invoke('sync:set-current-endpoint', payload || {}),
+  syncSetGatewayBearerBlocked: (payload) =>
+    ipcRenderer.invoke('sync:set-gateway-bearer-blocked', payload || {}),
+  syncTestEndpoint: (payload) => ipcRenderer.invoke('sync:test-endpoint', payload || {}),
+  syncRetry: () => ipcRenderer.invoke('sync:retry'),
+  syncExportTodosBackup: () => ipcRenderer.invoke('sync:export-todos-backup'),
   syncPairHttpPolicy: (baseUrl) => ipcRenderer.invoke('sync:pair-http-policy', baseUrl),
   syncPairClaim: (payload) => ipcRenderer.invoke('sync:pair-claim', payload || {}),
   syncClearBinding: () => ipcRenderer.invoke('sync:clear-binding'),

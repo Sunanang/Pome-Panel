@@ -38,6 +38,7 @@
       "sync-store.js",
       "sync-migration.js",
       "todos-sync.js",
+      "sync-settings.js",
       "packages/sync-protocol/**/*",
       "renderer/**/*",
       "scripts/codex-notify.js",

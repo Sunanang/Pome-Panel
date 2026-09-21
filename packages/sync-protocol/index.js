@@ -18,6 +18,7 @@ const mutation = require('./mutation');
 const pull = require('./pull');
 const pairing = require('./pairing');
 const migration = require('./migration');
+const endpoints = require('./endpoints');
 
 module.exports = {
   ...schema,
@@ -26,4 +27,5 @@ module.exports = {
   ...pull,
   ...pairing,
   ...migration,
+  ...endpoints,
 };
