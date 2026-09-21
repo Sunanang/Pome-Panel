@@ -47,7 +47,7 @@ test('FPK web device list keeps desktop semantic tokens (S7)', () => {
   assert.match(fnosUi, /生成配对码/);
   assert.match(fnosCss, /--bg-base:\s*#000000/);
   assert.match(fnosCss, /--accent-orange/);
-  assert.match(fnosCss, /\.badge-insecure/);
+  assert.match(fnosCss, /\.settings-nas-device-badge|\.badge-insecure/);
   assert.doesNotMatch(fnosCss, /linear-gradient\(\s*[^)]*(?:purple|indigo|#7c3aed)/i);
 });
 

@@ -3,37 +3,66 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="gateway-prefix" content="/app/pome-panel" />
   <title>Pome Panel Sync</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <main class="panel">
-    <h1 class="brand">Pome Panel Sync</h1>
-    <p class="lead">飞牛 NAS 同步服务。在已登录网关会话下生成配对码，于桌面客户端完成绑定。</p>
-
-    <section class="pair-panel" aria-label="生成配对码">
-      <h2 class="section-title">设备配对</h2>
-      <p class="note">需网关登录会话。请求校验 Origin 与 CSRF；配对码只显示一次，不进 URL / 日志。</p>
-      <div class="pair-actions">
-        <button type="button" class="btn primary" id="pair-start-btn">生成配对码</button>
-        <button type="button" class="btn" id="pair-csrf-btn">刷新 CSRF</button>
+  <main class="settings-page nas-web-shell" data-control-root="fnos-web-pair">
+    <section class="tile settings-card nas-web-card" aria-labelledby="nas-web-brand">
+      <div class="settings-card-heading">
+        <div>
+          <strong id="nas-web-brand">Pome Panel Sync</strong>
+          <small>飞牛 NAS · 设备配对</small>
+        </div>
+        <span class="nas-web-status-pill" id="session-pill" data-state="unknown" role="status">检测会话…</span>
       </div>
-      <p class="pair-status" id="pair-status" role="status"></p>
-      <p class="pair-code" id="pair-code" hidden aria-live="polite"></p>
-    </section>
+      <p class="settings-nas-sync-hint nas-web-lead">
+        在已登录网关会话下生成配对码，于桌面客户端「设置 → NAS 同步」完成绑定。配对码只显示一次，不进 URL / 日志。
+      </p>
 
-    <section class="pair-panel" aria-label="已配对设备">
-      <h2 class="section-title">设备列表</h2>
-      <ul class="device-list" id="device-list"></ul>
-      <p class="note" id="device-empty">尚无设备。桌面配对成功后显示；不安全绑定会标注。</p>
-    </section>
+      <div class="settings-card-heading settings-nas-pair-heading">
+        <div>
+          <strong>生成配对码</strong>
+          <small>POST /api/v1/pair/start · CSRF + Origin</small>
+        </div>
+      </div>
+      <div class="settings-nas-sync-actions pair-actions" aria-label="配对操作">
+        <button
+          type="button"
+          class="workspace-button compact primary"
+          id="pair-start-btn"
+          data-control-id="fnos.pair.start"
+        >生成配对码</button>
+        <button
+          type="button"
+          class="workspace-button compact"
+          id="pair-refresh-btn"
+          data-control-id="fnos.pair.refresh"
+        >刷新</button>
+      </div>
+      <p class="settings-nas-sync-hint" id="pair-status" role="status" data-control-id="fnos.pair.status"></p>
+      <div class="nas-web-code-block" id="pair-code-wrap" hidden>
+        <p class="nas-web-code" id="pair-code" aria-live="polite" data-control-id="fnos.pair.code"></p>
+        <p class="settings-nas-sync-hint" id="pair-expiry" data-control-id="fnos.pair.expiry"></p>
+      </div>
 
-    <dl class="meta">
-      <div><dt>Health</dt><dd><code>/api/v1/health</code></dd></div>
-      <div><dt>Pair start</dt><dd><code>POST /api/v1/pair/start</code></dd></div>
-      <div><dt>Pair claim</dt><dd><code>POST /api/v1/pair/claim</code></dd></div>
-      <div><dt>Devices</dt><dd><code>GET /api/v1/devices</code></dd></div>
-    </dl>
+      <div class="settings-card-heading">
+        <div>
+          <strong>已配对设备</strong>
+          <small>GET /api/v1/devices</small>
+        </div>
+      </div>
+      <ul
+        class="settings-nas-device-list"
+        id="device-list"
+        aria-label="已配对设备"
+        data-control-id="fnos.devices.list"
+      ></ul>
+      <p class="settings-nas-sync-hint" id="device-empty" data-control-id="fnos.devices.empty">
+        尚无设备。桌面配对成功后显示；不安全绑定会标注。
+      </p>
+    </section>
   </main>
   <script src="./pair.js"></script>
 </body>

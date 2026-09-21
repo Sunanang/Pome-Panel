@@ -1,8 +1,8 @@
 {
   "id": "com.pomepanel.sync",
   "name": "Pome Panel Sync",
-  "version": "0.1.0",
-  "description": "Pome Panel × 飞牛 NAS 同步（P0 骨架；G0 真机前勿宣称通道可用）",
+  "version": "1.1.3",
+  "description": "Pome Panel × 飞牛 NAS 同步（统一网关 /app/pome-panel；G0 真机前勿宣称通道可用）",
   "author": "Sunanang",
   "arch": ["x86_64", "arm64"],
   "minFnOS": "0.8.0",
@@ -11,7 +11,7 @@
     "stop": "cmd/stop.sh",
     "status": "cmd/status.sh"
   },
-  "appPath": "/pomepanel-sync",
+  "appPath": "/app/pome-panel",
   "socket": {
     "type": "unix",
     "pathHint": "runtime/pomepanel-sync.sock"
