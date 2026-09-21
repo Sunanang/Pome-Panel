@@ -582,6 +582,186 @@ async function controlSodaMusic(action, dependencies = {}, currentPlaying = fals
   return { ok: true, running: true, playing, bootstrapped };
 }
 
+const SYNC_CREDENTIALS_FILE = 'sync-credentials.json';
+const PAIR_HTTP_CONFIRM_TEXT = '配对码与新设备令牌将以明文 HTTP 传输，可能被窃听或篡改。确认继续？';
+
+/**
+ * Pure helpers for NAS sync deviceToken persistence (safeStorage + 0600 file).
+ * Never write plaintext tokens when encryption is unavailable.
+ */
+function createSyncCredentialsStore(deps = {}) {
+  const {
+    getUserDataPath,
+    safeStorage,
+    fs: fsMod,
+    path: pathMod,
+    fileName = SYNC_CREDENTIALS_FILE,
+  } = deps;
+  if (typeof getUserDataPath !== 'function') throw new TypeError('getUserDataPath required');
+  if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function') {
+    throw new TypeError('safeStorage required');
+  }
+  if (!fsMod || !pathMod) throw new TypeError('fs and path required');
+
+  function credentialsPath() {
+    return pathMod.join(getUserDataPath(), fileName);
+  }
+
+  function encryptionAvailable() {
+    return safeStorage.isEncryptionAvailable() === true;
+  }
+
+  function read() {
+    if (!encryptionAvailable()) {
+      return { ok: false, error: 'secure_storage_unavailable', bound: false, record: null };
+    }
+    try {
+      const raw = fsMod.readFileSync(credentialsPath(), 'utf8');
+      const envelope = JSON.parse(raw);
+      const decoded = safeStorage.decryptString(Buffer.from(String(envelope.payload || ''), 'base64'));
+      const record = JSON.parse(decoded);
+      if (!record || typeof record !== 'object' || !record.deviceToken) {
+        return { ok: true, bound: false, record: null, secureStorage: true };
+      }
+      return { ok: true, bound: true, record, secureStorage: true };
+    } catch (error) {
+      if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
+        return { ok: true, bound: false, record: null, secureStorage: true };
+      }
+      return { ok: false, error: 'read_failed', bound: false, record: null, secureStorage: true };
+    }
+  }
+
+  function publicStatus(record) {
+    if (!record) {
+      return {
+        bound: false,
+        secureStorage: encryptionAvailable(),
+        needsReauth: !encryptionAvailable(),
+      };
+    }
+    return {
+      bound: true,
+      secureStorage: true,
+      needsReauth: false,
+      deviceId: record.deviceId || null,
+      uid: record.uid || null,
+      serverId: record.serverId || null,
+      expiresAt: record.expiresAt || null,
+      insecureBound: Boolean(record.insecureBound),
+      baseUrl: record.baseUrl || null,
+      boundAt: record.boundAt || null,
+    };
+  }
+
+  function save(record) {
+    if (!encryptionAvailable()) {
+      return { ok: false, error: 'secure_storage_unavailable', refusedPlaintext: true };
+    }
+    if (!record || !record.deviceToken) {
+      return { ok: false, error: 'invalid_record' };
+    }
+    const payload = safeStorage.encryptString(JSON.stringify(record)).toString('base64');
+    const target = credentialsPath();
+    const temporaryPath = `${target}.${process.pid}.tmp`;
+    try {
+      fsMod.writeFileSync(temporaryPath, JSON.stringify({ version: 1, payload }), { mode: 0o600 });
+      fsMod.renameSync(temporaryPath, target);
+      try {
+        fsMod.chmodSync(target, 0o600);
+      } catch (chmodErr) {
+        /* best-effort on platforms that ignore mode */
+      }
+      return { ok: true, status: publicStatus(record) };
+    } catch (error) {
+      try { fsMod.unlinkSync(temporaryPath); } catch (unlinkError) {}
+      return { ok: false, error: 'save_failed' };
+    }
+  }
+
+  function clear() {
+    const target = credentialsPath();
+    try {
+      if (fsMod.existsSync(target)) fsMod.unlinkSync(target);
+      return { ok: true, status: publicStatus(null) };
+    } catch (error) {
+      return { ok: false, error: 'clear_failed' };
+    }
+  }
+
+  function getStatus() {
+    if (!encryptionAvailable()) {
+      return {
+        ok: true,
+        bound: false,
+        secureStorage: false,
+        needsReauth: true,
+        error: 'secure_storage_unavailable',
+      };
+    }
+    const result = read();
+    if (!result.ok && result.error === 'read_failed') {
+      return { ok: false, error: 'read_failed', bound: false, secureStorage: true };
+    }
+    return { ok: true, ...publicStatus(result.record) };
+  }
+
+  function getDeviceToken() {
+    const result = read();
+    if (!result.ok || !result.record) return null;
+    return result.record.deviceToken || null;
+  }
+
+  return {
+    credentialsPath,
+    encryptionAvailable,
+    read,
+    save,
+    clear,
+    getStatus,
+    getDeviceToken,
+    publicStatus,
+  };
+}
+
+/**
+ * Decide whether HTTP pairing needs the extra confirmation dialog (§10).
+ * Loopback HTTP is exempt from the insecure warning (decisions §8.1).
+ */
+function syncPairHttpPolicy(baseUrl) {
+  const raw = String(baseUrl || '').trim();
+  let url;
+  try {
+    url = new URL(raw);
+  } catch (error) {
+    return { ok: false, error: 'invalid_base_url', requiresExtraConfirm: false, insecureBound: false };
+  }
+  const protocol = url.protocol.toLowerCase();
+  const host = url.hostname.toLowerCase();
+  const isLoopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
+  if (protocol === 'https:') {
+    return { ok: true, requiresExtraConfirm: false, insecureBound: false, isLoopback, protocol };
+  }
+  if (protocol === 'http:') {
+    if (isLoopback) {
+      return { ok: true, requiresExtraConfirm: false, insecureBound: false, isLoopback: true, protocol };
+    }
+    return { ok: true, requiresExtraConfirm: true, insecureBound: true, isLoopback: false, protocol };
+  }
+  return { ok: false, error: 'unsupported_protocol', requiresExtraConfirm: false, insecureBound: false };
+}
+
+function normalizePairingCodeInput(value) {
+  return String(value || '').replace(/\s+/g, '').trim();
+}
+
+function validatePairingCodeInput(value) {
+  const code = normalizePairingCodeInput(value);
+  if (!code) return { ok: false, error: 'empty' };
+  if (!/^\d{6}$/.test(code)) return { ok: false, error: 'invalid_format' };
+  return { ok: true, code };
+}
+
 module.exports = {
   isPrivateAddress,
   decodeHtmlEntities,
@@ -613,4 +793,10 @@ module.exports = {
   updateDefaultTabPreference,
   sodaShortcutSpec,
   controlSodaMusic,
+  SYNC_CREDENTIALS_FILE,
+  PAIR_HTTP_CONFIRM_TEXT,
+  createSyncCredentialsStore,
+  syncPairHttpPolicy,
+  normalizePairingCodeInput,
+  validatePairingCodeInput,
 };

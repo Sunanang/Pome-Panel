@@ -95,4 +95,10 @@ contextBridge.exposeInMainWorld('notchAPI', {
     ipcRenderer.invoke('task-notification:activate', eventId),
   taskNotificationHover: (paused) =>
     ipcRenderer.send('task-notification:hover', paused === true),
+  syncGetStatus: () => ipcRenderer.invoke('sync:get-status'),
+  syncPairHttpPolicy: (baseUrl) => ipcRenderer.invoke('sync:pair-http-policy', baseUrl),
+  syncPairClaim: (payload) => ipcRenderer.invoke('sync:pair-claim', payload || {}),
+  syncClearBinding: () => ipcRenderer.invoke('sync:clear-binding'),
+  syncListDevices: (payload) => ipcRenderer.invoke('sync:list-devices', payload || {}),
+  syncRevokeDevice: (payload) => ipcRenderer.invoke('sync:revoke-device', payload || {}),
 });
