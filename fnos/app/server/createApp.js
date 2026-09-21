@@ -13,7 +13,11 @@ const { createRequestHandler } = require('./routes');
 function createApp(options = {}) {
   const listenMode = options.listenMode === 'device-port' ? 'device-port' : 'gateway';
   const store = options.store || createMemoryStore({ serverId: options.serverId });
-  const handler = createRequestHandler({ store, listenMode });
+  const handler = createRequestHandler({
+    store,
+    listenMode,
+    allowedOrigins: options.allowedOrigins,
+  });
   const server = http.createServer((req, res) => {
     Promise.resolve(handler(req, res)).catch((err) => {
       if (!res.headersSent) {

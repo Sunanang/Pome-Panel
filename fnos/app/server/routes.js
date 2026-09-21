@@ -2,6 +2,7 @@
 
 const { schemaEnvelope, isSchemaCompatible, SCHEMA_VERSION } = require('./schema');
 const { resolveIdentity, normalizeHeaderMap } = require('./auth');
+const { validatePairOrigin, readCsrfHeader } = require('./csrf');
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify({ ...schemaEnvelope(), ...body });
@@ -10,6 +11,16 @@ function sendJson(res, status, body) {
     'Content-Length': Buffer.byteLength(payload),
   });
   res.end(payload);
+}
+
+/** Redact secrets from log-oriented fields — never put code/token in URL or error bodies echoed to logs by callers. */
+function assertNoSecretLeak(body, secrets = []) {
+  const text = JSON.stringify(body);
+  for (const secret of secrets) {
+    if (secret && text.includes(secret)) {
+      throw Object.assign(new Error('secret_leak_guard'), { statusCode: 500 });
+    }
+  }
 }
 
 function readJsonBody(req, { maxBytes = 1024 * 1024 } = {}) {
@@ -66,7 +77,7 @@ function validateMutationShape(m) {
   return null;
 }
 
-function createRequestHandler({ store, listenMode }) {
+function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
   return async function handle(req, res) {
     const url = parseUrl(req);
     const path = url.pathname;
@@ -147,6 +158,133 @@ function createRequestHandler({ store, listenMode }) {
           error: 'token_required',
         });
         return;
+      }
+
+      // --- Pairing / devices (T3) -------------------------------------------------
+
+      if (method === 'GET' && path === '/api/v1/pair/csrf') {
+        if (listenMode === 'device-port') {
+          sendJson(res, 404, { error: 'pair_start_gateway_only' });
+          return;
+        }
+        const id = resolveIdentity(headers, { listenMode, store });
+        if (!id.ok || id.authMode !== 'gatewaySession') {
+          sendJson(res, id.ok ? 401 : id.status, { error: 'gateway_session_required' });
+          return;
+        }
+        const csrfToken = store.csrf.issue(id.uid);
+        sendJson(res, 200, { csrfToken, expiresInSec: 1800 });
+        return;
+      }
+
+      if (method === 'POST' && path === '/api/v1/pair/start') {
+        if (listenMode === 'device-port') {
+          sendJson(res, 404, { error: 'pair_start_gateway_only' });
+          return;
+        }
+        const id = resolveIdentity(headers, { listenMode, store });
+        if (!id.ok || id.authMode !== 'gatewaySession') {
+          sendJson(res, id.ok ? 401 : id.status, { error: 'gateway_session_required' });
+          return;
+        }
+        const originCheck = validatePairOrigin(headers.origin, {
+          allowedOrigins,
+          requestHost: headers.host,
+        });
+        if (!originCheck.ok) {
+          sendJson(res, 403, { error: originCheck.reason });
+          return;
+        }
+        const csrfHeader = readCsrfHeader(headers);
+        const csrfResult = store.csrf.consume(csrfHeader, id.uid);
+        if (!csrfResult.ok) {
+          sendJson(res, 403, { error: csrfResult.reason });
+          return;
+        }
+        // Code must never appear in the URL (POST body empty / unused).
+        if (url.searchParams.has('code') || url.searchParams.has('pairingCode')) {
+          sendJson(res, 400, { error: 'code_must_not_be_in_url' });
+          return;
+        }
+        const started = store.startPairing({ uid: id.uid });
+        if (started.error) {
+          sendJson(res, 422, { error: started.error });
+          return;
+        }
+        // Response includes code exactly once for the logged-in Web UI; never log it.
+        const body = {
+          codeId: started.codeId,
+          pairingCode: started.code,
+          expiresAt: started.expiresAt,
+        };
+        assertNoSecretLeak({ codeId: body.codeId, expiresAt: body.expiresAt }, [started.code]);
+        sendJson(res, 200, body);
+        return;
+      }
+
+      if (
+        method === 'POST'
+        && (path === '/api/v1/pair/claim' || path === '/api/v1/pair/complete')
+      ) {
+        let body;
+        try {
+          body = (await readJsonBody(req, { maxBytes: 16 * 1024 })) || {};
+        } catch (err) {
+          sendJson(res, err.statusCode || 422, { error: err.message });
+          return;
+        }
+        if (url.searchParams.has('code') || url.searchParams.has('pairingCode')) {
+          sendJson(res, 400, { error: 'code_must_not_be_in_url' });
+          return;
+        }
+        const result = store.claimPairing({
+          code: body.pairingCode || body.code,
+          deviceName: body.deviceName || body.name,
+          insecureBound: Boolean(body.insecureBound),
+        });
+        if (!result.ok) {
+          sendJson(res, result.status || 400, { error: result.error });
+          return;
+        }
+        const response = {
+          deviceToken: result.deviceToken,
+          deviceId: result.deviceId,
+          uid: result.uid,
+          serverId: result.serverId,
+          expiresAt: result.expiresAt,
+          insecureBound: result.insecureBound,
+        };
+        sendJson(res, 200, response);
+        return;
+      }
+
+      if (method === 'GET' && path === '/api/v1/devices') {
+        const id = resolveIdentity(headers, { listenMode, store });
+        if (!id.ok) {
+          sendJson(res, id.status, { error: id.reason || 'unauthenticated' });
+          return;
+        }
+        sendJson(res, 200, { devices: store.listDevices(id.uid) });
+        return;
+      }
+
+      {
+        const revokeMatch = /^\/api\/v1\/devices\/([^/]+)\/revoke$/.exec(path);
+        if (method === 'POST' && revokeMatch) {
+          const id = resolveIdentity(headers, { listenMode, store });
+          if (!id.ok) {
+            sendJson(res, id.status, { error: id.reason || 'unauthenticated' });
+            return;
+          }
+          const deviceId = decodeURIComponent(revokeMatch[1]);
+          const result = store.revokeDevice(id.uid, deviceId);
+          if (!result.ok) {
+            sendJson(res, 404, { error: result.reason || 'not_found' });
+            return;
+          }
+          sendJson(res, 200, { ok: true, device: result.device });
+          return;
+        }
       }
 
       if (method === 'GET' && path === '/api/v1/sync/state') {

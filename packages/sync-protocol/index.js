@@ -16,10 +16,12 @@ const schema = require('./schema');
 const collections = require('./collections');
 const mutation = require('./mutation');
 const pull = require('./pull');
+const pairing = require('./pairing');
 
 module.exports = {
   ...schema,
   ...collections,
   ...mutation,
   ...pull,
+  ...pairing,
 };

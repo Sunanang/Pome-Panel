@@ -1,14 +1,15 @@
 'use strict';
 
 /**
- * Local schemaVersion constants for FPK skeleton.
- * TODO(T1): align with packages/sync-protocol when that package lands —
- * prefer require('../../packages/sync-protocol') or a shared relative path;
- * until then keep these as the single local source of truth inside fnos/.
+ * Schema negotiation for FPK — single source of truth is packages/sync-protocol.
+ * Do not duplicate SCHEMA_VERSION / min / max constants locally.
  */
-const SCHEMA_VERSION = 1;
-const MIN_SUPPORTED = 1;
-const MAX_SUPPORTED = 1;
+const path = require('node:path');
+const protocol = require(path.join(__dirname, '..', '..', '..', 'packages', 'sync-protocol'));
+
+const SCHEMA_VERSION = protocol.SCHEMA_VERSION;
+const MIN_SUPPORTED = protocol.MIN_SUPPORTED_SCHEMA_VERSION;
+const MAX_SUPPORTED = protocol.MAX_SUPPORTED_SCHEMA_VERSION;
 
 function schemaEnvelope() {
   return {

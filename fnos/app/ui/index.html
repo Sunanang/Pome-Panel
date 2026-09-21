@@ -9,13 +9,32 @@
 <body>
   <main class="panel">
     <h1 class="brand">Pome Panel Sync</h1>
-    <p class="lead">飞牛 NAS 同步服务（P0 骨架）。完整桌面设置与配对 UI 在 Electron 客户端。</p>
+    <p class="lead">飞牛 NAS 同步服务。在已登录网关会话下生成配对码，于桌面客户端完成绑定。</p>
+
+    <section class="pair-panel" aria-label="生成配对码">
+      <h2 class="section-title">设备配对</h2>
+      <p class="note">需网关登录会话。请求校验 Origin 与 CSRF；配对码只显示一次，不进 URL / 日志。</p>
+      <div class="pair-actions">
+        <button type="button" class="btn primary" id="pair-start-btn">生成配对码</button>
+        <button type="button" class="btn" id="pair-csrf-btn">刷新 CSRF</button>
+      </div>
+      <p class="pair-status" id="pair-status" role="status"></p>
+      <p class="pair-code" id="pair-code" hidden aria-live="polite"></p>
+    </section>
+
+    <section class="pair-panel" aria-label="已配对设备">
+      <h2 class="section-title">设备列表</h2>
+      <ul class="device-list" id="device-list"></ul>
+      <p class="note" id="device-empty">尚无设备。桌面配对成功后显示；不安全绑定会标注。</p>
+    </section>
+
     <dl class="meta">
       <div><dt>Health</dt><dd><code>/api/v1/health</code></dd></div>
-      <div><dt>Me</dt><dd><code>/api/v1/me</code>（仅网关会话）</dd></div>
-      <div><dt>Auth probe</dt><dd><code>/api/v1/auth-probe</code></dd></div>
+      <div><dt>Pair start</dt><dd><code>POST /api/v1/pair/start</code></dd></div>
+      <div><dt>Pair claim</dt><dd><code>POST /api/v1/pair/claim</code></dd></div>
+      <div><dt>Devices</dt><dd><code>GET /api/v1/devices</code></dd></div>
     </dl>
-    <p class="note">设备同步端口只认 deviceToken，永不信任 <code>X-Trim-*</code>。端口不写死。</p>
   </main>
+  <script src="./pair.js"></script>
 </body>
 </html>

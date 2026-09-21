@@ -7,6 +7,9 @@
   --text-3: rgba(255, 255, 255, 0.55);
   --text-4: rgba(255, 255, 255, 0.36);
   --hairline: rgba(255, 255, 255, 0.12);
+  --accent-green: #30D978;
+  --accent-orange: #FF9352;
+  --p0: #FF5F57;
   --r-panel: 16px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -86,4 +89,80 @@ body {
 code {
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+.section-title {
+  margin: 0 0 var(--s-4);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.pair-panel {
+  margin: 0 0 var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--hairline);
+}
+
+.pair-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: var(--s-4);
+}
+
+.btn {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-1);
+  color: var(--text-1);
+  font: 13px/1 var(--font);
+  cursor: pointer;
+}
+
+.btn.primary {
+  border-color: var(--text-1);
+  background: var(--text-1);
+  color: var(--bg-base);
+}
+
+.pair-status { min-height: 1.2em; color: var(--text-3); font-size: 13px; }
+.pair-status[data-kind="error"] { color: var(--p0); }
+.pair-status[data-kind="ok"] { color: var(--accent-green); }
+
+.pair-code {
+  margin: var(--s-4) 0 0;
+  font: 28px/1.2 var(--font-mono);
+  letter-spacing: 0.2em;
+  color: var(--text-1);
+}
+
+.device-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.device-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--bg-base);
+}
+
+.badge-insecure {
+  margin-left: 8px;
+  padding: 0 6px;
+  border: 1px solid var(--accent-orange);
+  border-radius: 999px;
+  color: var(--accent-orange);
+  font-size: 11px;
 }
