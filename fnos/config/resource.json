@@ -1,0 +1,16 @@
+{
+  "cpu": {
+    "shares": 256
+  },
+  "memory": {
+    "limitMb": 256
+  },
+  "storage": {
+    "dataMb": 512,
+    "paths": ["data/", "runtime/"]
+  },
+  "runtime": {
+    "node": ">=18",
+    "sqlite": "memory-stub-for-p0; G0 验证 NAS 上 node:sqlite / 原生模块可用性"
+  }
+}

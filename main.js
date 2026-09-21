@@ -56,7 +56,50 @@ const {
   normalizeDefaultTabPreference,
   updateDefaultTabPreference,
   createForegroundMediaPermissionCoordinator,
+  createSyncCredentialsStore,
+  syncPairHttpPolicy,
+  validatePairingCodeInput,
+  PAIR_HTTP_CONFIRM_TEXT,
 } = require('./main-services');
+const {
+  INSECURE_DEVICE_TOKEN_TTL_MS,
+  SCHEMA_UI_STATE_INCOMPATIBLE,
+  MIN_SUPPORTED_SCHEMA_VERSION,
+  MAX_SUPPORTED_SCHEMA_VERSION,
+} = require('./packages/sync-protocol');
+const { openSyncStore, resolveSyncDbPath } = require('./sync-store');
+const {
+  classifyFromLocalAndNas,
+  resolveMigrationChoice,
+  runMigrationAttempt,
+  restoreLatestMigrationBackup,
+  MIGRATION_BANNER_TEXT,
+  isInsideSyncBackupDir,
+  resolveSyncBackupsRoot,
+  parseLocalTodosStrict,
+} = require('./sync-migration');
+const {
+  ensureBoundAccount,
+  writeTodoUpsert,
+  writeTodoDelete,
+  writeCategoryUpsert,
+  runTodosSyncCycle,
+  notesCollectionIsNotWired,
+  gateSchemaCompatibility,
+} = require('./todos-sync');
+const {
+  createSyncSettingsStore,
+  SYNC_SETTINGS_FILE,
+} = require('./sync-settings');
+const {
+  canRequestEndpoint,
+  selectEndpointsForAttempt,
+  shouldFailover,
+  classifyTransportError,
+  deriveSyncUiState,
+  syncUiStateLabel,
+  HTTP_INSECURE_CONFIRM_TEXT,
+} = require('./packages/sync-protocol/endpoints');
 
 // Keep the historical data directory so upgrading users retain notes, links,
 // recordings and encrypted settings after the public product rename.
@@ -232,6 +275,7 @@ const APP_SETTINGS_FILE = 'app-settings.json';
 const WORKSPACE_SETTINGS_FILE = 'workspace-settings.json';
 const WORKSPACE_DATA_FILE = 'workspace.json';
 const MIRROR_IMAGE_FILE = 'mirror-cover.jpg';
+const SYNC_CREDENTIALS_FILE_NAME = 'sync-credentials.json';
 const workspacePersistenceGate = createWorkspacePersistenceGate();
 const SODA_MUSIC_APP = '/Applications/汽水音乐.app';
 const TRANSCRIPTION_MODEL = 'qwen3-asr-flash-realtime';
@@ -2800,6 +2844,1119 @@ ipcMain.handle('credentials:copy', async (event, payload) => {
   return true;
 });
 
+const syncCredentialsStore = createSyncCredentialsStore({
+  getUserDataPath: () => app.getPath('userData'),
+  safeStorage,
+  fs,
+  path,
+  fileName: SYNC_CREDENTIALS_FILE_NAME,
+});
+
+const syncSettingsStore = createSyncSettingsStore({
+  getUserDataPath: () => app.getPath('userData'),
+  fs,
+  path,
+  fileName: SYNC_SETTINGS_FILE,
+});
+
+/** @type {ReturnType<typeof openSyncStore> | null} */
+let todosSyncStore = null;
+let todosSyncCycleTimer = null;
+const TODOS_SYNC_CYCLE_INTERVAL_MS = 15_000;
+
+/**
+ * In-memory schema negotiation outcome for the bound session (T7).
+ * Cleared on rebind / clear; not persisted (revalidated on next sync).
+ * @type {null | {
+ *   incompatible: boolean,
+ *   uiState: string | null,
+ *   upgradeTarget: string | null,
+ *   message: string | null,
+ *   reason: string | null,
+ *   schemaVersion?: number,
+ *   minSupported?: number,
+ *   maxSupported?: number,
+ *   checkedAt: number,
+ * }}
+ */
+let syncSchemaRuntime = null;
+
+function clearSyncSchemaRuntime() {
+  syncSchemaRuntime = null;
+}
+
+function setSyncSchemaRuntimeFromEvaluation(evaluation) {
+  if (!evaluation) {
+    clearSyncSchemaRuntime();
+    return null;
+  }
+  if (evaluation.ok) {
+    syncSchemaRuntime = {
+      incompatible: false,
+      uiState: null,
+      upgradeTarget: null,
+      message: null,
+      reason: null,
+      schemaVersion: evaluation.schemaVersion,
+      minSupported: evaluation.minSupported,
+      maxSupported: evaluation.maxSupported,
+      checkedAt: Date.now(),
+    };
+    return syncSchemaRuntime;
+  }
+  syncSchemaRuntime = {
+    incompatible: true,
+    uiState: evaluation.uiState || SCHEMA_UI_STATE_INCOMPATIBLE,
+    upgradeTarget: evaluation.upgradeTarget || 'unknown',
+    message: evaluation.message || null,
+    reason: evaluation.reason || 'schema_incompatible',
+    schemaVersion: evaluation.schemaVersion,
+    minSupported: evaluation.minSupported,
+    maxSupported: evaluation.maxSupported,
+    checkedAt: Date.now(),
+  };
+  return syncSchemaRuntime;
+}
+
+function buildSyncPublicStatus() {
+  const base = syncCredentialsStore.getStatus();
+  if (!syncSchemaRuntime || !syncSchemaRuntime.incompatible) {
+    return {
+      ...base,
+      schemaIncompatible: false,
+      schemaUiState: null,
+      schemaUpgradeTarget: null,
+      schemaMessage: null,
+    };
+  }
+  return {
+    ...base,
+    schemaIncompatible: true,
+    schemaUiState: syncSchemaRuntime.uiState,
+    schemaUpgradeTarget: syncSchemaRuntime.upgradeTarget,
+    schemaMessage: syncSchemaRuntime.message,
+    schemaReason: syncSchemaRuntime.reason,
+    schemaVersion: syncSchemaRuntime.schemaVersion,
+    schemaMinSupported: syncSchemaRuntime.minSupported,
+    schemaMaxSupported: syncSchemaRuntime.maxSupported,
+  };
+}
+
+function broadcastSyncStatus() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('sync:status', buildSyncPublicStatus());
+}
+
+function getTodosSyncStore() {
+  if (todosSyncStore) return todosSyncStore;
+  const dbPath = resolveSyncDbPath(app.getPath('userData'));
+  todosSyncStore = openSyncStore(dbPath);
+  return todosSyncStore;
+}
+
+function closeTodosSyncStore() {
+  if (todosSyncCycleTimer) {
+    clearInterval(todosSyncCycleTimer);
+    todosSyncCycleTimer = null;
+  }
+  if (todosSyncStore) {
+    try {
+      todosSyncStore.close();
+    } catch {
+      // ignore close races on quit
+    }
+    todosSyncStore = null;
+  }
+}
+
+function readBoundSyncContext() {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) {
+    return { ok: false, error: 'not_bound' };
+  }
+  const record = syncCredentialsStore.read().record;
+  if (!record || !record.deviceToken || !record.deviceId || !record.uid || !record.serverId) {
+    return { ok: false, error: 'binding_incomplete' };
+  }
+  const store = getTodosSyncStore();
+  const bound = ensureBoundAccount(store, record);
+  return {
+    ok: true,
+    store,
+    accountId: bound.accountId,
+    deviceId: bound.deviceId,
+    record,
+    status,
+  };
+}
+
+function broadcastTodosProjection(projection) {
+  if (!projection || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('sync:todos-projection', {
+    todosJson: projection.todosJson,
+    categoryNamesJson: projection.categoryNamesJson,
+    todos: projection.todos,
+    categoryNames: projection.categoryNames,
+  });
+}
+
+function createTodosSyncTransport(record) {
+  const token = record.deviceToken;
+  const fallbackBaseUrl = record.baseUrl;
+  return {
+    async pullPage({ cursor }) {
+      const query = cursor == null || cursor === '' ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+      return withEndpointFailover(async (endpoint) => {
+        const response = await fetchSyncJson(
+          joinSyncApiUrl(endpoint.baseUrl || fallbackBaseUrl, `api/v1/sync/pull${query}`),
+          {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        if (!response.ok) {
+          return {
+            ok: false,
+            error: (response.body && response.body.error) || response.error || 'pull_failed',
+            status: response.status,
+            certificateError: response.certificateError,
+            code: response.code,
+            body: response.body,
+          };
+        }
+        return { ok: true, body: response.body };
+      }, { token });
+    },
+    async pushMutations(mutations) {
+      return withEndpointFailover(async (endpoint) => {
+        const response = await fetchSyncJson(
+          joinSyncApiUrl(endpoint.baseUrl || fallbackBaseUrl, 'api/v1/sync/push'),
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: { mutations },
+          },
+        );
+        if (!response.ok) {
+          return {
+            ok: false,
+            error: (response.body && response.body.error) || response.error || 'push_failed',
+            status: response.status,
+            applied: response.body && response.body.applied,
+            certificateError: response.certificateError,
+            code: response.code,
+            body: response.body,
+          };
+        }
+        return {
+          ok: true,
+          applied: response.body && response.body.applied,
+          serverRev: response.body && response.body.serverRev,
+          body: response.body,
+        };
+      }, { token });
+    },
+  };
+}
+
+async function runBoundTodosSyncCycle({ broadcast = true } = {}) {
+  const ctx = readBoundSyncContext();
+  if (!ctx.ok) {
+    return { ok: false, error: ctx.error };
+  }
+  const transport = createTodosSyncTransport(ctx.record);
+  const result = await runTodosSyncCycle(ctx.store, {
+    accountId: ctx.accountId,
+    pullPage: transport.pullPage,
+    pushMutations: transport.pushMutations,
+    localSchema: {
+      minSupported: MIN_SUPPORTED_SCHEMA_VERSION,
+      maxSupported: MAX_SUPPORTED_SCHEMA_VERSION,
+    },
+  });
+  if (result.error === SCHEMA_UI_STATE_INCOMPATIBLE || result.stopPull || result.stopPush) {
+    setSyncSchemaRuntimeFromEvaluation(result);
+    broadcastSyncStatus();
+    return result;
+  }
+  if (result.ok) {
+    // Compatible cycle clears any prior mismatch latch.
+    setSyncSchemaRuntimeFromEvaluation({
+      ok: true,
+      schemaVersion: result.schemaVersion,
+      minSupported: MIN_SUPPORTED_SCHEMA_VERSION,
+      maxSupported: MAX_SUPPORTED_SCHEMA_VERSION,
+    });
+    broadcastSyncStatus();
+  }
+  if (result.ok && broadcast) {
+    broadcastTodosProjection(result.projection);
+  }
+  return result;
+}
+
+function scheduleTodosSyncCycle() {
+  if (todosSyncCycleTimer) return;
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return;
+  todosSyncCycleTimer = setInterval(() => {
+    runBoundTodosSyncCycle().catch(() => {});
+  }, TODOS_SYNC_CYCLE_INTERVAL_MS);
+  if (typeof todosSyncCycleTimer.unref === 'function') {
+    todosSyncCycleTimer.unref();
+  }
+}
+
+function joinSyncApiUrl(baseUrl, apiPath) {
+  const base = String(baseUrl || '').replace(/\/+$/, '');
+  const suffix = String(apiPath || '').replace(/^\/+/, '');
+  return `${base}/${suffix}`;
+}
+
+function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutMs = 8000 } = {}) {
+  return new Promise((resolve) => {
+    let parsed;
+    try {
+      parsed = new URL(targetUrl);
+    } catch (error) {
+      resolve({ ok: false, error: 'invalid_url' });
+      return;
+    }
+    const lib = parsed.protocol === 'https:' ? require('https') : require('http');
+    const payload = body == null ? null : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
+    const req = lib.request(
+      {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: `${parsed.pathname}${parsed.search}`,
+        method,
+        headers: {
+          Accept: 'application/json',
+          ...(payload
+            ? {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Content-Length': payload.length,
+              }
+            : {}),
+          ...headers,
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8');
+          let json = null;
+          try {
+            json = text ? JSON.parse(text) : null;
+          } catch (error) {
+            resolve({ ok: false, error: 'invalid_json', status: res.statusCode });
+            return;
+          }
+          resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, body: json });
+        });
+      },
+    );
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ ok: false, error: 'timeout', transferable: true });
+    });
+    req.on('error', (error) => {
+      const message = (error && error.message) || 'network_error';
+      const code = (error && error.code) || message;
+      const classified = classifyTransportError(code);
+      resolve({
+        ok: false,
+        error: classified.kind === 'certificate_error' ? 'certificate_error' : message,
+        code,
+        transferable: classified.transferable === true,
+        certificateError: classified.kind === 'certificate_error',
+        uiState: classified.uiState || null,
+      });
+    });
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+function buildNasSyncDashboard() {
+  const credStatus = syncCredentialsStore.getStatus();
+  const view = syncSettingsStore.getPublicView();
+  let outboxCount = 0;
+  let accountId = null;
+  if (credStatus.bound) {
+    try {
+      const ctx = readBoundSyncContext();
+      if (ctx.ok) {
+        accountId = ctx.accountId;
+        outboxCount = ctx.store.listPendingOutbox(ctx.accountId).length;
+      }
+    } catch {
+      outboxCount = 0;
+    }
+  }
+  const publicStatus = buildSyncPublicStatus();
+  const certificateError = Boolean(
+    view.lastError &&
+      (view.lastError.code === 'certificate_error' || view.lastUiState === 'certificate_error'),
+  );
+  const endpointDisabled = Boolean(
+    view.currentEndpoint &&
+      (view.currentEndpoint.disabledByPolicy || canRequestEndpoint(view.currentEndpoint).ok === false),
+  );
+  const migrating = Boolean(migrationSession && migrationSession.readonly);
+  const migrationFailed = Boolean(migrationSession && migrationSession.phase === 'failed');
+  const schemaIncompatible = Boolean(
+    publicStatus.schemaIncompatible || view.lastUiState === 'schema_incompatible',
+  );
+  const uiState = deriveSyncUiState({
+    bound: credStatus.bound,
+    needsReauth: credStatus.needsReauth,
+    migrating,
+    migrationFailed,
+    syncing: false,
+    outboxCount,
+    offline: Boolean(view.lastError) && !schemaIncompatible,
+    lastSuccessAt: view.lastSuccessAt,
+    lastError: view.lastError,
+    certificateError,
+    endpointDisabled,
+    schemaIncompatible,
+  });
+  syncSettingsStore.recordSyncMeta({ lastUiState: uiState });
+  return {
+    ok: true,
+    credentials: publicStatus,
+    settings: view,
+    outboxCount,
+    accountId,
+    uiState,
+    uiLabel: syncUiStateLabel(uiState),
+    channelLabel: (view.currentEndpoint && view.currentEndpoint.baseUrl) || '',
+    lastSuccessAt: view.lastSuccessAt,
+    insecureHttpWarning: view.insecureHttpWarning,
+    devicePortGuidance: view.devicePortGuidance,
+    httpConfirmText: HTTP_INSECURE_CONFIRM_TEXT,
+    schemaIncompatible,
+    schemaUpgradeTarget: publicStatus.schemaUpgradeTarget || null,
+    schemaMessage: publicStatus.schemaMessage || null,
+  };
+}
+
+async function probeEndpointHealth(endpoint, token) {
+  const gate = canRequestEndpoint(endpoint);
+  if (!gate.ok) {
+    return { ok: false, error: gate.error, uiState: gate.uiState || null };
+  }
+  const response = await fetchSyncJson(joinSyncApiUrl(endpoint.baseUrl, 'api/v1/health'), {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    timeoutMs: 4000,
+  });
+  if (!response.ok) {
+    if (response.certificateError) {
+      return {
+        ok: false,
+        error: 'certificate_error',
+        certificateError: true,
+        transferable: false,
+        uiState: 'certificate_error',
+      };
+    }
+    const classified = classifyTransportError(response.status || response.error || response.code);
+    return {
+      ok: false,
+      error: response.error || 'health_failed',
+      status: response.status,
+      transferable: classified.transferable,
+      certificateError: classified.kind === 'certificate_error',
+      uiState: classified.uiState || null,
+    };
+  }
+  return {
+    ok: true,
+    serverId: response.body && response.body.serverId,
+    schemaVersion: response.body && response.body.schemaVersion,
+    body: response.body,
+  };
+}
+
+async function withEndpointFailover(runFn) {
+  const view = syncSettingsStore.getPublicView();
+  const ordered = selectEndpointsForAttempt(view.endpoints, {
+    currentEndpointId: view.currentEndpointId,
+  });
+  if (ordered.length === 0 && view.endpoints.length === 0) {
+    // Fall back to credentials baseUrl as a transient single endpoint when settings empty.
+    return runFn({
+      endpointId: 'legacy',
+      baseUrl: syncCredentialsStore.getStatus().baseUrl || '',
+      enabled: true,
+      allowInsecureHttp: true,
+      disabledByPolicy: false,
+      priority: 0,
+    });
+  }
+  if (ordered.length === 0) {
+    return { ok: false, error: 'no_endpoint', uiState: 'endpoint_disabled' };
+  }
+  let lastFailure = null;
+  for (const endpoint of ordered) {
+    const gate = canRequestEndpoint(endpoint);
+    if (!gate.ok) {
+      lastFailure = { ok: false, error: gate.error, endpointId: endpoint.endpointId };
+      continue;
+    }
+    const result = await runFn(endpoint);
+    if (result && result.ok) {
+      syncSettingsStore.setCurrentEndpoint(endpoint.endpointId);
+      syncSettingsStore.updateEndpointHealth(endpoint.endpointId, {
+        ok: true,
+        serverId: result.serverId || null,
+      });
+      syncSettingsStore.recordSyncMeta({
+        lastSuccessAt: Date.now(),
+        lastError: null,
+        currentEndpointId: endpoint.endpointId,
+        lastUiState: 'synced',
+      });
+      return { ...result, endpointId: endpoint.endpointId, endpoint };
+    }
+    lastFailure = { ...result, endpointId: endpoint.endpointId };
+    if (result && result.certificateError) {
+      syncSettingsStore.recordSyncMeta({
+        lastError: { code: 'certificate_error', at: Date.now() },
+        lastUiState: 'certificate_error',
+      });
+      return {
+        ok: false,
+        error: 'certificate_error',
+        certificateError: true,
+        transferable: false,
+        uiState: 'certificate_error',
+        endpointId: endpoint.endpointId,
+      };
+    }
+    if (!shouldFailover(result && (result.status || result.error || result.code))) {
+      syncSettingsStore.recordSyncMeta({
+        lastError: { code: (result && result.error) || 'request_failed', at: Date.now() },
+      });
+      return lastFailure;
+    }
+  }
+  return lastFailure || { ok: false, error: 'all_endpoints_failed' };
+}
+
+ipcMain.handle('sync:get-status', () => buildSyncPublicStatus());
+
+ipcMain.handle('sync:get-dashboard', () => buildNasSyncDashboard());
+
+ipcMain.handle('sync:list-endpoints', () => syncSettingsStore.getPublicView());
+
+ipcMain.handle('sync:add-endpoint', (event, payload = {}) => {
+  const result = syncSettingsStore.addEndpoint(payload);
+  return result;
+});
+
+ipcMain.handle('sync:update-endpoint', (event, payload = {}) => {
+  const endpointId = String(payload.endpointId || '');
+  if (!endpointId) return { ok: false, error: 'endpoint_id_required' };
+  return syncSettingsStore.updateEndpoint(endpointId, payload);
+});
+
+ipcMain.handle('sync:delete-endpoint', (event, payload = {}) => {
+  const endpointId = String(payload.endpointId || '');
+  if (!endpointId) return { ok: false, error: 'endpoint_id_required' };
+  return syncSettingsStore.deleteEndpoint(endpointId);
+});
+
+ipcMain.handle('sync:reorder-endpoint', (event, payload = {}) => {
+  const endpointId = String(payload.endpointId || '');
+  if (!endpointId) return { ok: false, error: 'endpoint_id_required' };
+  return syncSettingsStore.reorderEndpoint(endpointId, payload.direction === 'up' ? 'up' : 'down');
+});
+
+ipcMain.handle('sync:set-current-endpoint', (event, payload = {}) => {
+  return syncSettingsStore.setCurrentEndpoint(String(payload.endpointId || ''));
+});
+
+ipcMain.handle('sync:set-gateway-bearer-blocked', (event, payload = {}) => {
+  return syncSettingsStore.setGatewayBearerBlocked(payload && payload.blocked === true);
+});
+
+ipcMain.handle('sync:test-endpoint', async (event, payload = {}) => {
+  const endpointId = String(payload.endpointId || '');
+  const view = syncSettingsStore.getPublicView();
+  const endpoint = (view.endpoints || []).find((ep) => ep.endpointId === endpointId);
+  if (!endpoint) return { ok: false, error: 'not_found' };
+  const token = syncCredentialsStore.getDeviceToken();
+  const result = await probeEndpointHealth(endpoint, token);
+  syncSettingsStore.updateEndpointHealth(endpointId, result);
+  if (result.certificateError) {
+    syncSettingsStore.recordSyncMeta({
+      lastError: { code: 'certificate_error', at: Date.now() },
+      lastUiState: 'certificate_error',
+    });
+  }
+  return result;
+});
+
+ipcMain.handle('sync:retry', async () => {
+  const result = await runBoundTodosSyncCycle({ broadcast: true });
+  return { ...result, dashboard: buildNasSyncDashboard() };
+});
+
+ipcMain.handle('sync:export-todos-backup', async () => {
+  const ctx = readBoundSyncContext();
+  let todosJson = '{}';
+  let categoryNamesJson = '{}';
+  if (ctx.ok) {
+    const projection = ctx.store.buildTodosLocalStorageProjection(ctx.accountId);
+    todosJson = projection.todosJson;
+    categoryNamesJson = projection.categoryNamesJson;
+  } else {
+    // Unbound: export current renderer-held data is not available in main;
+    // fall back to empty shell so dialog still works for UX.
+    todosJson = JSON.stringify({ P0: [], P1: [], P2: [], P3: [] });
+  }
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  const save = await dialog.showSaveDialog(win, {
+    title: '导出待办备份',
+    defaultPath: `pome-todos-backup-${Date.now()}.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  });
+  if (save.canceled || !save.filePath) {
+    return { ok: false, error: 'cancelled' };
+  }
+  try {
+    fs.writeFileSync(
+      save.filePath,
+      `${JSON.stringify({ todos: JSON.parse(todosJson), categoryNames: JSON.parse(categoryNamesJson), exportedAt: Date.now() }, null, 2)}\n`,
+      'utf8',
+    );
+    return { ok: true, path: save.filePath };
+  } catch (error) {
+    return { ok: false, error: 'write_failed', message: error && error.message };
+  }
+});
+
+ipcMain.handle('sync:pair-http-policy', (event, baseUrl) => {
+  const policy = syncPairHttpPolicy(baseUrl);
+  return {
+    ...policy,
+    confirmText: PAIR_HTTP_CONFIRM_TEXT,
+    insecureTtlDays: Math.round(INSECURE_DEVICE_TOKEN_TTL_MS / (24 * 60 * 60 * 1000)),
+  };
+});
+
+ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
+  const codeCheck = validatePairingCodeInput(payload.pairingCode || payload.code);
+  if (!codeCheck.ok) return { ok: false, error: codeCheck.error };
+
+  const baseUrl = String(payload.baseUrl || '').trim();
+  const policy = syncPairHttpPolicy(baseUrl);
+  if (!policy.ok) return { ok: false, error: policy.error || 'invalid_base_url' };
+
+  const allowInsecureHttp = payload.allowInsecureHttp === true;
+  if (policy.requiresExtraConfirm) {
+    if (!allowInsecureHttp) {
+      return { ok: false, error: 'insecure_http_not_allowed' };
+    }
+    if (payload.httpConfirmAccepted !== true) {
+      return { ok: false, error: 'http_confirm_required', confirmText: PAIR_HTTP_CONFIRM_TEXT };
+    }
+  }
+
+  if (!syncCredentialsStore.encryptionAvailable()) {
+    return { ok: false, error: 'secure_storage_unavailable', refusedPlaintext: true, needsReauth: true };
+  }
+
+  const insecureBound = Boolean(policy.insecureBound);
+  const claimUrl = joinSyncApiUrl(baseUrl, 'api/v1/pair/claim');
+  const response = await fetchSyncJson(claimUrl, {
+    method: 'POST',
+    body: {
+      pairingCode: codeCheck.code,
+      deviceName: payload.deviceName || require('os').hostname(),
+      insecureBound,
+    },
+  });
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: (response.body && response.body.error) || response.error || 'claim_failed',
+      status: response.status,
+    };
+  }
+
+  const body = response.body || {};
+  const schemaGate = gateSchemaCompatibility(body, {
+    minSupported: MIN_SUPPORTED_SCHEMA_VERSION,
+    maxSupported: MAX_SUPPORTED_SCHEMA_VERSION,
+  });
+  if (!schemaGate.ok) {
+    setSyncSchemaRuntimeFromEvaluation(schemaGate);
+    broadcastSyncStatus();
+    return {
+      ok: false,
+      error: SCHEMA_UI_STATE_INCOMPATIBLE,
+      reason: schemaGate.reason,
+      stopPull: true,
+      stopPush: true,
+      uiState: schemaGate.uiState,
+      upgradeTarget: schemaGate.upgradeTarget,
+      message: schemaGate.message,
+      schemaVersion: schemaGate.schemaVersion,
+      minSupported: schemaGate.minSupported,
+      maxSupported: schemaGate.maxSupported,
+    };
+  }
+
+  if (!body.deviceToken) {
+    return { ok: false, error: 'missing_device_token' };
+  }
+
+  const record = {
+    deviceToken: body.deviceToken,
+    deviceId: body.deviceId,
+    uid: body.uid,
+    serverId: body.serverId,
+    expiresAt: body.expiresAt,
+    insecureBound: Boolean(body.insecureBound),
+    baseUrl,
+    boundAt: Date.now(),
+  };
+  const saved = syncCredentialsStore.save(record);
+  if (!saved.ok) {
+    return { ok: false, error: saved.error || 'save_failed', refusedPlaintext: saved.refusedPlaintext };
+  }
+  clearSyncSchemaRuntime();
+  setSyncSchemaRuntimeFromEvaluation(schemaGate);
+  try {
+    syncSettingsStore.ensureEndpointFromPairing(baseUrl, {
+      kind: 'gateway',
+      allowInsecureHttp: allowInsecureHttp === true,
+      serverId: body.serverId,
+      uid: body.uid,
+    });
+    ensureBoundAccount(getTodosSyncStore(), record);
+    scheduleTodosSyncCycle();
+    // Kick an immediate cycle (pull→push). Migration four-state is T5b — not here.
+    runBoundTodosSyncCycle().catch(() => {});
+  } catch {
+    // Binding still succeeds even if SyncStore open fails; next write will retry.
+  }
+  return { ok: true, status: { ...saved.status, ...buildSyncPublicStatus() } };
+});
+
+ipcMain.handle('sync:clear-binding', () => {
+  const cleared = syncCredentialsStore.clear();
+  clearSyncSchemaRuntime();
+  closeTodosSyncStore();
+  broadcastSyncStatus();
+  return cleared.ok ? { ok: true, status: buildSyncPublicStatus() } : { ok: false, error: cleared.error };
+});
+
+ipcMain.handle('sync:todos-local-write', (event, payload = {}) => {
+  const ctx = readBoundSyncContext();
+  if (!ctx.ok) {
+    return { ok: false, error: ctx.error, unbound: ctx.error === 'not_bound' };
+  }
+  if (!notesCollectionIsNotWired()) {
+    return { ok: false, error: 'notes_collection_wired_forbidden' };
+  }
+
+  const op = payload.op;
+  const ctxWrite = { accountId: ctx.accountId, deviceId: ctx.deviceId };
+  let result;
+  if (op === 'upsert-todo') {
+    result = writeTodoUpsert(ctx.store, ctxWrite, {
+      item: payload.item,
+      categoryId: payload.categoryId,
+      clientMutationId: payload.clientMutationId,
+      clientTime: payload.clientTime,
+    });
+  } else if (op === 'delete-todo') {
+    result = writeTodoDelete(ctx.store, ctxWrite, {
+      entityId: payload.entityId || (payload.item && payload.item.id),
+      clientMutationId: payload.clientMutationId,
+      clientTime: payload.clientTime,
+    });
+  } else if (op === 'upsert-category') {
+    result = writeCategoryUpsert(ctx.store, ctxWrite, {
+      priority: payload.priority || payload.categoryId,
+      name: payload.name,
+      clientMutationId: payload.clientMutationId,
+      clientTime: payload.clientTime,
+    });
+  } else {
+    return { ok: false, error: 'unsupported_op' };
+  }
+
+  if (!result.ok) {
+    return { ok: false, error: result.reason || 'write_failed', field: result.field };
+  }
+
+  // Online push attempt; offline keeps outbox queued.
+  runBoundTodosSyncCycle().catch(() => {});
+
+  return {
+    ok: true,
+    deduped: result.deduped === true,
+    pendingCount: result.pendingCount,
+    projection: {
+      todosJson: result.projection.todosJson,
+      categoryNamesJson: result.projection.categoryNamesJson,
+    },
+  };
+});
+
+ipcMain.handle('sync:todos-run-cycle', async () => {
+  const result = await runBoundTodosSyncCycle({ broadcast: true });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.error || result.reason || 'sync_failed',
+      phase: result.phase,
+      pendingCount: result.pendingCount,
+      stopPull: result.stopPull === true,
+      stopPush: result.stopPush === true,
+      uiState: result.uiState || null,
+      upgradeTarget: result.upgradeTarget || null,
+      message: result.message || null,
+      status: buildSyncPublicStatus(),
+    };
+  }
+  return {
+    ok: true,
+    pendingCount: result.pendingCount,
+    pushed: result.pushed,
+    pulledChanges: result.pulledChanges,
+    status: buildSyncPublicStatus(),
+    projection: {
+      todosJson: result.projection.todosJson,
+      categoryNamesJson: result.projection.categoryNamesJson,
+    },
+  };
+});
+
+ipcMain.handle('sync:todos-get-projection', () => {
+  const ctx = readBoundSyncContext();
+  if (!ctx.ok) {
+    return { ok: false, error: ctx.error, unbound: ctx.error === 'not_bound' };
+  }
+  const projection = ctx.store.buildTodosLocalStorageProjection(ctx.accountId);
+  return {
+    ok: true,
+    bound: true,
+    pendingCount: ctx.store.listPendingOutbox(ctx.accountId).length,
+    projection: {
+      todosJson: projection.todosJson,
+      categoryNamesJson: projection.categoryNamesJson,
+      todos: projection.todos,
+      categoryNames: projection.categoryNames,
+    },
+  };
+});
+
+ipcMain.handle('sync:list-devices', async (event, payload = {}) => {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+  const token = syncCredentialsStore.getDeviceToken();
+  const baseUrl = String((payload && payload.baseUrl) || status.baseUrl || '').trim();
+  if (!baseUrl || !token) return { ok: false, error: 'missing_endpoint' };
+  const response = await fetchSyncJson(joinSyncApiUrl(baseUrl, 'api/v1/devices'), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: (response.body && response.body.error) || response.error || 'list_failed',
+      status: response.status,
+    };
+  }
+  return { ok: true, devices: (response.body && response.body.devices) || [] };
+});
+
+ipcMain.handle('sync:revoke-device', async (event, payload = {}) => {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+  const token = syncCredentialsStore.getDeviceToken();
+  const baseUrl = String((payload && payload.baseUrl) || status.baseUrl || '').trim();
+  const deviceId = String((payload && payload.deviceId) || '').trim();
+  if (!baseUrl || !token || !deviceId) return { ok: false, error: 'invalid_revoke' };
+  const response = await fetchSyncJson(
+    joinSyncApiUrl(baseUrl, `api/v1/devices/${encodeURIComponent(deviceId)}/revoke`),
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {},
+    },
+  );
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: (response.body && response.body.error) || response.error || 'revoke_failed',
+      status: response.status,
+    };
+  }
+  if (deviceId === status.deviceId) {
+    syncCredentialsStore.clear();
+  }
+  return { ok: true, device: response.body && response.body.device, clearedLocal: deviceId === status.deviceId };
+});
+
+/** In-memory migration UI session (read-only gate for todos). */
+const migrationSession = {
+  readonly: false,
+  phase: 'idle',
+  migrationId: null,
+  lastError: null,
+  pendingProjection: null,
+};
+
+let syncStoreInstance = null;
+
+function getOrOpenSyncStore() {
+  if (syncStoreInstance) return syncStoreInstance;
+  const dbPath = resolveSyncDbPath(app.getPath('userData'));
+  syncStoreInstance = openSyncStore(dbPath);
+  return syncStoreInstance;
+}
+
+function broadcastMigrationSession() {
+  const payload = {
+    readonly: migrationSession.readonly,
+    phase: migrationSession.phase,
+    migrationId: migrationSession.migrationId,
+    lastError: migrationSession.lastError,
+    bannerText: MIGRATION_BANNER_TEXT,
+  };
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    win.webContents.send('sync:migration-session', payload);
+  }
+  return payload;
+}
+
+function setMigrationSession(patch) {
+  Object.assign(migrationSession, patch);
+  return broadcastMigrationSession();
+}
+
+async function fetchBoundSyncJson(apiPath, { method = 'GET', body } = {}) {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+  const token = syncCredentialsStore.getDeviceToken();
+  const baseUrl = String(status.baseUrl || '').trim();
+  if (!baseUrl || !token) return { ok: false, error: 'missing_endpoint' };
+  const response = await fetchSyncJson(joinSyncApiUrl(baseUrl, apiPath), {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: (response.body && response.body.error) || response.error || 'request_failed',
+      status: response.status,
+      body: response.body,
+    };
+  }
+  return { ok: true, body: response.body, status: response.status };
+}
+
+ipcMain.handle('sync:get-migration-session', () => ({
+  ok: true,
+  ...broadcastMigrationSession(),
+  pendingProjection: migrationSession.pendingProjection,
+}));
+
+ipcMain.handle('sync:classify-migration', async (event, payload = {}) => {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+  const localTodosJson = payload.localTodosJson;
+  const local = parseLocalTodosStrict(
+    localTodosJson == null || localTodosJson === '' ? null : String(localTodosJson),
+  );
+  const stateRes = await fetchBoundSyncJson('api/v1/sync/state?collection=todos');
+  if (!stateRes.ok) return stateRes;
+  const decision = classifyFromLocalAndNas(
+    local.ok
+      ? JSON.stringify({
+          P0: local.data.P0,
+          P1: local.data.P1,
+          P2: local.data.P2,
+          P3: local.data.P3,
+        })
+      : String(localTodosJson || ''),
+    stateRes.body,
+  );
+  if (!decision.ok) return { ok: false, error: decision.reason || 'classify_failed' };
+  return {
+    ok: true,
+    decision,
+    localLive: local.ok ? local.live : 0,
+    localCorrupt: Boolean(local.corrupt),
+    nas: stateRes.body,
+  };
+});
+
+ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+
+  const localTodosJson = payload.localTodosJson == null ? null : String(payload.localTodosJson);
+  const classify = await fetchBoundSyncJson('api/v1/sync/state?collection=todos');
+  if (!classify.ok) return classify;
+  const decision = classifyFromLocalAndNas(localTodosJson, classify.body);
+  if (!decision.ok) {
+    return { ok: false, error: decision.reason || 'classify_failed' };
+  }
+  if (decision.decision === 'block_corrupt_local') {
+    return { ok: false, error: 'local_corrupt', message: decision.message, decision };
+  }
+
+  let authority = decision.authority || null;
+  if (decision.needsUserChoice) {
+    const resolved = resolveMigrationChoice(decision.decision, payload.choice);
+    if (!resolved.ok) {
+      setMigrationSession({ readonly: true, phase: 'awaiting_choice', lastError: null });
+      return { ok: false, error: 'choice_required', decision };
+    }
+    authority = resolved.authority;
+  }
+
+  setMigrationSession({ readonly: true, phase: 'migrating', lastError: null, pendingProjection: null });
+
+  const accountId = String(status.uid || status.deviceId || 'local');
+  const store = getOrOpenSyncStore();
+  store.ensureAccount({
+    accountId,
+    uid: status.uid,
+    serverId: status.serverId,
+    deviceId: status.deviceId,
+  });
+
+  const api = {
+    async startMigration(body) {
+      const res = await fetchBoundSyncJson('api/v1/migration/start', {
+        method: 'POST',
+        body: body || {},
+      });
+      if (!res.ok) throw new Error(res.error || 'migration_start_failed');
+      return res.body;
+    },
+    async commitMigration(body) {
+      const res = await fetchBoundSyncJson('api/v1/migration/commit', {
+        method: 'POST',
+        body,
+      });
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: res.error,
+          status: res.status,
+          body: res.body,
+        };
+      }
+      return { ok: true, body: res.body, status: res.status };
+    },
+    async getMigration(id) {
+      const res = await fetchBoundSyncJson(`api/v1/migration/${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(res.error || 'migration_get_failed');
+      return res.body;
+    },
+    async pullAll() {
+      const res = await fetchBoundSyncJson('api/v1/sync/pull?cursor=');
+      if (!res.ok) throw new Error(res.error || 'pull_failed');
+      return res.body;
+    },
+  };
+
+  let appliedProjection = null;
+  let result;
+  try {
+    result = await runMigrationAttempt({
+      decision,
+      authority,
+      localRaw: localTodosJson,
+      userDataPath: app.getPath('userData'),
+      accountId,
+      deviceId: status.deviceId,
+      api,
+      store,
+      applyLocalProjection(todosJson) {
+        appliedProjection = todosJson;
+      },
+    });
+  } catch (error) {
+    setMigrationSession({
+      readonly: false,
+      phase: 'failed',
+      lastError: error && error.message ? error.message : 'migration_failed',
+    });
+    return { ok: false, error: error && error.message ? error.message : 'migration_failed' };
+  }
+
+  if (!result.ok) {
+    setMigrationSession({
+      readonly: false,
+      phase: 'failed',
+      migrationId: result.migrationId || null,
+      lastError: result.error || 'migration_failed',
+      pendingProjection: appliedProjection,
+    });
+    return result;
+  }
+
+  setMigrationSession({
+    readonly: false,
+    phase: 'done',
+    migrationId: result.migrationId || null,
+    lastError: null,
+    pendingProjection: appliedProjection,
+  });
+  return {
+    ...result,
+    projectionJson: appliedProjection,
+    session: broadcastMigrationSession(),
+  };
+});
+
+ipcMain.handle('sync:ack-migration-projection', () => {
+  migrationSession.pendingProjection = null;
+  return { ok: true };
+});
+
+ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
+  if (payload.confirmed !== true) {
+    return { ok: false, error: 'confirm_required' };
+  }
+  const userDataPath = app.getPath('userData');
+  const root = resolveSyncBackupsRoot(userDataPath);
+  let applied = null;
+  const result = restoreLatestMigrationBackup(userDataPath, {
+    applyLocalProjection(todosJson) {
+      applied = todosJson;
+    },
+  });
+  if (!result.ok) return result;
+  if (result.path && !isInsideSyncBackupDir(root, result.path)) {
+    return { ok: false, error: 'backup_path_escape' };
+  }
+  setMigrationSession({
+    readonly: false,
+    phase: 'idle',
+    lastError: null,
+    pendingProjection: applied,
+  });
+  return { ...result, projectionJson: applied };
+});
+
 function sodaMusicRunning() {
   return new Promise((resolve) => {
     execFile('/usr/bin/pgrep', ['-f', '^/Applications/汽水音乐\\.app/Contents/MacOS/汽水音乐$'], { timeout: 1500 }, (error) => resolve(!error));
@@ -3838,6 +4995,7 @@ app.whenReady().then(() => {
   applyAppSettings();
   startTaskNotificationServer();
   void promptForMissingPermissions();
+  scheduleTodosSyncCycle();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -3861,6 +5019,7 @@ app.on('will-quit', () => {
   clearTaskNotificationTimers();
   stopTaskNotificationServer();
   closeAllTranscriptionSessions();
+  closeTodosSyncStore();
   globalShortcut.unregisterAll();
   stopClipboardPolling();
 });

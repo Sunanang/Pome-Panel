@@ -731,6 +731,49 @@
   const settingsCursorTokenClear = document.getElementById('settings-cursor-token-clear');
   const settingsCursorTokenHint = document.getElementById('settings-cursor-token-hint');
   let settingsCursorTokenMeta = { configured: false, state: 'empty', label: '未配置 · 使用本机登录' };
+  const settingsNasSyncStatus = document.getElementById('settings-nas-sync-status');
+  const settingsNasSyncBaseUrl = document.getElementById('settings-nas-sync-base-url');
+  const settingsNasPairCode = document.getElementById('settings-nas-pair-code');
+  const settingsNasPairSubmit = document.getElementById('settings-nas-pair-submit');
+  const settingsNasPairReauth = document.getElementById('settings-nas-pair-reauth');
+  const settingsNasSyncHint = document.getElementById('settings-nas-sync-hint');
+  const settingsNasDevices = document.getElementById('settings-nas-devices');
+  const settingsNasDeviceList = document.getElementById('settings-nas-device-list');
+  const settingsNasDialogRoot = document.getElementById('settings-nas-dialog-root');
+  const settingsNasDialogTitle = document.getElementById('settings-nas-dialog-title');
+  const settingsNasDialogBody = document.getElementById('settings-nas-dialog-body');
+  const settingsNasDialogCancel = document.getElementById('settings-nas-dialog-cancel');
+  const settingsNasDialogAlt = document.getElementById('settings-nas-dialog-alt');
+  const settingsNasDialogConfirm = document.getElementById('settings-nas-dialog-confirm');
+  const settingsNasDialog = document.getElementById('settings-nas-dialog');
+  const settingsNasMigrationActions = document.getElementById('settings-nas-migration-actions');
+  const settingsNasMigrationStart = document.getElementById('settings-nas-migration-start');
+  const settingsNasMigrationRetry = document.getElementById('settings-nas-migration-retry');
+  const settingsNasMigrationRestore = document.getElementById('settings-nas-migration-restore');
+  const todoMigrationBanner = document.getElementById('todo-migration-banner');
+  const tabTodo = document.getElementById('tab-todo');
+  const settingsNasChannelLabel = document.getElementById('settings-nas-channel-label');
+  const settingsNasOutboxCount = document.getElementById('settings-nas-outbox-count');
+  const settingsNasLastSync = document.getElementById('settings-nas-last-sync');
+  const settingsNasHttpWarning = document.getElementById('settings-nas-http-warning');
+  const settingsNasDevicePortGuide = document.getElementById('settings-nas-device-port-guide');
+  const settingsNasSyncRetry = document.getElementById('settings-nas-sync-retry');
+  const settingsNasExportBackup = document.getElementById('settings-nas-export-backup');
+  const settingsNasRestoreBackup = document.getElementById('settings-nas-restore-backup');
+  const settingsNasEndpointList = document.getElementById('settings-nas-endpoint-list');
+  const settingsNasEndpointUrl = document.getElementById('settings-nas-endpoint-url');
+  const settingsNasEndpointKind = document.getElementById('settings-nas-endpoint-kind');
+  const settingsNasEndpointAdd = document.getElementById('settings-nas-endpoint-add');
+  let nasPairUi = (window.NasSyncPair && window.NasSyncPair.initialPairUiState)
+    ? window.NasSyncPair.initialPairUiState()
+    : { code: '', baseUrl: '', bound: false, status: null, devices: [], dialog: null };
+  let nasMigrationUi = (window.NasSyncMigration && window.NasSyncMigration.initialMigrationUiState)
+    ? window.NasSyncMigration.initialMigrationUiState()
+    : { readonly: false, bannerVisible: false, phase: 'idle', dialog: null };
+  let nasSettingsUi = (window.NasSyncSettings && window.NasSyncSettings.initialSettingsUiState)
+    ? window.NasSyncSettings.initialSettingsUiState()
+    : { view: null, outboxCount: 0, uiState: 'unbound' };
+  let nasDialogResolver = null;
   const settingsFeatureList = document.getElementById('settings-feature-list');
   const settingsHomeModuleList = document.getElementById('settings-home-module-list');
   const settingsMirrorPreview = document.getElementById('settings-mirror-preview');
@@ -957,6 +1000,7 @@
       settingsCursorTokenStatus.textContent = settingsCursorTokenMeta.label || '未配置 · 使用本机登录';
       settingsCursorTokenStatus.dataset.state = settingsCursorTokenMeta.state || 'empty';
     }
+    renderNasSyncPanel();
     if (settingsShortcutValue) settingsShortcutValue.textContent = summary.shortcut;
     if (settingsDefaultTab) {
       const visibleTabs = new Set(Domain.visiblePanelTabs(
@@ -1662,6 +1706,432 @@
     settingsCursorTokenHint.classList.toggle('warning', kind === 'warning');
   }
 
+  function setNasSyncHint(message, kind = '') {
+    if (!settingsNasSyncHint) return;
+    settingsNasSyncHint.textContent = message || '';
+    settingsNasSyncHint.dataset.kind = kind || '';
+  }
+
+  function applyNasPairUi(action) {
+    if (!window.NasSyncPair || typeof window.NasSyncPair.reducePairUi !== 'function') return;
+    nasPairUi = window.NasSyncPair.reducePairUi(nasPairUi, action);
+    renderNasSyncPanel();
+  }
+
+  function applyNasSettingsUi(action) {
+    if (!window.NasSyncSettings || typeof window.NasSyncSettings.reduceSettingsUi !== 'function') return;
+    nasSettingsUi = window.NasSyncSettings.reduceSettingsUi(nasSettingsUi, action);
+    renderNasEndpoints();
+  }
+
+  function kindLabel(kind) {
+    switch (kind) {
+      case 'device-port': return '设备端口';
+      case 'fn-connect': return 'FN Connect';
+      case 'frp': return 'frp';
+      case 'custom': return '自定义';
+      default: return '网关';
+    }
+  }
+
+  function renderNasEndpoints() {
+    const view = nasSettingsUi.view;
+    const endpoints = (view && view.endpoints) || [];
+    const currentId = view && view.currentEndpointId;
+    if (settingsNasChannelLabel) {
+      settingsNasChannelLabel.textContent = nasSettingsUi.channelLabel || '—';
+    }
+    if (settingsNasOutboxCount) {
+      settingsNasOutboxCount.textContent = String(nasSettingsUi.outboxCount || 0);
+    }
+    if (settingsNasLastSync) {
+      settingsNasLastSync.textContent = nasSettingsUi.lastSuccessLabel || '—';
+    }
+    if (settingsNasHttpWarning) {
+      settingsNasHttpWarning.hidden = !nasSettingsUi.insecureWarningVisible;
+    }
+    if (settingsNasDevicePortGuide) {
+      settingsNasDevicePortGuide.hidden = !nasSettingsUi.devicePortGuidanceVisible;
+    }
+    if (settingsNasSyncRetry) {
+      settingsNasSyncRetry.disabled = nasSettingsUi.retryEnabled === false || nasSettingsUi.busy;
+    }
+    if (!settingsNasEndpointList) return;
+    if (!endpoints.length) {
+      settingsNasEndpointList.innerHTML = '<li class="settings-nas-endpoint-item"><span class="settings-nas-endpoint-meta">尚未添加 endpoint。配对成功后会自动写入网关地址，也可手动添加设备同步端口。</span></li>';
+      return;
+    }
+    settingsNasEndpointList.innerHTML = endpoints.map((ep) => {
+      const isCurrent = ep.endpointId === currentId;
+      const disabledPolicy = Boolean(ep.disabledByPolicy);
+      const classes = [
+        'settings-nas-endpoint-item',
+        isCurrent ? 'is-current' : '',
+        disabledPolicy ? 'is-disabled-policy' : '',
+      ].filter(Boolean).join(' ');
+      const loopback = /^(https?:\/\/)(127\.0\.0\.1|localhost|\[?::1\]?)/i.test(ep.baseUrl || '');
+      const showHttpToggle = /^http:/i.test(ep.baseUrl || '') && !loopback;
+      const httpChecked = ep.allowInsecureHttp ? ' checked' : '';
+      const httpDisabled = nasSettingsUi.busy ? ' disabled' : '';
+      const testing = nasSettingsUi.testingId === ep.endpointId;
+      return `<li class="${classes}" data-endpoint-id="${String(ep.endpointId).replace(/"/g, '')}" data-control-id="endpoint.kind-device-port">`
+        + `<div class="settings-nas-endpoint-main">`
+        + `<div><div class="settings-nas-endpoint-url">${ep.baseUrl || ''}`
+        + `<span class="settings-nas-endpoint-kind-badge">${kindLabel(ep.kind)}</span>`
+        + `${isCurrent ? '<span class="settings-nas-endpoint-kind-badge">当前</span>' : ''}`
+        + `${disabledPolicy ? '<span class="settings-nas-endpoint-kind-badge">已按策略停用</span>' : ''}`
+        + `</div>`
+        + `<div class="settings-nas-endpoint-meta">优先级 ${ep.priority}`
+        + `${ep.lastHealth && ep.lastHealth.ok ? ' · 健康' : ''}`
+        + `${ep.lastError ? ` · 错误 ${ep.lastError.code || ''}` : ''}`
+        + `</div></div></div>`
+        + `<div class="settings-nas-endpoint-actions">`
+        + (showHttpToggle
+          ? `<label class="settings-nas-http-toggle settings-feature-grid" data-control-id="endpoint.allowInsecureHttp">`
+            + `<span><b>允许明文 HTTP（不安全）</b><small>该地址不加密，设备令牌与待办内容可能被窃听或篡改</small></span>`
+            + `<input type="checkbox" data-nas-http-toggle="${String(ep.endpointId).replace(/"/g, '')}" aria-label="允许明文 HTTP"${httpChecked}${httpDisabled} /><i aria-hidden="true"></i>`
+            + `</label>`
+          : '')
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.test-connection" data-nas-test="${String(ep.endpointId).replace(/"/g, '')}"${testing || nasSettingsUi.busy ? ' disabled' : ''}>${testing ? '测试中…' : '测试连接'}</button>`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.enable" data-nas-enable="${String(ep.endpointId).replace(/"/g, '')}" data-enabled="${ep.enabled === false ? '0' : '1'}"${disabledPolicy ? ' disabled' : ''}>${ep.enabled === false ? '启用' : '停用'}</button>`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.reorder" data-nas-reorder="${String(ep.endpointId).replace(/"/g, '')}" data-dir="up">上移</button>`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.reorder" data-nas-reorder="${String(ep.endpointId).replace(/"/g, '')}" data-dir="down">下移</button>`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.edit" data-nas-use="${String(ep.endpointId).replace(/"/g, '')}">用作当前</button>`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.delete" data-nas-delete="${String(ep.endpointId).replace(/"/g, '')}">删除</button>`
+        + `</div></li>`;
+    }).join('');
+  }
+
+  function renderNasSyncPanel() {
+    const status = nasPairUi.status;
+    const bound = Boolean(status && status.bound);
+    if (settingsNasSyncStatus) {
+      const uiState = nasSettingsUi.uiState;
+      const schemaIncompatible = Boolean(
+        (status && status.schemaIncompatible)
+        || uiState === 'schema_incompatible'
+        || nasSettingsUi.schemaIncompatible,
+      );
+      if (schemaIncompatible) {
+        const target = (status && status.schemaUpgradeTarget)
+          || nasSettingsUi.schemaUpgradeTarget
+          || null;
+        settingsNasSyncStatus.textContent = target === 'desktop'
+          ? '协议不兼容 · 请升级桌面端'
+          : target === 'fpk'
+            ? '协议不兼容 · 请升级 NAS 应用'
+            : (nasSettingsUi.uiLabel || '协议不兼容 · 请升级');
+        settingsNasSyncStatus.dataset.state = 'error';
+        const schemaMessage = (status && status.schemaMessage) || nasSettingsUi.schemaMessage;
+        if (schemaMessage) setNasSyncHint(schemaMessage, 'error');
+      } else if (uiState && uiState !== 'unbound' && uiState !== 'synced') {
+        settingsNasSyncStatus.textContent = nasSettingsUi.uiLabel || uiState;
+        settingsNasSyncStatus.dataset.state =
+          uiState === 'certificate_error' || uiState === 'migration_failed'
+            ? 'error'
+            : uiState === 'endpoint_disabled' || uiState === 'needs_reauth' || uiState === 'offline_pending'
+              ? 'warning'
+              : uiState === 'syncing' || uiState === 'migrating'
+                ? 'syncing'
+                : bound
+                  ? (status.insecureBound ? 'insecure' : 'bound')
+                  : 'empty';
+      } else if (!bound) {
+        settingsNasSyncStatus.textContent = status && status.needsReauth
+          ? '需重新认证 · 安全存储不可用'
+          : '未绑定';
+        settingsNasSyncStatus.dataset.state = status && status.needsReauth ? 'insecure' : 'empty';
+      } else if (status.insecureBound) {
+        settingsNasSyncStatus.textContent = '已绑定 · 不安全绑定 / HTTP';
+        settingsNasSyncStatus.dataset.state = 'insecure';
+      } else {
+        settingsNasSyncStatus.textContent = nasSettingsUi.uiLabel || '已同步';
+        settingsNasSyncStatus.dataset.state = 'bound';
+      }
+    }
+    if (nasPairUi.error && !(status && status.schemaIncompatible)) {
+      setNasSyncHint(nasPairUi.error, 'error');
+    }
+    if (settingsNasPairReauth) settingsNasPairReauth.hidden = !bound;
+    if (settingsNasPairSubmit) {
+      settingsNasPairSubmit.disabled = Boolean(nasPairUi.submitting) || bound;
+    }
+    if (settingsNasPairCode) {
+      settingsNasPairCode.disabled = Boolean(nasPairUi.submitting) || bound;
+      if (document.activeElement !== settingsNasPairCode) {
+        settingsNasPairCode.value = nasPairUi.code || settingsNasPairCode.value;
+      }
+    }
+    if (settingsNasDevices) settingsNasDevices.hidden = !(nasPairUi.devices && nasPairUi.devices.length);
+    if (settingsNasMigrationActions) settingsNasMigrationActions.hidden = !bound;
+    if (settingsNasDeviceList) {
+      settingsNasDeviceList.innerHTML = (nasPairUi.devices || []).map((device) => {
+        const name = device.name || device.deviceId || '设备';
+        const badge = device.insecureBound
+          ? '<span class="settings-nas-device-badge" title="HTTP 不安全绑定">不安全绑定 / HTTP</span>'
+          : '';
+        const revokeDisabled = nasPairUi.submitting ? ' disabled' : '';
+        return `<li data-device-id="${String(device.deviceId || '').replace(/"/g, '')}">`
+          + `<span>${name}${badge}</span>`
+          + `<button class="workspace-button compact" type="button" data-control-id="devices.revoke" data-nas-revoke="${String(device.deviceId || '').replace(/"/g, '')}"${revokeDisabled}>吊销</button>`
+          + `</li>`;
+      }).join('');
+    }
+    renderNasEndpoints();
+  }
+
+  function openNasDialog(dialog) {
+    if (!settingsNasDialogRoot || !dialog) return Promise.resolve({ confirmed: false });
+    if (settingsNasDialogTitle) settingsNasDialogTitle.textContent = dialog.title || '确认';
+    if (settingsNasDialogBody) {
+      settingsNasDialogBody.textContent = dialog.body || '';
+      settingsNasDialogBody.style.whiteSpace = 'pre-line';
+    }
+    if (settingsNasDialogConfirm) settingsNasDialogConfirm.textContent = dialog.confirmLabel || '确认';
+    if (settingsNasDialogCancel) settingsNasDialogCancel.textContent = dialog.cancelLabel || '取消';
+    if (settingsNasDialogAlt) {
+      if (dialog.altLabel) {
+        settingsNasDialogAlt.hidden = false;
+        settingsNasDialogAlt.textContent = dialog.altLabel;
+      } else {
+        settingsNasDialogAlt.hidden = true;
+      }
+    }
+    if (settingsNasDialog) {
+      settingsNasDialog.dataset.controlId = dialog.controlId
+        || (dialog.id === 'pair-reauth-confirm'
+          ? 'pair.reauth'
+          : dialog.id === 'migration-both-live'
+            ? 'migration.both-live.confirm'
+            : dialog.id === 'migration-history-empty'
+              ? 'migration.history-empty.choice'
+              : dialog.id === 'migration-restore-confirm'
+                ? 'migration.failed.restore'
+                : 'pair.http-extra-confirm');
+    }
+    settingsNasDialogRoot.hidden = false;
+    return new Promise((resolve) => {
+      nasDialogResolver = resolve;
+    });
+  }
+
+  function closeNasDialog(confirmed, choice) {
+    if (settingsNasDialogRoot) settingsNasDialogRoot.hidden = true;
+    if (settingsNasDialogAlt) settingsNasDialogAlt.hidden = true;
+    const resolver = nasDialogResolver;
+    nasDialogResolver = null;
+    if (resolver) resolver({ confirmed: confirmed === true, choice: choice || null });
+  }
+
+  function applyNasMigrationUi(action) {
+    if (!window.NasSyncMigration) return;
+    nasMigrationUi = window.NasSyncMigration.reduceMigrationUi(nasMigrationUi, action);
+    window.__nasTodoReadonly = window.NasSyncMigration.isReadonly(nasMigrationUi);
+    if (todoMigrationBanner) {
+      todoMigrationBanner.hidden = !nasMigrationUi.bannerVisible;
+      todoMigrationBanner.textContent = nasMigrationUi.bannerText || '迁移中，稍候';
+    }
+    if (tabTodo) {
+      tabTodo.classList.toggle('is-migration-readonly', Boolean(nasMigrationUi.readonly));
+    }
+    if (settingsNasMigrationActions) {
+      settingsNasMigrationActions.hidden = !(nasPairUi.bound);
+    }
+    if (settingsNasMigrationRetry) {
+      settingsNasMigrationRetry.hidden = nasMigrationUi.phase !== 'failed';
+    }
+    if (settingsNasMigrationRestore) {
+      settingsNasMigrationRestore.hidden = !(
+        nasMigrationUi.phase === 'failed' || nasMigrationUi.lastMigrationId
+      );
+    }
+    if (nasMigrationUi.toast && typeof showStatusToast === 'function') {
+      showStatusToast(nasMigrationUi.toast);
+    }
+  }
+
+  function applyMigrationProjection(projectionJson) {
+    if (typeof projectionJson !== 'string') return;
+    try {
+      localStorage.setItem('notch-todo-data', projectionJson);
+      document.dispatchEvent(new CustomEvent('nas-sync:todos-projection', {
+        detail: { todosJson: projectionJson },
+      }));
+    } catch (error) {
+      /* ignore */
+    }
+  }
+
+  async function startNasMigration({ choice = null, isRetry = false } = {}) {
+    if (!window.NasSyncMigration || !window.notchAPI || typeof window.notchAPI.syncRunMigration !== 'function') {
+      return;
+    }
+    if (!nasPairUi.bound) {
+      setNasSyncHint('请先完成配对', 'warning');
+      return;
+    }
+    const localTodosJson = localStorage.getItem('notch-todo-data');
+    applyNasMigrationUi({ type: 'classifying' });
+
+    const classified = await window.notchAPI.syncClassifyMigration({ localTodosJson });
+    if (!classified || !classified.ok) {
+      applyNasMigrationUi({
+        type: 'failed',
+        message: (classified && classified.error) || '无法判定迁移状态',
+      });
+      setNasSyncHint('迁移判定失败', 'error');
+      return;
+    }
+
+    const decision = classified.decision;
+    let resolvedChoice = choice;
+    if (decision.needsUserChoice && !resolvedChoice) {
+      applyNasMigrationUi({ type: 'await_choice', decision });
+      const dialog = nasMigrationUi.dialog;
+      const picked = await openNasDialog(dialog);
+      if (dialog.allowDismiss !== false && !picked.confirmed && !picked.choice) {
+        // cancel abort for both-live
+        if (!picked.choice && dialog.choiceCancel == null) {
+          applyNasMigrationUi({ type: 'close_dialog' });
+          applyNasMigrationUi({ type: 'reset' });
+          setNasSyncHint('已取消迁移', 'warning');
+          return;
+        }
+      }
+      if (picked.confirmed && dialog.choiceConfirm) {
+        resolvedChoice = dialog.choiceConfirm;
+      } else if (picked.choice) {
+        resolvedChoice = picked.choice;
+      } else if (!picked.confirmed && dialog.choiceCancel) {
+        // history-empty: cancel button means keep_nas_deletes
+        resolvedChoice = dialog.choiceCancel;
+      } else {
+        applyNasMigrationUi({ type: 'close_dialog' });
+        applyNasMigrationUi({ type: 'reset' });
+        setNasSyncHint('已取消迁移', 'warning');
+        return;
+      }
+      closeNasDialog(true, resolvedChoice);
+      applyNasMigrationUi({ type: 'close_dialog' });
+    }
+
+    applyNasMigrationUi({ type: 'migrating' });
+    const result = await window.notchAPI.syncRunMigration({
+      localTodosJson,
+      choice: resolvedChoice,
+    });
+
+    if (!result || !result.ok) {
+      applyNasMigrationUi({
+        type: 'failed',
+        error: result && result.error,
+        message: (result && result.message) || (result && result.error) || '迁移失败',
+        migrationId: result && result.migrationId,
+      });
+      setNasSyncHint(
+        result && result.error === 'cas_conflict' ? '对端已变更，请重试判定' : '迁移失败',
+        'error',
+      );
+      return;
+    }
+
+    if (result.projectionJson) {
+      applyMigrationProjection(result.projectionJson);
+      if (typeof window.notchAPI.syncAckMigrationProjection === 'function') {
+        await window.notchAPI.syncAckMigrationProjection();
+      }
+    }
+
+    if (result.skipped) {
+      applyNasMigrationUi({ type: 'skipped' });
+      setNasSyncHint('两边皆空，已进入同步', 'success');
+    } else {
+      applyNasMigrationUi({ type: 'done', migrationId: result.migrationId });
+      setNasSyncHint(isRetry ? '迁移重试成功' : '迁移完成', 'success');
+    }
+  }
+
+  async function refreshNasSyncStatus() {
+    if (!window.notchAPI || typeof window.notchAPI.syncGetStatus !== 'function') return;
+    try {
+      const status = await window.notchAPI.syncGetStatus();
+      applyNasPairUi({ type: 'set_status', status });
+      if (status && status.bound && status.baseUrl && settingsNasSyncBaseUrl && !settingsNasSyncBaseUrl.value) {
+        settingsNasSyncBaseUrl.value = status.baseUrl;
+      }
+      if (status && status.bound && typeof window.notchAPI.syncListDevices === 'function') {
+        const listed = await window.notchAPI.syncListDevices({
+          baseUrl: settingsNasSyncBaseUrl?.value || status.baseUrl,
+        });
+        if (listed && listed.ok) applyNasPairUi({ type: 'devices', devices: listed.devices });
+      }
+      if (typeof window.notchAPI.syncGetDashboard === 'function') {
+        const dash = await window.notchAPI.syncGetDashboard();
+        if (dash && dash.ok) {
+          applyNasSettingsUi({
+            type: 'hydrate',
+            view: dash.settings,
+            syncStatus: dash.credentials,
+            outboxCount: dash.outboxCount,
+            uiState: dash.uiState,
+            uiLabel: dash.uiLabel,
+            channelLabel: dash.channelLabel,
+            error: '',
+            schemaIncompatible: dash.schemaIncompatible,
+            schemaUpgradeTarget: dash.schemaUpgradeTarget,
+            schemaMessage: dash.schemaMessage,
+          });
+          renderNasSyncPanel();
+        }
+      }
+    } catch (error) {
+      /* ignore offline status refresh */
+    }
+  }
+
+  async function submitNasPair({ httpConfirmAccepted = false } = {}) {
+    if (!window.NasSyncPair || !window.notchAPI || typeof window.notchAPI.syncPairClaim !== 'function') return;
+    const code = settingsNasPairCode?.value || '';
+    const baseUrl = settingsNasSyncBaseUrl?.value || '';
+    applyNasPairUi({ type: 'submit_start' });
+    setNasSyncHint('正在配对…');
+
+    const policy = await window.notchAPI.syncPairHttpPolicy(baseUrl);
+    if (window.NasSyncPair.shouldPromptHttpConfirm(policy) && !httpConfirmAccepted) {
+      applyNasPairUi({
+        type: 'open_http_confirm',
+        confirmText: policy.confirmText,
+      });
+      const decision = await openNasDialog(nasPairUi.dialog);
+      if (!decision.confirmed) {
+        applyNasPairUi({ type: 'close_dialog' });
+        setNasSyncHint('已取消不安全 HTTP 配对', 'warning');
+        return;
+      }
+      closeNasDialog(true);
+      return submitNasPair({ httpConfirmAccepted: true });
+    }
+
+    const result = await window.NasSyncPair.runPairSubmit({
+      code,
+      baseUrl,
+      api: window.notchAPI,
+      httpConfirmAccepted,
+      allowInsecureHttp: Boolean(policy && policy.insecureBound),
+    });
+    applyNasPairUi({ type: 'submit_end' });
+    if (!result.ok) {
+      applyNasPairUi({ type: 'failure', error: result.error, message: result.message });
+      setNasSyncHint(result.message || '配对失败', 'error');
+      return;
+    }
+    applyNasPairUi({ type: 'success', status: result.status });
+    if (settingsNasPairCode) settingsNasPairCode.value = '';
+    setNasSyncHint('配对成功，正在检查迁移…', 'success');
+    await refreshNasSyncStatus();
+    void startNasMigration();
+  }
+
   if (settingsCursorTokenSave) settingsCursorTokenSave.addEventListener('click', async () => {
     if (!window.notchAPI || typeof window.notchAPI.setCursorToken !== 'function') return;
     const token = settingsCursorToken?.value || '';
@@ -1714,6 +2184,347 @@
     setCursorTokenHint('已清除手动 Token，将只使用本机 Cursor 登录态。', 'success');
     document.dispatchEvent(new CustomEvent('notch:cursor-token-changed'));
   });
+
+  if (settingsNasPairCode) {
+    settingsNasPairCode.addEventListener('input', () => {
+      applyNasPairUi({ type: 'input', value: settingsNasPairCode.value });
+      setNasSyncHint('');
+    });
+    settingsNasPairCode.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void submitNasPair();
+      }
+    });
+  }
+  if (settingsNasPairSubmit) {
+    settingsNasPairSubmit.addEventListener('click', () => { void submitNasPair(); });
+  }
+  if (settingsNasPairReauth) {
+    settingsNasPairReauth.addEventListener('click', async () => {
+      applyNasPairUi({ type: 'open_reauth_confirm' });
+      const decision = await openNasDialog(nasPairUi.dialog);
+      if (!decision.confirmed) {
+        applyNasPairUi({ type: 'close_dialog' });
+        return;
+      }
+      closeNasDialog(true);
+      if (!window.notchAPI || typeof window.notchAPI.syncClearBinding !== 'function') return;
+      const cleared = await window.notchAPI.syncClearBinding();
+      if (cleared && cleared.ok) {
+        applyNasPairUi({ type: 'cleared' });
+        setNasSyncHint('已清除绑定，可重新配对', 'success');
+      } else {
+        setNasSyncHint('清除失败', 'error');
+      }
+    });
+  }
+
+  async function addNasEndpoint() {
+    if (!window.NasSyncSettings || !window.notchAPI) return;
+    const baseUrl = settingsNasEndpointUrl?.value || '';
+    const kind = settingsNasEndpointKind?.value || 'gateway';
+    const check = window.NasSyncSettings.validateBaseUrlDraft(baseUrl);
+    if (!check.ok) {
+      setNasSyncHint(check.message || 'URL 无效', 'error');
+      return;
+    }
+    applyNasSettingsUi({ type: 'busy' });
+    const result = await window.NasSyncSettings.runAddEndpoint({
+      api: window.notchAPI,
+      baseUrl: check.baseUrl,
+      kind,
+    });
+    applyNasSettingsUi({ type: 'idle' });
+    if (!result || !result.ok) {
+      setNasSyncHint(
+        result && result.error === 'duplicate_endpoint' ? '该地址已存在' : (result && result.error) || '添加失败',
+        'error',
+      );
+      return;
+    }
+    if (settingsNasEndpointUrl) settingsNasEndpointUrl.value = '';
+    setNasSyncHint('已添加 endpoint', 'success');
+    await refreshNasSyncStatus();
+  }
+
+  if (settingsNasEndpointAdd) {
+    settingsNasEndpointAdd.addEventListener('click', () => { void addNasEndpoint(); });
+  }
+  if (settingsNasEndpointUrl) {
+    settingsNasEndpointUrl.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void addNasEndpoint();
+      }
+    });
+  }
+  if (settingsNasSyncRetry) {
+    settingsNasSyncRetry.addEventListener('click', async () => {
+      if (!window.notchAPI || typeof window.notchAPI.syncRetry !== 'function') return;
+      applyNasSettingsUi({ type: 'busy' });
+      const result = await window.notchAPI.syncRetry();
+      applyNasSettingsUi({ type: 'idle' });
+      if (!result || !result.ok) {
+        setNasSyncHint((result && result.error) || '重试失败', 'error');
+      } else {
+        setNasSyncHint('已重试同步', 'success');
+      }
+      await refreshNasSyncStatus();
+    });
+  }
+  if (settingsNasExportBackup) {
+    settingsNasExportBackup.addEventListener('click', async () => {
+      if (!window.notchAPI || typeof window.notchAPI.syncExportTodosBackup !== 'function') return;
+      const result = await window.notchAPI.syncExportTodosBackup();
+      if (!result || !result.ok) {
+        if (result && result.error === 'cancelled') return;
+        setNasSyncHint('导出失败', 'error');
+        return;
+      }
+      setNasSyncHint('备份已导出', 'success');
+      if (typeof showStatusToast === 'function') showStatusToast('待办备份已导出');
+    });
+  }
+  if (settingsNasRestoreBackup) {
+    settingsNasRestoreBackup.addEventListener('click', async () => {
+      if (!window.NasSyncSettings) return;
+      const dialog = window.NasSyncSettings.buildRestoreConfirmDialog();
+      applyNasSettingsUi({ type: 'open_dialog', dialog });
+      const decision = await openNasDialog(dialog);
+      applyNasSettingsUi({ type: 'close_dialog' });
+      if (!decision.confirmed) return;
+      closeNasDialog(true);
+      if (!window.notchAPI || typeof window.notchAPI.syncRestoreMigrationBackup !== 'function') return;
+      const result = await window.notchAPI.syncRestoreMigrationBackup({ confirmed: true });
+      if (!result || !result.ok) {
+        setNasSyncHint((result && result.error) || '恢复失败', 'error');
+        return;
+      }
+      if (result.projectionJson) applyMigrationProjection(result.projectionJson);
+      setNasSyncHint('已恢复迁移备份', 'success');
+      await refreshNasSyncStatus();
+    });
+  }
+  if (settingsNasEndpointList) {
+    settingsNasEndpointList.addEventListener('click', async (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const testBtn = target.closest('[data-nas-test]');
+      const delBtn = target.closest('[data-nas-delete]');
+      const useBtn = target.closest('[data-nas-use]');
+      const enableBtn = target.closest('[data-nas-enable]');
+      const reorderBtn = target.closest('[data-nas-reorder]');
+      if (testBtn) {
+        const endpointId = testBtn.getAttribute('data-nas-test');
+        applyNasSettingsUi({ type: 'testing', endpointId });
+        const result = await window.notchAPI.syncTestEndpoint({ endpointId });
+        applyNasSettingsUi({ type: 'idle' });
+        if (result && result.certificateError) {
+          setNasSyncHint('证书错误：不会故障转移到其它 endpoint', 'error');
+        } else if (result && result.ok) {
+          setNasSyncHint('连接成功', 'success');
+        } else {
+          setNasSyncHint((result && result.error) || '连接失败', 'error');
+        }
+        await refreshNasSyncStatus();
+        return;
+      }
+      if (delBtn) {
+        const endpointId = delBtn.getAttribute('data-nas-delete');
+        const ep = ((nasSettingsUi.view && nasSettingsUi.view.endpoints) || [])
+          .find((item) => item.endpointId === endpointId);
+        const dialog = window.NasSyncSettings.buildDeleteConfirmDialog(ep || { endpointId });
+        const decision = await openNasDialog(dialog);
+        if (!decision.confirmed) return;
+        closeNasDialog(true);
+        await window.notchAPI.syncDeleteEndpoint({ endpointId });
+        await refreshNasSyncStatus();
+        return;
+      }
+      if (useBtn) {
+        await window.notchAPI.syncSetCurrentEndpoint({
+          endpointId: useBtn.getAttribute('data-nas-use'),
+        });
+        await refreshNasSyncStatus();
+        return;
+      }
+      if (enableBtn) {
+        const endpointId = enableBtn.getAttribute('data-nas-enable');
+        const enabled = enableBtn.getAttribute('data-enabled') !== '1';
+        const result = await window.notchAPI.syncUpdateEndpoint({ endpointId, enabled });
+        if (!result || !result.ok) {
+          setNasSyncHint(
+            result && result.error === 'disabled_by_policy'
+              ? '已停用：需改为 HTTPS 或重新开启 HTTP 开关'
+              : (result && result.error) || '更新失败',
+            'error',
+          );
+        }
+        await refreshNasSyncStatus();
+        return;
+      }
+      if (reorderBtn) {
+        await window.notchAPI.syncReorderEndpoint({
+          endpointId: reorderBtn.getAttribute('data-nas-reorder'),
+          direction: reorderBtn.getAttribute('data-dir'),
+        });
+        await refreshNasSyncStatus();
+      }
+    });
+    settingsNasEndpointList.addEventListener('change', async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      const endpointId = target.getAttribute('data-nas-http-toggle');
+      if (!endpointId) return;
+      const enable = target.checked === true;
+      if (enable) {
+        const dialog = window.NasSyncSettings.buildHttpConfirmDialog();
+        const decision = await openNasDialog(dialog);
+        if (!decision.confirmed) {
+          target.checked = false;
+          closeNasDialog(false);
+          return;
+        }
+        closeNasDialog(true);
+      }
+      const result = await window.NasSyncSettings.runToggleHttp({
+        api: window.notchAPI,
+        endpointId,
+        enable,
+        httpConfirmAccepted: enable,
+      });
+      if (!result || !result.ok) {
+        target.checked = !enable;
+        setNasSyncHint((result && result.error) || 'HTTP 开关更新失败', 'error');
+        return;
+      }
+      if (result.policyMessage) setNasSyncHint(result.policyMessage, 'warning');
+      else if (!enable) setNasSyncHint('已停用：需改为 HTTPS 或重新开启开关', 'warning');
+      else setNasSyncHint('已允许明文 HTTP（持续警告）', 'warning');
+      await refreshNasSyncStatus();
+    });
+  }
+  if (settingsNasDialogCancel) {
+    settingsNasDialogCancel.addEventListener('click', () => {
+      const dialog = nasMigrationUi.dialog || nasPairUi.dialog;
+      if (dialog && dialog.choiceCancel) {
+        closeNasDialog(false, dialog.choiceCancel);
+        return;
+      }
+      closeNasDialog(false);
+      applyNasPairUi({ type: 'close_dialog' });
+      applyNasMigrationUi({ type: 'close_dialog' });
+    });
+  }
+  if (settingsNasDialogAlt) {
+    settingsNasDialogAlt.addEventListener('click', () => {
+      const dialog = nasMigrationUi.dialog;
+      if (dialog && dialog.choiceAlt) {
+        closeNasDialog(true, dialog.choiceAlt);
+        return;
+      }
+      closeNasDialog(false);
+    });
+  }
+  if (settingsNasDialogConfirm) {
+    settingsNasDialogConfirm.addEventListener('click', () => {
+      const dialog = nasMigrationUi.dialog || nasPairUi.dialog;
+      if (dialog && dialog.choiceConfirm) {
+        closeNasDialog(true, dialog.choiceConfirm);
+        return;
+      }
+      closeNasDialog(true);
+    });
+  }
+  if (settingsNasMigrationStart) {
+    settingsNasMigrationStart.addEventListener('click', () => {
+      void startNasMigration();
+    });
+  }
+  if (settingsNasMigrationRetry) {
+    settingsNasMigrationRetry.addEventListener('click', () => {
+      void startNasMigration({ isRetry: true });
+    });
+  }
+  if (settingsNasMigrationRestore) {
+    settingsNasMigrationRestore.addEventListener('click', async () => {
+      applyNasMigrationUi({ type: 'open_restore_confirm' });
+      const decision = await openNasDialog(nasMigrationUi.dialog);
+      if (!decision.confirmed) {
+        applyNasMigrationUi({ type: 'close_dialog' });
+        return;
+      }
+      closeNasDialog(true);
+      if (!window.notchAPI || typeof window.notchAPI.syncRestoreMigrationBackup !== 'function') return;
+      const restored = await window.notchAPI.syncRestoreMigrationBackup({ confirmed: true });
+      if (!restored || !restored.ok) {
+        setNasSyncHint((restored && restored.error) || '恢复失败', 'error');
+        return;
+      }
+      if (restored.projectionJson) applyMigrationProjection(restored.projectionJson);
+      applyNasMigrationUi({ type: 'reset' });
+      setNasSyncHint('已恢复迁移备份', 'success');
+    });
+  }
+  if (window.notchAPI && typeof window.notchAPI.onSyncMigrationSession === 'function') {
+    window.notchAPI.onSyncMigrationSession((session) => {
+      if (!session) return;
+      applyNasMigrationUi({
+        type: 'set_readonly',
+        readonly: Boolean(session.readonly),
+      });
+      if (session.phase === 'failed') {
+        applyNasMigrationUi({
+          type: 'failed',
+          message: session.lastError || '迁移失败',
+          migrationId: session.migrationId,
+        });
+      }
+    });
+  }
+  if (settingsNasDeviceList) {
+    settingsNasDeviceList.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-nas-revoke]');
+      if (!button || !window.notchAPI || typeof window.notchAPI.syncRevokeDevice !== 'function') return;
+      const deviceId = button.getAttribute('data-nas-revoke');
+      applyNasPairUi({
+        type: 'open_reauth_confirm',
+      });
+      // Reuse dialog chrome for revoke confirm
+      const decision = await openNasDialog({
+        id: 'devices-revoke-confirm',
+        title: '吊销此设备？',
+        body: '吊销后该设备令牌立即失效。',
+        confirmLabel: '吊销',
+        cancelLabel: '取消',
+      });
+      if (!decision.confirmed) {
+        applyNasPairUi({ type: 'close_dialog' });
+        return;
+      }
+      closeNasDialog(true);
+      const result = await window.notchAPI.syncRevokeDevice({
+        deviceId,
+        baseUrl: settingsNasSyncBaseUrl?.value || (nasPairUi.status && nasPairUi.status.baseUrl),
+      });
+      if (!result || !result.ok) {
+        setNasSyncHint(result && result.error || '吊销失败', 'error');
+        return;
+      }
+      setNasSyncHint('设备已吊销', 'success');
+      await refreshNasSyncStatus();
+    });
+  }
+  void refreshNasSyncStatus();
+  if (window.notchAPI && typeof window.notchAPI.onSyncStatus === 'function') {
+    window.notchAPI.onSyncStatus((status) => {
+      applyNasPairUi({ type: 'set_status', status });
+      if (status && status.schemaIncompatible && status.schemaMessage) {
+        setNasSyncHint(status.schemaMessage, 'error');
+      }
+    });
+  }
 
   if (settingsApiConfigure) settingsApiConfigure.addEventListener('click', openTranscriptionSettings);
   if (transcriptionSettingsClose) transcriptionSettingsClose.addEventListener('click', closeTranscriptionSettings);

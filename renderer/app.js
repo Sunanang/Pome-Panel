@@ -25,6 +25,88 @@ function collectLocalStorageSnapshot() {
 }
 
 let workspaceReloadPending = false;
+let applyingSyncTodosProjection = false;
+let todosSyncBound = false;
+
+function applyTodosSyncProjectionPayload(projection) {
+  if (!projection) return false;
+  const todosJson =
+    typeof projection.todosJson === 'string'
+      ? projection.todosJson
+      : projection.todos
+        ? JSON.stringify(projection.todos)
+        : null;
+  const categoryNamesJson =
+    typeof projection.categoryNamesJson === 'string'
+      ? projection.categoryNamesJson
+      : projection.categoryNames
+        ? JSON.stringify(projection.categoryNames)
+        : null;
+  if (!todosJson || !categoryNamesJson) return false;
+
+  applyingSyncTodosProjection = true;
+  try {
+    localStorage.setItem(STORAGE_KEY, todosJson);
+    localStorage.setItem(TODO_CATEGORY_KEY, categoryNamesJson);
+    data = loadData();
+    todoCategoryNames = loadTodoCategoryNames();
+    PRIORITIES.forEach((priority) => {
+      if (typeof renderList === 'function') renderList(priority);
+      if (typeof updateCount === 'function') updateCount(priority);
+    });
+    if (typeof applyTodoCategoryNames === 'function') applyTodoCategoryNames();
+  } finally {
+    applyingSyncTodosProjection = false;
+  }
+  return true;
+}
+
+async function refreshTodosSyncBindingState() {
+  if (!window.notchAPI || typeof window.notchAPI.syncGetStatus !== 'function') {
+    todosSyncBound = false;
+    return false;
+  }
+  try {
+    const status = await window.notchAPI.syncGetStatus();
+    todosSyncBound = Boolean(status && status.bound);
+    return todosSyncBound;
+  } catch (error) {
+    todosSyncBound = false;
+    return false;
+  }
+}
+
+async function hydrateTodosSyncProjectionAfterWorkspace() {
+  const bound = await refreshTodosSyncBindingState();
+  if (!bound || typeof window.notchAPI.syncTodosGetProjection !== 'function') return;
+  try {
+    const result = await window.notchAPI.syncTodosGetProjection();
+    if (result && result.ok && result.projection) {
+      applyTodosSyncProjectionPayload(result.projection);
+    }
+  } catch (error) {
+    // Unbound / store unavailable — keep LS as-is.
+  }
+}
+
+function mirrorTodoToSync(payload) {
+  if (applyingSyncTodosProjection) return;
+  if (!window.notchAPI || typeof window.notchAPI.syncTodosLocalWrite !== 'function') return;
+  // Main returns unbound when not paired; keep optimistic LS write either way.
+  window.notchAPI
+    .syncTodosLocalWrite(payload)
+    .then((result) => {
+      if (result && result.unbound) {
+        todosSyncBound = false;
+        return;
+      }
+      if (result && result.ok) {
+        todosSyncBound = true;
+      }
+    })
+    .catch(() => {});
+}
+
 async function hydratePortableWorkspace() {
   if (!window.notchAPI?.loadWorkspaceData) return;
   try {
@@ -46,6 +128,8 @@ async function hydratePortableWorkspace() {
       location.reload();
       return;
     }
+    // Bound startup: hydratePortableWorkspace → SQLite projection overrides workspace.
+    await hydrateTodosSyncProjectionAfterWorkspace();
     setInterval(() => window.notchAPI.saveWorkspaceData(collectLocalStorageSnapshot()).catch(() => {}), 2000);
   } catch (error) {}
 }
@@ -164,6 +248,15 @@ function normalizeTodoItems(value) {
 }
 
 function saveData(data) {
+  if (window.NasSyncMigration && typeof window.NasSyncMigration.isReadonly === 'function') {
+    // Prefer live UI state if workspace exposed it
+  }
+  if (window.__nasTodoReadonly === true) {
+    if (typeof showStatusToast === 'function') {
+      showStatusToast('迁移中，稍候', { kind: 'warning' });
+    }
+    return false;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
@@ -173,6 +266,7 @@ function saveData(data) {
     const reminders = PRIORITIES.flatMap((priority) => data[priority] || []);
     window.notchAPI.scheduleTodoReminders(reminders).catch(() => {});
   }
+  return true;
 }
 
 let data = loadData();
@@ -193,11 +287,18 @@ function loadTodoCategoryNames() {
 }
 
 function persistTodoCategoryNames() {
+  if (window.__nasTodoReadonly === true) {
+    if (typeof showStatusToast === 'function') {
+      showStatusToast('迁移中，稍候', { kind: 'warning' });
+    }
+    return false;
+  }
   try {
     localStorage.setItem(TODO_CATEGORY_KEY, JSON.stringify(todoCategoryNames));
   } catch (error) {
     // LocalStorage 不可用时仍保留当前会话中的分类名。
   }
+  return true;
 }
 
 function applyTodoCategoryNames() {
@@ -228,6 +329,13 @@ if (window.notchAPI && typeof window.notchAPI.onTodoReminder === 'function') {
       changed = true;
     });
     if (changed) saveData(data);
+  });
+}
+
+if (window.notchAPI && typeof window.notchAPI.onSyncTodosProjection === 'function') {
+  window.notchAPI.onSyncTodosProjection((projection) => {
+    todosSyncBound = true;
+    applyTodosSyncProjectionPayload(projection);
   });
 }
 
@@ -371,11 +479,16 @@ function flashCheckboxPop(priority, id) {
 }
 
 function addTodo(priority, text, deadline) {
+  if (window.__nasTodoReadonly === true) {
+    if (typeof showStatusToast === 'function') showStatusToast('迁移中，稍候', { kind: 'warning' });
+    return false;
+  }
   const item = window.NotchDomain.createTodo(text, deadline, generateId(), Date.now());
   if (!item) return false;
   const previousPositions = captureTodoPositions(priority);
   data[priority].push(item);
   saveData(data);
+  mirrorTodoToSync({ op: 'upsert-todo', categoryId: priority, item });
   renderList(priority, { previousPositions });
   updateCount(priority);
   flashItemClass(priority, item.id, 'enter');
@@ -399,6 +512,7 @@ function editTodo(priority, id, text, deadline) {
   const previousPositions = captureTodoPositions(priority);
   data[priority][index] = updated;
   saveData(data);
+  mirrorTodoToSync({ op: 'upsert-todo', categoryId: priority, item: updated });
   renderList(priority, { previousPositions, focusId: id, focusAction: 'edit' });
   return true;
 }
@@ -412,6 +526,7 @@ function toggleTodo(priority, id) {
   list[idx].done = !list[idx].done;
   const nowDone = list[idx].done;
   saveData(data);
+  mirrorTodoToSync({ op: 'upsert-todo', categoryId: priority, item: list[idx] });
   renderList(priority, {
     previousPositions,
     focusId: restoreFocus ? id : '',
@@ -433,6 +548,7 @@ function deleteTodo(priority, id) {
   const nearbyItem = itemEl && (itemEl.nextElementSibling || itemEl.previousElementSibling);
   if (itemEl) itemEl.remove();
   saveData(data);
+  mirrorTodoToSync({ op: 'delete-todo', entityId: id });
   updateCount(priority);
   if (shouldRestoreFocus) {
     const nextFocus =
@@ -448,6 +564,7 @@ function deleteTodo(priority, id) {
       if (list.some((item) => item.id === removed.id)) return;
       list.splice(Math.min(index, list.length), 0, removed);
       saveData(data);
+      mirrorTodoToSync({ op: 'upsert-todo', categoryId: priority, item: removed });
       renderList(priority);
       updateCount(priority);
       const restored = document.querySelector(
@@ -1175,6 +1292,11 @@ document.querySelectorAll('.todo-category-name[data-category]').forEach((input) 
     }, TODO_CATEGORY_DEFAULTS);
     persistTodoCategoryNames();
     applyTodoCategoryNames();
+    mirrorTodoToSync({
+      op: 'upsert-category',
+      priority: categoryId,
+      name: todoCategoryNames[categoryId],
+    });
   };
   input.addEventListener('change', finishCategoryEdit);
   input.addEventListener('keydown', (event) => {
@@ -4902,6 +5024,18 @@ if (window.notchAPI && typeof window.notchAPI.onNewClipEntry === 'function') {
 }
 
 renderAll();
+
+document.addEventListener('nas-sync:todos-projection', (event) => {
+  const todosJson = event && event.detail && event.detail.todosJson;
+  if (typeof todosJson !== 'string') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, todosJson);
+  } catch (error) {
+    /* ignore */
+  }
+  data = loadData();
+  renderAll();
+});
 renderClipList(); // 首屏确保 clip-list DOM 就绪时渲染一次（幂等）
 renderClipFavs(); // 首屏渲染收藏剪贴块
 initTab();

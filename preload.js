@@ -95,4 +95,37 @@ contextBridge.exposeInMainWorld('notchAPI', {
     ipcRenderer.invoke('task-notification:activate', eventId),
   taskNotificationHover: (paused) =>
     ipcRenderer.send('task-notification:hover', paused === true),
+  syncGetStatus: () => ipcRenderer.invoke('sync:get-status'),
+  syncGetDashboard: () => ipcRenderer.invoke('sync:get-dashboard'),
+  syncListEndpoints: () => ipcRenderer.invoke('sync:list-endpoints'),
+  syncAddEndpoint: (payload) => ipcRenderer.invoke('sync:add-endpoint', payload || {}),
+  syncUpdateEndpoint: (payload) => ipcRenderer.invoke('sync:update-endpoint', payload || {}),
+  syncDeleteEndpoint: (payload) => ipcRenderer.invoke('sync:delete-endpoint', payload || {}),
+  syncReorderEndpoint: (payload) => ipcRenderer.invoke('sync:reorder-endpoint', payload || {}),
+  syncSetCurrentEndpoint: (payload) => ipcRenderer.invoke('sync:set-current-endpoint', payload || {}),
+  syncSetGatewayBearerBlocked: (payload) =>
+    ipcRenderer.invoke('sync:set-gateway-bearer-blocked', payload || {}),
+  syncTestEndpoint: (payload) => ipcRenderer.invoke('sync:test-endpoint', payload || {}),
+  syncRetry: () => ipcRenderer.invoke('sync:retry'),
+  syncExportTodosBackup: () => ipcRenderer.invoke('sync:export-todos-backup'),
+  syncPairHttpPolicy: (baseUrl) => ipcRenderer.invoke('sync:pair-http-policy', baseUrl),
+  syncPairClaim: (payload) => ipcRenderer.invoke('sync:pair-claim', payload || {}),
+  syncClearBinding: () => ipcRenderer.invoke('sync:clear-binding'),
+  syncListDevices: (payload) => ipcRenderer.invoke('sync:list-devices', payload || {}),
+  syncRevokeDevice: (payload) => ipcRenderer.invoke('sync:revoke-device', payload || {}),
+  syncGetMigrationSession: () => ipcRenderer.invoke('sync:get-migration-session'),
+  syncClassifyMigration: (payload) => ipcRenderer.invoke('sync:classify-migration', payload || {}),
+  syncRunMigration: (payload) => ipcRenderer.invoke('sync:run-migration', payload || {}),
+  syncAckMigrationProjection: () => ipcRenderer.invoke('sync:ack-migration-projection'),
+  syncRestoreMigrationBackup: (payload) =>
+    ipcRenderer.invoke('sync:restore-migration-backup', payload || {}),
+  onSyncMigrationSession: (cb) =>
+    subscribe('sync:migration-session', (event, payload) => cb(payload)),
+  syncTodosLocalWrite: (payload) => ipcRenderer.invoke('sync:todos-local-write', payload || {}),
+  syncTodosRunCycle: () => ipcRenderer.invoke('sync:todos-run-cycle'),
+  syncTodosGetProjection: () => ipcRenderer.invoke('sync:todos-get-projection'),
+  onSyncTodosProjection: (cb) =>
+    subscribe('sync:todos-projection', (event, projection) => cb(projection)),
+  onSyncStatus: (cb) =>
+    subscribe('sync:status', (event, status) => cb(status)),
 });
