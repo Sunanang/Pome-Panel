@@ -37,6 +37,10 @@ test('electron-builder build.files whitelists packages/sync-protocol', () => {
     files.includes('sync-migration.js'),
     'build.files must include sync-migration.js (T5b migration)'
   );
+  assert.ok(
+    files.includes('todos-sync.js'),
+    'build.files must include todos-sync.js (T5 todos dual-write + push/pull)'
+  );
 });
 
 test('test-desktop.js node --check list covers sync-protocol, sqliteProbe, and sync-store', () => {
@@ -44,6 +48,7 @@ test('test-desktop.js node --check list covers sync-protocol, sqliteProbe, and s
   assert.match(source, /sqliteProbe\.js/);
   assert.match(source, /sync-store\.js/);
   assert.match(source, /sync-migration\.js/);
+  assert.match(source, /todos-sync\.js/);
   assert.match(source, /packages\/sync-protocol\/migration\.js/);
   assert.match(source, /renderer\/nas-sync-migration\.js/);
   assert.match(source, /packages\/sync-protocol\/index\.js/);

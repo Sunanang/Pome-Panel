@@ -32,6 +32,7 @@ for (const file of [
   'sqliteProbe.js',
   'sync-store.js',
   'sync-migration.js',
+  'todos-sync.js',
   'packages/sync-protocol/index.js',
   'packages/sync-protocol/schema.js',
   'packages/sync-protocol/collections.js',

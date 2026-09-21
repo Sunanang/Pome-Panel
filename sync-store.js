@@ -313,6 +313,11 @@ function createSyncStore(db, meta = {}) {
       UPDATE outbox SET status = ?
       WHERE account_id = ? AND client_mutation_id = ?
     `),
+    listPendingUpsertsForEntity: db.prepare(`
+      SELECT client_mutation_id FROM outbox
+      WHERE account_id = ? AND collection = ? AND entity_id = ?
+        AND status = ? AND op = 'upsert'
+    `),
     rebaseOutboxBaseRev: db.prepare(`
       UPDATE outbox SET base_server_rev = ?
       WHERE account_id = ? AND collection = ? AND status = ?
@@ -550,9 +555,19 @@ function createSyncStore(db, meta = {}) {
           const existing = statements.getEntity.get(args.accountId, collection, change.entityId);
           if (existing && Number(existing.server_rev) > change.serverRev) {
             // Older page fragment — skip (idempotent / out-of-order safe).
+            // Also blocks stale upserts from resurrecting a newer tombstone.
             continue;
           }
           if (existing && Number(existing.server_rev) === change.serverRev) {
+            continue;
+          }
+          // Anti-resurrection: never apply an upsert that is older than a local tombstone.
+          if (
+            change.op === 'upsert' &&
+            existing &&
+            existing.deleted_at != null &&
+            Number(existing.server_rev) >= change.serverRev
+          ) {
             continue;
           }
 
@@ -674,6 +689,37 @@ function createSyncStore(db, meta = {}) {
         statements.markOutboxAcked.run(OUTBOX_STATUS_ACKED, accountId, id);
       }
     });
+  }
+
+  /**
+   * After a remote tombstone lands, drop pending local upserts for those entities
+   * so a later push cannot resurrect them (防复活).
+   */
+  function cancelPendingUpsertsForEntities(accountId, entityIds) {
+    const ids = Array.isArray(entityIds) ? entityIds.filter(isNonEmptyString) : [];
+    if (ids.length === 0) {
+      return { cancelled: [] };
+    }
+    const cancelled = [];
+    runInTransaction(() => {
+      for (const entityId of ids) {
+        const rows = statements.listPendingUpsertsForEntity.all(
+          accountId,
+          COLLECTIONS.TODOS,
+          entityId,
+          OUTBOX_STATUS_PENDING
+        );
+        for (const row of rows) {
+          statements.markOutboxAcked.run(
+            OUTBOX_STATUS_ACKED,
+            accountId,
+            row.client_mutation_id
+          );
+          cancelled.push(row.client_mutation_id);
+        }
+      }
+    });
+    return { cancelled };
   }
 
   function getEntity(accountId, collection, entityId) {
@@ -833,6 +879,7 @@ function createSyncStore(db, meta = {}) {
     applyPullPageAbortBeforeCursorCommit,
     listPendingOutbox,
     acknowledgeOutbox,
+    cancelPendingUpsertsForEntities,
     getEntity,
     buildTodosLocalStorageProjection,
     upsertMigration,

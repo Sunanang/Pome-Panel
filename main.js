@@ -75,6 +75,14 @@ const {
   resolveSyncBackupsRoot,
   parseLocalTodosStrict,
 } = require('./sync-migration');
+const {
+  ensureBoundAccount,
+  writeTodoUpsert,
+  writeTodoDelete,
+  writeCategoryUpsert,
+  runTodosSyncCycle,
+  notesCollectionIsNotWired,
+} = require('./todos-sync');
 
 // Keep the historical data directory so upgrading users retain notes, links,
 // recordings and encrypted settings after the public product rename.
@@ -2827,6 +2835,135 @@ const syncCredentialsStore = createSyncCredentialsStore({
   fileName: SYNC_CREDENTIALS_FILE_NAME,
 });
 
+/** @type {ReturnType<typeof openSyncStore> | null} */
+let todosSyncStore = null;
+let todosSyncCycleTimer = null;
+const TODOS_SYNC_CYCLE_INTERVAL_MS = 15_000;
+
+function getTodosSyncStore() {
+  if (todosSyncStore) return todosSyncStore;
+  const dbPath = resolveSyncDbPath(app.getPath('userData'));
+  todosSyncStore = openSyncStore(dbPath);
+  return todosSyncStore;
+}
+
+function closeTodosSyncStore() {
+  if (todosSyncCycleTimer) {
+    clearInterval(todosSyncCycleTimer);
+    todosSyncCycleTimer = null;
+  }
+  if (todosSyncStore) {
+    try {
+      todosSyncStore.close();
+    } catch {
+      // ignore close races on quit
+    }
+    todosSyncStore = null;
+  }
+}
+
+function readBoundSyncContext() {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) {
+    return { ok: false, error: 'not_bound' };
+  }
+  const record = syncCredentialsStore.read().record;
+  if (!record || !record.deviceToken || !record.deviceId || !record.uid || !record.serverId) {
+    return { ok: false, error: 'binding_incomplete' };
+  }
+  const store = getTodosSyncStore();
+  const bound = ensureBoundAccount(store, record);
+  return {
+    ok: true,
+    store,
+    accountId: bound.accountId,
+    deviceId: bound.deviceId,
+    record,
+    status,
+  };
+}
+
+function broadcastTodosProjection(projection) {
+  if (!projection || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('sync:todos-projection', {
+    todosJson: projection.todosJson,
+    categoryNamesJson: projection.categoryNamesJson,
+    todos: projection.todos,
+    categoryNames: projection.categoryNames,
+  });
+}
+
+function createTodosSyncTransport(record) {
+  const baseUrl = record.baseUrl;
+  const token = record.deviceToken;
+  return {
+    async pullPage({ cursor }) {
+      const query = cursor == null || cursor === '' ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+      const response = await fetchSyncJson(joinSyncApiUrl(baseUrl, `api/v1/sync/pull${query}`), {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        return {
+          ok: false,
+          error: (response.body && response.body.error) || response.error || 'pull_failed',
+          status: response.status,
+        };
+      }
+      return { ok: true, body: response.body };
+    },
+    async pushMutations(mutations) {
+      const response = await fetchSyncJson(joinSyncApiUrl(baseUrl, 'api/v1/sync/push'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: { mutations },
+      });
+      if (!response.ok) {
+        return {
+          ok: false,
+          error: (response.body && response.body.error) || response.error || 'push_failed',
+          status: response.status,
+          applied: response.body && response.body.applied,
+        };
+      }
+      return {
+        ok: true,
+        applied: response.body && response.body.applied,
+        serverRev: response.body && response.body.serverRev,
+      };
+    },
+  };
+}
+
+async function runBoundTodosSyncCycle({ broadcast = true } = {}) {
+  const ctx = readBoundSyncContext();
+  if (!ctx.ok) {
+    return { ok: false, error: ctx.error };
+  }
+  const transport = createTodosSyncTransport(ctx.record);
+  const result = await runTodosSyncCycle(ctx.store, {
+    accountId: ctx.accountId,
+    pullPage: transport.pullPage,
+    pushMutations: transport.pushMutations,
+  });
+  if (result.ok && broadcast) {
+    broadcastTodosProjection(result.projection);
+  }
+  return result;
+}
+
+function scheduleTodosSyncCycle() {
+  if (todosSyncCycleTimer) return;
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return;
+  todosSyncCycleTimer = setInterval(() => {
+    runBoundTodosSyncCycle().catch(() => {});
+  }, TODOS_SYNC_CYCLE_INTERVAL_MS);
+  if (typeof todosSyncCycleTimer.unref === 'function') {
+    todosSyncCycleTimer.unref();
+  }
+}
+
 function joinSyncApiUrl(baseUrl, apiPath) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   const suffix = String(apiPath || '').replace(/^\/+/, '');
@@ -2962,12 +3099,116 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
   if (!saved.ok) {
     return { ok: false, error: saved.error || 'save_failed', refusedPlaintext: saved.refusedPlaintext };
   }
+  try {
+    ensureBoundAccount(getTodosSyncStore(), record);
+    scheduleTodosSyncCycle();
+    // Kick an immediate cycle (pull→push). Migration four-state is T5b — not here.
+    runBoundTodosSyncCycle().catch(() => {});
+  } catch {
+    // Binding still succeeds even if SyncStore open fails; next write will retry.
+  }
   return { ok: true, status: saved.status };
 });
 
 ipcMain.handle('sync:clear-binding', () => {
   const cleared = syncCredentialsStore.clear();
+  closeTodosSyncStore();
   return cleared.ok ? { ok: true, status: cleared.status } : { ok: false, error: cleared.error };
+});
+
+ipcMain.handle('sync:todos-local-write', (event, payload = {}) => {
+  const ctx = readBoundSyncContext();
+  if (!ctx.ok) {
+    return { ok: false, error: ctx.error, unbound: ctx.error === 'not_bound' };
+  }
+  if (!notesCollectionIsNotWired()) {
+    return { ok: false, error: 'notes_collection_wired_forbidden' };
+  }
+
+  const op = payload.op;
+  const ctxWrite = { accountId: ctx.accountId, deviceId: ctx.deviceId };
+  let result;
+  if (op === 'upsert-todo') {
+    result = writeTodoUpsert(ctx.store, ctxWrite, {
+      item: payload.item,
+      categoryId: payload.categoryId,
+      clientMutationId: payload.clientMutationId,
+      clientTime: payload.clientTime,
+    });
+  } else if (op === 'delete-todo') {
+    result = writeTodoDelete(ctx.store, ctxWrite, {
+      entityId: payload.entityId || (payload.item && payload.item.id),
+      clientMutationId: payload.clientMutationId,
+      clientTime: payload.clientTime,
+    });
+  } else if (op === 'upsert-category') {
+    result = writeCategoryUpsert(ctx.store, ctxWrite, {
+      priority: payload.priority || payload.categoryId,
+      name: payload.name,
+      clientMutationId: payload.clientMutationId,
+      clientTime: payload.clientTime,
+    });
+  } else {
+    return { ok: false, error: 'unsupported_op' };
+  }
+
+  if (!result.ok) {
+    return { ok: false, error: result.reason || 'write_failed', field: result.field };
+  }
+
+  // Online push attempt; offline keeps outbox queued.
+  runBoundTodosSyncCycle().catch(() => {});
+
+  return {
+    ok: true,
+    deduped: result.deduped === true,
+    pendingCount: result.pendingCount,
+    projection: {
+      todosJson: result.projection.todosJson,
+      categoryNamesJson: result.projection.categoryNamesJson,
+    },
+  };
+});
+
+ipcMain.handle('sync:todos-run-cycle', async () => {
+  const result = await runBoundTodosSyncCycle({ broadcast: true });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.error || result.reason || 'sync_failed',
+      phase: result.phase,
+      pendingCount: result.pendingCount,
+    };
+  }
+  return {
+    ok: true,
+    pendingCount: result.pendingCount,
+    pushed: result.pushed,
+    pulledChanges: result.pulledChanges,
+    projection: {
+      todosJson: result.projection.todosJson,
+      categoryNamesJson: result.projection.categoryNamesJson,
+    },
+  };
+});
+
+ipcMain.handle('sync:todos-get-projection', () => {
+  const ctx = readBoundSyncContext();
+  if (!ctx.ok) {
+    return { ok: false, error: ctx.error, unbound: ctx.error === 'not_bound' };
+  }
+  const projection = ctx.store.buildTodosLocalStorageProjection(ctx.accountId);
+  return {
+    ok: true,
+    bound: true,
+    pendingCount: ctx.store.listPendingOutbox(ctx.accountId).length,
+    projection: {
+      todosJson: projection.todosJson,
+      categoryNamesJson: projection.categoryNamesJson,
+      todos: projection.todos,
+      categoryNames: projection.categoryNames,
+    },
+  };
 });
 
 ipcMain.handle('sync:list-devices', async (event, payload = {}) => {
@@ -4303,6 +4544,7 @@ app.whenReady().then(() => {
   applyAppSettings();
   startTaskNotificationServer();
   void promptForMissingPermissions();
+  scheduleTodosSyncCycle();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -4326,6 +4568,7 @@ app.on('will-quit', () => {
   clearTaskNotificationTimers();
   stopTaskNotificationServer();
   closeAllTranscriptionSessions();
+  closeTodosSyncStore();
   globalShortcut.unregisterAll();
   stopClipboardPolling();
 });

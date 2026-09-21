@@ -37,6 +37,7 @@
       "sqliteProbe.js",
       "sync-store.js",
       "sync-migration.js",
+      "todos-sync.js",
       "packages/sync-protocol/**/*",
       "renderer/**/*",
       "scripts/codex-notify.js",

@@ -109,4 +109,9 @@ contextBridge.exposeInMainWorld('notchAPI', {
     ipcRenderer.invoke('sync:restore-migration-backup', payload || {}),
   onSyncMigrationSession: (cb) =>
     subscribe('sync:migration-session', (event, payload) => cb(payload)),
+  syncTodosLocalWrite: (payload) => ipcRenderer.invoke('sync:todos-local-write', payload || {}),
+  syncTodosRunCycle: () => ipcRenderer.invoke('sync:todos-run-cycle'),
+  syncTodosGetProjection: () => ipcRenderer.invoke('sync:todos-get-projection'),
+  onSyncTodosProjection: (cb) =>
+    subscribe('sync:todos-projection', (event, projection) => cb(projection)),
 });
