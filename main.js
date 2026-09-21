@@ -88,14 +88,12 @@ const {
   SYNC_SETTINGS_FILE,
 } = require('./sync-settings');
 const {
-  canonicalizeEndpointUrl,
   canRequestEndpoint,
   selectEndpointsForAttempt,
   shouldFailover,
   classifyTransportError,
   deriveSyncUiState,
   syncUiStateLabel,
-  endpointHttpPolicy,
   HTTP_INSECURE_CONFIRM_TEXT,
 } = require('./packages/sync-protocol/endpoints');
 
