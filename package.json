@@ -35,6 +35,7 @@
       "platform.js",
       "preload.js",
       "sqliteProbe.js",
+      "sync-store.js",
       "packages/sync-protocol/**/*",
       "renderer/**/*",
       "scripts/codex-notify.js",
