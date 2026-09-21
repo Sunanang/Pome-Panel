@@ -1807,10 +1807,27 @@
     const bound = Boolean(status && status.bound);
     if (settingsNasSyncStatus) {
       const uiState = nasSettingsUi.uiState;
-      if (uiState && uiState !== 'unbound' && uiState !== 'synced') {
+      const schemaIncompatible = Boolean(
+        (status && status.schemaIncompatible)
+        || uiState === 'schema_incompatible'
+        || nasSettingsUi.schemaIncompatible,
+      );
+      if (schemaIncompatible) {
+        const target = (status && status.schemaUpgradeTarget)
+          || nasSettingsUi.schemaUpgradeTarget
+          || null;
+        settingsNasSyncStatus.textContent = target === 'desktop'
+          ? '协议不兼容 · 请升级桌面端'
+          : target === 'fpk'
+            ? '协议不兼容 · 请升级 NAS 应用'
+            : (nasSettingsUi.uiLabel || '协议不兼容 · 请升级');
+        settingsNasSyncStatus.dataset.state = 'error';
+        const schemaMessage = (status && status.schemaMessage) || nasSettingsUi.schemaMessage;
+        if (schemaMessage) setNasSyncHint(schemaMessage, 'error');
+      } else if (uiState && uiState !== 'unbound' && uiState !== 'synced') {
         settingsNasSyncStatus.textContent = nasSettingsUi.uiLabel || uiState;
         settingsNasSyncStatus.dataset.state =
-          uiState === 'certificate_error' || uiState === 'migration_failed' || uiState === 'schema_incompatible'
+          uiState === 'certificate_error' || uiState === 'migration_failed'
             ? 'error'
             : uiState === 'endpoint_disabled' || uiState === 'needs_reauth' || uiState === 'offline_pending'
               ? 'warning'
@@ -1831,6 +1848,9 @@
         settingsNasSyncStatus.textContent = nasSettingsUi.uiLabel || '已同步';
         settingsNasSyncStatus.dataset.state = 'bound';
       }
+    }
+    if (nasPairUi.error && !(status && status.schemaIncompatible)) {
+      setNasSyncHint(nasPairUi.error, 'error');
     }
     if (settingsNasPairReauth) settingsNasPairReauth.hidden = !bound;
     if (settingsNasPairSubmit) {
@@ -2057,6 +2077,9 @@
             uiLabel: dash.uiLabel,
             channelLabel: dash.channelLabel,
             error: '',
+            schemaIncompatible: dash.schemaIncompatible,
+            schemaUpgradeTarget: dash.schemaUpgradeTarget,
+            schemaMessage: dash.schemaMessage,
           });
           renderNasSyncPanel();
         }
@@ -2494,6 +2517,14 @@
     });
   }
   void refreshNasSyncStatus();
+  if (window.notchAPI && typeof window.notchAPI.onSyncStatus === 'function') {
+    window.notchAPI.onSyncStatus((status) => {
+      applyNasPairUi({ type: 'set_status', status });
+      if (status && status.schemaIncompatible && status.schemaMessage) {
+        setNasSyncHint(status.schemaMessage, 'error');
+      }
+    });
+  }
 
   if (settingsApiConfigure) settingsApiConfigure.addEventListener('click', openTranscriptionSettings);
   if (transcriptionSettingsClose) transcriptionSettingsClose.addEventListener('click', closeTranscriptionSettings);

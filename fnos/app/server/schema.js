@@ -11,12 +11,12 @@ const SCHEMA_VERSION = protocol.SCHEMA_VERSION;
 const MIN_SUPPORTED = protocol.MIN_SUPPORTED_SCHEMA_VERSION;
 const MAX_SUPPORTED = protocol.MAX_SUPPORTED_SCHEMA_VERSION;
 
-function schemaEnvelope() {
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    minSupported: MIN_SUPPORTED,
-    maxSupported: MAX_SUPPORTED,
-  };
+function schemaEnvelope(overrides = {}) {
+  return protocol.schemaEnvelope({
+    schemaVersion: overrides.schemaVersion ?? SCHEMA_VERSION,
+    minSupported: overrides.minSupported ?? MIN_SUPPORTED,
+    maxSupported: overrides.maxSupported ?? MAX_SUPPORTED,
+  });
 }
 
 function isSchemaCompatible(clientVersion) {
@@ -25,10 +25,24 @@ function isSchemaCompatible(clientVersion) {
   return n >= MIN_SUPPORTED && n <= MAX_SUPPORTED;
 }
 
+/**
+ * Server-side check of a client-advertised range (pair / health probe body).
+ * Returns the same stopPull/stopPush flags the desktop client uses.
+ */
+function evaluateClientSchema(clientPeer) {
+  return protocol.evaluateSchemaNegotiation(clientPeer, {
+    minSupported: MIN_SUPPORTED,
+    maxSupported: MAX_SUPPORTED,
+  });
+}
+
 module.exports = {
   SCHEMA_VERSION,
   MIN_SUPPORTED,
   MAX_SUPPORTED,
   schemaEnvelope,
   isSchemaCompatible,
+  evaluateClientSchema,
+  evaluateSchemaNegotiation: protocol.evaluateSchemaNegotiation,
+  negotiateSchema: protocol.negotiateSchema,
 };

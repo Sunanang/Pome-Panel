@@ -96,6 +96,14 @@
       case 'set_status':
         next.bound = Boolean(action.status && action.status.bound);
         next.status = action.status || null;
+        if (action.status && action.status.schemaIncompatible) {
+          next.error = action.status.schemaMessage
+            || (action.status.schemaUpgradeTarget === 'desktop'
+              ? '协议不兼容：请升级桌面端 Pome Panel 后再同步'
+              : action.status.schemaUpgradeTarget === 'fpk'
+                ? '协议不兼容：请升级 NAS 上的 Pome Panel Sync 应用后再同步'
+                : '协议不兼容：请升级桌面端或 NAS 应用后再同步');
+        }
         return next;
       default:
         return next;
@@ -167,12 +175,20 @@
         code_not_found: '配对码无效',
         code_consumed: '配对码已使用',
         code_expired: '配对码已过期',
+        schema_incompatible: result.message
+          || (result.upgradeTarget === 'desktop'
+            ? '协议不兼容：请升级桌面端 Pome Panel 后再同步'
+            : result.upgradeTarget === 'fpk'
+              ? '协议不兼容：请升级 NAS 上的 Pome Panel Sync 应用后再同步'
+              : '协议不兼容：请升级桌面端或 NAS 应用后再同步'),
       };
       return {
         ok: false,
         error: result.error,
-        message: messages[result.error] || result.error || '配对失败',
+        message: messages[result.error] || result.message || result.error || '配对失败',
         refusedPlaintext: result.refusedPlaintext,
+        upgradeTarget: result.upgradeTarget,
+        uiState: result.uiState,
       };
     }
     return { ok: true, status: result.status };

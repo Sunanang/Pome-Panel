@@ -29,6 +29,9 @@
       toast: '',
       dialog: null,
       retryEnabled: true,
+      schemaIncompatible: false,
+      schemaUpgradeTarget: null,
+      schemaMessage: null,
     };
   }
 
@@ -61,6 +64,17 @@
         next.insecureWarningVisible = Boolean(view && view.insecureHttpWarning);
         next.devicePortGuidanceVisible = Boolean(view && view.devicePortGuidance);
         next.error = action.error || '';
+        next.schemaIncompatible = Boolean(
+          action.schemaIncompatible
+          || (sync && sync.schemaIncompatible)
+          || next.uiState === 'schema_incompatible',
+        );
+        next.schemaUpgradeTarget = action.schemaUpgradeTarget
+          || (sync && sync.schemaUpgradeTarget)
+          || null;
+        next.schemaMessage = action.schemaMessage
+          || (sync && sync.schemaMessage)
+          || null;
         return next;
       }
       case 'set_draft':

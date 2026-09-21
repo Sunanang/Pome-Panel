@@ -14,11 +14,15 @@
 const crypto = require('node:crypto');
 const {
   SCHEMA_VERSION,
+  MIN_SUPPORTED_SCHEMA_VERSION,
+  MAX_SUPPORTED_SCHEMA_VERSION,
   COLLECTIONS,
   assertP0Collection,
   createMutation,
   assertPushBatchLimits,
   P0_ENABLED_COLLECTIONS,
+  evaluateSchemaNegotiation,
+  SCHEMA_UI_STATE_INCOMPATIBLE,
 } = require('./packages/sync-protocol');
 const {
   TODO_STORAGE_KEY,
@@ -194,6 +198,58 @@ function normalizePullResponse(body) {
       : null,
     hasMore: source.hasMore === true,
     serverRev: source.serverRev,
+  };
+}
+
+/**
+ * Extract schema advertisement fields from any API / pull / push JSON body.
+ * @param {unknown} body
+ */
+function extractSchemaPeer(body) {
+  if (body == null || typeof body !== 'object' || Array.isArray(body)) {
+    return null;
+  }
+  return {
+    schemaVersion: body.schemaVersion,
+    minSupported: body.minSupported,
+    maxSupported: body.maxSupported,
+  };
+}
+
+/**
+ * Pair + sync gate: evaluate peer schema advertisement against local support.
+ * Incompatible → stopPull && stopPush (no read-only degrade).
+ *
+ * @param {unknown} peerOrBody
+ * @param {{ minSupported?: number, maxSupported?: number }} [local]
+ */
+function gateSchemaCompatibility(peerOrBody, local = {}) {
+  const peer = extractSchemaPeer(peerOrBody) || peerOrBody;
+  return evaluateSchemaNegotiation(peer, {
+    minSupported: local.minSupported ?? MIN_SUPPORTED_SCHEMA_VERSION,
+    maxSupported: local.maxSupported ?? MAX_SUPPORTED_SCHEMA_VERSION,
+  });
+}
+
+function schemaIncompatibleResult(evaluation, { phase, projection, pendingCount } = {}) {
+  return {
+    ok: false,
+    reason: evaluation.reason || 'schema_incompatible',
+    error: SCHEMA_UI_STATE_INCOMPATIBLE,
+    phase: phase || 'schema',
+    stopPull: true,
+    stopPush: true,
+    uiState: evaluation.uiState || SCHEMA_UI_STATE_INCOMPATIBLE,
+    upgradeTarget: evaluation.upgradeTarget || 'unknown',
+    message: evaluation.message,
+    schemaVersion: evaluation.schemaVersion,
+    minSupported: evaluation.minSupported,
+    maxSupported: evaluation.maxSupported,
+    projection,
+    pendingCount,
+    pulledChanges: 0,
+    pages: 0,
+    pushed: 0,
   };
 }
 
@@ -374,18 +430,25 @@ function applyTodosPullPage(store, { accountId, pull }) {
 
 /**
  * Push pending outbox mutations. Server duplicates (same clientMutationId) are acked locally.
+ * Schema-incompatible push responses stop without acknowledging (outbox retained).
  *
  * @param {object} store
  * @param {{
  *   accountId: string,
- *   pushMutations: (mutations: object[]) => Promise<{ ok: boolean, applied?: object[], serverRev?: number, error?: string, status?: number }>,
+ *   pushMutations: (mutations: object[]) => Promise<{ ok: boolean, applied?: object[], serverRev?: number, error?: string, status?: number, body?: object }>,
+ *   localSchema?: { minSupported?: number, maxSupported?: number },
  * }} args
  */
-async function pushTodosOutbox(store, { accountId, pushMutations }) {
+async function pushTodosOutbox(store, { accountId, pushMutations, localSchema } = {}) {
   const pending = store.listPendingOutbox(accountId, COLLECTIONS.TODOS);
   if (pending.length === 0) {
     return { ok: true, pushed: 0, acked: [], pendingCount: 0, skipped: true };
   }
+
+  const schemaLocal = {
+    minSupported: (localSchema && localSchema.minSupported) ?? MIN_SUPPORTED_SCHEMA_VERSION,
+    maxSupported: (localSchema && localSchema.maxSupported) ?? MAX_SUPPORTED_SCHEMA_VERSION,
+  };
 
   const mutations = pending.map(outboxRowToMutation);
   const limits = assertPushBatchLimits(mutations);
@@ -395,6 +458,19 @@ async function pushTodosOutbox(store, { accountId, pushMutations }) {
   }
 
   const response = await pushMutations(mutations);
+  const peerBody = (response && (response.body || response.peer)) || response;
+  if (peerBody && (peerBody.schemaVersion != null || peerBody.minSupported != null)) {
+    const schemaGate = gateSchemaCompatibility(peerBody, schemaLocal);
+    if (!schemaGate.ok) {
+      return {
+        ...schemaGate,
+        error: SCHEMA_UI_STATE_INCOMPATIBLE,
+        pendingCount: pending.length,
+        pushed: 0,
+      };
+    }
+  }
+
   if (!response || response.ok !== true) {
     return {
       ok: false,
@@ -432,12 +508,14 @@ async function pushTodosOutbox(store, { accountId, pushMutations }) {
 /**
  * Ordinary sync loop: pull pages → rebase (inside store) → push outbox.
  * First-bind migration must NOT use this path (T5b).
+ * Schema is checked on every peer response; incompatible → stop pull AND push.
  */
 async function runTodosSyncCycle(store, {
   accountId,
   pullPage,
   pushMutations,
   maxPages = 50,
+  localSchema,
 } = {}) {
   if (!store) {
     return { ok: false, reason: 'store_required' };
@@ -446,15 +524,32 @@ async function runTodosSyncCycle(store, {
     return { ok: false, reason: 'transport_required' };
   }
 
+  const schemaLocal = {
+    minSupported: (localSchema && localSchema.minSupported) ?? MIN_SUPPORTED_SCHEMA_VERSION,
+    maxSupported: (localSchema && localSchema.maxSupported) ?? MAX_SUPPORTED_SCHEMA_VERSION,
+  };
+
   let pages = 0;
   let pulledChanges = 0;
   let hasMore = true;
   let lastProjection = store.buildTodosLocalStorageProjection(accountId);
+  const pendingAtStart = store.listPendingOutbox(accountId).length;
 
   while (hasMore && pages < maxPages) {
     const cursorState = store.getPullCursor(accountId, COLLECTIONS.TODOS);
     const remote = await pullPage({ cursor: cursorState.cursor });
     if (!remote || remote.ok !== true) {
+      // Even failed responses may carry schema advertisement (e.g. 422 envelope).
+      if (remote && remote.body) {
+        const schemaGate = gateSchemaCompatibility(remote.body, schemaLocal);
+        if (!schemaGate.ok) {
+          return schemaIncompatibleResult(schemaGate, {
+            phase: 'pull',
+            projection: lastProjection,
+            pendingCount: pendingAtStart,
+          });
+        }
+      }
       return {
         ok: false,
         reason: (remote && (remote.error || remote.reason)) || 'pull_failed',
@@ -465,9 +560,20 @@ async function runTodosSyncCycle(store, {
       };
     }
 
+    const peerBody = remote.body || remote.pull || remote;
+    const schemaGate = gateSchemaCompatibility(peerBody, schemaLocal);
+    if (!schemaGate.ok) {
+      // Stop both pull application and subsequent push — do not pollute local cache.
+      return schemaIncompatibleResult(schemaGate, {
+        phase: 'pull',
+        projection: lastProjection,
+        pendingCount: pendingAtStart,
+      });
+    }
+
     const applied = applyTodosPullPage(store, {
       accountId,
-      pull: remote.body || remote.pull || remote,
+      pull: peerBody,
     });
     if (!applied.ok) {
       return {
@@ -485,8 +591,19 @@ async function runTodosSyncCycle(store, {
     hasMore = applied.hasMore === true;
   }
 
-  const pushed = await pushTodosOutbox(store, { accountId, pushMutations });
+  const pushed = await pushTodosOutbox(store, {
+    accountId,
+    pushMutations,
+    localSchema: schemaLocal,
+  });
   if (!pushed.ok) {
+    if (pushed.error === SCHEMA_UI_STATE_INCOMPATIBLE || pushed.stopPush) {
+      return schemaIncompatibleResult(pushed, {
+        phase: 'push',
+        projection: lastProjection,
+        pendingCount: pushed.pendingCount ?? pendingAtStart,
+      });
+    }
     return {
       ok: false,
       reason: pushed.reason || 'push_failed',
@@ -582,4 +699,10 @@ module.exports = {
   applyTodosProjectionToStorage,
   ensureBoundAccount,
   categoryEntityId,
+  extractSchemaPeer,
+  gateSchemaCompatibility,
+  schemaIncompatibleResult,
+  SCHEMA_UI_STATE_INCOMPATIBLE,
+  MIN_SUPPORTED_SCHEMA_VERSION,
+  MAX_SUPPORTED_SCHEMA_VERSION,
 };

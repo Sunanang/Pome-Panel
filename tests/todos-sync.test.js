@@ -300,6 +300,9 @@ test('runTodosSyncCycle pull then push with mock transport', async () => {
         return {
           ok: true,
           body: {
+            schemaVersion: SCHEMA_VERSION,
+            minSupported: SCHEMA_VERSION,
+            maxSupported: SCHEMA_VERSION,
             changes: [
               {
                 entityId: 'todo-remote',
@@ -344,6 +347,16 @@ test('runTodosSyncCycle pull then push with mock transport', async () => {
             status: 'duplicate',
           })),
           serverRev: 4,
+          body: {
+            schemaVersion: SCHEMA_VERSION,
+            minSupported: SCHEMA_VERSION,
+            maxSupported: SCHEMA_VERSION,
+            applied: mutations.map((m) => ({
+              clientMutationId: m.clientMutationId,
+              status: 'duplicate',
+            })),
+            serverRev: 4,
+          },
         };
       },
     });

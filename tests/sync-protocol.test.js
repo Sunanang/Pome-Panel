@@ -73,6 +73,37 @@ test('negotiateSchema rejects peer that is too new or too old', () => {
   assert.equal(negotiateSchema({ schemaVersion: 1 }).reason, 'peer_schema_invalid');
 });
 
+test('evaluateSchemaNegotiation stops both directions and names upgrade target', () => {
+  const {
+    evaluateSchemaNegotiation,
+    SCHEMA_UI_STATE_INCOMPATIBLE,
+    SCHEMA_UPGRADE_MESSAGES,
+    schemaEnvelope,
+  } = protocol;
+  const tooNew = evaluateSchemaNegotiation(
+    { schemaVersion: 5, minSupported: 3, maxSupported: 5 },
+    { minSupported: 1, maxSupported: 2 }
+  );
+  assert.equal(tooNew.ok, false);
+  assert.equal(tooNew.stopPull, true);
+  assert.equal(tooNew.stopPush, true);
+  assert.equal(tooNew.upgradeTarget, 'desktop');
+  assert.equal(tooNew.uiState, SCHEMA_UI_STATE_INCOMPATIBLE);
+  assert.equal(tooNew.message, SCHEMA_UPGRADE_MESSAGES.desktop);
+
+  const tooOld = evaluateSchemaNegotiation(
+    { schemaVersion: 1, minSupported: 1, maxSupported: 1 },
+    { minSupported: 2, maxSupported: 3 }
+  );
+  assert.equal(tooOld.upgradeTarget, 'fpk');
+  assert.equal(tooOld.message, SCHEMA_UPGRADE_MESSAGES.fpk);
+
+  const ok = evaluateSchemaNegotiation(schemaEnvelope());
+  assert.equal(ok.ok, true);
+  assert.equal(ok.stopPull, false);
+  assert.equal(ok.stopPush, false);
+});
+
 test('P0 enables only todos; placeholders are known but rejected for wiring', () => {
   assert.deepEqual(P0_ENABLED_COLLECTIONS, [COLLECTIONS.TODOS]);
   assert.equal(protocol.isP0EnabledCollection('todos'), true);
