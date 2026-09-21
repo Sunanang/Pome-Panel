@@ -65,6 +65,7 @@ test('test-desktop.js node --check list covers sync-protocol, sqliteProbe, and s
   assert.match(source, /packages\/sync-protocol\/pull\.js/);
   assert.match(source, /packages\/sync-protocol\/pairing\.js/);
   assert.match(source, /fnos\/app\/server\/pairing\.js/);
+  assert.match(source, /fnos\/app\/ui\/pair\.js/);
   assert.match(source, /renderer\/nas-sync-pair\.js/);
 });
 

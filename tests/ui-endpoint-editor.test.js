@@ -68,3 +68,55 @@ test('device-port shares same list UI — no second skin (S6)', () => {
   // Single list container; no alternate device-port-only card
   assert.doesNotMatch(html, /settings-nas-device-port-card/);
 });
+
+test('A.2 endpoint.delete confirm/cancel dialog dimensions (S3)', () => {
+  const dialog = settingsUi.buildDeleteConfirmDialog({
+    endpointId: 'e-del',
+    baseUrl: 'https://nas.local/app',
+  });
+  assert.equal(dialog.role, 'dialog');
+  assert.equal(dialog.controlId, settingsUi.DELETE_CONFIRM_CONTROL_ID);
+  assert.match(dialog.body, /确认删除/);
+  assert.equal(dialog.confirmLabel, '删除');
+  assert.equal(dialog.cancelLabel, '取消');
+  assert.match(workspaceJs, /buildDeleteConfirmDialog|openNasDialog/);
+  assert.match(workspaceJs, /syncDeleteEndpoint/);
+  assert.match(html, /role="dialog"/);
+  assert.match(html, /aria-modal="true"/);
+});
+
+test('A.2 endpoint.test-connection success / failure via mocked API', async () => {
+  const ok = await settingsUi.runTestConnection({
+    endpointId: 'e1',
+    api: { syncTestEndpoint: async () => ({ ok: true, serverId: 'srv' }) },
+  });
+  assert.equal(ok.ok, true);
+
+  const bad = await settingsUi.runTestConnection({
+    endpointId: 'e1',
+    api: { syncTestEndpoint: async () => ({ ok: false, error: 'timeout' }) },
+  });
+  assert.equal(bad.ok, false);
+
+  const missing = await settingsUi.runTestConnection({ endpointId: 'e1', api: {} });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.error, 'api_unavailable');
+});
+
+test('A.2 endpoint.enable / HTTP toggle disable paths wired', async () => {
+  assert.match(workspaceJs, /data-nas-enable/);
+  assert.match(workspaceJs, /syncUpdateEndpoint/);
+  const toggled = await settingsUi.runToggleHttp({
+    endpointId: 'e1',
+    enable: true,
+    httpConfirmAccepted: true,
+    api: {
+      syncUpdateEndpoint: async (payload) => {
+        assert.equal(payload.allowInsecureHttp, true);
+        assert.equal(payload.httpConfirmAccepted, true);
+        return { ok: true };
+      },
+    },
+  });
+  assert.equal(toggled.ok, true);
+});

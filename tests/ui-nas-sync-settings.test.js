@@ -59,3 +59,23 @@ test('retry API wiring exists in workspace + preload', () => {
   assert.match(preload, /syncRetry/);
   assert.match(preload, /syncGetDashboard/);
 });
+
+test('S5: NAS HTTP toggle has prefers-reduced-motion degrade path', () => {
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.settings-nas-http-toggle/);
+  assert.match(css, /\.settings-nas-http-toggle input:focus-visible \+ i[\s\S]*?var\(--focus-ring\)/);
+});
+
+test('hydrate carries schema incompatible fields for T7 status', () => {
+  let state = settingsUi.initialSettingsUiState();
+  state = settingsUi.reduceSettingsUi(state, {
+    type: 'hydrate',
+    uiState: 'schema_incompatible',
+    uiLabel: '协议不兼容',
+    schemaIncompatible: true,
+    schemaUpgradeTarget: 'desktop',
+    schemaMessage: '请升级桌面端',
+  });
+  assert.equal(state.schemaIncompatible, true);
+  assert.equal(state.schemaUpgradeTarget, 'desktop');
+  assert.equal(state.schemaMessage, '请升级桌面端');
+});

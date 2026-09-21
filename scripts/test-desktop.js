@@ -64,6 +64,7 @@ for (const file of [
   'fnos/app/server/index.js',
   'fnos/app/server/testHarness.js',
   'fnos/app/server/pairing.js',
+  'fnos/app/ui/pair.js',
 ]) {
   run(process.execPath, ['--check', file]);
 }
