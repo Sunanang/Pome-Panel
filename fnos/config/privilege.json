@@ -1,0 +1,18 @@
+{
+  "network": {
+    "outbound": false,
+    "listenUnix": true,
+    "listenTcp": true,
+    "tcpPortFixed": false,
+    "note": "TCP 设备同步端口由运行时分配或配置，禁止写死 5001；可行性属 G0 真机门禁"
+  },
+  "filesystem": {
+    "dataDir": true,
+    "runtimeDir": true
+  },
+  "gateway": {
+    "trustTrimHeaders": true,
+    "stripClientTrimHeaders": true,
+    "note": "仅 Unix socket / 受控反代入口可信 X-Trim-*；网关须清客户端同名头后重注"
+  }
+}

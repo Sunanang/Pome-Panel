@@ -24,6 +24,42 @@ for (const file of ['notch-focus', 'retained-workspace', 'startup']) {
   run(require('electron'), [`tests/${file}.electron.js`]);
   fs.rmSync(testProfile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
-for (const file of ['main.js', 'main-services.js', 'platform.js', 'preload.js', 'renderer/domain.js', 'renderer/effects.js', 'renderer/app.js', 'renderer/workspace.js', 'renderer/icon-motion.js', 'renderer/notification.js', 'build/afterPack.js', 'scripts/codex-notify.js', 'scripts/claude-notify.js', 'scripts/smoke-app.js']) {
+for (const file of [
+  'main.js',
+  'main-services.js',
+  'platform.js',
+  'preload.js',
+  'sqliteProbe.js',
+  'sync-store.js',
+  'sync-migration.js',
+  'packages/sync-protocol/index.js',
+  'packages/sync-protocol/schema.js',
+  'packages/sync-protocol/collections.js',
+  'packages/sync-protocol/mutation.js',
+  'packages/sync-protocol/pull.js',
+  'packages/sync-protocol/pairing.js',
+  'packages/sync-protocol/migration.js',
+  'renderer/domain.js',
+  'renderer/effects.js',
+  'renderer/app.js',
+  'renderer/workspace.js',
+  'renderer/icon-motion.js',
+  'renderer/notification.js',
+  'renderer/nas-sync-pair.js',
+  'renderer/nas-sync-migration.js',
+  'build/afterPack.js',
+  'scripts/codex-notify.js',
+  'scripts/claude-notify.js',
+  'scripts/smoke-app.js',
+  'fnos/app/server/schema.js',
+  'fnos/app/server/auth.js',
+  'fnos/app/server/csrf.js',
+  'fnos/app/server/store.js',
+  'fnos/app/server/routes.js',
+  'fnos/app/server/createApp.js',
+  'fnos/app/server/index.js',
+  'fnos/app/server/testHarness.js',
+  'fnos/app/server/pairing.js',
+]) {
   run(process.execPath, ['--check', file]);
 }

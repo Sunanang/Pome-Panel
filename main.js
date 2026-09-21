@@ -56,7 +56,25 @@ const {
   normalizeDefaultTabPreference,
   updateDefaultTabPreference,
   createForegroundMediaPermissionCoordinator,
+  createSyncCredentialsStore,
+  syncPairHttpPolicy,
+  validatePairingCodeInput,
+  PAIR_HTTP_CONFIRM_TEXT,
 } = require('./main-services');
+const {
+  INSECURE_DEVICE_TOKEN_TTL_MS,
+} = require('./packages/sync-protocol');
+const { openSyncStore, resolveSyncDbPath } = require('./sync-store');
+const {
+  classifyFromLocalAndNas,
+  resolveMigrationChoice,
+  runMigrationAttempt,
+  restoreLatestMigrationBackup,
+  MIGRATION_BANNER_TEXT,
+  isInsideSyncBackupDir,
+  resolveSyncBackupsRoot,
+  parseLocalTodosStrict,
+} = require('./sync-migration');
 
 // Keep the historical data directory so upgrading users retain notes, links,
 // recordings and encrypted settings after the public product rename.
@@ -232,6 +250,7 @@ const APP_SETTINGS_FILE = 'app-settings.json';
 const WORKSPACE_SETTINGS_FILE = 'workspace-settings.json';
 const WORKSPACE_DATA_FILE = 'workspace.json';
 const MIRROR_IMAGE_FILE = 'mirror-cover.jpg';
+const SYNC_CREDENTIALS_FILE_NAME = 'sync-credentials.json';
 const workspacePersistenceGate = createWorkspacePersistenceGate();
 const SODA_MUSIC_APP = '/Applications/汽水音乐.app';
 const TRANSCRIPTION_MODEL = 'qwen3-asr-flash-realtime';
@@ -2798,6 +2817,452 @@ ipcMain.handle('credentials:copy', async (event, payload) => {
     }, 60_000).unref?.();
   }
   return true;
+});
+
+const syncCredentialsStore = createSyncCredentialsStore({
+  getUserDataPath: () => app.getPath('userData'),
+  safeStorage,
+  fs,
+  path,
+  fileName: SYNC_CREDENTIALS_FILE_NAME,
+});
+
+function joinSyncApiUrl(baseUrl, apiPath) {
+  const base = String(baseUrl || '').replace(/\/+$/, '');
+  const suffix = String(apiPath || '').replace(/^\/+/, '');
+  return `${base}/${suffix}`;
+}
+
+function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutMs = 8000 } = {}) {
+  return new Promise((resolve) => {
+    let parsed;
+    try {
+      parsed = new URL(targetUrl);
+    } catch (error) {
+      resolve({ ok: false, error: 'invalid_url' });
+      return;
+    }
+    const lib = parsed.protocol === 'https:' ? require('https') : require('http');
+    const payload = body == null ? null : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
+    const req = lib.request(
+      {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: `${parsed.pathname}${parsed.search}`,
+        method,
+        headers: {
+          Accept: 'application/json',
+          ...(payload
+            ? {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Content-Length': payload.length,
+              }
+            : {}),
+          ...headers,
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8');
+          let json = null;
+          try {
+            json = text ? JSON.parse(text) : null;
+          } catch (error) {
+            resolve({ ok: false, error: 'invalid_json', status: res.statusCode });
+            return;
+          }
+          resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, body: json });
+        });
+      },
+    );
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ ok: false, error: 'timeout' });
+    });
+    req.on('error', (error) => {
+      resolve({ ok: false, error: error && error.message || 'network_error' });
+    });
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+ipcMain.handle('sync:get-status', () => syncCredentialsStore.getStatus());
+
+ipcMain.handle('sync:pair-http-policy', (event, baseUrl) => {
+  const policy = syncPairHttpPolicy(baseUrl);
+  return {
+    ...policy,
+    confirmText: PAIR_HTTP_CONFIRM_TEXT,
+    insecureTtlDays: Math.round(INSECURE_DEVICE_TOKEN_TTL_MS / (24 * 60 * 60 * 1000)),
+  };
+});
+
+ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
+  const codeCheck = validatePairingCodeInput(payload.pairingCode || payload.code);
+  if (!codeCheck.ok) return { ok: false, error: codeCheck.error };
+
+  const baseUrl = String(payload.baseUrl || '').trim();
+  const policy = syncPairHttpPolicy(baseUrl);
+  if (!policy.ok) return { ok: false, error: policy.error || 'invalid_base_url' };
+
+  const allowInsecureHttp = payload.allowInsecureHttp === true;
+  if (policy.requiresExtraConfirm) {
+    if (!allowInsecureHttp) {
+      return { ok: false, error: 'insecure_http_not_allowed' };
+    }
+    if (payload.httpConfirmAccepted !== true) {
+      return { ok: false, error: 'http_confirm_required', confirmText: PAIR_HTTP_CONFIRM_TEXT };
+    }
+  }
+
+  if (!syncCredentialsStore.encryptionAvailable()) {
+    return { ok: false, error: 'secure_storage_unavailable', refusedPlaintext: true, needsReauth: true };
+  }
+
+  const insecureBound = Boolean(policy.insecureBound);
+  const claimUrl = joinSyncApiUrl(baseUrl, 'api/v1/pair/claim');
+  const response = await fetchSyncJson(claimUrl, {
+    method: 'POST',
+    body: {
+      pairingCode: codeCheck.code,
+      deviceName: payload.deviceName || require('os').hostname(),
+      insecureBound,
+    },
+  });
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: (response.body && response.body.error) || response.error || 'claim_failed',
+      status: response.status,
+    };
+  }
+
+  const body = response.body || {};
+  if (!body.deviceToken) {
+    return { ok: false, error: 'missing_device_token' };
+  }
+
+  const record = {
+    deviceToken: body.deviceToken,
+    deviceId: body.deviceId,
+    uid: body.uid,
+    serverId: body.serverId,
+    expiresAt: body.expiresAt,
+    insecureBound: Boolean(body.insecureBound),
+    baseUrl,
+    boundAt: Date.now(),
+  };
+  const saved = syncCredentialsStore.save(record);
+  if (!saved.ok) {
+    return { ok: false, error: saved.error || 'save_failed', refusedPlaintext: saved.refusedPlaintext };
+  }
+  return { ok: true, status: saved.status };
+});
+
+ipcMain.handle('sync:clear-binding', () => {
+  const cleared = syncCredentialsStore.clear();
+  return cleared.ok ? { ok: true, status: cleared.status } : { ok: false, error: cleared.error };
+});
+
+ipcMain.handle('sync:list-devices', async (event, payload = {}) => {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+  const token = syncCredentialsStore.getDeviceToken();
+  const baseUrl = String((payload && payload.baseUrl) || status.baseUrl || '').trim();
+  if (!baseUrl || !token) return { ok: false, error: 'missing_endpoint' };
+  const response = await fetchSyncJson(joinSyncApiUrl(baseUrl, 'api/v1/devices'), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: (response.body && response.body.error) || response.error || 'list_failed',
+      status: response.status,
+    };
+  }
+  return { ok: true, devices: (response.body && response.body.devices) || [] };
+});
+
+ipcMain.handle('sync:revoke-device', async (event, payload = {}) => {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+  const token = syncCredentialsStore.getDeviceToken();
+  const baseUrl = String((payload && payload.baseUrl) || status.baseUrl || '').trim();
+  const deviceId = String((payload && payload.deviceId) || '').trim();
+  if (!baseUrl || !token || !deviceId) return { ok: false, error: 'invalid_revoke' };
+  const response = await fetchSyncJson(
+    joinSyncApiUrl(baseUrl, `api/v1/devices/${encodeURIComponent(deviceId)}/revoke`),
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {},
+    },
+  );
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: (response.body && response.body.error) || response.error || 'revoke_failed',
+      status: response.status,
+    };
+  }
+  if (deviceId === status.deviceId) {
+    syncCredentialsStore.clear();
+  }
+  return { ok: true, device: response.body && response.body.device, clearedLocal: deviceId === status.deviceId };
+});
+
+/** In-memory migration UI session (read-only gate for todos). */
+const migrationSession = {
+  readonly: false,
+  phase: 'idle',
+  migrationId: null,
+  lastError: null,
+  pendingProjection: null,
+};
+
+let syncStoreInstance = null;
+
+function getOrOpenSyncStore() {
+  if (syncStoreInstance) return syncStoreInstance;
+  const dbPath = resolveSyncDbPath(app.getPath('userData'));
+  syncStoreInstance = openSyncStore(dbPath);
+  return syncStoreInstance;
+}
+
+function broadcastMigrationSession() {
+  const payload = {
+    readonly: migrationSession.readonly,
+    phase: migrationSession.phase,
+    migrationId: migrationSession.migrationId,
+    lastError: migrationSession.lastError,
+    bannerText: MIGRATION_BANNER_TEXT,
+  };
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    win.webContents.send('sync:migration-session', payload);
+  }
+  return payload;
+}
+
+function setMigrationSession(patch) {
+  Object.assign(migrationSession, patch);
+  return broadcastMigrationSession();
+}
+
+async function fetchBoundSyncJson(apiPath, { method = 'GET', body } = {}) {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+  const token = syncCredentialsStore.getDeviceToken();
+  const baseUrl = String(status.baseUrl || '').trim();
+  if (!baseUrl || !token) return { ok: false, error: 'missing_endpoint' };
+  const response = await fetchSyncJson(joinSyncApiUrl(baseUrl, apiPath), {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: (response.body && response.body.error) || response.error || 'request_failed',
+      status: response.status,
+      body: response.body,
+    };
+  }
+  return { ok: true, body: response.body, status: response.status };
+}
+
+ipcMain.handle('sync:get-migration-session', () => ({
+  ok: true,
+  ...broadcastMigrationSession(),
+  pendingProjection: migrationSession.pendingProjection,
+}));
+
+ipcMain.handle('sync:classify-migration', async (event, payload = {}) => {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+  const localTodosJson = payload.localTodosJson;
+  const local = parseLocalTodosStrict(
+    localTodosJson == null || localTodosJson === '' ? null : String(localTodosJson),
+  );
+  const stateRes = await fetchBoundSyncJson('api/v1/sync/state?collection=todos');
+  if (!stateRes.ok) return stateRes;
+  const decision = classifyFromLocalAndNas(
+    local.ok
+      ? JSON.stringify({
+          P0: local.data.P0,
+          P1: local.data.P1,
+          P2: local.data.P2,
+          P3: local.data.P3,
+        })
+      : String(localTodosJson || ''),
+    stateRes.body,
+  );
+  if (!decision.ok) return { ok: false, error: decision.reason || 'classify_failed' };
+  return {
+    ok: true,
+    decision,
+    localLive: local.ok ? local.live : 0,
+    localCorrupt: Boolean(local.corrupt),
+    nas: stateRes.body,
+  };
+});
+
+ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
+  const status = syncCredentialsStore.getStatus();
+  if (!status.bound) return { ok: false, error: 'not_bound' };
+
+  const localTodosJson = payload.localTodosJson == null ? null : String(payload.localTodosJson);
+  const classify = await fetchBoundSyncJson('api/v1/sync/state?collection=todos');
+  if (!classify.ok) return classify;
+  const decision = classifyFromLocalAndNas(localTodosJson, classify.body);
+  if (!decision.ok) {
+    return { ok: false, error: decision.reason || 'classify_failed' };
+  }
+  if (decision.decision === 'block_corrupt_local') {
+    return { ok: false, error: 'local_corrupt', message: decision.message, decision };
+  }
+
+  let authority = decision.authority || null;
+  if (decision.needsUserChoice) {
+    const resolved = resolveMigrationChoice(decision.decision, payload.choice);
+    if (!resolved.ok) {
+      setMigrationSession({ readonly: true, phase: 'awaiting_choice', lastError: null });
+      return { ok: false, error: 'choice_required', decision };
+    }
+    authority = resolved.authority;
+  }
+
+  setMigrationSession({ readonly: true, phase: 'migrating', lastError: null, pendingProjection: null });
+
+  const accountId = String(status.uid || status.deviceId || 'local');
+  const store = getOrOpenSyncStore();
+  store.ensureAccount({
+    accountId,
+    uid: status.uid,
+    serverId: status.serverId,
+    deviceId: status.deviceId,
+  });
+
+  const api = {
+    async startMigration(body) {
+      const res = await fetchBoundSyncJson('api/v1/migration/start', {
+        method: 'POST',
+        body: body || {},
+      });
+      if (!res.ok) throw new Error(res.error || 'migration_start_failed');
+      return res.body;
+    },
+    async commitMigration(body) {
+      const res = await fetchBoundSyncJson('api/v1/migration/commit', {
+        method: 'POST',
+        body,
+      });
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: res.error,
+          status: res.status,
+          body: res.body,
+        };
+      }
+      return { ok: true, body: res.body, status: res.status };
+    },
+    async getMigration(id) {
+      const res = await fetchBoundSyncJson(`api/v1/migration/${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(res.error || 'migration_get_failed');
+      return res.body;
+    },
+    async pullAll() {
+      const res = await fetchBoundSyncJson('api/v1/sync/pull?cursor=');
+      if (!res.ok) throw new Error(res.error || 'pull_failed');
+      return res.body;
+    },
+  };
+
+  let appliedProjection = null;
+  let result;
+  try {
+    result = await runMigrationAttempt({
+      decision,
+      authority,
+      localRaw: localTodosJson,
+      userDataPath: app.getPath('userData'),
+      accountId,
+      deviceId: status.deviceId,
+      api,
+      store,
+      applyLocalProjection(todosJson) {
+        appliedProjection = todosJson;
+      },
+    });
+  } catch (error) {
+    setMigrationSession({
+      readonly: false,
+      phase: 'failed',
+      lastError: error && error.message ? error.message : 'migration_failed',
+    });
+    return { ok: false, error: error && error.message ? error.message : 'migration_failed' };
+  }
+
+  if (!result.ok) {
+    setMigrationSession({
+      readonly: false,
+      phase: 'failed',
+      migrationId: result.migrationId || null,
+      lastError: result.error || 'migration_failed',
+      pendingProjection: appliedProjection,
+    });
+    return result;
+  }
+
+  setMigrationSession({
+    readonly: false,
+    phase: 'done',
+    migrationId: result.migrationId || null,
+    lastError: null,
+    pendingProjection: appliedProjection,
+  });
+  return {
+    ...result,
+    projectionJson: appliedProjection,
+    session: broadcastMigrationSession(),
+  };
+});
+
+ipcMain.handle('sync:ack-migration-projection', () => {
+  migrationSession.pendingProjection = null;
+  return { ok: true };
+});
+
+ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
+  if (payload.confirmed !== true) {
+    return { ok: false, error: 'confirm_required' };
+  }
+  const userDataPath = app.getPath('userData');
+  const root = resolveSyncBackupsRoot(userDataPath);
+  let applied = null;
+  const result = restoreLatestMigrationBackup(userDataPath, {
+    applyLocalProjection(todosJson) {
+      applied = todosJson;
+    },
+  });
+  if (!result.ok) return result;
+  if (result.path && !isInsideSyncBackupDir(root, result.path)) {
+    return { ok: false, error: 'backup_path_escape' };
+  }
+  setMigrationSession({
+    readonly: false,
+    phase: 'idle',
+    lastError: null,
+    pendingProjection: applied,
+  });
+  return { ...result, projectionJson: applied };
 });
 
 function sodaMusicRunning() {

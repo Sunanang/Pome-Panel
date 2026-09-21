@@ -1,0 +1,168 @@
+/* FPK Web — align with desktop semantic tokens (black base, graded white text).
+   TODO(T6): when embedding richer UI, map to renderer/styles.css variables. */
+:root {
+  --bg-base: #000000;
+  --surface-1: #141414;
+  --text-1: #ffffff;
+  --text-3: rgba(255, 255, 255, 0.55);
+  --text-4: rgba(255, 255, 255, 0.36);
+  --hairline: rgba(255, 255, 255, 0.12);
+  --accent-green: #30D978;
+  --accent-orange: #FF9352;
+  --p0: #FF5F57;
+  --r-panel: 16px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --s-4: 16px;
+  --s-5: 24px;
+  --fs-title: 22px;
+  --fs-body: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg-base);
+  color: var(--text-1);
+  font-family: var(--font);
+}
+
+body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--s-5);
+}
+
+.panel {
+  width: min(520px, 100%);
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-panel);
+  padding: var(--s-5);
+}
+
+.brand {
+  margin: 0 0 var(--s-4);
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+
+.lead,
+.note {
+  margin: 0 0 var(--s-4);
+  color: var(--text-3);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.meta {
+  margin: 0 0 var(--s-4);
+  display: grid;
+  gap: 10px;
+}
+
+.meta div {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.meta dt {
+  margin: 0;
+  color: var(--text-4);
+  font-size: 12px;
+}
+
+.meta dd {
+  margin: 0;
+  color: var(--text-1);
+  font-size: var(--fs-body);
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.section-title {
+  margin: 0 0 var(--s-4);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.pair-panel {
+  margin: 0 0 var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--hairline);
+}
+
+.pair-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: var(--s-4);
+}
+
+.btn {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-1);
+  color: var(--text-1);
+  font: 13px/1 var(--font);
+  cursor: pointer;
+}
+
+.btn.primary {
+  border-color: var(--text-1);
+  background: var(--text-1);
+  color: var(--bg-base);
+}
+
+.pair-status { min-height: 1.2em; color: var(--text-3); font-size: 13px; }
+.pair-status[data-kind="error"] { color: var(--p0); }
+.pair-status[data-kind="ok"] { color: var(--accent-green); }
+
+.pair-code {
+  margin: var(--s-4) 0 0;
+  font: 28px/1.2 var(--font-mono);
+  letter-spacing: 0.2em;
+  color: var(--text-1);
+}
+
+.device-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.device-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--bg-base);
+}
+
+.badge-insecure {
+  margin-left: 8px;
+  padding: 0 6px;
+  border: 1px solid var(--accent-orange);
+  border-radius: 999px;
+  color: var(--accent-orange);
+  font-size: 11px;
+}
