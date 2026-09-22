@@ -61,6 +61,11 @@ test('FPK Web style uses desktop tokens — no banned palette / no inline color 
   // Pairing code must beat `.settings-card p { font-size: 11px }` and stay display-sized.
   assert.match(css, /\.settings-card\s+\.nas-web-code|#pair-code\.nas-web-code/);
   assert.match(css, /font:\s*700\s+4[0-9]px/);
+  // Empty tabs must not invent page scroll with huge shell min-heights.
+  assert.doesNotMatch(css, /\.panel\s*\{[^}]*min-height:\s*(?:[6-9]\d{2}|[1-9]\d{3,})px/s);
+  assert.doesNotMatch(css, /\.panels\s*\{[^}]*min-height:\s*(?:[5-9]\d{2}|[1-9]\d{3,})px/s);
+  assert.doesNotMatch(css, /min-height:\s*100vh/);
+  assert.match(css, /\.tab-panel:not\(\.active\)\s*\{\s*display:\s*none/);
 });
 
 test('resolveApiPrefix / apiUrl honor gatewayPrefix (absolute /api was the break)', () => {
