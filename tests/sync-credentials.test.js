@@ -122,3 +122,113 @@ test('safeStorage available → encrypt + 0600 file; public status never echoes 
   assert.equal(store.getDeviceToken(), null);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('decrypt failure keeps the ciphertext and reports credentials_unreadable', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-cred-'));
+  const filePath = path.join(dir, 'sync-credentials.json');
+  fs.writeFileSync(filePath, JSON.stringify({ version: 1, payload: 'not-our-key' }));
+  const store = createSyncCredentialsStore({
+    getUserDataPath: () => dir,
+    safeStorage: {
+      isEncryptionAvailable: () => true,
+      encryptString() { throw new Error('unused'); },
+      decryptString() { throw new Error('keychain ACL / ad-hoc signature'); },
+    },
+    fs,
+    path,
+  });
+  const status = store.getStatus();
+  assert.equal(status.bound, false);
+  assert.equal(status.credentialsUnreadable, true);
+  assert.equal(status.error, 'credentials_unreadable');
+  assert.equal(store.getDeviceToken(), null);
+  assert.equal(fs.readFileSync(filePath, 'utf8').includes('not-our-key'), true);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('readable credentials in an older Application Support folder are copied into userData', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-cred-roots-'));
+  const userData = path.join(root, 'Dynamic Panel');
+  const legacy = path.join(root, 'Pome Panel');
+  fs.mkdirSync(legacy, { recursive: true });
+  const key = crypto.randomBytes(32);
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString(value) {
+      return Buffer.concat([key.subarray(0, 8), Buffer.from(String(value), 'utf8')]);
+    },
+    decryptString(buffer) {
+      return Buffer.from(buffer).subarray(8).toString('utf8');
+    },
+  };
+  const legacyStore = createSyncCredentialsStore({
+    getUserDataPath: () => legacy,
+    safeStorage,
+    fs,
+    path,
+  });
+  const saved = legacyStore.save({
+    deviceToken: 'legacy-device-token',
+    deviceId: 'dev-legacy',
+    uid: 'uid-legacy',
+    serverId: 'srv-legacy',
+  });
+  assert.equal(saved.ok, true);
+
+  const store = createSyncCredentialsStore({
+    getUserDataPath: () => userData,
+    getAppDataPath: () => root,
+    safeStorage,
+    fs,
+    path,
+  });
+  assert.equal(store.getDeviceToken(), 'legacy-device-token');
+  assert.equal(store.getStatus().bound, true);
+  assert.equal(fs.existsSync(path.join(userData, 'sync-credentials.json')), true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('unreadable primary is not overwritten by another folder', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-cred-keep-'));
+  const userData = path.join(root, 'Dynamic Panel');
+  const legacy = path.join(root, 'notch-todo');
+  fs.mkdirSync(userData, { recursive: true });
+  fs.mkdirSync(legacy, { recursive: true });
+  const primaryPath = path.join(userData, 'sync-credentials.json');
+  fs.writeFileSync(primaryPath, JSON.stringify({ version: 1, payload: 'current-ciphertext' }));
+  const key = crypto.randomBytes(32);
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString(value) {
+      return Buffer.concat([key.subarray(0, 8), Buffer.from(String(value), 'utf8')]);
+    },
+    decryptString(buffer) {
+      const text = Buffer.from(buffer).toString('utf8');
+      if (text.includes('current-ciphertext')) throw new Error('wrong signature');
+      return Buffer.from(buffer).subarray(8).toString('utf8');
+    },
+  };
+  const legacyStore = createSyncCredentialsStore({
+    getUserDataPath: () => legacy,
+    safeStorage,
+    fs,
+    path,
+  });
+  assert.equal(legacyStore.save({
+    deviceToken: 'older-token',
+    deviceId: 'dev-old',
+    uid: 'uid-old',
+  }).ok, true);
+
+  const store = createSyncCredentialsStore({
+    getUserDataPath: () => userData,
+    getAppDataPath: () => root,
+    safeStorage,
+    fs,
+    path,
+  });
+  assert.equal(store.getDeviceToken(), null);
+  assert.equal(store.getStatus().credentialsUnreadable, true);
+  assert.equal(fs.readFileSync(primaryPath, 'utf8').includes('current-ciphertext'), true);
+  fs.rmSync(root, { recursive: true, force: true });
+});

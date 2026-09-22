@@ -1860,8 +1860,17 @@
       || uiState === 'certificate_error'
       || uiState === 'migration_failed'
       || uiState === 'endpoint_disabled';
+    const lostToken = window.NasSyncSettings
+      && typeof window.NasSyncSettings.shouldPromptLostDeviceToken === 'function'
+      && window.NasSyncSettings.shouldPromptLostDeviceToken({
+        bound,
+        schemaIncompatible,
+        endpoints: nasSettingsUi.view && nasSettingsUi.view.endpoints,
+      });
+    const lostTokenCopy = (window.NasSyncSettings && window.NasSyncSettings.LOST_DEVICE_TOKEN_HINT)
+      || '本机曾配置同步地址，但设备令牌已丢失，请重新配对';
     if (settingsNasSyncStatus) {
-      if (hardError) {
+      if (hardError || lostToken) {
         settingsNasSyncStatus.textContent = '出错';
         settingsNasSyncStatus.dataset.state = 'error';
       } else if (!bound) {
@@ -1879,19 +1888,9 @@
         if (schemaMessage) setNasStatusHint(schemaMessage, 'error');
       }
     }
-    const lostToken = window.NasSyncSettings
-      && typeof window.NasSyncSettings.shouldPromptLostDeviceToken === 'function'
-      && window.NasSyncSettings.shouldPromptLostDeviceToken({
-        bound,
-        schemaIncompatible,
-        endpoints: nasSettingsUi.view && nasSettingsUi.view.endpoints,
-        lastSuccessAt: nasSettingsUi.view && nasSettingsUi.view.lastSuccessAt,
-      });
     const statusHint = settingsNasStatusHint ? settingsNasStatusHint.textContent : '';
-    const lostTokenCopy = (window.NasSyncSettings && window.NasSyncSettings.LOST_DEVICE_TOKEN_HINT)
-      || '设备令牌丢失，请重新配对';
     if (lostToken) {
-      setNasStatusHint(lostTokenCopy, '');
+      setNasStatusHint(lostTokenCopy, 'warning');
     } else if (statusHint === lostTokenCopy) {
       setNasStatusHint('', '');
     }

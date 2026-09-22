@@ -88,20 +88,16 @@ test('unpaired status hides channel and retry; lost token is one line', () => {
   assert.match(workspaceJs, /settingsNasSyncRetry\.hidden = !bound/);
   assert.match(workspaceJs, /textContent = '未配对'/);
   assert.match(workspaceJs, /textContent = '已连接'/);
-  assert.match(workspaceJs, /设备令牌丢失，请重新配对/);
-  assert.equal(settingsUi.LOST_DEVICE_TOKEN_HINT, '设备令牌丢失，请重新配对');
+  assert.match(workspaceJs, /本机曾配置同步地址，但设备令牌已丢失，请重新配对/);
+  assert.equal(settingsUi.LOST_DEVICE_TOKEN_HINT, '本机曾配置同步地址，但设备令牌已丢失，请重新配对');
   assert.equal(settingsUi.shouldPromptLostDeviceToken({
     bound: false,
-    endpoints: [{ baseUrl: 'http://nas:1', serverId: 'srv' }],
+    endpoints: [{ baseUrl: 'http://nas:1' }],
   }), true);
   assert.equal(settingsUi.shouldPromptLostDeviceToken({
     bound: false,
     lastSuccessAt: 1700000000000,
     endpoints: [],
-  }), true);
-  assert.equal(settingsUi.shouldPromptLostDeviceToken({
-    bound: false,
-    endpoints: [{ baseUrl: 'http://nas:1' }],
   }), false);
   assert.equal(settingsUi.shouldPromptLostDeviceToken({
     bound: true,

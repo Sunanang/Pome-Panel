@@ -2847,6 +2847,7 @@ ipcMain.handle('credentials:copy', async (event, payload) => {
 
 const syncCredentialsStore = createSyncCredentialsStore({
   getUserDataPath: () => app.getPath('userData'),
+  getAppDataPath: () => app.getPath('appData'),
   safeStorage,
   fs,
   path,

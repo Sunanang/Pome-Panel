@@ -253,18 +253,16 @@
     network_error: '网络不可用',
   };
 
-  const LOST_DEVICE_TOKEN_HINT = '设备令牌丢失，请重新配对';
+  const LOST_DEVICE_TOKEN_HINT = '本机曾配置同步地址，但设备令牌已丢失，请重新配对';
 
   /**
-   * Endpoints or a past success can outlive the device token.
-   * Only then ask for a new pair — a freshly added address stays 「未配对」.
+   * Plaintext endpoints survive ad-hoc reinstalls; the safeStorage device token
+   * often does not. Any saved address without a binding needs one re-pair line.
    */
   function shouldPromptLostDeviceToken(input = {}) {
     if (input.bound || input.schemaIncompatible) return false;
     const endpoints = Array.isArray(input.endpoints) ? input.endpoints : [];
-    const hadBinding = Boolean(input.lastSuccessAt)
-      || endpoints.some((ep) => ep && (ep.serverId || ep.uid));
-    return hadBinding;
+    return endpoints.length > 0;
   }
 
   function isRawErrorCode(value) {
