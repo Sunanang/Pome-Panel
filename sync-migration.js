@@ -463,8 +463,11 @@ async function runMigrationAttempt(ctx) {
   store.updateMigrationState(migrationId, 'prepared');
 
   const local = parseLocalTodosStrict(localRaw == null || localRaw === '' ? null : localRaw);
+  const extraEntities = Array.isArray(ctx.extraEntities) ? ctx.extraEntities : [];
   const entities =
-    resolvedAuthority === AUTHORITY.LOCAL && local.ok ? localTodosToEntities(local.data) : [];
+    resolvedAuthority === AUTHORITY.LOCAL && local.ok
+      ? localTodosToEntities(local.data).concat(extraEntities)
+      : [];
 
   const commitBody = {
     migrationId,
@@ -495,13 +498,18 @@ async function runMigrationAttempt(ctx) {
     backupId: commit.body && commit.body.backupId,
   });
 
+  let remoteChanges = [];
   try {
     if (resolvedAuthority === AUTHORITY.NAS || decision.decision === MIGRATION_DECISIONS.ENTER_SYNC_NAS_HISTORY) {
       let projectionJson;
       if (typeof api.pullAll === 'function') {
         const pulled = await api.pullAll();
+        remoteChanges = Array.isArray(pulled.changes) ? pulled.changes : [];
+        const todoChanges = remoteChanges.filter((change) => (
+          !change || !change.collection || change.collection === 'todos'
+        ));
         const projection = entitiesToTodosProjection(
-          (pulled.changes || []).map((c) => ({
+          todoChanges.map((c) => ({
             entityId: c.entityId,
             op: c.op,
             payload: c.payload,
@@ -511,7 +519,7 @@ async function runMigrationAttempt(ctx) {
         if (store.replaceTodosFromEntities) {
           const applied = store.replaceTodosFromEntities(
             accountId,
-            (pulled.changes || []).filter((c) => c.op !== 'delete'),
+            todoChanges.filter((c) => c.op !== 'delete'),
             Number(pulled.serverRev) || 0,
           );
           if (!applied.ok) throw new Error(applied.reason || 'apply_failed');
@@ -522,7 +530,8 @@ async function runMigrationAttempt(ctx) {
       applyLocalProjection(projectionJson);
     } else if (resolvedAuthority === AUTHORITY.LOCAL) {
       if (store.replaceTodosFromEntities) {
-        const applied = store.replaceTodosFromEntities(accountId, entities, Number(commit.body.serverRev) || 0);
+        const todoEntities = entities.filter((ent) => !ent.collection || ent.collection === 'todos');
+        const applied = store.replaceTodosFromEntities(accountId, todoEntities, Number(commit.body.serverRev) || 0);
         if (!applied.ok) throw new Error(applied.reason || 'apply_failed');
       }
       if (local.ok) {
@@ -557,6 +566,8 @@ async function runMigrationAttempt(ctx) {
     authority: resolvedAuthority,
     decision,
     serverRev: commit.body && commit.body.serverRev,
+    remoteChanges,
+    uploadedEntities: entities,
   };
 }
 

@@ -495,12 +495,12 @@ test('todos LS projection keeps P0–P3 shell and item field set', () => {
   }
 });
 
-test('rejects non-P0 collections on write and pull', () => {
+test('rejects unwired collections and accepts notes', () => {
   const { store, accountId } = memoryStore();
   try {
     const write = store.writeLocalMutation(
       mutationInput(accountId, {
-        collection: 'notes',
+        collection: 'commands',
         clientMutationId: 'n1',
         payload: { title: 'nope' },
       })
@@ -508,9 +508,19 @@ test('rejects non-P0 collections on write and pull', () => {
     assert.equal(write.ok, false);
     assert.equal(write.reason, 'collection_not_enabled');
 
+    const notes = store.writeLocalMutation(
+      mutationInput(accountId, {
+        collection: 'notes',
+        clientMutationId: 'note-1',
+        entityId: 'note:home',
+        payload: { kind: 'home', markdown: 'hello' },
+      })
+    );
+    assert.equal(notes.ok, true);
+
     const pull = store.applyPullPage({
       accountId,
-      collection: 'notes',
+      collection: 'commands',
       pull: { changes: [], nextCursor: null, hasMore: false, serverRev: 0 },
     });
     assert.equal(pull.ok, false);

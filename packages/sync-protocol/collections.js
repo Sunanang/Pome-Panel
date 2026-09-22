@@ -2,8 +2,8 @@
 
 /**
  * Sync collection names.
- * P0 enables only `todos`. Other names are placeholders and must not be wired
- * into push/pull until their P1/P2 phase.
+ * Workspace sync covers todos, notes, links, clipboard, recordings, AI settings,
+ * and the secrets vault. `commands` and `homeLayout` stay unwired.
  */
 const COLLECTIONS = Object.freeze({
   TODOS: 'todos',
@@ -12,10 +12,21 @@ const COLLECTIONS = Object.freeze({
   COMMANDS: 'commands',
   HOME_LAYOUT: 'homeLayout',
   CLIPBOARD_HISTORY: 'clipboardHistory',
+  RECORDINGS: 'recordings',
+  AI_SETTINGS: 'aiSettings',
+  SECRETS: 'secrets',
 });
 
-/** Collections allowed for P0 sync I/O. */
-const P0_ENABLED_COLLECTIONS = Object.freeze([COLLECTIONS.TODOS]);
+/** Collections allowed on the sync push/pull path. */
+const P0_ENABLED_COLLECTIONS = Object.freeze([
+  COLLECTIONS.TODOS,
+  COLLECTIONS.NOTES,
+  COLLECTIONS.LINKS,
+  COLLECTIONS.CLIPBOARD_HISTORY,
+  COLLECTIONS.RECORDINGS,
+  COLLECTIONS.AI_SETTINGS,
+  COLLECTIONS.SECRETS,
+]);
 
 const ALL_COLLECTION_NAMES = Object.freeze(Object.values(COLLECTIONS));
 

@@ -1997,9 +1997,12 @@
     const localTodosJson = typeof window.getLocalTodosForSync === 'function'
       ? window.getLocalTodosForSync()
       : localStorage.getItem('notch-todo-data');
+    const workspace = typeof window.getWorkspaceSnapshotForSync === 'function'
+      ? window.getWorkspaceSnapshotForSync()
+      : null;
     applyNasMigrationUi({ type: 'classifying' });
 
-    const classified = await window.notchAPI.syncClassifyMigration({ localTodosJson });
+    const classified = await window.notchAPI.syncClassifyMigration({ localTodosJson, workspace });
     if (!classified || !classified.ok) {
       applyNasMigrationUi({
         type: 'failed',
@@ -2044,6 +2047,7 @@
     applyNasMigrationUi({ type: 'migrating' });
     const result = await window.notchAPI.syncRunMigration({
       localTodosJson,
+      workspace,
       choice: resolvedChoice,
     });
 
@@ -2068,9 +2072,15 @@
       }
     }
 
+    if (result.workspaceProjection) {
+      document.dispatchEvent(new CustomEvent('nas-sync:workspace-projection', {
+        detail: result.workspaceProjection,
+      }));
+    }
+
     if (result.skipped) {
       applyNasMigrationUi({ type: 'skipped' });
-      setNasSyncHint('待办两边都是空的，已进入同步。笔记、链接和录音仍只在本机。', 'warning');
+      setNasSyncHint('笔记、剪贴板、录音、链接、密钥和待办两边都是空的，已进入同步。', 'warning');
     } else {
       applyNasMigrationUi({ type: 'done', migrationId: result.migrationId });
       setNasSyncHint(isRetry ? '迁移重试成功' : '迁移完成', 'success');
@@ -3550,6 +3560,59 @@
     if (transcriptionStartPromise && window.notchAPI) window.notchAPI.finishTranscription().catch(() => {});
     stopMediaTracks();
     if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+  });
+
+  window.getLinkGroupsForSync = () => linkGroups.map((group) => ({
+    id: group.id,
+    name: group.name || '',
+    collapsed: group.collapsed === true,
+    links: Array.isArray(group.links) ? group.links.map((link) => ({
+      id: link.id,
+      url: link.url,
+      title: link.title || '',
+      description: link.description || '',
+      icon: link.icon || '',
+      createdAt: link.createdAt || 0,
+    })) : [],
+  }));
+  window.getRecordingsForSync = () => recordings
+    .filter((recording) => recording && !recording.isDraft)
+    .map((recording) => ({
+      id: recording.id,
+      createdAt: recording.createdAt,
+      durationMs: recording.durationMs,
+      transcript: recording.transcript || '',
+      audioPath: recording.audioPath || '',
+      mimeType: recording.mimeType || '',
+      title: recording.title || '',
+      category: recording.category || '',
+    }));
+
+  document.addEventListener('nas-sync:workspace-projection', (event) => {
+    const detail = event && event.detail ? event.detail : {};
+    if (Array.isArray(detail.links)) {
+      linkGroups = detail.links;
+      persistLinks();
+      renderLinkGroups();
+    }
+    if (Array.isArray(detail.recordings)) {
+      const incoming = detail.recordings.map((row) => {
+        if (row && row.audioOmitted && !row.audioPath) {
+          const existing = recordings.find((item) => item.id === row.id);
+          if (existing && existing.audioPath) return { ...row, audioPath: existing.audioPath };
+        }
+        return row;
+      });
+      recordings = incoming.map(Domain.createRecording).filter(Boolean);
+      selectedRecordingId = recordings.some((recording) => recording.id === selectedRecordingId)
+        ? selectedRecordingId
+        : (recordings[0] && recordings[0].id) || '';
+      persistRecordings();
+      renderRecordings();
+    }
+    if (detail.notes || detail.clipboard || detail.links || detail.recordings) {
+      loadCredentials().catch(() => {});
+    }
   });
 
   renderCommands();

@@ -8,6 +8,8 @@ const MUTATION_OPS = Object.freeze(['upsert', 'delete']);
 /** Suggested push batch caps (server may still reject oversize). */
 const PUSH_BATCH_MAX_MUTATIONS = 500;
 const PUSH_BATCH_MAX_BYTES = 1024 * 1024;
+/** Workspace batches may carry recording / clipboard blobs. */
+const WORKSPACE_PUSH_MAX_BYTES = 8 * 1024 * 1024;
 
 const REQUIRED_MUTATION_FIELDS = Object.freeze([
   'schemaVersion',
@@ -131,7 +133,7 @@ function createMutation(fields) {
  * @param {unknown} mutations
  * @returns {{ ok: true } | { ok: false, reason: string }}
  */
-function assertPushBatchLimits(mutations) {
+function assertPushBatchLimits(mutations, options = {}) {
   if (!Array.isArray(mutations)) {
     return { ok: false, reason: 'push_batch_not_array' };
   }
@@ -141,22 +143,26 @@ function assertPushBatchLimits(mutations) {
   if (mutations.length > PUSH_BATCH_MAX_MUTATIONS) {
     return { ok: false, reason: 'push_batch_too_many' };
   }
+  const maxBytes = Number.isInteger(options.maxBytes) && options.maxBytes > 0
+    ? options.maxBytes
+    : PUSH_BATCH_MAX_BYTES;
   let bytes = 0;
   try {
     bytes = Buffer.byteLength(JSON.stringify(mutations), 'utf8');
   } catch {
     return { ok: false, reason: 'push_batch_not_serializable' };
   }
-  if (bytes > PUSH_BATCH_MAX_BYTES) {
+  if (bytes > maxBytes) {
     return { ok: false, reason: 'push_batch_too_large' };
   }
-  return { ok: true };
+  return { ok: true, bytes };
 }
 
 module.exports = {
   MUTATION_OPS,
   PUSH_BATCH_MAX_MUTATIONS,
   PUSH_BATCH_MAX_BYTES,
+  WORKSPACE_PUSH_MAX_BYTES,
   REQUIRED_MUTATION_FIELDS,
   validateMutation,
   createMutation,

@@ -78,6 +78,7 @@ const {
   resolveSyncBackupsRoot,
   parseLocalTodosStrict,
   selectMigrationLocalTodos,
+  classifyMigrationDecision,
 } = require('./sync-migration');
 const {
   ensureBoundAccount,
@@ -85,9 +86,19 @@ const {
   writeTodoDelete,
   writeCategoryUpsert,
   runTodosSyncCycle,
-  notesCollectionIsNotWired,
   gateSchemaCompatibility,
 } = require('./todos-sync');
+const {
+  countWorkspaceContent,
+  buildWorkspaceEntities,
+  partitionEntities,
+  planWorkspaceSync,
+  projectWorkspaceEntities,
+  hashesForEntities,
+  mutationFromEntity,
+  splitMutationBatches,
+  WORKSPACE_COLLECTIONS,
+} = require('./workspace-sync');
 const {
   createSyncSettingsStore,
   SYNC_SETTINGS_FILE,
@@ -3007,8 +3018,11 @@ function createTodosSyncTransport(record) {
   const token = record.deviceToken;
   const fallbackBaseUrl = record.baseUrl;
   return {
-    async pullPage({ cursor }) {
-      const query = cursor == null || cursor === '' ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+    async pullPage({ cursor, collection } = {}) {
+      const params = new URLSearchParams();
+      if (cursor != null && cursor !== '') params.set('cursor', String(cursor));
+      params.set('collection', collection || 'todos');
+      const query = `?${params.toString()}`;
       return withEndpointFailover(async (endpoint) => {
         const response = await fetchSyncJson(
           joinSyncApiUrl(endpoint.baseUrl || fallbackBaseUrl, `api/v1/sync/pull${query}`),
@@ -3040,6 +3054,7 @@ function createTodosSyncTransport(record) {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
             body: { mutations },
+            timeoutMs: 60000,
           },
         );
         if (!response.ok) {
@@ -3098,6 +3113,13 @@ async function runBoundTodosSyncCycle({ broadcast = true } = {}) {
   }
   if (result.ok && broadcast) {
     broadcastTodosProjection(result.projection);
+  }
+  if (result.ok) {
+    try {
+      await runBoundWorkspaceSyncCycle();
+    } catch (error) {
+      // 工作区同步失败时待办结果仍然有效，下一轮再试。
+    }
   }
   return result;
 }
@@ -3563,6 +3585,7 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
     insecureBound: Boolean(body.insecureBound),
     baseUrl,
     boundAt: Date.now(),
+    ...(body.accountSyncKey ? { accountSyncKey: body.accountSyncKey } : {}),
   };
   const saved = syncCredentialsStore.save(record);
   if (!saved.ok) {
@@ -3599,9 +3622,6 @@ ipcMain.handle('sync:todos-local-write', (event, payload = {}) => {
   const ctx = readBoundSyncContext();
   if (!ctx.ok) {
     return { ok: false, error: ctx.error, unbound: ctx.error === 'not_bound' };
-  }
-  if (!notesCollectionIsNotWired()) {
-    return { ok: false, error: 'notes_collection_wired_forbidden' };
   }
 
   const op = payload.op;
@@ -3782,7 +3802,7 @@ function setMigrationSession(patch) {
   return broadcastMigrationSession();
 }
 
-async function fetchBoundSyncJson(apiPath, { method = 'GET', body } = {}) {
+async function fetchBoundSyncJson(apiPath, { method = 'GET', body, timeoutMs = 8000 } = {}) {
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
   const token = syncCredentialsStore.getDeviceToken();
@@ -3792,6 +3812,7 @@ async function fetchBoundSyncJson(apiPath, { method = 'GET', body } = {}) {
     method,
     headers: { Authorization: `Bearer ${token}` },
     body,
+    timeoutMs,
   });
   if (!response.ok) {
     return {
@@ -3810,6 +3831,317 @@ ipcMain.handle('sync:get-migration-session', () => ({
   pendingProjection: migrationSession.pendingProjection,
 }));
 
+const WORKSPACE_INDEX_FILE = 'sync-workspace-index.json';
+
+function workspaceIndexPath() {
+  return path.join(app.getPath('userData'), WORKSPACE_INDEX_FILE);
+}
+
+function readWorkspaceIndex() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(workspaceIndexPath(), 'utf8'));
+    return parsed && parsed.hashes && typeof parsed.hashes === 'object' ? parsed.hashes : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function writeWorkspaceIndex(hashes) {
+  const target = workspaceIndexPath();
+  const temporary = `${target}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(temporary, JSON.stringify({ version: 1, hashes: hashes || {} }), { mode: 0o600 });
+    fs.renameSync(temporary, target);
+  } catch (error) {
+    try { fs.unlinkSync(temporary); } catch (unlinkError) {}
+  }
+}
+
+function readOptionalFileBase64(filePath, maxBytes) {
+  if (!filePath) return '';
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile() || stat.size <= 0 || stat.size > maxBytes) return '';
+    return fs.readFileSync(filePath).toString('base64');
+  } catch (error) {
+    return '';
+  }
+}
+
+function parseJsonArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== 'string' || !raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function readWorkspaceBagValue(key) {
+  const payload = readJsonFile(workspacePath(WORKSPACE_DATA_FILE), {});
+  const stored = payload && payload.localStorage && payload.localStorage[key];
+  return typeof stored === 'string' ? stored : null;
+}
+
+function assembleWorkspaceSnapshot(rendererSnapshot) {
+  const snap = rendererSnapshot && typeof rendererSnapshot === 'object' ? rendererSnapshot : {};
+  const notes = snap.notes && typeof snap.notes === 'object' ? snap.notes : {};
+  const clipboard = snap.clipboard && typeof snap.clipboard === 'object' ? snap.clipboard : {};
+  const history = Array.isArray(clipboard.history)
+    ? clipboard.history
+    : parseJsonArray(readWorkspaceBagValue('notch-clip-history'));
+  const recordings = Array.isArray(snap.recordings)
+    ? snap.recordings
+    : parseJsonArray(readWorkspaceBagValue('notch-recordings'));
+  const storedAi = readStoredTranscriptionSettings();
+  return {
+    notes: {
+      home: typeof notes.home === 'string' ? notes.home : (readWorkspaceBagValue('notch-home-note') || ''),
+      archive: Array.isArray(notes.archive) ? notes.archive : parseJsonArray(readWorkspaceBagValue('notch-note-archive-v1')),
+      activeId: typeof notes.activeId === 'string'
+        ? notes.activeId
+        : (readWorkspaceBagValue('notch-note-active-archive-v1') || ''),
+    },
+    links: Array.isArray(snap.links) ? snap.links : parseJsonArray(readWorkspaceBagValue('notch-link-groups')),
+    clipboard: {
+      history: history.map((item) => {
+        if (!item || item.type !== 'image') return item;
+        return {
+          ...item,
+          imageBase64: readOptionalFileBase64(getSafeClipImagePath(item.imagePath), 2 * 1024 * 1024),
+        };
+      }),
+      favorites: Array.isArray(clipboard.favorites)
+        ? clipboard.favorites
+        : parseJsonArray(readWorkspaceBagValue('notch-clip-favorites')),
+    },
+    recordings: recordings.map((row) => {
+      if (!row || row.isDraft) return row;
+      return {
+        ...row,
+        audioBase64: readOptionalFileBase64(getSafeRecordingPath(row.audioPath), 8 * 1024 * 1024),
+      };
+    }),
+    aiSettings: {
+      apiKey: decryptStoredSecret(storedAi.encryptedApiKey),
+      llmApiKey: decryptStoredSecret(storedAi.encryptedLlmApiKey),
+      workspaceId: String(storedAi.workspaceId || ''),
+      region: String(storedAi.region || ''),
+      llmBaseUrl: String(storedAi.llmBaseUrl || ''),
+      llmModel: String(storedAi.llmModel || ''),
+      hasStoredSecret: Boolean(storedAi.encryptedApiKey || storedAi.encryptedLlmApiKey),
+    },
+    secrets: readCredentialsVault(),
+  };
+}
+
+function writeSyncedBytes(directory, fileName, base64) {
+  if (!base64) return '';
+  const buffer = Buffer.from(base64, 'base64');
+  if (!buffer.length) return '';
+  fs.mkdirSync(directory, { recursive: true });
+  const target = path.join(directory, fileName);
+  fs.writeFileSync(target, buffer);
+  return target;
+}
+
+function writeSyncedAiSettings(plain) {
+  const previous = readStoredTranscriptionSettings();
+  const next = { ...previous };
+  if (plain.apiKey) {
+    const encrypted = encryptStoredSecret(plain.apiKey);
+    if (encrypted) next.encryptedApiKey = encrypted;
+  } else if (plain.apiKey === '') {
+    next.encryptedApiKey = '';
+  }
+  if (plain.llmApiKey) {
+    const encrypted = encryptStoredSecret(plain.llmApiKey);
+    if (encrypted) next.encryptedLlmApiKey = encrypted;
+  } else if (plain.llmApiKey === '') {
+    next.encryptedLlmApiKey = '';
+  }
+  if (plain.workspaceId != null) next.workspaceId = String(plain.workspaceId || '');
+  if (plain.region) next.region = String(plain.region);
+  if (plain.llmBaseUrl) next.llmBaseUrl = String(plain.llmBaseUrl);
+  if (plain.llmModel) next.llmModel = String(plain.llmModel);
+  try {
+    const target = getTranscriptionSettingsPath();
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, JSON.stringify(next), { mode: 0o600 });
+  } catch (error) {
+    // 磁盘写入失败时保留原来的转写配置。
+  }
+}
+
+function materializeWorkspaceSnapshot(projected, previousSnapshot) {
+  const snapshot = projected.snapshot;
+  const previous = previousSnapshot && typeof previousSnapshot === 'object' ? previousSnapshot : {};
+  const previousRecordings = Array.isArray(previous.recordings) ? previous.recordings : [];
+  const previousClips = previous.clipboard && Array.isArray(previous.clipboard.history)
+    ? previous.clipboard.history
+    : [];
+  const renderer = {
+    notes: snapshot.notes,
+    links: snapshot.links,
+    clipboard: { history: [], favorites: snapshot.clipboard.favorites },
+    recordings: [],
+  };
+  for (const item of snapshot.clipboard.history) {
+    const next = {
+      id: item.id,
+      type: item.type,
+      text: item.text,
+      timestamp: item.timestamp,
+      imagePath: '',
+    };
+    if (item.type === 'image' && item.imageBase64) {
+      const clean = String(item.id || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+      const absolute = writeSyncedBytes(getClipImagesDir(), `clip-${clean || 'sync'}.png`, item.imageBase64);
+      if (absolute) next.imagePath = platformPolicy.portableMediaPath(CLIP_IMAGES_DIR_NAME, absolute);
+    } else if (item.type === 'image') {
+      const prior = previousClips.find((row) => row && row.id === item.id);
+      if (prior && prior.imagePath) next.imagePath = prior.imagePath;
+    }
+    renderer.clipboard.history.push(next);
+  }
+  for (const recording of snapshot.recordings) {
+    const next = { ...recording };
+    delete next.audioBase64;
+    if (recording.audioBase64) {
+      const clean = String(recording.id || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 48);
+      const fileName = `recording-${clean || 'sync'}.${recordingExtension(recording.mimeType)}`;
+      const absolute = writeSyncedBytes(getRecordingsDir(), fileName, recording.audioBase64);
+      if (absolute) next.audioPath = platformPolicy.portableMediaPath(RECORDINGS_DIR_NAME, absolute);
+    } else {
+      const prior = previousRecordings.find((row) => row && row.id === recording.id);
+      if (prior && prior.audioPath) next.audioPath = prior.audioPath;
+    }
+    renderer.recordings.push(next);
+  }
+  if (projected.secretsApplied) {
+    const rows = snapshot.secrets
+      .map((item) => normalizeCredentialInput(item, item && item.id, item && item.createdAt))
+      .filter(Boolean);
+    writeCredentialsVault(rows);
+  }
+  if (projected.aiApplied && snapshot.aiSettings) {
+    writeSyncedAiSettings(snapshot.aiSettings);
+  }
+  return renderer;
+}
+
+function broadcastWorkspaceProjection(projection) {
+  if (!projection || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('sync:workspace-projection', projection);
+}
+
+async function ensureAccountSyncKey(record) {
+  if (record && typeof record.accountSyncKey === 'string' && record.accountSyncKey) {
+    return record.accountSyncKey;
+  }
+  const res = await fetchBoundSyncJson('api/v1/account/sync-key');
+  const key = res.ok && res.body ? res.body.accountSyncKey : '';
+  if (!key || !record) return null;
+  const saved = syncCredentialsStore.save({ ...record, accountSyncKey: key });
+  if (!saved.ok) return null;
+  record.accountSyncKey = key;
+  return key;
+}
+
+async function readRendererWorkspaceSnapshot() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  try {
+    const value = await mainWindow.webContents.executeJavaScript(
+      'window.getWorkspaceSnapshotForSync ? window.getWorkspaceSnapshotForSync() : null',
+      true,
+    );
+    return value && typeof value === 'object' ? value : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function pushWorkspaceMutations(record, entities) {
+  if (!entities || !entities.length) return { ok: true, pushed: 0 };
+  const transport = createTodosSyncTransport(record);
+  const mutations = entities.map((entity) => mutationFromEntity(entity, { deviceId: record.deviceId }));
+  let pushed = 0;
+  for (const batch of splitMutationBatches(mutations)) {
+    const result = await transport.pushMutations(batch);
+    if (!result || result.ok !== true) {
+      return { ok: false, error: (result && result.error) || 'push_failed', pushed };
+    }
+    pushed += batch.length;
+  }
+  return { ok: true, pushed };
+}
+
+async function pullWorkspaceChanges(ctx) {
+  const transport = createTodosSyncTransport(ctx.record);
+  const remoteChanges = [];
+  for (const collection of WORKSPACE_COLLECTIONS) {
+    let cursor = ctx.store.getPullCursor(ctx.accountId, collection).cursor;
+    for (let guard = 0; guard < 40; guard += 1) {
+      const remote = await transport.pullPage({ cursor, collection });
+      if (!remote || remote.ok !== true) {
+        return { ok: false, error: (remote && remote.error) || 'pull_failed' };
+      }
+      const body = remote.body || {};
+      const normalized = {
+        changes: Array.isArray(body.changes) ? body.changes : [],
+        nextCursor: Object.prototype.hasOwnProperty.call(body, 'nextCursor') ? body.nextCursor : null,
+        hasMore: body.hasMore === true,
+        serverRev: Number(body.serverRev) || 0,
+      };
+      const applied = ctx.store.applyPullPage({
+        accountId: ctx.accountId,
+        collection,
+        pull: normalized,
+      });
+      if (!applied.ok) return { ok: false, error: applied.reason || 'apply_failed' };
+      for (const change of normalized.changes) {
+        if (!change) continue;
+        if (change.collection && change.collection !== collection) continue;
+        remoteChanges.push({ ...change, collection: change.collection || collection });
+      }
+      if (!normalized.hasMore) break;
+      cursor = normalized.nextCursor;
+    }
+  }
+  return { ok: true, remoteChanges };
+}
+
+async function runBoundWorkspaceSyncCycle() {
+  if (!fs.existsSync(workspaceIndexPath())) {
+    return { ok: true, skipped: true };
+  }
+  const ctx = readBoundSyncContext();
+  if (!ctx.ok) return { ok: false, error: ctx.error };
+  const accountKey = await ensureAccountSyncKey(ctx.record);
+  const rendererSnapshot = await readRendererWorkspaceSnapshot();
+  const snapshot = assembleWorkspaceSnapshot(rendererSnapshot);
+  const built = buildWorkspaceEntities(snapshot, { accountKey });
+  const pulled = await pullWorkspaceChanges(ctx);
+  if (!pulled.ok) return pulled;
+  const plan = planWorkspaceSync({
+    index: readWorkspaceIndex(),
+    localEntities: built.entities,
+    remoteChanges: pulled.remoteChanges,
+  });
+  if (pulled.remoteChanges.length) {
+    const projected = projectWorkspaceEntities(plan.mergedEntities, { accountKey });
+    broadcastWorkspaceProjection(materializeWorkspaceSnapshot(projected, snapshot));
+  }
+  if (plan.toPush.length) {
+    const pushed = await pushWorkspaceMutations(ctx.record, plan.toPush);
+    if (!pushed.ok) return pushed;
+  }
+  writeWorkspaceIndex(plan.nextIndex);
+  return { ok: true, pushed: plan.toPush.length, pulled: pulled.remoteChanges.length };
+}
+
 function readWorkspaceTodosRaw() {
   const payload = readJsonFile(workspacePath(WORKSPACE_DATA_FILE), {});
   const stored = payload && payload.localStorage && payload.localStorage['notch-todo-data'];
@@ -3818,6 +4150,52 @@ function readWorkspaceTodosRaw() {
 
 function resolveMigrationLocalTodos(fromRenderer) {
   return selectMigrationLocalTodos(fromRenderer, readWorkspaceTodosRaw());
+}
+
+function classifyBoundWorkspace(localTodosJson, rendererWorkspace, nasState) {
+  const local = parseLocalTodosStrict(
+    localTodosJson == null || localTodosJson === '' ? null : String(localTodosJson),
+  );
+  if (!local.ok) {
+    return {
+      local,
+      snapshot: null,
+      counts: null,
+      decision: classifyFromLocalAndNas(String(localTodosJson || ''), nasState),
+    };
+  }
+  const snapshot = assembleWorkspaceSnapshot(rendererWorkspace);
+  const counts = countWorkspaceContent(snapshot, { todoLive: local.live });
+  return {
+    local,
+    snapshot,
+    counts,
+    decision: classifyMigrationDecision({
+      localOk: true,
+      localCorrupt: false,
+      localLive: counts.total,
+      nas: nasState,
+    }),
+  };
+}
+
+function latestWorkspaceChanges(changes) {
+  const map = new Map();
+  for (const change of changes || []) {
+    if (!change || !change.entityId) continue;
+    map.set(change.entityId, change);
+  }
+  return [...map.values()].filter((change) => (
+    change.collection
+    && change.collection !== 'todos'
+    && change.op !== 'delete'
+    && change.payload
+  )).map((change) => ({
+    entityId: change.entityId,
+    collection: change.collection,
+    op: 'upsert',
+    payload: change.payload,
+  }));
 }
 
 ipcMain.handle('sync:classify-migration', async (event, payload = {}) => {
@@ -3830,23 +4208,13 @@ ipcMain.handle('sync:classify-migration', async (event, payload = {}) => {
   );
   const stateRes = await fetchBoundSyncJson('api/v1/sync/state?collection=todos');
   if (!stateRes.ok) return stateRes;
-  const decision = classifyFromLocalAndNas(
-    local.ok
-      ? JSON.stringify({
-          P0: local.data.P0,
-          P1: local.data.P1,
-          P2: local.data.P2,
-          P3: local.data.P3,
-        })
-      : String(localTodosJson || ''),
-    stateRes.body,
-  );
-  if (!decision.ok) return { ok: false, error: decision.reason || 'classify_failed' };
+  const classified = classifyBoundWorkspace(localTodosJson, payload.workspace, stateRes.body);
+  if (!classified.decision.ok) return { ok: false, error: classified.decision.reason || 'classify_failed' };
   return {
     ok: true,
-    decision,
-    localLive: local.ok ? local.live : 0,
-    localCorrupt: Boolean(local.corrupt),
+    decision: classified.decision,
+    localLive: classified.counts ? classified.counts.total : (classified.local.ok ? classified.local.live : 0),
+    localCorrupt: Boolean(classified.local.corrupt),
     nas: stateRes.body,
   };
 });
@@ -3858,7 +4226,8 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
   const localTodosJson = resolveMigrationLocalTodos(payload.localTodosJson).raw;
   const classify = await fetchBoundSyncJson('api/v1/sync/state?collection=todos');
   if (!classify.ok) return classify;
-  const decision = classifyFromLocalAndNas(localTodosJson, classify.body);
+  const classified = classifyBoundWorkspace(localTodosJson, payload.workspace, classify.body);
+  const decision = classified.decision;
   if (!decision.ok) {
     return { ok: false, error: decision.reason || 'classify_failed' };
   }
@@ -3900,6 +4269,7 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
       const res = await fetchBoundSyncJson('api/v1/migration/commit', {
         method: 'POST',
         body,
+        timeoutMs: 60000,
       });
       if (!res.ok) {
         return {
@@ -3917,11 +4287,41 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
       return res.body;
     },
     async pullAll() {
-      const res = await fetchBoundSyncJson('api/v1/sync/pull?cursor=');
-      if (!res.ok) throw new Error(res.error || 'pull_failed');
-      return res.body;
+      let cursor = '';
+      const changes = [];
+      let serverRev = 0;
+      for (let guard = 0; guard < 40; guard += 1) {
+        const apiPath = cursor
+          ? `api/v1/sync/pull?cursor=${encodeURIComponent(cursor)}`
+          : 'api/v1/sync/pull?cursor=';
+        const res = await fetchBoundSyncJson(apiPath, { timeoutMs: 60000 });
+        if (!res.ok) throw new Error(res.error || 'pull_failed');
+        const body = res.body || {};
+        if (Array.isArray(body.changes)) changes.push(...body.changes);
+        serverRev = Number(body.serverRev) || serverRev;
+        if (body.hasMore !== true) {
+          return { changes, serverRev, hasMore: false, nextCursor: body.nextCursor == null ? null : body.nextCursor };
+        }
+        cursor = body.nextCursor == null ? '' : String(body.nextCursor);
+        if (!cursor) break;
+      }
+      return { changes, serverRev, hasMore: false };
     },
   };
+
+  const credential = syncCredentialsStore.read();
+  const record = credential && credential.record ? credential.record : null;
+  const accountKey = record ? await ensureAccountSyncKey(record) : null;
+  let builtEntities = [];
+  let deferredEntities = [];
+  let inlineEntities = [];
+  if (authority === 'local' && classified.snapshot) {
+    const built = buildWorkspaceEntities(classified.snapshot, { accountKey });
+    const parts = partitionEntities(built.entities);
+    builtEntities = built.entities;
+    deferredEntities = parts.deferred;
+    inlineEntities = parts.inline;
+  }
 
   let appliedProjection = null;
   let result;
@@ -3930,6 +4330,7 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
       decision,
       authority,
       localRaw: localTodosJson,
+      extraEntities: authority === 'local' ? inlineEntities : [],
       userDataPath: app.getPath('userData'),
       accountId,
       deviceId: status.deviceId,
@@ -3959,6 +4360,32 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
     return result;
   }
 
+  let workspaceProjection = null;
+  if (result.skipped) {
+    writeWorkspaceIndex(readWorkspaceIndex());
+  } else if (authority === 'local') {
+    if (record && deferredEntities.length) {
+      const pushed = await pushWorkspaceMutations(record, deferredEntities);
+      if (!pushed.ok) {
+        setMigrationSession({
+          readonly: false,
+          phase: 'failed',
+          migrationId: result.migrationId || null,
+          lastError: pushed.error || 'workspace_push_failed',
+          pendingProjection: appliedProjection,
+        });
+        return { ok: false, error: pushed.error || 'workspace_push_failed', migrationId: result.migrationId };
+      }
+    }
+    writeWorkspaceIndex(hashesForEntities(builtEntities));
+  } else if (!result.skipped && (authority === 'nas' || result.authority === 'nas')) {
+    const workspaceEntities = latestWorkspaceChanges(result.remoteChanges);
+    const projected = projectWorkspaceEntities(workspaceEntities, { accountKey });
+    workspaceProjection = materializeWorkspaceSnapshot(projected, classified.snapshot);
+    broadcastWorkspaceProjection(workspaceProjection);
+    writeWorkspaceIndex(hashesForEntities(workspaceEntities));
+  }
+
   setMigrationSession({
     readonly: false,
     phase: 'done',
@@ -3969,6 +4396,7 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
   return {
     ...result,
     projectionJson: appliedProjection,
+    workspaceProjection,
     session: broadcastMigrationSession(),
   };
 });

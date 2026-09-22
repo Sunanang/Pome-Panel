@@ -127,7 +127,7 @@ function classifyMigrationDecision(input) {
       choiceKind: 'both_live',
       localLive,
       nas,
-      message: '两边都有待办，请选择以哪一侧为准',
+      message: '两边都有内容，请选择以哪一侧为准',
     };
   }
   if (!localHasLive && nas.pristine) {

@@ -19,6 +19,7 @@ const pull = require('./pull');
 const pairing = require('./pairing');
 const migration = require('./migration');
 const endpoints = require('./endpoints');
+const secretBox = require('./secret-box');
 
 module.exports = {
   ...schema,
@@ -28,4 +29,5 @@ module.exports = {
   ...pairing,
   ...migration,
   ...endpoints,
+  ...secretBox,
 };

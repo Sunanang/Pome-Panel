@@ -142,6 +142,9 @@ test('runMigrationFlow: choice_required then success; no silent history-empty', 
 
 test('workspace/app wire migration readonly gate and IPC (no electron require)', () => {
   assert.match(workspaceJs, /startNasMigration/);
+  assert.match(workspaceJs, /笔记、剪贴板、录音、链接、密钥和待办两边都是空的，已进入同步。/);
+  assert.doesNotMatch(workspaceJs, /仍只在本机/);
+  assert.match(appJs, /getWorkspaceSnapshotForSync/);
   assert.match(workspaceJs, /syncRunMigration/);
   assert.match(workspaceJs, /__nasTodoReadonly/);
   assert.match(workspaceJs, /settingsNasMigrationRetry/);

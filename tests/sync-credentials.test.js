@@ -97,17 +97,21 @@ test('safeStorage available → encrypt + 0600 file; public status never echoes 
     expiresAt: Date.now() + 1000,
     baseUrl: 'http://192.168.0.2/app',
     boundAt: Date.now(),
+    accountSyncKey: 'account-sync-key-plain',
   });
   assert.equal(saved.ok, true);
   assert.equal(saved.status.bound, true);
   assert.equal(saved.status.insecureBound, true);
   assert.equal(saved.status.deviceToken, undefined);
+  assert.equal(saved.status.accountSyncKey, undefined);
   assert.equal(JSON.stringify(saved.status).includes('super-secret'), false);
+  assert.equal(JSON.stringify(saved.status).includes('account-sync-key-plain'), false);
 
   const filePath = path.join(dir, 'sync-credentials.json');
   assert.equal(fs.existsSync(filePath), true);
   const disk = fs.readFileSync(filePath, 'utf8');
   assert.equal(disk.includes('super-secret-device-token'), false);
+  assert.equal(disk.includes('account-sync-key-plain'), false);
   try {
     const mode = fs.statSync(filePath).mode & 0o777;
     // On some CI filesystems mode bits may be masked; still assert not world-writable.

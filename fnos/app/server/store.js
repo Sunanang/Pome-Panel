@@ -39,6 +39,7 @@ function createMemoryStore(options = {}) {
         changeLog: [],
         serverRev: 0,
         migrations: new Map(),
+        accountSyncKey: null,
       };
       byUid.set(key, b);
     }
@@ -194,7 +195,20 @@ function createMemoryStore(options = {}) {
       expiresAt: issued.expiresAt,
       insecureBound: Boolean(insecureBound),
       codeId: row.codeId,
+      accountSyncKey: getOrCreateAccountSyncKey(row.uid),
     };
+  }
+
+  /**
+   * Per-uid key for sealing workspace secrets. Returned only to an authenticated
+   * device. Never written into entity payloads.
+   */
+  function getOrCreateAccountSyncKey(uid) {
+    const b = bucket(uid);
+    if (!b.accountSyncKey) {
+      b.accountSyncKey = crypto.randomBytes(32).toString('base64');
+    }
+    return b.accountSyncKey;
   }
 
   /** Test helper: peek pairing row by plaintext code (never expose in HTTP). */
@@ -348,11 +362,15 @@ function createMemoryStore(options = {}) {
     return { applied, serverRev: b.serverRev };
   }
 
-  function pull(uid, { cursor } = {}) {
+  function pull(uid, { cursor, collection } = {}) {
     const b = bucket(uid);
     const after = cursor == null || cursor === '' ? 0 : Number(cursor);
-    const changes = b.changeLog
-      .filter((c) => c.serverRev > after)
+    const matched = b.changeLog.filter((c) => {
+      if (c.serverRev <= after) return false;
+      if (!collection) return true;
+      return (c.collection || 'todos') === collection;
+    });
+    const changes = matched
       .slice(0, 500)
       .map((c) => {
         if (c.op === 'delete') {
@@ -362,7 +380,7 @@ function createMemoryStore(options = {}) {
         return { ...c, payload: ent ? ent.payload : undefined };
       });
     const nextCursor = changes.length ? String(changes[changes.length - 1].serverRev) : String(after);
-    const hasMore = b.changeLog.some((c) => c.serverRev > Number(nextCursor));
+    const hasMore = matched.length > changes.length;
     return {
       changes,
       nextCursor,
@@ -382,6 +400,7 @@ function createMemoryStore(options = {}) {
     listDevices,
     startPairing,
     claimPairing,
+    getOrCreateAccountSyncKey,
     _peekPairingByCode,
     syncState,
     startMigration,
