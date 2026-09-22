@@ -15,7 +15,7 @@
       syncStatus: null,
       outboxCount: 0,
       uiState: 'unbound',
-      uiLabel: '未绑定',
+      uiLabel: '未配对',
       channelLabel: '',
       lastSuccessLabel: '',
       insecureWarningVisible: false,
@@ -253,6 +253,20 @@
     network_error: '网络不可用',
   };
 
+  const LOST_DEVICE_TOKEN_HINT = '设备令牌丢失，请重新配对';
+
+  /**
+   * Endpoints or a past success can outlive the device token.
+   * Only then ask for a new pair — a freshly added address stays 「未配对」.
+   */
+  function shouldPromptLostDeviceToken(input = {}) {
+    if (input.bound || input.schemaIncompatible) return false;
+    const endpoints = Array.isArray(input.endpoints) ? input.endpoints : [];
+    const hadBinding = Boolean(input.lastSuccessAt)
+      || endpoints.some((ep) => ep && (ep.serverId || ep.uid));
+    return hadBinding;
+  }
+
   function isRawErrorCode(value) {
     const text = String(value || '').trim();
     if (!text || /[\u4e00-\u9fff]/.test(text) || /\s/.test(text)) return false;
@@ -289,6 +303,8 @@
     runExportBackup,
     runRetrySync,
     humanizeSyncError,
+    shouldPromptLostDeviceToken,
+    LOST_DEVICE_TOKEN_HINT,
     isRawErrorCode,
     HTTP_CONFIRM_CONTROL_ID,
     DELETE_CONFIRM_CONTROL_ID,

@@ -550,38 +550,12 @@
                   <p class="settings-cursor-token-hint" id="settings-cursor-token-hint"></p>
                 </section>
 
-                <section class="tile settings-card settings-nas-sync-card" id="settings-nas-sync-card" data-control-root="nas-sync-settings" data-control-id="settings.nas-sync.tab" aria-labelledby="settings-nas-status-title">
-                  <div class="settings-card-heading">
-                    <div><span class="tile-label">NAS 同步</span><strong id="settings-nas-status-title">连接状态</strong></div>
-                    <small id="settings-nas-sync-status" data-state="empty" data-control-id="settings.nas-sync.status-bar">未绑定</small>
-                  </div>
-                  <p class="settings-nas-lead">通道、待传队列和上次同步。出问题先重试；备份用于迁移前后留底。</p>
-
-                  <div class="settings-nas-status-meta" id="settings-nas-status-meta" aria-live="polite">
-                    <div class="settings-nas-meta-item"><span>通道</span><strong id="settings-nas-channel-label">—</strong></div>
-                    <div class="settings-nas-meta-item"><span>待传</span><strong id="settings-nas-outbox-count">0</strong></div>
-                    <div class="settings-nas-meta-item"><span>上次同步</span><strong id="settings-nas-last-sync">—</strong></div>
-                  </div>
-
-                  <p class="settings-nas-sync-hint settings-nas-http-warning" id="settings-nas-http-warning" role="status" data-control-id="settings.nas-sync.http-warning" data-kind="warning" hidden>
-                    不安全连接：已启用明文 HTTP endpoint，设备令牌与待办可能被窃听或篡改
-                  </p>
-
-                  <div class="settings-nas-sync-actions" id="settings-nas-sync-actions">
-                    <button class="workspace-button compact" id="settings-nas-sync-retry" type="button" data-control-id="settings.nas-sync.retry">重试</button>
-                    <span class="settings-nas-action-split" aria-hidden="true"></span>
-                    <button class="workspace-button compact settings-nas-quiet" id="settings-nas-export-backup" type="button" data-control-id="settings.nas-sync.export-backup">导出备份</button>
-                    <button class="workspace-button compact settings-nas-quiet" id="settings-nas-restore-backup" type="button" data-control-id="settings.nas-sync.restore-backup">恢复上次迁移备份</button>
-                  </div>
-                  <p class="settings-nas-sync-hint" id="settings-nas-status-hint" role="status"></p>
-                </section>
-
                 <section class="tile settings-card settings-nas-endpoints" id="settings-nas-endpoints" aria-labelledby="settings-nas-endpoint-title">
                   <div class="settings-card-heading">
-                    <div><span class="tile-label">Endpoint</span><strong id="settings-nas-endpoint-title">多地址选路</strong></div>
-                    <small>同 serverId + uid</small>
+                    <div><span class="tile-label">NAS 同步</span><strong id="settings-nas-endpoint-title">同步地址</strong></div>
+                    <small>测连只检查能否访问</small>
                   </div>
-                  <p class="settings-nas-lead">网关、设备同步端口、FN Connect 与 frp 放在同一列表。证书错误不会自动换到下一条。</p>
+                  <p class="settings-nas-lead">填写地址。需要多条时再添加。测试连接不代表已经配对。</p>
                   <p class="settings-nas-sync-hint settings-nas-device-port-guide" id="settings-nas-device-port-guide" role="status" data-kind="warning" hidden>
                     统一网关 Bearer 不可用时，可添加「设备同步端口」endpoint（与网关可并存）。端口不写死，请填写 FPK 展示的完整 URL。
                   </p>
@@ -613,7 +587,7 @@
                     <div><span class="tile-label">配对</span><strong id="settings-nas-pair-title">绑定本机</strong></div>
                     <small>令牌仅加密保存在本机</small>
                   </div>
-                  <p class="settings-nas-lead">在飞牛 NAS 的 Pome Panel Sync 网页生成 6 位配对码，再绑定这台电脑。留空地址则使用上方当前 Endpoint。</p>
+                  <p class="settings-nas-lead">在飞牛网页生成 6 位配对码后绑定。配对成功才是已连接。留空地址则用上方当前地址。</p>
                   <label class="settings-nas-field">
                     <span>同步地址</span>
                     <input id="settings-nas-sync-base-url" type="url" placeholder="https://nas.example/app/pome-panel-sync" autocomplete="off" spellcheck="false" aria-label="NAS 同步地址" />
@@ -632,6 +606,28 @@
                     <button class="workspace-button compact" id="settings-nas-migration-retry" type="button" data-control-id="migration.failed.retry" hidden>重试迁移</button>
                     <button class="workspace-button compact settings-nas-quiet" id="settings-nas-migration-restore" type="button" data-control-id="migration.failed.restore" hidden>恢复上次迁移备份</button>
                   </div>
+                </section>
+
+                <section class="tile settings-card settings-nas-sync-card" id="settings-nas-sync-card" data-control-root="nas-sync-settings" data-control-id="settings.nas-sync.tab" aria-labelledby="settings-nas-status-title">
+                  <div class="settings-card-heading">
+                    <div><span class="tile-label">NAS 同步</span><strong id="settings-nas-status-title">状态</strong></div>
+                    <small id="settings-nas-sync-status" data-state="empty" data-control-id="settings.nas-sync.status-bar">未配对</small>
+                  </div>
+                  <div class="settings-nas-status-meta" id="settings-nas-status-meta" aria-live="polite" hidden>
+                    <div class="settings-nas-meta-item"><span>通道</span><strong id="settings-nas-channel-label">—</strong></div>
+                    <div class="settings-nas-meta-item"><span>待传</span><strong id="settings-nas-outbox-count">0</strong></div>
+                    <div class="settings-nas-meta-item"><span>上次同步</span><strong id="settings-nas-last-sync">—</strong></div>
+                  </div>
+                  <p class="settings-nas-sync-hint settings-nas-http-warning" id="settings-nas-http-warning" role="status" data-control-id="settings.nas-sync.http-warning" data-kind="warning" hidden>
+                    不安全连接：已启用明文 HTTP endpoint，设备令牌与待办可能被窃听或篡改
+                  </p>
+                  <div class="settings-nas-sync-actions" id="settings-nas-sync-actions">
+                    <button class="workspace-button compact" id="settings-nas-sync-retry" type="button" data-control-id="settings.nas-sync.retry" hidden>重试同步</button>
+                    <span class="settings-nas-action-split" aria-hidden="true"></span>
+                    <button class="workspace-button compact settings-nas-quiet" id="settings-nas-export-backup" type="button" data-control-id="settings.nas-sync.export-backup">导出备份</button>
+                    <button class="workspace-button compact settings-nas-quiet" id="settings-nas-restore-backup" type="button" data-control-id="settings.nas-sync.restore-backup">恢复上次迁移备份</button>
+                  </div>
+                  <p class="settings-nas-sync-hint" id="settings-nas-status-hint" role="status"></p>
                 </section>
 
                 <section class="tile settings-card settings-nas-devices" id="settings-nas-devices" data-control-id="devices.list" aria-labelledby="settings-nas-devices-title" hidden>

@@ -6705,6 +6705,10 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
 }
 
 /* T6 NAS sync settings — status / endpoints / HTTP toggle; reuse settings tokens only */
+.settings-nas-status-meta[hidden],
+#settings-nas-sync-retry[hidden] {
+  display: none !important;
+}
 .settings-nas-status-meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

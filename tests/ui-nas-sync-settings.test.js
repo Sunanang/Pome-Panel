@@ -74,10 +74,46 @@ test('retry not_bound is Chinese and is not shown as a raw code', () => {
     workspaceJs.indexOf('settingsNasSyncRetry.addEventListener'),
   );
   const retryHead = retryBlock.slice(0, retryBlock.indexOf('if (settingsNasExportBackup)'));
-  assert.match(retryHead, /请先完成配对再同步/);
+  assert.match(retryHead, /if \(!nasPairUi\.bound\) return;/);
+  assert.doesNotMatch(retryHead, /请先完成配对再同步/);
   assert.match(retryHead, /describeNasSyncError\(result, '重试失败'\)/);
-  assert.match(retryHead, /!nasPairUi\.bound/);
   assert.doesNotMatch(retryHead, /setNasStatusHint\(\s*\(?result && result\.error\)/);
+});
+
+test('unpaired status hides channel and retry; lost token is one line', () => {
+  assert.match(html, />未配对</);
+  assert.match(html, /id="settings-nas-status-meta"[^>]*hidden|id="settings-nas-status-meta"[^>]*\shidden/);
+  assert.match(html, /id="settings-nas-sync-retry"[^>]*hidden/);
+  assert.match(workspaceJs, /settingsNasStatusMeta\.hidden = !bound/);
+  assert.match(workspaceJs, /settingsNasSyncRetry\.hidden = !bound/);
+  assert.match(workspaceJs, /textContent = '未配对'/);
+  assert.match(workspaceJs, /textContent = '已连接'/);
+  assert.match(workspaceJs, /设备令牌丢失，请重新配对/);
+  assert.equal(settingsUi.LOST_DEVICE_TOKEN_HINT, '设备令牌丢失，请重新配对');
+  assert.equal(settingsUi.shouldPromptLostDeviceToken({
+    bound: false,
+    endpoints: [{ baseUrl: 'http://nas:1', serverId: 'srv' }],
+  }), true);
+  assert.equal(settingsUi.shouldPromptLostDeviceToken({
+    bound: false,
+    lastSuccessAt: 1700000000000,
+    endpoints: [],
+  }), true);
+  assert.equal(settingsUi.shouldPromptLostDeviceToken({
+    bound: false,
+    endpoints: [{ baseUrl: 'http://nas:1' }],
+  }), false);
+  assert.equal(settingsUi.shouldPromptLostDeviceToken({
+    bound: true,
+    endpoints: [{ serverId: 'srv' }],
+  }), false);
+  assert.equal(settingsUi.shouldPromptLostDeviceToken({
+    bound: false,
+    schemaIncompatible: true,
+    endpoints: [{ serverId: 'srv' }],
+  }), false);
+  assert.match(css, /#settings-nas-sync-retry\[hidden\]/);
+  assert.match(css, /\.settings-nas-status-meta\[hidden\]/);
 });
 
 test('retry API wiring exists in workspace + preload', () => {
