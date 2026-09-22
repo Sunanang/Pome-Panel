@@ -34,16 +34,6 @@
     { id: 'credentials', label: '密钥' },
   ]);
 
-  const EMPTY = Object.freeze({
-    devices: '',
-    todo: '还没有待办。',
-    clip: '还没有剪贴板记录。',
-    notes: '还没有笔记。',
-    links: '还没有链接。',
-    recordings: '还没有录音。',
-    credentials: '还没有 AI 配置或密钥。',
-  });
-
   const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
 
   function resolveApiPrefix(pathname, metaPrefix) {
@@ -113,38 +103,6 @@
     let selectedRecording = '';
     const objectUrls = [];
 
-    function setStatus(text, kind) {
-      const status = byId('workspace-status');
-      if (!status) return;
-      status.textContent = text || '';
-      if (kind) status.setAttribute('data-kind', kind);
-      else status.removeAttribute('data-kind');
-    }
-
-    function setEmpty(tab, count) {
-      const empty = byId('workspace-empty');
-      if (!empty) return;
-      const message = EMPTY[tab] || '';
-      if (!message || count > 0 || tab === 'devices') {
-        empty.hidden = true;
-        return;
-      }
-      empty.hidden = false;
-      empty.textContent = message;
-    }
-
-    function describe(data) {
-      const counts = data && data.counts ? data.counts : {};
-      return [
-        `笔记 ${counts.notes || 0}`,
-        `剪贴板 ${counts.clipboard || 0}`,
-        `录音 ${counts.recordings || 0}`,
-        `链接 ${counts.links || 0}`,
-        `待办 ${counts.todos || 0}`,
-        `密钥 ${counts.secrets || 0}`,
-      ].join(' · ');
-    }
-
     function revokeUrls() {
       if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
         for (const url of objectUrls) {
@@ -159,18 +117,6 @@
       if (className) node.className = className;
       if (text != null) node.textContent = text;
       return node;
-    }
-
-    function countFor(tab) {
-      if (!view) return 0;
-      const counts = view.counts || {};
-      if (tab === 'notes') return counts.notes || 0;
-      if (tab === 'clip') return counts.clipboard || 0;
-      if (tab === 'recordings') return counts.recordings || 0;
-      if (tab === 'links') return counts.links || 0;
-      if (tab === 'todo') return counts.todos || 0;
-      if (tab === 'credentials') return (counts.secrets || 0) + ((view.ai && view.ai.configured) ? 1 : 0);
-      return 0;
     }
 
     function noteItems() {
@@ -200,9 +146,6 @@
       if (count) count.textContent = `${(view && view.counts && view.counts.notes) || items.length} 篇`;
       if (!list || !doc) return;
       clearNode(list);
-      if (!items.length) {
-        list.appendChild(el('div', 'notes-list-empty', EMPTY.notes));
-      }
       if (!selectedNote || !items.some((item) => item.id === selectedNote)) {
         selectedNote = items[0] ? items[0].id : '';
       }
@@ -221,13 +164,7 @@
       if (!detail) return;
       clearNode(detail);
       const current = items.find((item) => item.id === selectedNote);
-      if (!current) {
-        const empty = el('div', 'notes-detail-empty');
-        empty.appendChild(el('strong', '', '还没有同步的笔记'));
-        empty.appendChild(el('p', '', '桌面保存并同步后，会出现在这里。'));
-        detail.appendChild(empty);
-        return;
-      }
+      if (!current) return;
       const head = el('div', 'notes-detail-head');
       head.appendChild(el('span', 'tile-label', '笔记'));
       head.appendChild(el('strong', '', current.title));
@@ -248,10 +185,7 @@
       if (!list || !doc) return;
       clearNode(list);
       const items = filteredClips();
-      if (!items.length) {
-        list.appendChild(el('div', 'clip-empty', EMPTY.clip));
-        return;
-      }
+      if (!items.length) return;
       for (const item of items) {
         const type = item.type === 'url' || item.type === 'image' ? item.type : 'text';
         const card = el('article', `clip-item clip-item-${type} clip-type-${type}`);
@@ -282,7 +216,6 @@
         selectedRecording = items[0] ? items[0].id : '';
       }
       clearNode(list);
-      if (!items.length) list.appendChild(el('div', 'recording-list-empty', EMPTY.recordings));
       for (const item of items) {
         const button = el('button', item.id === selectedRecording ? 'recording-item active' : 'recording-item');
         button.type = 'button';
@@ -301,10 +234,7 @@
       if (!detail) return;
       clearNode(detail);
       const current = items.find((item) => item.id === selectedRecording);
-      if (!current) {
-        detail.appendChild(el('div', 'recording-detail-empty', '同步过来的录音和转写会显示在这里。'));
-        return;
-      }
+      if (!current) return;
       const head = el('div', 'recording-detail-head');
       head.appendChild(el('strong', '', current.title || '录音'));
       const meta = [];
@@ -331,12 +261,7 @@
       clearNode(host);
       const groups = (view && view.links) || [];
       const visible = groups.filter((group) => group.links && group.links.length);
-      if (!visible.length) {
-        const empty = el('div', 'links-empty');
-        empty.appendChild(el('strong', '', '还没有链接'));
-        host.appendChild(empty);
-        return;
-      }
+      if (!visible.length) return;
       for (const group of visible) {
         const card = el('section', 'link-group tile');
         const head = el('div', 'link-group-head');
@@ -380,10 +305,7 @@
         if (count) count.textContent = String(rows.length);
         if (!list) continue;
         clearNode(list);
-        if (!rows.length) {
-          list.appendChild(el('li', 'todo-empty', '还没有待办'));
-          continue;
-        }
+        if (!rows.length) continue;
         for (const item of rows) {
           const row = el('li', item.done ? 'todo-item done' : 'todo-item');
           row.setAttribute('data-priority', priority);
@@ -436,13 +358,7 @@
       if (count) count.textContent = `${secrets.length} 项`;
       if (!list || !doc) return;
       clearNode(list);
-      if (!secrets.length) {
-        const empty = el('div', 'credential-empty');
-        empty.appendChild(el('strong', '', '还没有密钥'));
-        empty.appendChild(el('span', '', '已配置的账号会显示在这里，密码不会出现。'));
-        list.appendChild(empty);
-        return;
-      }
+      if (!secrets.length) return;
       for (const secret of secrets) {
         const card = el('article', 'credential-item');
         card.appendChild(el('strong', '', secret.service || '已配置'));
@@ -480,7 +396,6 @@
       renderLinks();
       renderTodos();
       renderCredentials();
-      setEmpty(activeTab, countFor(activeTab));
     }
 
     function selectTab(id) {
@@ -501,7 +416,6 @@
           panel.className = on ? 'tab-panel active' : 'tab-panel';
         }
       }
-      setEmpty(id, countFor(id));
       return Promise.resolve();
     }
 
@@ -557,28 +471,15 @@
     }
 
     async function load() {
-      if (!fetchImpl) {
-        setStatus('内容加载失败，请刷新后重试', 'error');
-        return null;
-      }
+      if (!fetchImpl) return null;
       try {
         const { res, body } = await fetchJson('/api/v1/workspace');
-        if (!res || !res.ok) {
-          setStatus(
-            res && res.status === 401
-              ? '未检测到飞牛登录会话，请在飞牛已登录状态下打开本页'
-              : '内容加载失败，请刷新后重试',
-            'error',
-          );
-          return null;
-        }
+        if (!res || !res.ok) return null;
         revokeUrls();
         view = body && typeof body === 'object' ? body : {};
-        setStatus(describe(view), 'ok');
         renderAll();
         return view;
       } catch (error) {
-        setStatus('内容加载失败，请刷新后重试', 'error');
         return null;
       }
     }
@@ -607,7 +508,6 @@
 
   return {
     TABS,
-    EMPTY,
     resolveApiPrefix,
     apiUrl,
     safeHttpUrl,

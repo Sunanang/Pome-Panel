@@ -66,6 +66,9 @@ test('FPK Web style uses desktop tokens — no banned palette / no inline color 
   assert.doesNotMatch(css, /\.panels\s*\{[^}]*min-height:\s*(?:[5-9]\d{2}|[1-9]\d{3,})px/s);
   assert.doesNotMatch(css, /min-height:\s*100vh/);
   assert.match(css, /\.tab-panel:not\(\.active\)\s*\{\s*display:\s*none/);
+  assert.match(css, /\.tab-panel\.active\s*\{[^}]*flex:\s*1/s);
+  assert.doesNotMatch(css, /\.panel::after/);
+  assert.doesNotMatch(css, /conic-gradient/);
 });
 
 test('resolveApiPrefix / apiUrl honor gatewayPrefix (absolute /api was the break)', () => {

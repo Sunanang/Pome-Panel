@@ -122,7 +122,10 @@ test('NAS panel uses desktop tab chrome and puts 设备 in the home slot', () =>
   assert.match(html, />生成配对码</);
   assert.match(html, /data-control-id="fnos.devices.list"/);
   assert.match(html, /已配对设备/);
-  assert.match(html, /应用重启后，需要桌面再同步一次才会重新出现/);
+  assert.doesNotMatch(html, /应用重启后，需要桌面再同步一次才会重新出现/);
+  assert.doesNotMatch(html, /还没有同步内容/);
+  assert.doesNotMatch(html, /还没有待办|还没有笔记|还没有链接|还没有密钥|还没有同步的笔记/);
+  assert.doesNotMatch(html, /id="workspace-status"|id="workspace-empty"|nas-memory-note/);
   assert.match(html, /\/app\/pome-panel\/panel\.js/);
   const visible = html.replace(/<script[\s\S]*?<\/script>/gi, '');
   assert.doesNotMatch(visible, /\/api\/v1\//);
@@ -326,7 +329,8 @@ test('panel controller renders synced notes and switches to devices', async () =
   });
   await controller.init();
   assert.match(textOf(store['notes-list']), /会议纪要/);
-  assert.match(store['workspace-status'].textContent, /笔记 1/);
+  assert.equal(store['workspace-status'].textContent, '');
+  assert.doesNotMatch(textOf(store['todo-list-P1']), /还没有待办/);
   assert.equal(store['tab-devices'].hidden, false);
   assert.equal(store['tab-notes'].hidden, true);
   assert.equal(store['tab-button-devices'].className, 'tab active');
