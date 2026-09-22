@@ -52,6 +52,34 @@ test('status reducer maps hydrate fields', () => {
   assert.equal(state.uiLabel, '离线待传');
 });
 
+test('retry not_bound is Chinese and is not shown as a raw code', () => {
+  assert.equal(
+    settingsUi.humanizeSyncError({ ok: false, error: 'not_bound' }, '重试失败'),
+    '请先完成配对再同步',
+  );
+  assert.equal(
+    settingsUi.humanizeSyncError({ error: 'binding_incomplete' }, '重试失败'),
+    '配对信息不完整，请重新配对',
+  );
+  assert.equal(settingsUi.humanizeSyncError({ error: 'some_new_code' }, '重试失败'), '重试失败');
+  assert.equal(
+    settingsUi.humanizeSyncError({ error: 'not_bound', message: 'not_bound' }, '重试失败'),
+    '请先完成配对再同步',
+  );
+  assert.doesNotMatch(
+    settingsUi.humanizeSyncError({ ok: false, error: 'not_bound' }, '重试失败'),
+    /not_bound/,
+  );
+  const retryBlock = workspaceJs.slice(
+    workspaceJs.indexOf('settingsNasSyncRetry.addEventListener'),
+  );
+  const retryHead = retryBlock.slice(0, retryBlock.indexOf('if (settingsNasExportBackup)'));
+  assert.match(retryHead, /请先完成配对再同步/);
+  assert.match(retryHead, /describeNasSyncError\(result, '重试失败'\)/);
+  assert.match(retryHead, /!nasPairUi\.bound/);
+  assert.doesNotMatch(retryHead, /setNasStatusHint\(\s*\(?result && result\.error\)/);
+});
+
 test('retry API wiring exists in workspace + preload', () => {
   assert.match(workspaceJs, /syncRetry/);
   assert.match(workspaceJs, /settings-nas-sync-retry/);

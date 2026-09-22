@@ -232,6 +232,50 @@
     return opts.api.syncRetry();
   }
 
+  const SYNC_ERROR_COPY = {
+    not_bound: '请先完成配对再同步',
+    binding_incomplete: '配对信息不完整，请重新配对',
+    missing_endpoint: '请先添加同步地址',
+    not_found: '找不到该 endpoint',
+    endpoint_id_required: '缺少 endpoint',
+    duplicate_endpoint: '该地址已存在',
+    disabled_by_policy: '已停用：需改为 HTTPS 或重新开启 HTTP 开关',
+    https_on_http: '该地址说的是 HTTP，不是 HTTPS。请把 Base URL 改为 http://…',
+    certificate_error: '证书错误',
+    timeout: '连接超时',
+    invalid_url: 'URL 无效',
+    invalid_json: '服务器返回无法解析',
+    write_failed: '写入失败',
+    api_unavailable: '同步 API 不可用',
+    list_failed: '读取设备列表失败',
+    revoke_failed: '吊销失败',
+    invalid_revoke: '无法吊销该设备',
+    network_error: '网络不可用',
+  };
+
+  function isRawErrorCode(value) {
+    const text = String(value || '').trim();
+    if (!text || /[\u4e00-\u9fff]/.test(text) || /\s/.test(text)) return false;
+    return /^[A-Za-z0-9_.:-]+$/.test(text);
+  }
+
+  /**
+   * User-facing sync failure. Known codes become Chinese; unknown raw codes
+   * fall back instead of being shown (for example `not_bound`).
+   */
+  function humanizeSyncError(result, fallback = '操作失败') {
+    const fallbackText = fallback || '操作失败';
+    if (result == null || result === '') return fallbackText;
+    if (typeof result === 'string') {
+      return SYNC_ERROR_COPY[result] || (isRawErrorCode(result) ? fallbackText : result);
+    }
+    const code = result.error || result.code || '';
+    if (code && SYNC_ERROR_COPY[code]) return SYNC_ERROR_COPY[code];
+    const message = result.message;
+    if (message && !isRawErrorCode(message)) return message;
+    return fallbackText;
+  }
+
   const api = {
     initialSettingsUiState,
     reduceSettingsUi,
@@ -244,6 +288,8 @@
     runTestConnection,
     runExportBackup,
     runRetrySync,
+    humanizeSyncError,
+    isRawErrorCode,
     HTTP_CONFIRM_CONTROL_ID,
     DELETE_CONFIRM_CONTROL_ID,
     RESTORE_CONFIRM_CONTROL_ID,
