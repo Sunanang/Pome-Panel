@@ -550,75 +550,94 @@
                   <p class="settings-cursor-token-hint" id="settings-cursor-token-hint"></p>
                 </section>
 
-                <section class="tile settings-card settings-nas-sync-card" id="settings-nas-sync-card" data-control-root="nas-sync-settings" data-control-id="settings.nas-sync.tab">
+                <section class="tile settings-card settings-nas-sync-card" id="settings-nas-sync-card" data-control-root="nas-sync-settings" data-control-id="settings.nas-sync.tab" aria-labelledby="settings-nas-status-title">
                   <div class="settings-card-heading">
-                    <div><span class="tile-label">NAS 同步</span><strong>连接与状态</strong></div>
+                    <div><span class="tile-label">NAS 同步</span><strong id="settings-nas-status-title">连接状态</strong></div>
                     <small id="settings-nas-sync-status" data-state="empty" data-control-id="settings.nas-sync.status-bar">未绑定</small>
                   </div>
+                  <p class="settings-nas-lead">通道、待传队列和上次同步。出问题先重试；备份用于迁移前后留底。</p>
 
                   <div class="settings-nas-status-meta" id="settings-nas-status-meta" aria-live="polite">
-                    <span class="settings-nas-meta-item">通道 <strong id="settings-nas-channel-label">—</strong></span>
-                    <span class="settings-nas-meta-item">待传 <strong id="settings-nas-outbox-count">0</strong></span>
-                    <span class="settings-nas-meta-item">上次同步 <strong id="settings-nas-last-sync">—</strong></span>
+                    <div class="settings-nas-meta-item"><span>通道</span><strong id="settings-nas-channel-label">—</strong></div>
+                    <div class="settings-nas-meta-item"><span>待传</span><strong id="settings-nas-outbox-count">0</strong></div>
+                    <div class="settings-nas-meta-item"><span>上次同步</span><strong id="settings-nas-last-sync">—</strong></div>
                   </div>
 
                   <p class="settings-nas-sync-hint settings-nas-http-warning" id="settings-nas-http-warning" role="status" data-control-id="settings.nas-sync.http-warning" data-kind="warning" hidden>
                     不安全连接：已启用明文 HTTP endpoint，设备令牌与待办可能被窃听或篡改
                   </p>
 
+                  <div class="settings-nas-sync-actions" id="settings-nas-sync-actions">
+                    <button class="workspace-button compact" id="settings-nas-sync-retry" type="button" data-control-id="settings.nas-sync.retry">重试</button>
+                    <span class="settings-nas-action-split" aria-hidden="true"></span>
+                    <button class="workspace-button compact settings-nas-quiet" id="settings-nas-export-backup" type="button" data-control-id="settings.nas-sync.export-backup">导出备份</button>
+                    <button class="workspace-button compact settings-nas-quiet" id="settings-nas-restore-backup" type="button" data-control-id="settings.nas-sync.restore-backup">恢复上次迁移备份</button>
+                  </div>
+                </section>
+
+                <section class="tile settings-card settings-nas-endpoints" id="settings-nas-endpoints" aria-labelledby="settings-nas-endpoint-title">
+                  <div class="settings-card-heading">
+                    <div><span class="tile-label">Endpoint</span><strong id="settings-nas-endpoint-title">多地址选路</strong></div>
+                    <small>同 serverId + uid</small>
+                  </div>
+                  <p class="settings-nas-lead">网关、设备同步端口、FN Connect 与 frp 放在同一列表。证书错误不会自动换到下一条。</p>
                   <p class="settings-nas-sync-hint settings-nas-device-port-guide" id="settings-nas-device-port-guide" role="status" data-kind="warning" hidden>
                     统一网关 Bearer 不可用时，可添加「设备同步端口」endpoint（与网关可并存）。端口不写死，请填写 FPK 展示的完整 URL。
                   </p>
-
-                  <div class="settings-nas-sync-actions" id="settings-nas-sync-actions">
-                    <button class="workspace-button compact" id="settings-nas-sync-retry" type="button" data-control-id="settings.nas-sync.retry">重试</button>
-                    <button class="workspace-button compact" id="settings-nas-export-backup" type="button" data-control-id="settings.nas-sync.export-backup">导出备份</button>
-                    <button class="workspace-button compact" id="settings-nas-restore-backup" type="button" data-control-id="settings.nas-sync.restore-backup">恢复上次迁移备份</button>
-                  </div>
-
-                  <div class="settings-nas-endpoints" id="settings-nas-endpoints">
-                    <div class="settings-card-heading">
-                      <div><span class="tile-label">Endpoint</span><strong>多地址选路</strong></div>
-                      <small>同 serverId + uid；证书错误不转移</small>
-                    </div>
-                    <ul class="settings-nas-endpoint-list" id="settings-nas-endpoint-list" aria-label="同步 endpoint 列表"></ul>
-                    <div class="settings-nas-sync-row settings-nas-endpoint-add-row">
+                  <ul class="settings-nas-endpoint-list" id="settings-nas-endpoint-list" aria-label="同步 endpoint 列表"></ul>
+                  <div class="settings-nas-endpoint-composer">
+                    <label class="settings-nas-field">
+                      <span>地址</span>
                       <input id="settings-nas-endpoint-url" type="url" placeholder="https://nas.example/app/pome-panel-sync" autocomplete="off" spellcheck="false" aria-label="Endpoint Base URL" data-control-id="endpoint.baseUrl" />
-                      <select id="settings-nas-endpoint-kind" aria-label="Endpoint 类型" data-control-id="endpoint.kind-device-port">
-                        <option value="gateway">网关</option>
-                        <option value="device-port">设备同步端口</option>
-                        <option value="fn-connect">FN Connect</option>
-                        <option value="frp">自建 frp</option>
-                        <option value="custom">自定义</option>
-                      </select>
+                    </label>
+                    <div class="settings-nas-endpoint-composer-actions">
+                      <label class="settings-nas-field settings-nas-field-kind">
+                        <span>类型</span>
+                        <select id="settings-nas-endpoint-kind" aria-label="Endpoint 类型" data-control-id="endpoint.kind-device-port">
+                          <option value="gateway">网关</option>
+                          <option value="device-port">设备同步端口</option>
+                          <option value="fn-connect">FN Connect</option>
+                          <option value="frp">自建 frp</option>
+                          <option value="custom">自定义</option>
+                        </select>
+                      </label>
                       <button class="workspace-button compact primary" id="settings-nas-endpoint-add" type="button" data-control-id="endpoint.add">添加 endpoint</button>
                     </div>
                   </div>
+                </section>
 
+                <section class="tile settings-card settings-nas-pair-card" aria-labelledby="settings-nas-pair-title">
                   <div class="settings-card-heading settings-nas-pair-heading">
-                    <div><span class="tile-label">配对</span><strong>设备配对</strong></div>
+                    <div><span class="tile-label">配对</span><strong id="settings-nas-pair-title">绑定本机</strong></div>
+                    <small>令牌仅加密保存在本机</small>
                   </div>
-                  <p>在飞牛 NAS 的 Pome Panel Sync 网页生成配对码后，填写下方绑定本机。设备令牌由系统安全存储加密，不进入 LocalStorage。</p>
-                  <div class="settings-nas-sync-row">
-                    <input id="settings-nas-sync-base-url" type="url" placeholder="https://nas.example/app/pome-panel-sync（或选用上方 endpoint）" autocomplete="off" spellcheck="false" aria-label="NAS 同步地址" />
-                  </div>
-                  <div class="settings-nas-sync-row settings-nas-sync-pair-row">
-                    <input id="settings-nas-pair-code" type="text" inputmode="numeric" maxlength="8" placeholder="6 位配对码" autocomplete="off" spellcheck="false" aria-label="配对码" data-control-id="pair.code-input" />
+                  <p class="settings-nas-lead">在飞牛 NAS 的 Pome Panel Sync 网页生成 6 位配对码，再绑定这台电脑。留空地址则使用上方当前 Endpoint。</p>
+                  <label class="settings-nas-field">
+                    <span>同步地址</span>
+                    <input id="settings-nas-sync-base-url" type="url" placeholder="https://nas.example/app/pome-panel-sync" autocomplete="off" spellcheck="false" aria-label="NAS 同步地址" />
+                  </label>
+                  <div class="settings-nas-pair-compose">
+                    <label class="settings-nas-field">
+                      <span>配对码</span>
+                      <input id="settings-nas-pair-code" type="text" inputmode="numeric" maxlength="8" placeholder="6 位数字" autocomplete="off" spellcheck="false" aria-label="配对码" data-control-id="pair.code-input" />
+                    </label>
                     <button class="workspace-button compact primary" id="settings-nas-pair-submit" type="button" data-control-id="pair.submit">配对</button>
-                    <button class="workspace-button compact" id="settings-nas-pair-reauth" type="button" data-control-id="pair.reauth" hidden>吊销令牌并重新配对</button>
                   </div>
+                  <button class="workspace-button compact settings-nas-quiet settings-nas-reauth" id="settings-nas-pair-reauth" type="button" data-control-id="pair.reauth" hidden>吊销令牌并重新配对</button>
                   <p class="settings-nas-sync-hint" id="settings-nas-sync-hint" role="status"></p>
                   <div class="settings-nas-migration-actions" id="settings-nas-migration-actions" hidden>
                     <button class="workspace-button compact" id="settings-nas-migration-start" type="button">开始迁移</button>
                     <button class="workspace-button compact" id="settings-nas-migration-retry" type="button" data-control-id="migration.failed.retry" hidden>重试迁移</button>
-                    <button class="workspace-button compact" id="settings-nas-migration-restore" type="button" data-control-id="migration.failed.restore" hidden>恢复上次迁移备份</button>
+                    <button class="workspace-button compact settings-nas-quiet" id="settings-nas-migration-restore" type="button" data-control-id="migration.failed.restore" hidden>恢复上次迁移备份</button>
                   </div>
-                  <div class="settings-nas-devices" id="settings-nas-devices" data-control-id="devices.list" hidden>
-                    <div class="settings-card-heading">
-                      <div><span class="tile-label">设备</span><strong>已配对列表</strong></div>
-                    </div>
-                    <ul class="settings-nas-device-list" id="settings-nas-device-list"></ul>
+                </section>
+
+                <section class="tile settings-card settings-nas-devices" id="settings-nas-devices" data-control-id="devices.list" aria-labelledby="settings-nas-devices-title" hidden>
+                  <div class="settings-card-heading">
+                    <div><span class="tile-label">设备</span><strong id="settings-nas-devices-title">已配对设备</strong></div>
+                    <small>吊销后需重新配对</small>
                   </div>
+                  <ul class="settings-nas-device-list" id="settings-nas-device-list"></ul>
                 </section>
 
 

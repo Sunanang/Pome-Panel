@@ -1739,7 +1739,9 @@
     const endpoints = (view && view.endpoints) || [];
     const currentId = view && view.currentEndpointId;
     if (settingsNasChannelLabel) {
-      settingsNasChannelLabel.textContent = nasSettingsUi.channelLabel || '—';
+      const channel = nasSettingsUi.channelLabel || '—';
+      settingsNasChannelLabel.textContent = channel;
+      settingsNasChannelLabel.title = channel === '—' ? '' : channel;
     }
     if (settingsNasOutboxCount) {
       settingsNasOutboxCount.textContent = String(nasSettingsUi.outboxCount || 0);
@@ -1758,7 +1760,7 @@
     }
     if (!settingsNasEndpointList) return;
     if (!endpoints.length) {
-      settingsNasEndpointList.innerHTML = '<li class="settings-nas-endpoint-item"><span class="settings-nas-endpoint-meta">尚未添加 endpoint。配对成功后会自动写入网关地址，也可手动添加设备同步端口。</span></li>';
+      settingsNasEndpointList.innerHTML = '<li class="settings-nas-endpoint-item is-empty"><span class="settings-nas-endpoint-meta">尚未添加 endpoint。配对成功后会自动写入网关地址，也可在下方手动添加设备同步端口。</span></li>';
       return;
     }
     settingsNasEndpointList.innerHTML = endpoints.map((ep) => {
@@ -1774,14 +1776,18 @@
       const httpChecked = ep.allowInsecureHttp ? ' checked' : '';
       const httpDisabled = nasSettingsUi.busy ? ' disabled' : '';
       const testing = nasSettingsUi.testingId === ep.endpointId;
-      return `<li class="${classes}" data-endpoint-id="${String(ep.endpointId).replace(/"/g, '')}" data-control-id="endpoint.kind-device-port">`
+      const metaTone = ep.lastError ? ' is-error' : (ep.lastHealth && ep.lastHealth.ok ? ' is-ok' : '');
+      const idAttr = String(ep.endpointId).replace(/"/g, '');
+      return `<li class="${classes}" data-endpoint-id="${idAttr}" data-control-id="endpoint.kind-device-port">`
         + `<div class="settings-nas-endpoint-main">`
-        + `<div><div class="settings-nas-endpoint-url">${ep.baseUrl || ''}`
+        + `<div class="settings-nas-endpoint-copy">`
+        + `<div class="settings-nas-endpoint-url">${ep.baseUrl || ''}</div>`
+        + `<div class="settings-nas-endpoint-badges">`
         + `<span class="settings-nas-endpoint-kind-badge">${kindLabel(ep.kind)}</span>`
-        + `${isCurrent ? '<span class="settings-nas-endpoint-kind-badge">当前</span>' : ''}`
-        + `${disabledPolicy ? '<span class="settings-nas-endpoint-kind-badge">已按策略停用</span>' : ''}`
+        + `${isCurrent ? '<span class="settings-nas-endpoint-kind-badge is-current">当前</span>' : ''}`
+        + `${disabledPolicy ? '<span class="settings-nas-endpoint-kind-badge is-policy">已按策略停用</span>' : ''}`
         + `</div>`
-        + `<div class="settings-nas-endpoint-meta">优先级 ${ep.priority}`
+        + `<div class="settings-nas-endpoint-meta${metaTone}">优先级 ${ep.priority}`
         + `${ep.lastHealth && ep.lastHealth.ok ? ' · 健康' : ''}`
         + `${ep.lastError ? ` · 错误 ${ep.lastError.code || ''}` : ''}`
         + `</div></div></div>`
@@ -1789,16 +1795,19 @@
         + (showHttpToggle
           ? `<label class="settings-nas-http-toggle settings-feature-grid" data-control-id="endpoint.allowInsecureHttp">`
             + `<span><b>允许明文 HTTP（不安全）</b><small>该地址不加密，设备令牌与待办内容可能被窃听或篡改</small></span>`
-            + `<input type="checkbox" data-nas-http-toggle="${String(ep.endpointId).replace(/"/g, '')}" aria-label="允许明文 HTTP"${httpChecked}${httpDisabled} /><i aria-hidden="true"></i>`
+            + `<input type="checkbox" data-nas-http-toggle="${idAttr}" aria-label="允许明文 HTTP"${httpChecked}${httpDisabled} /><i aria-hidden="true"></i>`
             + `</label>`
           : '')
-        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.test-connection" data-nas-test="${String(ep.endpointId).replace(/"/g, '')}"${testing || nasSettingsUi.busy ? ' disabled' : ''}>${testing ? '测试中…' : '测试连接'}</button>`
-        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.enable" data-nas-enable="${String(ep.endpointId).replace(/"/g, '')}" data-enabled="${ep.enabled === false ? '0' : '1'}"${disabledPolicy ? ' disabled' : ''}>${ep.enabled === false ? '启用' : '停用'}</button>`
-        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.reorder" data-nas-reorder="${String(ep.endpointId).replace(/"/g, '')}" data-dir="up">上移</button>`
-        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.reorder" data-nas-reorder="${String(ep.endpointId).replace(/"/g, '')}" data-dir="down">下移</button>`
-        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.edit" data-nas-use="${String(ep.endpointId).replace(/"/g, '')}">用作当前</button>`
-        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.delete" data-nas-delete="${String(ep.endpointId).replace(/"/g, '')}">删除</button>`
-        + `</div></li>`;
+        + `<div class="settings-nas-endpoint-toolbar">`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.test-connection" data-nas-test="${idAttr}"${testing || nasSettingsUi.busy ? ' disabled' : ''}>${testing ? '测试中…' : '测试连接'}</button>`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.edit" data-nas-use="${idAttr}">用作当前</button>`
+        + `</div>`
+        + `<div class="settings-nas-endpoint-toolbar settings-nas-endpoint-toolbar-quiet">`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.reorder" data-nas-reorder="${idAttr}" data-dir="up">上移</button>`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.reorder" data-nas-reorder="${idAttr}" data-dir="down">下移</button>`
+        + `<button class="workspace-button compact" type="button" data-control-id="endpoint.enable" data-nas-enable="${idAttr}" data-enabled="${ep.enabled === false ? '0' : '1'}"${disabledPolicy ? ' disabled' : ''}>${ep.enabled === false ? '启用' : '停用'}</button>`
+        + `<button class="workspace-button compact settings-nas-endpoint-delete" type="button" data-control-id="endpoint.delete" data-nas-delete="${idAttr}">删除</button>`
+        + `</div></div></li>`;
     }).join('');
   }
 
@@ -1872,8 +1881,8 @@
           : '';
         const revokeDisabled = nasPairUi.submitting ? ' disabled' : '';
         return `<li data-device-id="${String(device.deviceId || '').replace(/"/g, '')}">`
-          + `<span>${name}${badge}</span>`
-          + `<button class="workspace-button compact" type="button" data-control-id="devices.revoke" data-nas-revoke="${String(device.deviceId || '').replace(/"/g, '')}"${revokeDisabled}>吊销</button>`
+          + `<div class="settings-nas-device-main"><span class="settings-nas-device-name">${name}</span>${badge}</div>`
+          + `<button class="workspace-button compact settings-nas-quiet" type="button" data-control-id="devices.revoke" data-nas-revoke="${String(device.deviceId || '').replace(/"/g, '')}"${revokeDisabled}>吊销</button>`
           + `</li>`;
       }).join('');
     }

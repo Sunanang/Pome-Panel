@@ -6502,17 +6502,32 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
 .settings-cursor-token-hint.success { color: #65d9a1 !important; }
 .settings-cursor-token-hint.warning { color: #ffb16d !important; }
 
-/* NAS sync pairing (T3) — reuse settings token row patterns; no new palette */
-.settings-nas-sync-card p { margin-top: var(--s-3, 10px); color: var(--text-3); }
-.settings-nas-sync-row {
-  margin-top: var(--s-3, 12px);
-  display: flex;
-  align-items: center;
-  gap: var(--s-2, 8px);
-  min-width: 0;
+/* NAS sync — same settings cards, tokens, and workspace-button; no second skin */
+.settings-nas-sync-card p,
+.settings-nas-pair-card p,
+.settings-nas-endpoints p,
+.settings-nas-devices p {
+  margin-top: var(--s-3, 10px);
+  color: var(--text-3);
 }
+.settings-nas-lead {
+  line-height: 1.55;
+}
+.settings-nas-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin-top: var(--s-3, 12px);
+}
+.settings-nas-field > span {
+  color: var(--text-2);
+  font-size: var(--fs-caption, 10.5px);
+  letter-spacing: 0.2px;
+}
+.settings-nas-field input,
 .settings-nas-sync-row input {
-  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   height: 32px;
   padding: 0 10px;
@@ -6522,19 +6537,66 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   color: var(--text-1);
   font: var(--fs-mini, 11px) / 1.2 var(--font-mono);
 }
+.settings-nas-field input:focus,
 .settings-nas-sync-row input:focus {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
+.settings-nas-sync-row {
+  margin-top: var(--s-3, 12px);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2, 8px);
+  min-width: 0;
+}
+.settings-nas-sync-row input { flex: 1 1 auto; }
+.settings-nas-pair-compose {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2, 8px);
+  margin-top: var(--s-3, 12px);
+}
+.settings-nas-pair-compose .settings-nas-field { flex: 1 1 auto; margin-top: 0; }
+.settings-nas-pair-compose .workspace-button { flex: 0 0 auto; margin-bottom: 1px; }
+.settings-nas-reauth { margin-top: var(--s-2, 8px); }
+.settings-nas-reauth[hidden] { display: none !important; }
 .settings-nas-sync-hint {
-  min-height: 14px;
+  min-height: 0;
   margin-top: var(--s-2, 8px);
   color: var(--text-4);
   font-size: var(--fs-micro, 9px);
+  line-height: 1.45;
+}
+.settings-nas-sync-hint:empty {
+  margin-top: 0;
 }
 .settings-nas-sync-hint[data-kind="error"] { color: var(--p0); }
 .settings-nas-sync-hint[data-kind="success"] { color: var(--accent-green); }
 .settings-nas-sync-hint[data-kind="warning"] { color: var(--accent-orange); }
+.settings-nas-sync-hint:not(:empty)[data-kind="error"],
+.settings-nas-sync-hint:not(:empty)[data-kind="warning"],
+.settings-nas-sync-hint:not(:empty)[data-kind="success"],
+.settings-nas-http-warning,
+.settings-nas-device-port-guide {
+  padding: var(--s-2, 8px) var(--s-3, 10px);
+  border-radius: var(--r-input, 9px);
+  border: 1px solid var(--hairline);
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+}
+.settings-nas-sync-hint:not(:empty)[data-kind="error"] {
+  border-color: color-mix(in srgb, var(--p0) 42%, var(--hairline));
+  background: color-mix(in srgb, var(--p0) 10%, var(--surface-2));
+}
+.settings-nas-sync-hint:not(:empty)[data-kind="warning"],
+.settings-nas-http-warning,
+.settings-nas-device-port-guide {
+  border-color: color-mix(in srgb, var(--accent-orange) 42%, var(--hairline));
+  background: color-mix(in srgb, var(--accent-orange) 10%, var(--surface-2));
+}
+.settings-nas-sync-hint:not(:empty)[data-kind="success"] {
+  border-color: color-mix(in srgb, var(--accent-green) 42%, var(--hairline));
+  background: color-mix(in srgb, var(--accent-green) 10%, var(--surface-2));
+}
 .settings-nas-device-list {
   list-style: none;
   margin: var(--s-3, 10px) 0 0;
@@ -6548,13 +6610,29 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2, 8px);
-  padding: var(--s-2, 8px) var(--s-3, 10px);
+  padding: 10px 11px;
   border: 1px solid var(--hairline);
-  border-radius: var(--r-tile, 12px);
-  background: var(--surface-1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-2);
   font-size: var(--fs-body, 12px);
 }
+.settings-nas-device-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2, 8px);
+}
+.settings-nas-device-name {
+  overflow: hidden;
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-nas-devices[hidden] { display: none !important; }
 .settings-nas-device-badge {
   display: inline-flex;
   align-items: center;
@@ -6579,8 +6657,24 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
 .settings-nas-dialog {
   width: min(420px, calc(100% - 32px));
 }
-#settings-nas-sync-status[data-state="bound"] { color: var(--accent-green); }
-#settings-nas-sync-status[data-state="insecure"] { color: var(--accent-orange); }
+#settings-nas-sync-status {
+  flex: 0 0 auto;
+  max-width: 46%;
+  padding: 3px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill, 999px);
+  background: rgba(255, 255, 255, 0.04);
+  line-height: 1.4;
+  text-align: right;
+}
+#settings-nas-sync-status[data-state="bound"] {
+  color: var(--accent-green);
+  border-color: color-mix(in srgb, var(--accent-green) 45%, var(--hairline));
+}
+#settings-nas-sync-status[data-state="insecure"] {
+  color: var(--accent-orange);
+  border-color: color-mix(in srgb, var(--accent-orange) 45%, var(--hairline));
+}
 #settings-nas-sync-status[data-state="empty"] { color: var(--text-4); }
 
 /* T5b migration banner + actions — token-only, no new palette */
@@ -6612,31 +6706,64 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
 
 /* T6 NAS sync settings — status / endpoints / HTTP toggle; reuse settings tokens only */
 .settings-nas-status-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-3, 12px);
-  margin-top: var(--s-2, 8px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2, 8px);
+  margin-top: var(--s-4, 16px);
   color: var(--text-4);
   font-size: var(--fs-micro, 9px);
 }
+.settings-nas-meta-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 11px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.settings-nas-meta-item span {
+  color: var(--text-4);
+  font-size: 9px;
+}
 .settings-nas-meta-item strong {
+  overflow: hidden;
   color: var(--text-2);
+  font-size: 11px;
   font-weight: 600;
-  margin-left: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .settings-nas-sync-actions {
   margin-top: var(--s-3, 12px);
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--s-2, 8px);
+}
+.settings-nas-action-split {
+  flex: 1 1 8px;
+  min-width: 8px;
+}
+.settings-nas-sync-actions .settings-nas-quiet,
+.settings-nas-migration-actions .settings-nas-quiet,
+.settings-nas-device-list .settings-nas-quiet,
+.settings-nas-reauth {
+  background: transparent;
+  color: var(--text-3);
+}
+.settings-nas-sync-actions .settings-nas-quiet:hover,
+.settings-nas-migration-actions .settings-nas-quiet:hover,
+.settings-nas-device-list .settings-nas-quiet:hover,
+.settings-nas-reauth:hover {
+  background: var(--surface-2);
+  color: var(--text-1);
 }
 .settings-nas-http-warning[hidden],
 .settings-nas-device-port-guide[hidden] {
   display: none !important;
 }
-.settings-nas-endpoints {
-  margin-top: var(--s-4, 16px);
-}
+.settings-nas-endpoints { margin-top: 0; }
 .settings-nas-endpoint-list {
   list-style: none;
   margin: var(--s-3, 10px) 0 0;
@@ -6645,6 +6772,7 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   flex-direction: column;
   gap: var(--s-2, 8px);
 }
+.settings-nas-endpoint-list:empty { display: none; }
 .settings-nas-endpoint-item {
   display: flex;
   flex-direction: column;
@@ -6652,7 +6780,13 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   padding: var(--s-3, 10px);
   border: 1px solid var(--hairline);
   border-radius: var(--r-tile, 12px);
-  background: var(--surface-1);
+  background: rgba(255, 255, 255, 0.04);
+}
+.settings-nas-endpoint-item.is-empty {
+  align-items: center;
+  text-align: center;
+  background: transparent;
+  border-style: dashed;
 }
 .settings-nas-endpoint-item.is-current {
   border-color: color-mix(in srgb, var(--accent-green) 45%, var(--hairline));
@@ -6667,24 +6801,75 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   gap: var(--s-2, 8px);
   min-width: 0;
 }
+.settings-nas-endpoint-copy { min-width: 0; }
 .settings-nas-endpoint-url {
   color: var(--text-1);
   font-size: var(--fs-body, 12px);
   font-family: var(--font-mono);
   word-break: break-all;
 }
+.settings-nas-endpoint-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.settings-nas-endpoint-badges .settings-nas-endpoint-kind-badge { margin-left: 0; }
 .settings-nas-endpoint-meta {
   margin-top: 4px;
   color: var(--text-4);
   font-size: var(--fs-micro, 9px);
 }
+.settings-nas-endpoint-meta.is-ok { color: var(--accent-green); }
+.settings-nas-endpoint-meta.is-error { color: var(--p0); }
 .settings-nas-endpoint-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s-2, 8px);
+}
+.settings-nas-endpoint-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2, 8px);
   align-items: center;
 }
+.settings-nas-endpoint-toolbar-quiet .workspace-button {
+  background: transparent;
+  color: var(--text-3);
+  border-color: var(--hairline-soft);
+}
+.settings-nas-endpoint-toolbar-quiet .workspace-button:hover {
+  background: var(--surface-2);
+  color: var(--text-1);
+}
+.settings-nas-endpoint-toolbar .workspace-button.settings-nas-endpoint-delete {
+  color: var(--p0);
+  border-color: color-mix(in srgb, var(--p0) 35%, var(--hairline));
+}
+.settings-nas-endpoint-toolbar .workspace-button.settings-nas-endpoint-delete:hover {
+  background: color-mix(in srgb, var(--p0) 12%, var(--surface-2));
+  color: var(--p0);
+}
+.settings-nas-endpoint-composer {
+  margin-top: var(--s-3, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2, 8px);
+  padding: var(--s-3, 12px);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.settings-nas-endpoint-composer .settings-nas-field { margin-top: 0; }
+.settings-nas-endpoint-composer-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2, 8px);
+}
+.settings-nas-field-kind { flex: 1 1 auto; }
+.settings-nas-field select,
 .settings-nas-endpoint-add-row select {
+  width: 100%;
   height: 32px;
   padding: 0 8px;
   border: 1px solid var(--hairline);
@@ -6692,11 +6877,24 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   background: var(--surface-2);
   color: var(--text-1);
   font: var(--fs-mini, 11px) / 1.2 var(--font);
+  color-scheme: dark;
 }
+.settings-nas-field select:focus,
+.settings-nas-endpoint-add-row select:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.settings-nas-endpoint-composer-actions .workspace-button { flex: 0 0 auto; }
 .settings-nas-http-toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--s-2, 8px);
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 11px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.035);
   min-width: 0;
 }
 .settings-nas-http-toggle > span {
@@ -6762,9 +6960,30 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   color: var(--text-3);
   font-size: var(--fs-micro, 9px);
 }
-#settings-nas-sync-status[data-state="error"] { color: var(--p0); }
-#settings-nas-sync-status[data-state="warning"] { color: var(--accent-orange); }
+.settings-nas-endpoint-kind-badge.is-current {
+  border-color: color-mix(in srgb, var(--accent-green) 45%, var(--hairline));
+  color: var(--accent-green);
+}
+.settings-nas-endpoint-kind-badge.is-policy {
+  border-color: color-mix(in srgb, var(--accent-orange) 45%, var(--hairline));
+  color: var(--accent-orange);
+}
+#settings-nas-sync-status[data-state="error"] {
+  color: var(--p0);
+  border-color: color-mix(in srgb, var(--p0) 45%, var(--hairline));
+}
+#settings-nas-sync-status[data-state="warning"] {
+  color: var(--accent-orange);
+  border-color: color-mix(in srgb, var(--accent-orange) 45%, var(--hairline));
+}
 #settings-nas-sync-status[data-state="syncing"] { color: var(--text-2); }
+
+@media (max-width: 720px) {
+  .settings-nas-status-meta { grid-template-columns: 1fr; }
+  .settings-nas-pair-compose,
+  .settings-nas-endpoint-composer-actions { flex-wrap: wrap; }
+  .settings-nas-action-split { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .settings-nas-http-toggle i,
