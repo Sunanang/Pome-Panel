@@ -247,6 +247,22 @@ function normalizeTodoItems(value) {
     .filter(Boolean);
 }
 
+function getLocalTodosForSync() {
+  const snapshot = { P0: [], P1: [], P2: [], P3: [] };
+  PRIORITIES.forEach((priority) => {
+    snapshot[priority] = (data[priority] || []).map((item) => ({
+      id: item.id,
+      text: item.text,
+      done: item.done === true,
+      createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+      deadline: typeof item.deadline === 'string' ? item.deadline : '',
+      remindedAt: Math.max(0, Number(item.remindedAt) || 0),
+    }));
+  });
+  return JSON.stringify(snapshot);
+}
+window.getLocalTodosForSync = getLocalTodosForSync;
+
 function saveData(data) {
   if (window.NasSyncMigration && typeof window.NasSyncMigration.isReadonly === 'function') {
     // Prefer live UI state if workspace exposed it

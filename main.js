@@ -77,6 +77,7 @@ const {
   isInsideSyncBackupDir,
   resolveSyncBackupsRoot,
   parseLocalTodosStrict,
+  selectMigrationLocalTodos,
 } = require('./sync-migration');
 const {
   ensureBoundAccount,
@@ -3809,10 +3810,21 @@ ipcMain.handle('sync:get-migration-session', () => ({
   pendingProjection: migrationSession.pendingProjection,
 }));
 
+function readWorkspaceTodosRaw() {
+  const payload = readJsonFile(workspacePath(WORKSPACE_DATA_FILE), {});
+  const stored = payload && payload.localStorage && payload.localStorage['notch-todo-data'];
+  return typeof stored === 'string' ? stored : null;
+}
+
+function resolveMigrationLocalTodos(fromRenderer) {
+  return selectMigrationLocalTodos(fromRenderer, readWorkspaceTodosRaw());
+}
+
 ipcMain.handle('sync:classify-migration', async (event, payload = {}) => {
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
-  const localTodosJson = payload.localTodosJson;
+  const selected = resolveMigrationLocalTodos(payload.localTodosJson);
+  const localTodosJson = selected.raw;
   const local = parseLocalTodosStrict(
     localTodosJson == null || localTodosJson === '' ? null : String(localTodosJson),
   );
@@ -3843,7 +3855,7 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
 
-  const localTodosJson = payload.localTodosJson == null ? null : String(payload.localTodosJson);
+  const localTodosJson = resolveMigrationLocalTodos(payload.localTodosJson).raw;
   const classify = await fetchBoundSyncJson('api/v1/sync/state?collection=todos');
   if (!classify.ok) return classify;
   const decision = classifyFromLocalAndNas(localTodosJson, classify.body);

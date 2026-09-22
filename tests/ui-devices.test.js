@@ -12,19 +12,19 @@ const pairUi = require('../renderer/nas-sync-pair.js');
 const fnosUi = fs.readFileSync(path.join(__dirname, '..', 'fnos', 'app', 'ui', 'index.html'), 'utf8');
 const fnosCss = fs.readFileSync(path.join(__dirname, '..', 'fnos', 'app', 'ui', 'styles.css'), 'utf8');
 
-test('A.6 devices.list markup + insecureBound badge style tokens (S1)', () => {
-  assert.match(html, /data-control-id="devices\.list"/);
-  assert.match(html, /id="settings-nas-device-list"/);
-  assert.match(css, /\.settings-nas-device-badge/);
-  assert.match(css, /var\(--accent-orange\)/);
-  assert.match(workspaceJs, /不安全绑定 \/ HTTP/);
-  assert.match(workspaceJs, /device\.insecureBound/);
+test('desktop settings do not show the paired-device list', () => {
+  assert.doesNotMatch(html, /id="settings-nas-devices"/);
+  assert.doesNotMatch(html, /已配对设备/);
+  assert.doesNotMatch(html, /data-control-id="devices\.list"/);
+  assert.doesNotMatch(workspaceJs, /syncListDevices/);
+  assert.doesNotMatch(workspaceJs, /syncRevokeDevice/);
+  assert.match(fnosUi, /data-control-id="fnos.devices.list"/);
+  assert.match(fnosUi, /生成配对码/);
 });
 
-test('A.6 devices.revoke button + confirm dialog pattern (S3)', () => {
-  assert.match(workspaceJs, /data-nas-revoke/);
-  assert.match(workspaceJs, /syncRevokeDevice/);
-  assert.match(workspaceJs, /吊销此设备/);
+test('A.6 devices.revoke stays on the NAS web UI', () => {
+  assert.match(fnosUi, /device-list/);
+  assert.match(fnosCss, /\.settings-nas-device-badge|\.badge-insecure/);
   assert.match(html, /role="dialog"/);
   assert.match(html, /workspace-button/);
 });

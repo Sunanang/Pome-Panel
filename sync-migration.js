@@ -63,32 +63,118 @@ function parseLocalTodosStrict(raw) {
   let latestUpdatedAt = null;
   for (const key of TODO_PRIORITIES) {
     for (const item of parsed[key]) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        return { ok: false, corrupt: true, reason: 'item_invalid' };
-      }
-      if (typeof item.text !== 'string' || !item.text.trim()) {
-        return { ok: false, corrupt: true, reason: 'item_text_invalid' };
-      }
-      if (typeof item.id !== 'string' || !item.id) {
-        return { ok: false, corrupt: true, reason: 'item_id_invalid' };
-      }
+      const coerced = coerceLocalTodoItem(item, key, data[key].length);
+      if (!coerced.ok) return coerced;
       live += 1;
-      const stamp = Number(item.createdAt) || 0;
+      const stamp = Number(coerced.item.createdAt) || 0;
       if (stamp && (!latestUpdatedAt || stamp > latestUpdatedAt)) {
         latestUpdatedAt = stamp;
       }
-      data[key].push({
-        id: item.id,
-        text: item.text.trim(),
-        done: item.done === true,
-        createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
-        deadline: typeof item.deadline === 'string' ? item.deadline : '',
-        remindedAt: Math.max(0, Number(item.remindedAt) || 0),
-        categoryId: key,
-      });
+      data[key].push(coerced.item);
     }
   }
   return { ok: true, corrupt: false, data, live, latestUpdatedAt };
+}
+
+/**
+ * The visible list accepts a plain string or an object that still needs an id.
+ * Those are the same todos the desktop shows; they must count as live, not corrupt.
+ */
+function coerceLocalTodoItem(item, categoryId, index) {
+  if (typeof item === 'string') {
+    const text = item.trim();
+    if (!text) return { ok: false, corrupt: true, reason: 'item_text_invalid' };
+    return {
+      ok: true,
+      item: {
+        id: `legacy-${categoryId}-${index}`,
+        text,
+        done: false,
+        createdAt: Date.now(),
+        deadline: '',
+        remindedAt: 0,
+        categoryId,
+      },
+    };
+  }
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    return { ok: false, corrupt: true, reason: 'item_invalid' };
+  }
+  if (typeof item.text !== 'string' || !item.text.trim()) {
+    return { ok: false, corrupt: true, reason: 'item_text_invalid' };
+  }
+  const id = typeof item.id === 'string' && item.id ? item.id : `legacy-${categoryId}-${index}`;
+  return {
+    ok: true,
+    item: {
+      id,
+      text: item.text.trim(),
+      done: item.done === true,
+      createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+      deadline: typeof item.deadline === 'string' ? item.deadline : '',
+      remindedAt: Math.max(0, Number(item.remindedAt) || 0),
+      categoryId,
+    },
+  };
+}
+
+function canonicalLocalTodosJson(data) {
+  const todos = { P0: [], P1: [], P2: [], P3: [] };
+  for (const key of TODO_PRIORITIES) {
+    todos[key] = (data[key] || []).map((item) => ({
+      id: item.id,
+      text: item.text,
+      done: item.done === true,
+      createdAt: item.createdAt,
+      deadline: item.deadline || '',
+      remindedAt: item.remindedAt || 0,
+    }));
+  }
+  return JSON.stringify(todos);
+}
+
+/**
+ * Prefer the todos the screen is showing. If that list is empty, use the
+ * workspace.json copy — localStorage can stay empty while the file still has them.
+ * A corrupt screen payload is not replaced.
+ */
+function selectMigrationLocalTodos(rendererRaw, workspaceRaw) {
+  const renderer = parseLocalTodosStrict(rendererRaw);
+  if (!renderer.ok) {
+    return {
+      ok: false,
+      corrupt: true,
+      live: 0,
+      raw: rendererRaw == null ? '' : String(rendererRaw),
+      source: 'screen',
+    };
+  }
+  if (renderer.live > 0) {
+    return {
+      ok: true,
+      corrupt: false,
+      live: renderer.live,
+      raw: canonicalLocalTodosJson(renderer.data),
+      source: 'screen',
+    };
+  }
+  const workspace = parseLocalTodosStrict(workspaceRaw);
+  if (workspace.ok && workspace.live > 0) {
+    return {
+      ok: true,
+      corrupt: false,
+      live: workspace.live,
+      raw: canonicalLocalTodosJson(workspace.data),
+      source: 'workspace',
+    };
+  }
+  return {
+    ok: true,
+    corrupt: false,
+    live: 0,
+    raw: canonicalLocalTodosJson(renderer.data),
+    source: 'screen',
+  };
 }
 
 function resolveSyncBackupsRoot(userDataPath) {
@@ -509,6 +595,7 @@ module.exports = {
   MIGRATION_STATES,
   AUTHORITY,
   parseLocalTodosStrict,
+  selectMigrationLocalTodos,
   classifyMigrationDecision,
   resolveMigrationChoice,
   normalizeNasSyncState,

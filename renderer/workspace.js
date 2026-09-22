@@ -739,9 +739,6 @@
   const settingsNasSyncHint = document.getElementById('settings-nas-sync-hint');
   const settingsNasStatusHint = document.getElementById('settings-nas-status-hint');
   const settingsNasEndpointHint = document.getElementById('settings-nas-endpoint-hint');
-  const settingsNasDeviceHint = document.getElementById('settings-nas-device-hint');
-  const settingsNasDevices = document.getElementById('settings-nas-devices');
-  const settingsNasDeviceList = document.getElementById('settings-nas-device-list');
   const settingsNasDialogRoot = document.getElementById('settings-nas-dialog-root');
   const settingsNasDialogTitle = document.getElementById('settings-nas-dialog-title');
   const settingsNasDialogBody = document.getElementById('settings-nas-dialog-body');
@@ -1729,10 +1726,6 @@
     paintNasHint(settingsNasEndpointHint, message, kind);
   }
 
-  function setNasDeviceHint(message, kind = '') {
-    paintNasHint(settingsNasDeviceHint, message, kind);
-  }
-
   function describeNasSyncError(result, fallback) {
     if (window.NasSyncSettings && typeof window.NasSyncSettings.humanizeSyncError === 'function') {
       return window.NasSyncSettings.humanizeSyncError(result, fallback);
@@ -1907,21 +1900,7 @@
         settingsNasPairCode.value = nasPairUi.code || settingsNasPairCode.value;
       }
     }
-    if (settingsNasDevices) settingsNasDevices.hidden = !(nasPairUi.devices && nasPairUi.devices.length);
     if (settingsNasMigrationActions) settingsNasMigrationActions.hidden = !bound;
-    if (settingsNasDeviceList) {
-      settingsNasDeviceList.innerHTML = (nasPairUi.devices || []).map((device) => {
-        const name = device.name || device.deviceId || '设备';
-        const badge = device.insecureBound
-          ? '<span class="settings-nas-device-badge" title="HTTP 不安全绑定">不安全绑定 / HTTP</span>'
-          : '';
-        const revokeDisabled = nasPairUi.submitting ? ' disabled' : '';
-        return `<li data-device-id="${String(device.deviceId || '').replace(/"/g, '')}">`
-          + `<div class="settings-nas-device-main"><span class="settings-nas-device-name">${name}</span>${badge}</div>`
-          + `<button class="workspace-button compact settings-nas-quiet" type="button" data-control-id="devices.revoke" data-nas-revoke="${String(device.deviceId || '').replace(/"/g, '')}"${revokeDisabled}>吊销</button>`
-          + `</li>`;
-      }).join('');
-    }
     renderNasEndpoints();
   }
 
@@ -2015,7 +1994,9 @@
       setNasSyncHint('请先完成配对', 'warning');
       return;
     }
-    const localTodosJson = localStorage.getItem('notch-todo-data');
+    const localTodosJson = typeof window.getLocalTodosForSync === 'function'
+      ? window.getLocalTodosForSync()
+      : localStorage.getItem('notch-todo-data');
     applyNasMigrationUi({ type: 'classifying' });
 
     const classified = await window.notchAPI.syncClassifyMigration({ localTodosJson });
@@ -2089,7 +2070,7 @@
 
     if (result.skipped) {
       applyNasMigrationUi({ type: 'skipped' });
-      setNasSyncHint('两边皆空，已进入同步', 'success');
+      setNasSyncHint('待办两边都是空的，已进入同步。笔记、链接和录音仍只在本机。', 'warning');
     } else {
       applyNasMigrationUi({ type: 'done', migrationId: result.migrationId });
       setNasSyncHint(isRetry ? '迁移重试成功' : '迁移完成', 'success');
@@ -2103,12 +2084,6 @@
       applyNasPairUi({ type: 'set_status', status });
       if (status && status.bound && status.baseUrl && settingsNasSyncBaseUrl && !settingsNasSyncBaseUrl.value) {
         settingsNasSyncBaseUrl.value = status.baseUrl;
-      }
-      if (status && status.bound && typeof window.notchAPI.syncListDevices === 'function') {
-        const listed = await window.notchAPI.syncListDevices({
-          baseUrl: settingsNasSyncBaseUrl?.value || status.baseUrl,
-        });
-        if (listed && listed.ok) applyNasPairUi({ type: 'devices', devices: listed.devices });
       }
       if (typeof window.notchAPI.syncGetDashboard === 'function') {
         const dash = await window.notchAPI.syncGetDashboard();
@@ -2542,39 +2517,6 @@
           migrationId: session.migrationId,
         });
       }
-    });
-  }
-  if (settingsNasDeviceList) {
-    settingsNasDeviceList.addEventListener('click', async (event) => {
-      const button = event.target.closest('[data-nas-revoke]');
-      if (!button || !window.notchAPI || typeof window.notchAPI.syncRevokeDevice !== 'function') return;
-      const deviceId = button.getAttribute('data-nas-revoke');
-      applyNasPairUi({
-        type: 'open_reauth_confirm',
-      });
-      // Reuse dialog chrome for revoke confirm
-      const decision = await openNasDialog({
-        id: 'devices-revoke-confirm',
-        title: '吊销此设备？',
-        body: '吊销后该设备令牌立即失效。',
-        confirmLabel: '吊销',
-        cancelLabel: '取消',
-      });
-      if (!decision.confirmed) {
-        applyNasPairUi({ type: 'close_dialog' });
-        return;
-      }
-      closeNasDialog(true);
-      const result = await window.notchAPI.syncRevokeDevice({
-        deviceId,
-        baseUrl: settingsNasSyncBaseUrl?.value || (nasPairUi.status && nasPairUi.status.baseUrl),
-      });
-      if (!result || !result.ok) {
-        setNasDeviceHint(describeNasSyncError(result, '吊销失败'), 'error');
-        return;
-      }
-      setNasDeviceHint('设备已吊销', 'success');
-      await refreshNasSyncStatus();
     });
   }
   void refreshNasSyncStatus();
