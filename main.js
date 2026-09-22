@@ -96,6 +96,7 @@ const {
   selectEndpointsForAttempt,
   shouldFailover,
   classifyTransportError,
+  describeTransportFailure,
   deriveSyncUiState,
   syncUiStateLabel,
   HTTP_INSECURE_CONFIRM_TEXT,
@@ -3018,8 +3019,10 @@ function createTodosSyncTransport(record) {
           return {
             ok: false,
             error: (response.body && response.body.error) || response.error || 'pull_failed',
+            message: response.message || null,
             status: response.status,
             certificateError: response.certificateError,
+            needsTrustConfirm: response.needsTrustConfirm === true,
             code: response.code,
             body: response.body,
           };
@@ -3041,9 +3044,11 @@ function createTodosSyncTransport(record) {
           return {
             ok: false,
             error: (response.body && response.body.error) || response.error || 'push_failed',
+            message: response.message || null,
             status: response.status,
             applied: response.body && response.body.applied,
             certificateError: response.certificateError,
+            needsTrustConfirm: response.needsTrustConfirm === true,
             code: response.code,
             body: response.body,
           };
@@ -3166,13 +3171,20 @@ function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutM
     req.on('error', (error) => {
       const message = (error && error.message) || 'network_error';
       const code = (error && error.code) || message;
-      const classified = classifyTransportError(code);
+      const described = describeTransportFailure({ code, message });
+      if (described) {
+        resolve({ ...described, code });
+        return;
+      }
+      const classified = classifyTransportError({ code, message });
       resolve({
         ok: false,
-        error: classified.kind === 'certificate_error' ? 'certificate_error' : message,
+        error: message,
+        message,
         code,
         transferable: classified.transferable === true,
-        certificateError: classified.kind === 'certificate_error',
+        certificateError: false,
+        needsTrustConfirm: false,
         uiState: classified.uiState || null,
       });
     });
@@ -3256,11 +3268,21 @@ async function probeEndpointHealth(endpoint, token) {
     timeoutMs: 4000,
   });
   if (!response.ok) {
-    if (response.certificateError) {
+    const described = describeTransportFailure({
+      code: response.code,
+      error: response.error,
+      message: response.message || response.error,
+    });
+    if (described && described.error === 'https_on_http') {
+      return { ...described, status: response.status, code: response.code };
+    }
+    if (response.certificateError || (described && described.certificateError)) {
       return {
         ok: false,
         error: 'certificate_error',
+        message: '证书错误',
         certificateError: true,
+        needsTrustConfirm: true,
         transferable: false,
         uiState: 'certificate_error',
       };
@@ -3485,10 +3507,21 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
   });
 
   if (!response.ok) {
+    const described = describeTransportFailure({
+      code: response.code,
+      error: response.error,
+      message: response.message || response.error,
+    });
+    if (described) {
+      return { ...described, status: response.status, code: response.code || null };
+    }
     return {
       ok: false,
       error: (response.body && response.body.error) || response.error || 'claim_failed',
+      message: response.message || null,
       status: response.status,
+      certificateError: false,
+      needsTrustConfirm: false,
     };
   }
 

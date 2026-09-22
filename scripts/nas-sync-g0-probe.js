@@ -25,6 +25,7 @@ const path = require('node:path');
 const http = require('node:http');
 const https = require('node:https');
 const { URL } = require('node:url');
+const { classifyTransportError } = require('../packages/sync-protocol/endpoints');
 
 function parseArgs(argv) {
   const out = {
@@ -104,11 +105,15 @@ function fetchJson(targetUrl, { method = 'GET', headers = {}, timeoutMs = 8000 }
       },
     );
     req.on('error', (error) => {
+      const classified = classifyTransportError({ code: error.code, message: error.message });
       resolve({
         ok: false,
-        error: error.code || 'request_failed',
-        message: String(error.message || error),
-        certificateError: /cert|SSL|TLS|UNABLE_TO_VERIFY/i.test(String(error.message || error)),
+        error: classified.kind === 'https_on_http' ? 'https_on_http' : (error.code || 'request_failed'),
+        message: classified.kind === 'https_on_http'
+          ? classified.userMessage
+          : String(error.message || error),
+        certificateError: classified.kind === 'certificate_error',
+        needsTrustConfirm: classified.needsTrustConfirm === true,
       });
     });
     req.on('timeout', () => {

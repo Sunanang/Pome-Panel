@@ -102,6 +102,7 @@ test('failover: DNS/timeout/502 transfer; 401 and certificate do not', () => {
   assert.equal(classifyTransportError('unable to verify the first certificate').kind, 'certificate_error');
   assert.equal(shouldFailover('unable to verify the first certificate'), false);
   assert.equal(classifyTransportError('CERT_HAS_EXPIRED').transferable, false);
+  assert.equal(classifyTransportError('CERT_HAS_EXPIRED').needsTrustConfirm, true);
 });
 
 test('selectEndpointsForAttempt skips disabledByPolicy and sorts by priority', () => {

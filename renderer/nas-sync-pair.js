@@ -6,6 +6,38 @@
  */
 (function initNasSyncPair(global) {
   const PAIR_CODE_RE = /^\d{6}$/;
+  const HTTPS_ON_HTTP_MESSAGE = '该地址说的是 HTTP，不是 HTTPS。请把 Base URL 改为 http://…';
+
+  function isHttpsOnHttpText(value) {
+    const raw = String(value || '').toLowerCase();
+    return (
+      /(?:^|[^a-z0-9])https_on_http(?:$|[^a-z0-9])/.test(raw)
+      || /wrong version number/.test(raw)
+      || /err_ssl_wrong_version_number/.test(raw)
+      || /ssl_r_wrong_version_number/.test(raw)
+    );
+  }
+
+  function isHttpsOnHttpFailure(result) {
+    if (result == null) return false;
+    if (typeof result !== 'object') return isHttpsOnHttpText(result);
+    if (result.error === 'https_on_http' || result.kind === 'https_on_http' || result.code === 'https_on_http') {
+      return true;
+    }
+    return isHttpsOnHttpText([result.error, result.code, result.message, result.kind].filter(Boolean).join(' '));
+  }
+
+  /**
+   * Certificate trust confirm is only for a real untrusted certificate.
+   * HTTPS-to-plaintext-HTTP must never open that dialog, even if a caller
+   * mis-labeled the failure as certificate_error.
+   */
+  function shouldOpenCertificateTrustDialog(result) {
+    if (!result || result.ok) return false;
+    if (isHttpsOnHttpFailure(result)) return false;
+    if (result.needsTrustConfirm !== true) return false;
+    return result.certificateError === true || result.error === 'certificate_error';
+  }
 
   function normalizePairCode(value) {
     return String(value || '').replace(/\s+/g, '').trim();
@@ -57,6 +89,8 @@
         next.disabled = false;
         next.error = action.message || action.error || '配对失败';
         next.toast = next.error;
+        next.needsTrustConfirm = action.needsTrustConfirm === true;
+        if (!next.needsTrustConfirm) next.dialog = null;
         return next;
       case 'open_http_confirm':
         next.dialog = {
@@ -166,6 +200,16 @@
     });
 
     if (!result.ok) {
+      if (isHttpsOnHttpFailure(result)) {
+        return {
+          ok: false,
+          error: 'https_on_http',
+          message: HTTPS_ON_HTTP_MESSAGE,
+          needsTrustConfirm: false,
+          certificateError: false,
+          dialog: null,
+        };
+      }
       const messages = {
         secure_storage_unavailable: '系统安全存储不可用，拒绝保存明文令牌',
         http_confirm_required: '需要确认不安全的 HTTP 配对',
@@ -175,6 +219,7 @@
         code_not_found: '配对码无效',
         code_consumed: '配对码已使用',
         code_expired: '配对码已过期',
+        certificate_error: '证书错误',
         schema_incompatible: result.message
           || (result.upgradeTarget === 'desktop'
             ? '协议不兼容：请升级桌面端 Pome Panel 后再同步'
@@ -182,10 +227,14 @@
               ? '协议不兼容：请升级 NAS 上的 Pome Panel Sync 应用后再同步'
               : '协议不兼容：请升级桌面端或 NAS 应用后再同步'),
       };
+      const needsTrustConfirm = shouldOpenCertificateTrustDialog(result);
       return {
         ok: false,
         error: result.error,
         message: messages[result.error] || result.message || result.error || '配对失败',
+        needsTrustConfirm,
+        certificateError: result.certificateError === true || result.error === 'certificate_error',
+        dialog: null,
         refusedPlaintext: result.refusedPlaintext,
         upgradeTarget: result.upgradeTarget,
         uiState: result.uiState,
@@ -195,8 +244,11 @@
   }
 
   const api = {
+    HTTPS_ON_HTTP_MESSAGE,
     normalizePairCode,
     validatePairCode,
+    isHttpsOnHttpFailure,
+    shouldOpenCertificateTrustDialog,
     shouldPromptHttpConfirm,
     reducePairUi,
     initialPairUiState,

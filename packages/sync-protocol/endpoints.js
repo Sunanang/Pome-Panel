@@ -23,6 +23,10 @@ const SYNC_UI_STATES = Object.freeze([
 const HTTP_INSECURE_CONFIRM_TEXT =
   '该地址不加密，设备令牌与待办内容可能被窃听或篡改。确认允许明文 HTTP？';
 
+/** HTTPS client spoke to a peer that is plaintext HTTP (not a certificate problem). */
+const HTTPS_ON_HTTP_MESSAGE =
+  '该地址说的是 HTTP，不是 HTTPS。请把 Base URL 改为 http://…';
+
 const HTTP_INSECURE_WARNING_TEXT = '不安全连接：当前有启用的明文 HTTP endpoint';
 
 const DEVICE_PORT_GUIDANCE_TEXT =
@@ -198,9 +202,35 @@ function applyEndpointBaseUrlChange(endpoint, nextBaseUrl) {
   };
 }
 
+function transportErrorText(errorOrStatus) {
+  if (errorOrStatus && typeof errorOrStatus === 'object') {
+    return [errorOrStatus.code, errorOrStatus.errno, errorOrStatus.error, errorOrStatus.message, errorOrStatus.reason]
+      .filter((part) => part != null && part !== '')
+      .join(' ');
+  }
+  return String(errorOrStatus ?? '');
+}
+
+/**
+ * OpenSSL/Chromium: HTTPS client received a plaintext HTTP record.
+ * "wrong version number" is not a certificate the user can trust.
+ */
+function isHttpsOnPlainHttp(raw) {
+  const text = String(raw || '').toLowerCase();
+  return (
+    /(?:^|[^a-z0-9])https_on_http(?:$|[^a-z0-9])/.test(text)
+    || /wrong version number/.test(text)
+    || /err_ssl_wrong_version_number/.test(text)
+    || /ssl_r_wrong_version_number/.test(text)
+  );
+}
+
 /**
  * Classify a transport error for failover.
- * TLS / certificate failures are security errors — never failover.
+ * TLS certificate failures are security errors — never failover, and may ask
+ * the user to trust a specific certificate.
+ * HTTPS pointed at plaintext HTTP is a protocol mismatch: tell the user to
+ * switch the Base URL to http://, and do not offer certificate trust.
  */
 function classifyTransportError(errorOrStatus) {
   if (errorOrStatus == null) return { kind: 'unknown', transferable: false };
@@ -219,16 +249,29 @@ function classifyTransportError(errorOrStatus) {
     return { kind: 'http', transferable: false, status };
   }
 
-  const raw = String(
-    typeof errorOrStatus === 'object'
-      ? errorOrStatus.code || errorOrStatus.error || errorOrStatus.message || ''
-      : errorOrStatus,
-  ).toLowerCase();
+  const raw = transportErrorText(errorOrStatus).toLowerCase();
+
+  if (isHttpsOnPlainHttp(raw)) {
+    return {
+      kind: 'https_on_http',
+      transferable: false,
+      needsTrustConfirm: false,
+      certificateError: false,
+      userMessage: HTTPS_ON_HTTP_MESSAGE,
+      uiState: null,
+    };
+  }
 
   if (
-    /cert|certificate|unable to verify|self[- ]signed|tls|ssl|err_tls|err_cert|untrust/.test(raw)
+    /cert|certificate|unable[_ ]to[_ ]verify|self[- _]signed|tls|ssl|err_tls|err_cert|untrust/.test(raw)
   ) {
-    return { kind: 'certificate_error', transferable: false, uiState: 'certificate_error' };
+    return {
+      kind: 'certificate_error',
+      transferable: false,
+      needsTrustConfirm: true,
+      certificateError: true,
+      uiState: 'certificate_error',
+    };
   }
   if (/enotfound|getaddrinfo|dns/.test(raw)) {
     return { kind: 'dns', transferable: true };
@@ -275,6 +318,60 @@ function selectEndpointsForAttempt(endpoints, { currentEndpointId = null } = {})
  */
 function shouldFailover(errorOrStatus) {
   return classifyTransportError(errorOrStatus).transferable === true;
+}
+
+/**
+ * User-facing transport failure for certificate trust vs HTTPS-on-HTTP.
+ * Returns null for ordinary network/HTTP failures so callers keep their own copy.
+ */
+function describeTransportFailure(errorOrStatus) {
+  const classified = classifyTransportError(errorOrStatus);
+  if (classified.kind === 'https_on_http') {
+    return {
+      ok: false,
+      error: 'https_on_http',
+      message: classified.userMessage || HTTPS_ON_HTTP_MESSAGE,
+      transferable: false,
+      certificateError: false,
+      needsTrustConfirm: false,
+      uiState: null,
+    };
+  }
+  if (classified.kind === 'certificate_error') {
+    return {
+      ok: false,
+      error: 'certificate_error',
+      message: '证书错误',
+      transferable: false,
+      certificateError: true,
+      needsTrustConfirm: true,
+      uiState: 'certificate_error',
+    };
+  }
+  return null;
+}
+
+/**
+ * Genuine untrusted / self-signed certificate failures may ask the user to pin trust.
+ * Protocol mismatch (HTTPS client, plaintext HTTP peer) must not.
+ */
+function shouldRequestCertificateTrust(errorOrStatus) {
+  if (errorOrStatus && typeof errorOrStatus === 'object') {
+    const text = transportErrorText(errorOrStatus).toLowerCase();
+    if (
+      isHttpsOnPlainHttp(text)
+      || errorOrStatus.error === 'https_on_http'
+      || errorOrStatus.kind === 'https_on_http'
+      || errorOrStatus.code === 'https_on_http'
+    ) {
+      return false;
+    }
+    if (errorOrStatus.kind === 'certificate_error' && errorOrStatus.needsTrustConfirm !== false) {
+      return true;
+    }
+  }
+  const described = describeTransportFailure(errorOrStatus);
+  return Boolean(described && described.certificateError === true && described.needsTrustConfirm === true);
 }
 
 /**
@@ -429,6 +526,7 @@ module.exports = {
   ENDPOINT_KINDS,
   SYNC_UI_STATES,
   HTTP_INSECURE_CONFIRM_TEXT,
+  HTTPS_ON_HTTP_MESSAGE,
   HTTP_INSECURE_WARNING_TEXT,
   DEVICE_PORT_GUIDANCE_TEXT,
   APP_PATH_SEGMENT,
@@ -437,7 +535,10 @@ module.exports = {
   endpointHttpPolicy,
   applyAllowInsecureHttpToggle,
   applyEndpointBaseUrlChange,
+  isHttpsOnPlainHttp,
   classifyTransportError,
+  describeTransportFailure,
+  shouldRequestCertificateTrust,
   selectEndpointsForAttempt,
   shouldFailover,
   dedupeEndpointsByCanonical,

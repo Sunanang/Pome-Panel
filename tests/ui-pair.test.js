@@ -109,11 +109,89 @@ test('pair.reauth reducer clears binding state', () => {
   assert.equal(state.dialog, null);
 });
 
+test('HTTPS-on-HTTP pair failure explains the scheme and does not ask to trust a certificate', async () => {
+  const { HTTPS_ON_HTTP_MESSAGE } = require('../packages/sync-protocol/endpoints');
+  assert.equal(pairUi.HTTPS_ON_HTTP_MESSAGE, HTTPS_ON_HTTP_MESSAGE);
+  const nodeMessage = 'write EPROTO C0DC4C59DD7F0000:error:0A00010B:SSL routines:ssl3_get_record:wrong version number:../deps/openssl/openssl/ssl/record/ssl3_record.c:354:';
+  const api = {
+    syncPairHttpPolicy: async () => ({ ok: true, requiresExtraConfirm: false, insecureBound: false }),
+    syncPairClaim: async () => ({
+      ok: false,
+      error: 'certificate_error',
+      code: 'EPROTO',
+      message: nodeMessage,
+      certificateError: true,
+      needsTrustConfirm: true,
+      uiState: 'certificate_error',
+    }),
+  };
+  const result = await pairUi.runPairSubmit({
+    code: '111222',
+    baseUrl: 'https://39.106.162.144:34931',
+    api,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'https_on_http');
+  assert.equal(result.message, HTTPS_ON_HTTP_MESSAGE);
+  assert.match(result.message, /HTTP，不是 HTTPS/);
+  assert.match(result.message, /http:\/\//);
+  assert.equal(result.needsTrustConfirm, false);
+  assert.equal(result.certificateError, false);
+  assert.equal(result.dialog, null);
+  assert.equal(pairUi.shouldOpenCertificateTrustDialog(result), false);
+  assert.equal(pairUi.shouldOpenCertificateTrustDialog({
+    ok: false,
+    error: 'certificate_error',
+    code: 'ERR_SSL_WRONG_VERSION_NUMBER',
+    message: nodeMessage,
+    certificateError: true,
+    needsTrustConfirm: true,
+  }), false);
+
+  let state = pairUi.initialPairUiState();
+  state = pairUi.reducePairUi(state, { type: 'open_http_confirm', confirmText: '明文' });
+  state = pairUi.reducePairUi(state, {
+    type: 'failure',
+    message: result.message,
+    needsTrustConfirm: false,
+  });
+  assert.equal(state.dialog, null);
+  assert.equal(state.needsTrustConfirm, false);
+  assert.equal(state.error, HTTPS_ON_HTTP_MESSAGE);
+
+  const trustedCert = await pairUi.runPairSubmit({
+    code: '111222',
+    baseUrl: 'https://nas.example',
+    api: {
+      syncPairHttpPolicy: async () => ({ ok: true, requiresExtraConfirm: false }),
+      syncPairClaim: async () => ({
+        ok: false,
+        error: 'certificate_error',
+        message: '证书错误',
+        certificateError: true,
+        needsTrustConfirm: true,
+        uiState: 'certificate_error',
+      }),
+    },
+  });
+  assert.equal(trustedCert.error, 'certificate_error');
+  assert.equal(trustedCert.needsTrustConfirm, true);
+  assert.equal(trustedCert.certificateError, true);
+  assert.equal(pairUi.shouldOpenCertificateTrustDialog(trustedCert), true);
+  assert.equal(trustedCert.dialog, null);
+});
+
 test('workspace wires Enter submit and notchAPI pair IPC (no electron require)', () => {
   assert.match(workspaceJs, /submitNasPair/);
   assert.match(workspaceJs, /keydown/);
   assert.match(workspaceJs, /syncPairClaim/);
   assert.match(workspaceJs, /httpConfirmAccepted/);
+  assert.match(workspaceJs, /shouldOpenCertificateTrustDialog\(result\)/);
+  const failureBranch = workspaceJs.slice(workspaceJs.indexOf('if (!result.ok)'));
+  const failureHead = failureBranch.slice(0, failureBranch.indexOf('applyNasPairUi({ type: \'success\''));
+  assert.match(failureHead, /shouldOpenCertificateTrustDialog/);
+  assert.doesNotMatch(failureHead, /openNasDialog/);
+  assert.match(workspaceJs, /result\.error === 'https_on_http'/);
   assert.doesNotMatch(workspaceJs, /require\(['"]electron['"]\)/);
   const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
   assert.match(preload, /syncPairClaim/);

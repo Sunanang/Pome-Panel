@@ -2121,7 +2121,13 @@
     });
     applyNasPairUi({ type: 'submit_end' });
     if (!result.ok) {
-      applyNasPairUi({ type: 'failure', error: result.error, message: result.message });
+      const askTrust = window.NasSyncPair.shouldOpenCertificateTrustDialog(result) === true;
+      applyNasPairUi({
+        type: 'failure',
+        error: result.error,
+        message: result.message,
+        needsTrustConfirm: askTrust,
+      });
       setNasSyncHint(result.message || '配对失败', 'error');
       return;
     }
@@ -2266,7 +2272,16 @@
       const result = await window.notchAPI.syncRetry();
       applyNasSettingsUi({ type: 'idle' });
       if (!result || !result.ok) {
-        setNasSyncHint((result && result.error) || '重试失败', 'error');
+        const httpsOnHttp = result && (
+          result.error === 'https_on_http'
+          || (window.NasSyncPair && window.NasSyncPair.isHttpsOnHttpFailure(result))
+        );
+        setNasSyncHint(
+          httpsOnHttp
+            ? (result.message || window.NasSyncPair.HTTPS_ON_HTTP_MESSAGE)
+            : ((result && result.error) || '重试失败'),
+          'error',
+        );
       } else {
         setNasSyncHint('已重试同步', 'success');
       }
@@ -2320,7 +2335,9 @@
         applyNasSettingsUi({ type: 'testing', endpointId });
         const result = await window.notchAPI.syncTestEndpoint({ endpointId });
         applyNasSettingsUi({ type: 'idle' });
-        if (result && result.certificateError) {
+        if (result && (result.error === 'https_on_http' || (window.NasSyncPair && window.NasSyncPair.isHttpsOnHttpFailure(result)))) {
+          setNasSyncHint(result.message || window.NasSyncPair.HTTPS_ON_HTTP_MESSAGE, 'error');
+        } else if (result && result.certificateError) {
           setNasSyncHint('证书错误：不会故障转移到其它 endpoint', 'error');
         } else if (result && result.ok) {
           setNasSyncHint('连接成功', 'success');
