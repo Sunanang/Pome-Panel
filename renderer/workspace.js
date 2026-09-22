@@ -737,6 +737,9 @@
   const settingsNasPairSubmit = document.getElementById('settings-nas-pair-submit');
   const settingsNasPairReauth = document.getElementById('settings-nas-pair-reauth');
   const settingsNasSyncHint = document.getElementById('settings-nas-sync-hint');
+  const settingsNasStatusHint = document.getElementById('settings-nas-status-hint');
+  const settingsNasEndpointHint = document.getElementById('settings-nas-endpoint-hint');
+  const settingsNasDeviceHint = document.getElementById('settings-nas-device-hint');
   const settingsNasDevices = document.getElementById('settings-nas-devices');
   const settingsNasDeviceList = document.getElementById('settings-nas-device-list');
   const settingsNasDialogRoot = document.getElementById('settings-nas-dialog-root');
@@ -1706,10 +1709,27 @@
     settingsCursorTokenHint.classList.toggle('warning', kind === 'warning');
   }
 
+  function paintNasHint(el, message, kind = '') {
+    if (!el) return;
+    el.textContent = message || '';
+    el.dataset.kind = kind || '';
+  }
+
+  // Pair card only: pairing, reauth, and migration. Connection tests must not land here.
   function setNasSyncHint(message, kind = '') {
-    if (!settingsNasSyncHint) return;
-    settingsNasSyncHint.textContent = message || '';
-    settingsNasSyncHint.dataset.kind = kind || '';
+    paintNasHint(settingsNasSyncHint, message, kind);
+  }
+
+  function setNasStatusHint(message, kind = '') {
+    paintNasHint(settingsNasStatusHint, message, kind);
+  }
+
+  function setNasEndpointHint(message, kind = '') {
+    paintNasHint(settingsNasEndpointHint, message, kind);
+  }
+
+  function setNasDeviceHint(message, kind = '') {
+    paintNasHint(settingsNasDeviceHint, message, kind);
   }
 
   function applyNasPairUi(action) {
@@ -1832,7 +1852,7 @@
             : (nasSettingsUi.uiLabel || '协议不兼容 · 请升级');
         settingsNasSyncStatus.dataset.state = 'error';
         const schemaMessage = (status && status.schemaMessage) || nasSettingsUi.schemaMessage;
-        if (schemaMessage) setNasSyncHint(schemaMessage, 'error');
+        if (schemaMessage) setNasStatusHint(schemaMessage, 'error');
       } else if (uiState && uiState !== 'unbound' && uiState !== 'synced') {
         settingsNasSyncStatus.textContent = nasSettingsUi.uiLabel || uiState;
         settingsNasSyncStatus.dataset.state =
@@ -2241,7 +2261,7 @@
     const kind = settingsNasEndpointKind?.value || 'gateway';
     const check = window.NasSyncSettings.validateBaseUrlDraft(baseUrl);
     if (!check.ok) {
-      setNasSyncHint(check.message || 'URL 无效', 'error');
+      setNasEndpointHint(check.message || 'URL 无效', 'error');
       return;
     }
     applyNasSettingsUi({ type: 'busy' });
@@ -2252,14 +2272,14 @@
     });
     applyNasSettingsUi({ type: 'idle' });
     if (!result || !result.ok) {
-      setNasSyncHint(
+      setNasEndpointHint(
         result && result.error === 'duplicate_endpoint' ? '该地址已存在' : (result && result.error) || '添加失败',
         'error',
       );
       return;
     }
     if (settingsNasEndpointUrl) settingsNasEndpointUrl.value = '';
-    setNasSyncHint('已添加 endpoint', 'success');
+    setNasEndpointHint('已添加 endpoint', 'success');
     await refreshNasSyncStatus();
   }
 
@@ -2285,14 +2305,14 @@
           result.error === 'https_on_http'
           || (window.NasSyncPair && window.NasSyncPair.isHttpsOnHttpFailure(result))
         );
-        setNasSyncHint(
+        setNasStatusHint(
           httpsOnHttp
             ? (result.message || window.NasSyncPair.HTTPS_ON_HTTP_MESSAGE)
             : ((result && result.error) || '重试失败'),
           'error',
         );
       } else {
-        setNasSyncHint('已重试同步', 'success');
+        setNasStatusHint('已重试同步', 'success');
       }
       await refreshNasSyncStatus();
     });
@@ -2303,10 +2323,10 @@
       const result = await window.notchAPI.syncExportTodosBackup();
       if (!result || !result.ok) {
         if (result && result.error === 'cancelled') return;
-        setNasSyncHint('导出失败', 'error');
+        setNasStatusHint('导出失败', 'error');
         return;
       }
-      setNasSyncHint('备份已导出', 'success');
+      setNasStatusHint('备份已导出', 'success');
       if (typeof showStatusToast === 'function') showStatusToast('待办备份已导出');
     });
   }
@@ -2322,11 +2342,11 @@
       if (!window.notchAPI || typeof window.notchAPI.syncRestoreMigrationBackup !== 'function') return;
       const result = await window.notchAPI.syncRestoreMigrationBackup({ confirmed: true });
       if (!result || !result.ok) {
-        setNasSyncHint((result && result.error) || '恢复失败', 'error');
+        setNasStatusHint((result && result.error) || '恢复失败', 'error');
         return;
       }
       if (result.projectionJson) applyMigrationProjection(result.projectionJson);
-      setNasSyncHint('已恢复迁移备份', 'success');
+      setNasStatusHint('已恢复迁移备份', 'success');
       await refreshNasSyncStatus();
     });
   }
@@ -2345,13 +2365,13 @@
         const result = await window.notchAPI.syncTestEndpoint({ endpointId });
         applyNasSettingsUi({ type: 'idle' });
         if (result && (result.error === 'https_on_http' || (window.NasSyncPair && window.NasSyncPair.isHttpsOnHttpFailure(result)))) {
-          setNasSyncHint(result.message || window.NasSyncPair.HTTPS_ON_HTTP_MESSAGE, 'error');
+          setNasEndpointHint(result.message || window.NasSyncPair.HTTPS_ON_HTTP_MESSAGE, 'error');
         } else if (result && result.certificateError) {
-          setNasSyncHint('证书错误：不会故障转移到其它 endpoint', 'error');
+          setNasEndpointHint('证书错误：不会故障转移到其它 endpoint', 'error');
         } else if (result && result.ok) {
-          setNasSyncHint('连接成功', 'success');
+          setNasEndpointHint('连接成功', 'success');
         } else {
-          setNasSyncHint((result && result.error) || '连接失败', 'error');
+          setNasEndpointHint((result && result.error) || '连接失败', 'error');
         }
         await refreshNasSyncStatus();
         return;
@@ -2380,7 +2400,7 @@
         const enabled = enableBtn.getAttribute('data-enabled') !== '1';
         const result = await window.notchAPI.syncUpdateEndpoint({ endpointId, enabled });
         if (!result || !result.ok) {
-          setNasSyncHint(
+          setNasEndpointHint(
             result && result.error === 'disabled_by_policy'
               ? '已停用：需改为 HTTPS 或重新开启 HTTP 开关'
               : (result && result.error) || '更新失败',
@@ -2422,12 +2442,12 @@
       });
       if (!result || !result.ok) {
         target.checked = !enable;
-        setNasSyncHint((result && result.error) || 'HTTP 开关更新失败', 'error');
+        setNasEndpointHint((result && result.error) || 'HTTP 开关更新失败', 'error');
         return;
       }
-      if (result.policyMessage) setNasSyncHint(result.policyMessage, 'warning');
-      else if (!enable) setNasSyncHint('已停用：需改为 HTTPS 或重新开启开关', 'warning');
-      else setNasSyncHint('已允许明文 HTTP（持续警告）', 'warning');
+      if (result.policyMessage) setNasEndpointHint(result.policyMessage, 'warning');
+      else if (!enable) setNasEndpointHint('已停用：需改为 HTTPS 或重新开启开关', 'warning');
+      else setNasEndpointHint('已允许明文 HTTP（持续警告）', 'warning');
       await refreshNasSyncStatus();
     });
   }
@@ -2535,10 +2555,10 @@
         baseUrl: settingsNasSyncBaseUrl?.value || (nasPairUi.status && nasPairUi.status.baseUrl),
       });
       if (!result || !result.ok) {
-        setNasSyncHint(result && result.error || '吊销失败', 'error');
+        setNasDeviceHint(result && result.error || '吊销失败', 'error');
         return;
       }
-      setNasSyncHint('设备已吊销', 'success');
+      setNasDeviceHint('设备已吊销', 'success');
       await refreshNasSyncStatus();
     });
   }
@@ -2547,7 +2567,7 @@
     window.notchAPI.onSyncStatus((status) => {
       applyNasPairUi({ type: 'set_status', status });
       if (status && status.schemaIncompatible && status.schemaMessage) {
-        setNasSyncHint(status.schemaMessage, 'error');
+        setNasStatusHint(status.schemaMessage, 'error');
       }
     });
   }

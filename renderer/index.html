@@ -573,6 +573,7 @@
                     <button class="workspace-button compact settings-nas-quiet" id="settings-nas-export-backup" type="button" data-control-id="settings.nas-sync.export-backup">导出备份</button>
                     <button class="workspace-button compact settings-nas-quiet" id="settings-nas-restore-backup" type="button" data-control-id="settings.nas-sync.restore-backup">恢复上次迁移备份</button>
                   </div>
+                  <p class="settings-nas-sync-hint" id="settings-nas-status-hint" role="status"></p>
                 </section>
 
                 <section class="tile settings-card settings-nas-endpoints" id="settings-nas-endpoints" aria-labelledby="settings-nas-endpoint-title">
@@ -585,6 +586,7 @@
                     统一网关 Bearer 不可用时，可添加「设备同步端口」endpoint（与网关可并存）。端口不写死，请填写 FPK 展示的完整 URL。
                   </p>
                   <ul class="settings-nas-endpoint-list" id="settings-nas-endpoint-list" aria-label="同步 endpoint 列表"></ul>
+                  <p class="settings-nas-sync-hint" id="settings-nas-endpoint-hint" role="status"></p>
                   <div class="settings-nas-endpoint-composer">
                     <label class="settings-nas-field">
                       <span>地址</span>
@@ -638,6 +640,7 @@
                     <small>吊销后需重新配对</small>
                   </div>
                   <ul class="settings-nas-device-list" id="settings-nas-device-list"></ul>
+                  <p class="settings-nas-sync-hint" id="settings-nas-device-hint" role="status"></p>
                 </section>
 
 
