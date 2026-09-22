@@ -326,21 +326,32 @@ body {
 
 .nas-web-code-block {
   margin-top: var(--s-4);
-  padding: var(--s-4);
+  padding: 18px 20px 16px;
   border-radius: var(--r-input);
   background: rgba(0, 0, 0, 0.35);
   box-shadow: inset 0 0 0 1px var(--hairline);
 }
 
-.nas-web-code {
+/* Beat `.settings-card p { font-size: 11px }` so the code stays display-sized. */
+.settings-card .nas-web-code,
+.nas-web-code-block .nas-web-code,
+#pair-code.nas-web-code {
   margin: 0;
-  font: 600 36px/1.2 var(--font-mono);
-  letter-spacing: 0.28em;
   color: var(--text-1);
+  font: 700 44px/1.15 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.34em;
   text-align: center;
+  text-indent: 0.34em;
 }
 
-#pair-expiry { margin-top: var(--s-2); text-align: center; color: var(--text-3); font-size: var(--fs-small); }
+#pair-expiry,
+.settings-card #pair-expiry {
+  margin-top: var(--s-2);
+  text-align: center;
+  color: var(--text-3);
+  font-size: var(--fs-small);
+}
 
 .settings-nas-device-list {
   list-style: none;

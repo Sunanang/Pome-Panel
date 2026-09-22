@@ -58,6 +58,9 @@ test('FPK Web style uses desktop tokens — no banned palette / no inline color 
   assert.doesNotMatch(css, /\b(?:Inter|Roboto|Arial)\b/);
   assert.doesNotMatch(css, /linear-gradient\([^)]*(?:purple|indigo|#7[cC]|#6[dD])/i);
   assert.doesNotMatch(css, /#F4F1EA/i);
+  // Pairing code must beat `.settings-card p { font-size: 11px }` and stay display-sized.
+  assert.match(css, /\.settings-card\s+\.nas-web-code|#pair-code\.nas-web-code/);
+  assert.match(css, /font:\s*700\s+4[0-9]px/);
 });
 
 test('resolveApiPrefix / apiUrl honor gatewayPrefix (absolute /api was the break)', () => {
