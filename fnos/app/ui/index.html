@@ -5,109 +5,225 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="gateway-prefix" content="/app/pome-panel" />
   <title>Pome Panel</title>
-  <!-- Absolute under gatewayPrefix: avoids broken ./assets when URL lacks trailing slash -->
   <link rel="stylesheet" href="/app/pome-panel/styles.css" />
 </head>
 <body>
-  <main class="settings-page nas-web-shell" data-control-root="fnos-web-panel">
-    <header class="tile settings-card nas-web-card nas-web-top">
-      <div class="settings-card-heading">
-        <div>
-          <strong id="nas-web-brand">Pome Panel</strong>
-          <small>飞牛 NAS · 工作区</small>
+  <div id="app" class="expanded" data-control-root="fnos-web-panel">
+    <div class="panel" id="panel">
+      <header class="topbar">
+        <div class="tabs" id="tabs" role="tablist" aria-label="Pome Panel">
+          <button class="tab active" id="tab-button-devices" type="button" data-tab="devices" role="tab" aria-controls="tab-devices" aria-selected="true">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8M12 16v4" />
+            </svg>
+            <span class="tab-label">设备</span>
+          </button>
+          <button class="tab" id="tab-button-todo" type="button" data-tab="todo" role="tab" aria-controls="tab-todo" aria-selected="false" tabindex="-1">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 7h10" />
+              <path d="M4 12h10" />
+              <path d="M4 17h7" />
+              <path d="M17.5 7.5 19 9l2.5-3" />
+            </svg>
+            <span class="tab-label">待办</span>
+          </button>
+          <button class="tab" id="tab-button-clip" type="button" data-tab="clip" role="tab" aria-controls="tab-clip" aria-selected="false" tabindex="-1">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+              <rect x="9" y="3" width="6" height="4" rx="1" />
+            </svg>
+            <span class="tab-label">剪贴</span>
+          </button>
+          <button class="tab" id="tab-button-notes" type="button" data-tab="notes" role="tab" aria-controls="tab-notes" aria-selected="false" tabindex="-1">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 4h14v16H5z" />
+              <path d="M8 8h8M8 12h8M8 16h5" />
+            </svg>
+            <span class="tab-label">笔记</span>
+          </button>
+          <button class="tab" id="tab-button-links" type="button" data-tab="links" role="tab" aria-controls="tab-links" aria-selected="false" tabindex="-1">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" />
+              <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1" />
+            </svg>
+            <span class="tab-label">链接</span>
+          </button>
+          <button class="tab" id="tab-button-recordings" type="button" data-tab="recordings" role="tab" aria-controls="tab-recordings" aria-selected="false" tabindex="-1">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="8" y="3" width="8" height="13" rx="4" />
+              <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7" />
+            </svg>
+            <span class="tab-label">录制</span>
+          </button>
+          <button class="tab" id="tab-button-credentials" type="button" data-tab="credentials" role="tab" aria-controls="tab-credentials" aria-selected="false" tabindex="-1">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="8" cy="15" r="4" />
+              <path d="m11 12 7-7 2 2-2 2 1.5 1.5-2.5 2.5-1.5-1.5-2 2" />
+            </svg>
+            <span class="tab-label">密钥</span>
+          </button>
         </div>
         <span class="nas-web-status-pill" id="session-pill" data-state="unknown" role="status">检测会话…</span>
+      </header>
+
+      <div class="panels" id="panels">
+        <section id="tab-devices" class="tab-panel active" role="tabpanel" aria-labelledby="tab-button-devices">
+          <div class="devices-page">
+            <section class="tile settings-card" aria-labelledby="nas-pair-title">
+              <div class="settings-card-heading">
+                <div>
+                  <span class="tile-label">飞牛 NAS</span>
+                  <strong id="nas-pair-title">生成配对码</strong>
+                </div>
+                <small>约 5 分钟有效</small>
+              </div>
+              <p>在已登录的飞牛会话下生成配对码，于桌面「设置 → NAS 同步」完成绑定。配对码只显示一次。</p>
+              <div class="settings-nas-sync-actions pair-actions" aria-label="配对操作">
+                <button type="button" class="workspace-button compact primary" id="pair-start-btn" data-control-id="fnos.pair.start">生成配对码</button>
+                <button type="button" class="workspace-button compact" id="pair-refresh-btn" data-control-id="fnos.pair.refresh">刷新</button>
+              </div>
+              <p class="settings-nas-sync-hint" id="pair-status" role="status" data-control-id="fnos.pair.status"></p>
+              <div class="nas-web-code-block" id="pair-code-wrap" hidden>
+                <p class="nas-web-code" id="pair-code" aria-live="polite" data-control-id="fnos.pair.code"></p>
+                <p class="settings-nas-sync-hint" id="pair-expiry" data-control-id="fnos.pair.expiry"></p>
+              </div>
+            </section>
+            <section class="tile settings-card" aria-labelledby="nas-web-devices-title">
+              <div class="settings-card-heading">
+                <div>
+                  <span class="tile-label">已绑定</span>
+                  <strong id="nas-web-devices-title">已配对设备</strong>
+                </div>
+                <small>只在飞牛显示</small>
+              </div>
+              <ul class="settings-nas-device-list" id="device-list" aria-label="已配对设备" data-control-id="fnos.devices.list"></ul>
+              <p class="settings-nas-sync-hint" id="device-empty" data-control-id="fnos.devices.empty">尚无设备。桌面配对成功后显示；不安全绑定会标注。</p>
+            </section>
+          </div>
+        </section>
+
+        <section id="tab-todo" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-todo" hidden>
+          <div class="sections" id="todo-sections">
+            <section class="quadrant tile" data-priority="P0">
+              <div class="quadrant-header">
+                <span class="dot dot-p0"></span>
+                <span class="quadrant-title" id="todo-name-P0">课程</span>
+                <span class="count" id="todo-count-P0" data-priority="P0">0</span>
+              </div>
+              <ul class="todo-list" id="todo-list-P0" data-priority="P0"></ul>
+            </section>
+            <section class="quadrant tile" data-priority="P1">
+              <div class="quadrant-header">
+                <span class="dot dot-p1"></span>
+                <span class="quadrant-title" id="todo-name-P1">自媒体&amp;写作</span>
+                <span class="count" id="todo-count-P1" data-priority="P1">0</span>
+              </div>
+              <ul class="todo-list" id="todo-list-P1" data-priority="P1"></ul>
+            </section>
+            <section class="quadrant tile" data-priority="P2">
+              <div class="quadrant-header">
+                <span class="dot dot-p2"></span>
+                <span class="quadrant-title" id="todo-name-P2">Vibe coding</span>
+                <span class="count" id="todo-count-P2" data-priority="P2">0</span>
+              </div>
+              <ul class="todo-list" id="todo-list-P2" data-priority="P2"></ul>
+            </section>
+            <section class="quadrant tile" data-priority="P3">
+              <div class="quadrant-header">
+                <span class="dot dot-p3"></span>
+                <span class="quadrant-title" id="todo-name-P3">日常</span>
+                <span class="count" id="todo-count-P3" data-priority="P3">0</span>
+              </div>
+              <ul class="todo-list" id="todo-list-P3" data-priority="P3"></ul>
+            </section>
+          </div>
+        </section>
+
+        <section id="tab-clip" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-clip" hidden>
+          <div class="clip-panel">
+            <div class="clip-toolbar" id="clip-toolbar">
+              <button class="clip-filter active" id="clip-filter-all" data-filter="all" type="button">全部</button>
+              <button class="clip-filter" id="clip-filter-text" data-filter="text" type="button">文字</button>
+              <button class="clip-filter" id="clip-filter-image" data-filter="image" type="button">图片</button>
+              <button class="clip-filter" id="clip-filter-faved" data-filter="faved" type="button">收藏</button>
+            </div>
+            <div class="clip-list" id="clip-list"></div>
+          </div>
+        </section>
+
+        <section id="tab-notes" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-notes" hidden>
+          <div class="notes-page">
+            <aside class="notes-library tile">
+              <div class="notes-library-head">
+                <div class="notes-library-title">
+                  <span class="tile-label">笔记库</span>
+                  <strong id="notes-count">0 篇</strong>
+                </div>
+              </div>
+              <label class="notes-search-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+                <input id="notes-search" type="search" placeholder="搜索笔记" aria-label="搜索笔记" autocomplete="off" />
+              </label>
+              <div class="notes-list" id="notes-list"></div>
+            </aside>
+            <section class="notes-detail tile" id="notes-detail">
+              <div class="notes-detail-empty" id="notes-detail-empty">
+                <strong>还没有同步的笔记</strong>
+                <p>桌面保存并同步后，会出现在这里。</p>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="tab-links" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-links" hidden>
+          <div class="links-page">
+            <div class="link-groups" id="link-groups"></div>
+          </div>
+        </section>
+
+        <section id="tab-recordings" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-recordings" hidden>
+          <div class="recordings-page">
+            <aside class="recording-library">
+              <div class="recording-library-head">
+                <div><span class="tile-label">录音资料库</span><strong id="recording-count">0 条</strong></div>
+              </div>
+              <div class="recording-list" id="recording-list"></div>
+            </aside>
+            <section class="recording-detail" id="recording-detail">
+              <div class="recording-detail-empty" id="recording-detail-empty">同步过来的录音和转写会显示在这里。</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="tab-credentials" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-credentials" hidden>
+          <div class="credentials-page">
+            <section class="tile settings-card credentials-form-card">
+              <div class="credentials-heading">
+                <div><span class="tile-label">智能能力</span><strong>API 配置</strong></div>
+                <span class="secure-chip">只读</span>
+              </div>
+              <div class="settings-status-list">
+                <div><span>通义百炼实时转写</span><small id="nas-asr-status" data-state="empty">未配置</small></div>
+                <div><span>对话模型</span><small id="nas-llm-status" data-state="empty">未配置</small></div>
+              </div>
+              <p id="nas-ai-meta"></p>
+            </section>
+            <section class="tile credentials-library">
+              <div class="credentials-library-head">
+                <div><span class="tile-label">账号密码</span><strong id="credential-count">0 项</strong></div>
+              </div>
+              <div class="credential-list" id="credential-list"></div>
+            </section>
+          </div>
+        </section>
+
       </div>
-      <p class="settings-nas-sync-hint nas-web-lead">
-        这里显示已配对桌面同步过来的内容。配对和设备管理在「设备」里。
-      </p>
-      <nav class="nas-web-nav" aria-label="面板分区">
-        <button
-          type="button"
-          class="workspace-button compact"
-          id="nav-content"
-          data-control-id="fnos.panel.content"
-          aria-current="page"
-        >内容</button>
-        <button
-          type="button"
-          class="workspace-button compact"
-          id="nav-devices"
-          data-control-id="fnos.panel.devices"
-        >设备</button>
-      </nav>
-    </header>
-
-    <section id="panel-content" data-control-id="fnos.panel.content-view" aria-label="工作区内容">
-      <div class="nas-web-tabs" id="workspace-tabs" role="tablist" aria-label="内容分类"></div>
-      <section class="tile settings-card nas-web-card">
-        <p class="settings-nas-sync-hint" id="workspace-status" role="status" data-control-id="fnos.workspace.status"></p>
-        <div id="workspace-list" data-control-id="fnos.workspace.list"></div>
-        <p class="settings-nas-sync-hint" id="workspace-empty" data-control-id="fnos.workspace.empty">
-          还没有同步内容。桌面完成配对并同步后，这里会显示笔记、剪贴板、录音、链接和待办。
-        </p>
-        <p class="settings-nas-sync-hint">
-          这些内容保存在飞牛应用的内存里。应用重启后，需要桌面再同步一次才会重新出现。
-        </p>
-      </section>
-    </section>
-
-    <section id="panel-devices" hidden aria-label="设备与配对">
-      <section class="tile settings-card nas-web-card" aria-labelledby="nas-web-devices-title">
-        <div class="settings-card-heading">
-          <div>
-            <strong id="nas-web-devices-title">设备</strong>
-            <small>生成配对码，并管理已配对的桌面</small>
-          </div>
-        </div>
-        <p class="settings-nas-sync-hint nas-web-lead">
-          在已登录的飞牛网关会话下生成配对码，于桌面客户端「设置 → NAS 同步」完成绑定。配对码只显示一次，请勿截图分享。
-        </p>
-
-        <div class="settings-card-heading settings-nas-pair-heading">
-          <div>
-            <strong>生成配对码</strong>
-            <small>需已登录飞牛；码约 5 分钟有效</small>
-          </div>
-        </div>
-        <div class="settings-nas-sync-actions pair-actions" aria-label="配对操作">
-          <button
-            type="button"
-            class="workspace-button compact primary"
-            id="pair-start-btn"
-            data-control-id="fnos.pair.start"
-          >生成配对码</button>
-          <button
-            type="button"
-            class="workspace-button compact"
-            id="pair-refresh-btn"
-            data-control-id="fnos.pair.refresh"
-          >刷新</button>
-        </div>
-        <p class="settings-nas-sync-hint" id="pair-status" role="status" data-control-id="fnos.pair.status"></p>
-        <div class="nas-web-code-block" id="pair-code-wrap" hidden>
-          <p class="nas-web-code" id="pair-code" aria-live="polite" data-control-id="fnos.pair.code"></p>
-          <p class="settings-nas-sync-hint" id="pair-expiry" data-control-id="fnos.pair.expiry"></p>
-        </div>
-
-        <div class="settings-card-heading">
-          <div>
-            <strong>已配对设备</strong>
-            <small>桌面绑定成功后显示在此</small>
-          </div>
-        </div>
-        <ul
-          class="settings-nas-device-list"
-          id="device-list"
-          aria-label="已配对设备"
-          data-control-id="fnos.devices.list"
-        ></ul>
-        <p class="settings-nas-sync-hint" id="device-empty" data-control-id="fnos.devices.empty">
-          尚无设备。桌面配对成功后显示；不安全绑定会标注。
-        </p>
-      </section>
-    </section>
-  </main>
+    </div>
+    <p class="settings-nas-sync-hint nas-panel-status" id="workspace-status" role="status" data-control-id="fnos.workspace.status"></p>
+    <p class="settings-nas-sync-hint nas-panel-status" id="workspace-empty" data-control-id="fnos.workspace.empty" hidden>还没有同步内容。桌面完成配对并同步后，这里会显示笔记、剪贴板、录音、链接和待办。</p>
+    <p class="nas-memory-note">这些内容保存在飞牛应用的内存里。应用重启后，需要桌面再同步一次才会重新出现。</p>
+  </div>
   <script src="/app/pome-panel/pair.js"></script>
   <script src="/app/pome-panel/panel.js"></script>
 </body>

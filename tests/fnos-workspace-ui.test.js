@@ -51,18 +51,34 @@ function makeEl() {
 function makeDom() {
   const ids = [
     'workspace-status',
-    'workspace-list',
     'workspace-empty',
-    'workspace-tabs',
-    'panel-content',
-    'panel-devices',
-    'nav-content',
-    'nav-devices',
+    'notes-list',
+    'notes-detail',
+    'notes-count',
+    'notes-search',
+    'clip-list',
+    'recording-list',
+    'recording-detail',
+    'recording-count',
+    'link-groups',
+    'credential-list',
+    'credential-count',
+    'nas-asr-status',
+    'nas-llm-status',
+    'nas-ai-meta',
   ];
+  for (const priority of ['P0', 'P1', 'P2', 'P3']) {
+    ids.push(`todo-name-${priority}`, `todo-count-${priority}`, `todo-list-${priority}`);
+  }
+  for (const tab of ['devices', 'todo', 'clip', 'notes', 'links', 'recordings', 'credentials']) {
+    ids.push(`tab-button-${tab}`, `tab-${tab}`);
+  }
+  for (const filter of ['all', 'text', 'image', 'faved']) ids.push(`clip-filter-${filter}`);
   const store = {};
   for (const id of ids) store[id] = makeEl();
-  store['panel-devices'].hidden = true;
-  store['nav-content'].attrs['aria-current'] = 'page';
+  store['tab-devices'].hidden = false;
+  store['tab-button-devices'].className = 'tab active';
+  store['notes-search'].value = '';
   const doc = {
     getElementById(id) { return store[id] || null; },
     querySelector(sel) {
@@ -88,14 +104,19 @@ function hrefsOf(node, acc = []) {
   return acc;
 }
 
-test('NAS panel shell is content-first and keeps pairing as a module', () => {
-  assert.match(html, /id="nav-content"/);
-  assert.match(html, /id="nav-devices"/);
-  assert.match(html, />内容</);
+test('NAS panel uses desktop tab chrome and puts 设备 in the home slot', () => {
+  assert.match(html, /class="tabs"/);
+  assert.match(html, /class="tab active"/);
+  assert.match(html, /id="tab-button-devices"/);
   assert.match(html, />设备</);
-  assert.match(html, /id="panel-content"/);
-  assert.doesNotMatch(html, /id="panel-content"[^>]*\shidden/);
-  assert.match(html, /id="panel-devices"[^>]*\shidden/);
+  assert.doesNotMatch(html, />首页</);
+  assert.doesNotMatch(html, /id="nav-content"/);
+  const order = [...html.matchAll(/data-tab="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(order, ['devices', 'todo', 'clip', 'notes', 'links', 'recordings', 'credentials']);
+  assert.match(html, /id="tab-devices"[^>]*class="tab-panel active"/);
+  assert.match(html, /id="tab-todo"[^>]*hidden/);
+  assert.match(html, /class="sections"/);
+  assert.match(html, /class="quadrant tile"/);
   assert.match(html, /id="pair-start-btn"/);
   assert.match(html, /id="pair-refresh-btn"/);
   assert.match(html, />生成配对码</);
@@ -304,46 +325,44 @@ test('panel controller renders synced notes and switches to devices', async () =
     gatewayPrefix: '/app/pome-panel',
   });
   await controller.init();
-  assert.match(textOf(store['workspace-list']), /会议纪要/);
+  assert.match(textOf(store['notes-list']), /会议纪要/);
   assert.match(store['workspace-status'].textContent, /笔记 1/);
-  assert.equal(store['workspace-empty'].hidden, true);
-  assert.match(textOf(store['workspace-tabs']), /剪贴板/);
-  assert.equal(store['panel-devices'].hidden, true);
+  assert.equal(store['tab-devices'].hidden, false);
+  assert.equal(store['tab-notes'].hidden, true);
+  assert.equal(store['tab-button-devices'].className, 'tab active');
 
-  await controller.selectTab('clipboard');
-  assert.match(textOf(store['workspace-list']), /配图/);
-  assert.match(textOf(store['workspace-list']), /已收藏/);
-  assert.equal(mediaUrls.length, 1);
-  assert.match(mediaUrls[0], /\/app\/pome-panel\/api\/v1\/workspace\/media\/clip%3Ac1/);
+  await controller.selectTab('clip');
+  assert.equal(store['tab-clip'].hidden, false);
+  assert.equal(store['tab-devices'].hidden, true);
+  assert.match(textOf(store['clip-list']), /配图/);
+  assert.match(textOf(store['clip-list']), /已收藏/);
+  assert.ok(mediaUrls.some((url) => url.includes('/app/pome-panel/api/v1/workspace/media/clip%3Ac1')));
 
   await controller.selectTab('recordings');
-  assert.match(textOf(store['workspace-list']), /站会/);
-  assert.match(textOf(store['workspace-list']), /今天先看同步/);
-  assert.match(textOf(store['workspace-list']), /1:05/);
+  assert.match(textOf(store['recording-list']), /站会/);
+  assert.match(textOf(store['recording-detail']), /今天先看同步/);
+  assert.match(textOf(store['recording-detail']), /1:05/);
 
   await controller.selectTab('links');
-  assert.match(textOf(store['workspace-list']), /示例/);
-  assert.match(textOf(store['workspace-list']), /坏链接/);
-  const hrefs = hrefsOf(store['workspace-list']);
-  assert.deepEqual(hrefs, ['https://example.com/a']);
+  assert.match(textOf(store['link-groups']), /示例/);
+  assert.match(textOf(store['link-groups']), /坏链接/);
+  assert.deepEqual(hrefsOf(store['link-groups']), ['https://example.com/a']);
 
-  await controller.selectTab('todos');
-  assert.match(textOf(store['workspace-list']), /写周报/);
-  assert.match(textOf(store['workspace-list']), /课程/);
+  await controller.selectTab('todo');
+  assert.match(textOf(store['todo-list-P0']), /写周报/);
+  assert.equal(store['todo-name-P0'].textContent, '课程');
 
-  await controller.selectTab('config');
-  assert.match(textOf(store['workspace-list']), /语音转写：已配置/);
-  assert.match(textOf(store['workspace-list']), /对话模型：未配置/);
-  assert.match(textOf(store['workspace-list']), /OpenAI/);
-  assert.match(textOf(store['workspace-list']), /a…m/);
-  assert.doesNotMatch(textOf(store['workspace-list']), /password|apiKey|sk-/);
+  await controller.selectTab('credentials');
+  assert.equal(store['nas-asr-status'].textContent, '已配置');
+  assert.equal(store['nas-llm-status'].textContent, '未配置');
+  assert.match(textOf(store['credential-list']), /OpenAI/);
+  assert.match(textOf(store['credential-list']), /a…m/);
+  assert.doesNotMatch(textOf(store['credential-list']), /password|apiKey|sk-/);
 
-  await controller.selectTab('notes');
-  controller.showSection('devices');
-  assert.equal(store['panel-content'].hidden, true);
-  assert.equal(store['panel-devices'].hidden, false);
-  assert.equal(store['nav-devices'].attrs['aria-current'], 'page');
-  assert.equal(store['nav-content'].attrs['aria-current'], undefined);
+  await controller.showSection('devices');
+  assert.equal(store['tab-devices'].hidden, false);
+  assert.equal(store['tab-credentials'].hidden, true);
+  assert.equal(store['tab-button-devices'].attrs['aria-selected'], 'true');
 
   assert.equal(panelUi.safeHttpUrl('javascript:alert(1)'), '');
   assert.equal(panelUi.safeHttpUrl('https://example.com/a'), 'https://example.com/a');

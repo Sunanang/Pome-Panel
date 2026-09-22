@@ -1,9 +1,8 @@
 'use strict';
 
 /**
- * Feiniu web Panel — browse synced workspace content.
- * Pairing stays on the devices section. Node tests require() this file;
- * the browser boots only when the content nav exists.
+ * Feiniu web Panel. Tab order follows the desktop bar, with 设备 in the 首页 slot.
+ * Node tests require() this file; the browser boots only when the device tab exists.
  */
 
 (function (root, factory) {
@@ -14,7 +13,7 @@
   if (typeof document !== 'undefined' && typeof window !== 'undefined') {
     root.PomeFnOsPanelUi = api;
     const start = () => {
-      if (document.getElementById('nav-content')) api.boot(document, window);
+      if (document.getElementById('tab-button-devices')) api.boot(document, window);
     };
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', start);
@@ -26,28 +25,26 @@
   const DEFAULT_GATEWAY_PREFIX = '/app/pome-panel';
 
   const TABS = Object.freeze([
+    { id: 'devices', label: '设备' },
+    { id: 'todo', label: '待办' },
+    { id: 'clip', label: '剪贴' },
     { id: 'notes', label: '笔记' },
-    { id: 'clipboard', label: '剪贴板' },
-    { id: 'recordings', label: '录音' },
     { id: 'links', label: '链接' },
-    { id: 'todos', label: '待办' },
-    { id: 'config', label: '配置' },
+    { id: 'recordings', label: '录制' },
+    { id: 'credentials', label: '密钥' },
   ]);
 
   const EMPTY = Object.freeze({
+    devices: '',
+    todo: '还没有待办。',
+    clip: '还没有剪贴板记录。',
     notes: '还没有笔记。',
-    clipboard: '还没有剪贴板记录。',
-    recordings: '还没有录音。',
     links: '还没有链接。',
-    todos: '还没有待办。',
-    config: '还没有 AI 配置或密钥。',
+    recordings: '还没有录音。',
+    credentials: '还没有 AI 配置或密钥。',
   });
 
-  const CLIP_LABEL = Object.freeze({
-    text: '文字',
-    url: '链接',
-    image: '图片',
-  });
+  const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
 
   function resolveApiPrefix(pathname, metaPrefix) {
     if (metaPrefix != null && String(metaPrefix).trim() !== '') {
@@ -107,67 +104,33 @@
       apiPrefix = DEFAULT_GATEWAY_PREFIX;
     }
 
-    const els = {
-      status: doc && doc.getElementById('workspace-status'),
-      list: doc && doc.getElementById('workspace-list'),
-      empty: doc && doc.getElementById('workspace-empty'),
-      tabs: doc && doc.getElementById('workspace-tabs'),
-      content: doc && doc.getElementById('panel-content'),
-      devices: doc && doc.getElementById('panel-devices'),
-      navContent: doc && doc.getElementById('nav-content'),
-      navDevices: doc && doc.getElementById('nav-devices'),
-    };
-
+    const byId = (id) => (doc ? doc.getElementById(id) : null);
     let view = null;
-    let activeTab = 'notes';
-    let section = 'content';
+    let activeTab = 'devices';
+    let clipFilter = 'all';
+    let noteQuery = '';
+    let selectedNote = '';
+    let selectedRecording = '';
     const objectUrls = [];
 
     function setStatus(text, kind) {
-      if (!els.status) return;
-      els.status.textContent = text || '';
-      if (kind) els.status.setAttribute('data-kind', kind);
-      else els.status.removeAttribute('data-kind');
+      const status = byId('workspace-status');
+      if (!status) return;
+      status.textContent = text || '';
+      if (kind) status.setAttribute('data-kind', kind);
+      else status.removeAttribute('data-kind');
     }
 
-    function setCurrent(button, on) {
-      if (!button) return;
-      if (on) button.setAttribute('aria-current', 'page');
-      else button.removeAttribute('aria-current');
-    }
-
-    function showSection(name) {
-      section = name === 'devices' ? 'devices' : 'content';
-      if (els.content) els.content.hidden = section !== 'content';
-      if (els.devices) els.devices.hidden = section !== 'devices';
-      setCurrent(els.navContent, section === 'content');
-      setCurrent(els.navDevices, section === 'devices');
-    }
-
-    function revokeUrls() {
-      if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
-        for (const url of objectUrls) {
-          try { URL.revokeObjectURL(url); } catch (error) { /* already revoked */ }
-        }
+    function setEmpty(tab, count) {
+      const empty = byId('workspace-empty');
+      if (!empty) return;
+      const message = EMPTY[tab] || '';
+      if (!message || count > 0 || tab === 'devices') {
+        empty.hidden = true;
+        return;
       }
-      objectUrls.length = 0;
-    }
-
-    function article(title) {
-      const node = doc.createElement('article');
-      node.className = 'nas-web-item';
-      const heading = doc.createElement('h3');
-      heading.textContent = title || '';
-      node.appendChild(heading);
-      return node;
-    }
-
-    function addLine(node, text, className) {
-      const line = doc.createElement('p');
-      if (className) line.className = className;
-      line.textContent = text == null ? '' : String(text);
-      node.appendChild(line);
-      return line;
+      empty.hidden = false;
+      empty.textContent = message;
     }
 
     function describe(data) {
@@ -182,187 +145,401 @@
       ].join(' · ');
     }
 
-    function cardsFor(tab, data) {
-      const cards = [];
-      if (tab === 'notes') {
-        const notes = data.notes || {};
-        if (notes.home && String(notes.home).trim()) {
-          const node = article('首页速记');
-          addLine(node, notes.home);
-          cards.push({ node });
+    function revokeUrls() {
+      if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+        for (const url of objectUrls) {
+          try { URL.revokeObjectURL(url); } catch (error) { /* already revoked */ }
         }
-        for (const note of notes.archive || []) {
-          const node = article(note.title || '未命名');
-          if (note.content) addLine(node, note.content);
-          if (note.id && note.id === notes.activeId) addLine(node, '当前笔记', 'nas-web-meta');
-          cards.push({ node });
-        }
-        return cards;
       }
+      objectUrls.length = 0;
+    }
 
-      if (tab === 'clipboard') {
-        for (const item of data.clipboard || []) {
-          const node = article(CLIP_LABEL[item.type] || '文字');
-          if (item.text) addLine(node, item.text);
-          if (item.favorite) addLine(node, '已收藏', 'nas-web-meta');
-          let media = null;
-          if (item.hasImage && item.id) {
-            const img = doc.createElement('img');
-            img.alt = '剪贴板图片';
-            node.appendChild(img);
-            media = { node: img, entityId: `clip:${item.id}` };
+    function el(tag, className, text) {
+      const node = doc.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    }
+
+    function countFor(tab) {
+      if (!view) return 0;
+      const counts = view.counts || {};
+      if (tab === 'notes') return counts.notes || 0;
+      if (tab === 'clip') return counts.clipboard || 0;
+      if (tab === 'recordings') return counts.recordings || 0;
+      if (tab === 'links') return counts.links || 0;
+      if (tab === 'todo') return counts.todos || 0;
+      if (tab === 'credentials') return (counts.secrets || 0) + ((view.ai && view.ai.configured) ? 1 : 0);
+      return 0;
+    }
+
+    function noteItems() {
+      const notes = (view && view.notes) || {};
+      const items = [];
+      if (notes.home && String(notes.home).trim()) {
+        items.push({ id: 'home', title: '首页速记', content: notes.home });
+      }
+      for (const note of notes.archive || []) {
+        items.push({
+          id: note.id || '',
+          title: note.title || '未命名',
+          content: note.content || '',
+          active: note.id && note.id === notes.activeId,
+        });
+      }
+      const query = noteQuery.trim().toLowerCase();
+      if (!query) return items;
+      return items.filter((item) => `${item.title}\n${item.content}`.toLowerCase().includes(query));
+    }
+
+    function renderNotes() {
+      const list = byId('notes-list');
+      const detail = byId('notes-detail');
+      const count = byId('notes-count');
+      const items = noteItems();
+      if (count) count.textContent = `${(view && view.counts && view.counts.notes) || items.length} 篇`;
+      if (!list || !doc) return;
+      clearNode(list);
+      if (!items.length) {
+        list.appendChild(el('div', 'notes-list-empty', EMPTY.notes));
+      }
+      if (!selectedNote || !items.some((item) => item.id === selectedNote)) {
+        selectedNote = items[0] ? items[0].id : '';
+      }
+      for (const item of items) {
+        const button = el('button', item.id === selectedNote ? 'notes-list-item active' : 'notes-list-item');
+        button.type = 'button';
+        button.appendChild(el('strong', '', item.title));
+        if (item.content) button.appendChild(el('span', '', item.content.replace(/\s+/g, ' ').slice(0, 80)));
+        if (item.active) button.appendChild(el('span', '', '当前笔记'));
+        button.addEventListener('click', () => {
+          selectedNote = item.id;
+          renderNotes();
+        });
+        list.appendChild(button);
+      }
+      if (!detail) return;
+      clearNode(detail);
+      const current = items.find((item) => item.id === selectedNote);
+      if (!current) {
+        const empty = el('div', 'notes-detail-empty');
+        empty.appendChild(el('strong', '', '还没有同步的笔记'));
+        empty.appendChild(el('p', '', '桌面保存并同步后，会出现在这里。'));
+        detail.appendChild(empty);
+        return;
+      }
+      const head = el('div', 'notes-detail-head');
+      head.appendChild(el('span', 'tile-label', '笔记'));
+      head.appendChild(el('strong', '', current.title));
+      detail.appendChild(head);
+      detail.appendChild(el('p', 'notes-body', current.content || ''));
+    }
+
+    function filteredClips() {
+      const items = (view && view.clipboard) || [];
+      if (clipFilter === 'faved') return items.filter((item) => item.favorite);
+      if (clipFilter === 'image') return items.filter((item) => item.type === 'image' || item.hasImage);
+      if (clipFilter === 'text') return items.filter((item) => item.type !== 'image');
+      return items;
+    }
+
+    function renderClips() {
+      const list = byId('clip-list');
+      if (!list || !doc) return;
+      clearNode(list);
+      const items = filteredClips();
+      if (!items.length) {
+        list.appendChild(el('div', 'clip-empty', EMPTY.clip));
+        return;
+      }
+      for (const item of items) {
+        const type = item.type === 'url' || item.type === 'image' ? item.type : 'text';
+        const card = el('article', `clip-item clip-item-${type} clip-type-${type}`);
+        if (item.hasImage && item.id) {
+          const wrap = el('div', 'clip-thumb-wrap');
+          const img = el('img', 'clip-thumb');
+          img.alt = '剪贴板图片';
+          wrap.appendChild(img);
+          card.appendChild(wrap);
+          attachMedia(img, `clip:${item.id}`);
+        }
+        if (item.text) card.appendChild(el('p', 'clip-text', item.text));
+        const meta = el('div', 'clip-meta');
+        meta.appendChild(el('span', 'clip-time', item.favorite ? '已收藏' : (type === 'url' ? '链接' : type === 'image' ? '图片' : '文字')));
+        card.appendChild(meta);
+        list.appendChild(card);
+      }
+    }
+
+    function renderRecordings() {
+      const list = byId('recording-list');
+      const detail = byId('recording-detail');
+      const count = byId('recording-count');
+      const items = (view && view.recordings) || [];
+      if (count) count.textContent = `${items.length} 条`;
+      if (!list || !doc) return;
+      if (!selectedRecording || !items.some((item) => item.id === selectedRecording)) {
+        selectedRecording = items[0] ? items[0].id : '';
+      }
+      clearNode(list);
+      if (!items.length) list.appendChild(el('div', 'recording-list-empty', EMPTY.recordings));
+      for (const item of items) {
+        const button = el('button', item.id === selectedRecording ? 'recording-item active' : 'recording-item');
+        button.type = 'button';
+        button.appendChild(el('strong', '', item.title || '录音'));
+        const bits = [];
+        if (item.durationMs) bits.push(formatDuration(item.durationMs));
+        if (item.category) bits.push(item.category);
+        if (item.transcript) bits.push(item.transcript.replace(/\s+/g, ' ').slice(0, 42));
+        if (bits.length) button.appendChild(el('span', '', bits.join(' · ')));
+        button.addEventListener('click', () => {
+          selectedRecording = item.id;
+          renderRecordings();
+        });
+        list.appendChild(button);
+      }
+      if (!detail) return;
+      clearNode(detail);
+      const current = items.find((item) => item.id === selectedRecording);
+      if (!current) {
+        detail.appendChild(el('div', 'recording-detail-empty', '同步过来的录音和转写会显示在这里。'));
+        return;
+      }
+      const head = el('div', 'recording-detail-head');
+      head.appendChild(el('strong', '', current.title || '录音'));
+      const meta = [];
+      if (current.durationMs) meta.push(formatDuration(current.durationMs));
+      if (current.category) meta.push(current.category);
+      if (current.audioOmitted) meta.push('音频过大，未随同步上传');
+      if (meta.length) head.appendChild(el('span', '', meta.join(' · ')));
+      detail.appendChild(head);
+      if (current.hasAudio && !current.audioOmitted && current.id) {
+        const holder = el('div', 'recording-audio');
+        const audio = el('audio');
+        audio.controls = true;
+        audio.preload = 'none';
+        holder.appendChild(audio);
+        detail.appendChild(holder);
+        attachMedia(audio, `recording:${current.id}`);
+      }
+      if (current.transcript) detail.appendChild(el('p', 'recording-transcript', current.transcript));
+    }
+
+    function renderLinks() {
+      const host = byId('link-groups');
+      if (!host || !doc) return;
+      clearNode(host);
+      const groups = (view && view.links) || [];
+      const visible = groups.filter((group) => group.links && group.links.length);
+      if (!visible.length) {
+        const empty = el('div', 'links-empty');
+        empty.appendChild(el('strong', '', '还没有链接'));
+        host.appendChild(empty);
+        return;
+      }
+      for (const group of visible) {
+        const card = el('section', 'link-group tile');
+        const head = el('div', 'link-group-head');
+        head.appendChild(el('strong', '', group.name || '未分组'));
+        head.appendChild(el('span', 'group-count', String(group.links.length)));
+        card.appendChild(head);
+        const body = el('div', 'link-group-body');
+        for (const link of group.links) {
+          const href = safeHttpUrl(link.url);
+          if (!href) {
+            body.appendChild(el('p', 'link-plain', link.title || link.url || ''));
+            continue;
           }
-          cards.push({ node, media });
+          const row = el('a', 'link-item');
+          row.setAttribute('href', href);
+          row.setAttribute('target', '_blank');
+          row.setAttribute('rel', 'noopener noreferrer');
+          const mark = el('span', 'link-favicon', (link.title || href).slice(0, 1).toUpperCase());
+          const copy = el('span', 'link-open');
+          copy.appendChild(el('strong', '', link.title || href));
+          copy.appendChild(el('span', '', href));
+          row.appendChild(mark);
+          row.appendChild(copy);
+          body.appendChild(row);
         }
-        return cards;
+        card.appendChild(body);
+        host.appendChild(card);
       }
+    }
 
-      if (tab === 'recordings') {
-        for (const item of data.recordings || []) {
-          const node = article(item.title || '录音');
-          if (item.transcript) addLine(node, item.transcript);
-          const bits = [];
-          if (item.durationMs) bits.push(formatDuration(item.durationMs));
-          if (item.category) bits.push(item.category);
-          if (bits.length) addLine(node, bits.join(' · '), 'nas-web-meta');
-          if (item.audioOmitted) addLine(node, '音频过大，未随同步上传', 'nas-web-meta');
-          let media = null;
-          if (item.hasAudio && !item.audioOmitted && item.id) {
-            const audio = doc.createElement('audio');
-            audio.controls = true;
-            audio.preload = 'none';
-            node.appendChild(audio);
-            media = { node: audio, entityId: `recording:${item.id}` };
-          }
-          cards.push({ node, media });
+    function renderTodos() {
+      if (!doc) return;
+      const categories = (view && view.categories) || {};
+      const todos = (view && view.todos) || [];
+      for (const priority of PRIORITIES) {
+        const name = byId(`todo-name-${priority}`);
+        const count = byId(`todo-count-${priority}`);
+        const list = byId(`todo-list-${priority}`);
+        if (name && categories[priority]) name.textContent = categories[priority];
+        const rows = todos.filter((item) => (item.categoryId || 'P3') === priority);
+        if (count) count.textContent = String(rows.length);
+        if (!list) continue;
+        clearNode(list);
+        if (!rows.length) {
+          list.appendChild(el('li', 'todo-empty', '还没有待办'));
+          continue;
         }
-        return cards;
-      }
-
-      if (tab === 'links') {
-        for (const group of data.links || []) {
-          const links = Array.isArray(group.links) ? group.links : [];
-          if (!links.length) continue;
-          const node = article(group.name || '未分组');
-          for (const link of links) {
-            const href = safeHttpUrl(link.url);
-            if (!href) {
-              addLine(node, link.title || link.url || '');
-              continue;
+        for (const item of rows) {
+          const row = el('li', item.done ? 'todo-item done' : 'todo-item');
+          row.setAttribute('data-priority', priority);
+          const box = el('span', 'checkbox');
+          box.setAttribute('aria-hidden', 'true');
+          const mark = doc.createElementNS ? doc.createElementNS('http://www.w3.org/2000/svg', 'svg') : el('span');
+          if (mark.setAttribute) {
+            mark.setAttribute('viewBox', '0 0 12 12');
+            const path = doc.createElementNS ? doc.createElementNS('http://www.w3.org/2000/svg', 'path') : null;
+            if (path) {
+              path.setAttribute('d', 'M2 6.2 4.6 9 10 3');
+              path.setAttribute('fill', 'none');
+              path.setAttribute('stroke', 'white');
+              path.setAttribute('stroke-width', '1.6');
+              mark.appendChild(path);
             }
-            const anchor = doc.createElement('a');
-            anchor.textContent = link.title || href;
-            anchor.setAttribute('href', href);
-            anchor.setAttribute('target', '_blank');
-            anchor.setAttribute('rel', 'noopener noreferrer');
-            node.appendChild(anchor);
           }
-          cards.push({ node });
+          box.appendChild(mark);
+          row.appendChild(box);
+          row.appendChild(el('span', 'todo-text', item.text || ''));
+          if (item.deadline) row.appendChild(el('span', 'todo-deadline', item.deadline));
+          list.appendChild(row);
         }
-        return cards;
       }
+    }
 
-      if (tab === 'todos') {
-        const categories = data.categories || {};
-        for (const item of data.todos || []) {
-          const node = doc.createElement('article');
-          node.className = 'nas-web-item';
-          node.setAttribute('data-done', item.done ? 'true' : 'false');
-          const row = doc.createElement('div');
-          row.className = 'nas-web-todo';
-          const dot = doc.createElement('span');
-          dot.className = 'nas-web-dot';
-          dot.setAttribute('data-priority', item.categoryId || 'P3');
-          const heading = doc.createElement('h3');
-          heading.textContent = item.text || '';
-          row.appendChild(dot);
-          row.appendChild(heading);
-          node.appendChild(row);
-          const bits = [categories[item.categoryId], item.deadline].filter(Boolean);
-          if (bits.length) addLine(node, bits.join(' · '), 'nas-web-meta');
-          if (item.done) addLine(node, '已完成', 'nas-web-meta');
-          cards.push({ node });
-        }
-        return cards;
+    function setConfigState(id, value) {
+      const node = byId(id);
+      if (!node) return;
+      const on = value === '已配置';
+      node.textContent = on ? '已配置' : '未配置';
+      node.setAttribute('data-state', on ? 'saved' : 'empty');
+    }
+
+    function renderCredentials() {
+      const list = byId('credential-list');
+      const count = byId('credential-count');
+      const meta = byId('nas-ai-meta');
+      const ai = (view && view.ai) || {};
+      const secrets = (view && view.secrets) || [];
+      setConfigState('nas-asr-status', ai.asr);
+      setConfigState('nas-llm-status', ai.llm);
+      if (meta) {
+        const bits = [];
+        if (ai.model) bits.push(`模型 ${ai.model}`);
+        if (ai.region) bits.push(`区域 ${ai.region}`);
+        if (ai.workspaceId) bits.push(`工作区 ${ai.workspaceId}`);
+        meta.textContent = bits.join(' · ');
       }
-
-      const ai = data.ai || {};
-      const secrets = Array.isArray(data.secrets) ? data.secrets : [];
-      const hasAi = Boolean(ai.configured || ai.model || ai.workspaceId || ai.asr === '已配置' || ai.llm === '已配置');
-      if (hasAi) {
-        const node = article('AI 配置');
-        addLine(node, `语音转写：${ai.asr === '已配置' ? '已配置' : '未配置'}`);
-        addLine(node, `对话模型：${ai.llm === '已配置' ? '已配置' : '未配置'}`);
-        if (ai.model) addLine(node, `模型 ${ai.model}`, 'nas-web-meta');
-        if (ai.region) addLine(node, `区域 ${ai.region}`, 'nas-web-meta');
-        if (ai.workspaceId) addLine(node, `工作区 ${ai.workspaceId}`, 'nas-web-meta');
-        cards.push({ node });
+      if (count) count.textContent = `${secrets.length} 项`;
+      if (!list || !doc) return;
+      clearNode(list);
+      if (!secrets.length) {
+        const empty = el('div', 'credential-empty');
+        empty.appendChild(el('strong', '', '还没有密钥'));
+        empty.appendChild(el('span', '', '已配置的账号会显示在这里，密码不会出现。'));
+        list.appendChild(empty);
+        return;
       }
       for (const secret of secrets) {
-        const node = article(secret.service || '已配置');
-        addLine(node, secret.account ? `账号 ${secret.account}` : '已配置');
-        cards.push({ node });
+        const card = el('article', 'credential-item');
+        card.appendChild(el('strong', '', secret.service || '已配置'));
+        card.appendChild(el('span', '', secret.account ? `账号 ${secret.account}` : '已配置'));
+        card.appendChild(el('code', '', '已加密'));
+        list.appendChild(card);
       }
-      return cards;
     }
 
     async function attachMedia(node, entityId) {
       if (!fetchImpl || !entityId) return;
-      const url = apiUrl(apiPrefix, `/api/v1/workspace/media/${encodeURIComponent(entityId)}`);
-      const res = await fetchImpl(url, { credentials: 'same-origin' });
-      if (!res || !res.ok || typeof res.blob !== 'function') return;
-      const blob = await res.blob();
-      if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return;
-      let local = '';
       try {
-        local = URL.createObjectURL(blob);
-      } catch (error) {
-        return;
-      }
-      objectUrls.push(local);
-      node.src = local;
-    }
-
-    async function renderActive() {
-      revokeUrls();
-      clearNode(els.list);
-      const cards = view ? cardsFor(activeTab, view) : [];
-      if (!cards.length) {
-        if (els.empty) {
-          els.empty.hidden = false;
-          if (!view) {
-            els.empty.textContent = '还没有同步内容。桌面完成配对并同步后，这里会显示笔记、剪贴板、录音、链接和待办。';
-          } else {
-            els.empty.textContent = EMPTY[activeTab] || EMPTY.notes;
-          }
+        const url = apiUrl(apiPrefix, `/api/v1/workspace/media/${encodeURIComponent(entityId)}`);
+        const res = await fetchImpl(url, { credentials: 'same-origin' });
+        if (!res || !res.ok || typeof res.blob !== 'function') return;
+        const blob = await res.blob();
+        if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return;
+        let local = '';
+        try {
+          local = URL.createObjectURL(blob);
+        } catch (error) {
+          return;
         }
-        return;
+        objectUrls.push(local);
+        node.src = local;
+      } catch (error) {
+        /* leave the card without media */
       }
-      if (els.empty) els.empty.hidden = true;
-      const pending = [];
-      for (const card of cards) {
-        if (els.list) els.list.appendChild(card.node);
-        if (card.media) pending.push(attachMedia(card.media.node, card.media.entityId));
-      }
-      await Promise.all(pending);
     }
 
-    function renderTabs() {
-      if (!els.tabs || !doc) return;
-      clearNode(els.tabs);
+    function renderAll() {
+      renderNotes();
+      renderClips();
+      renderRecordings();
+      renderLinks();
+      renderTodos();
+      renderCredentials();
+      setEmpty(activeTab, countFor(activeTab));
+    }
+
+    function selectTab(id) {
+      if (!TABS.some((tab) => tab.id === id)) return Promise.resolve();
+      activeTab = id;
       for (const tab of TABS) {
-        const button = doc.createElement('button');
-        button.type = 'button';
-        button.className = 'workspace-button compact';
-        button.textContent = tab.label;
-        button.setAttribute('role', 'tab');
-        button.setAttribute('data-tab', tab.id);
-        button.setAttribute('aria-selected', tab.id === activeTab ? 'true' : 'false');
+        const button = byId(`tab-button-${tab.id}`);
+        const panel = byId(`tab-${tab.id}`);
+        const on = tab.id === id;
+        if (button) {
+          button.className = on ? 'tab active' : 'tab';
+          button.setAttribute('aria-selected', on ? 'true' : 'false');
+          if (on) button.removeAttribute('tabindex');
+          else button.setAttribute('tabindex', '-1');
+        }
+        if (panel) {
+          panel.hidden = !on;
+          panel.className = on ? 'tab-panel active' : 'tab-panel';
+        }
+      }
+      setEmpty(id, countFor(id));
+      return Promise.resolve();
+    }
+
+    function showSection(name) {
+      return selectTab(name === 'devices' ? 'devices' : 'todo');
+    }
+
+    function bindFilters() {
+      for (const filter of ['all', 'text', 'image', 'faved']) {
+        const button = byId(`clip-filter-${filter}`);
+        if (!button) continue;
+        button.addEventListener('click', () => {
+          clipFilter = filter;
+          for (const name of ['all', 'text', 'image', 'faved']) {
+            const peer = byId(`clip-filter-${name}`);
+            if (peer) peer.className = name === filter ? 'clip-filter active' : 'clip-filter';
+          }
+          renderClips();
+        });
+      }
+      const search = byId('notes-search');
+      if (search) {
+        search.addEventListener('input', () => {
+          noteQuery = search.value || '';
+          renderNotes();
+        });
+      }
+    }
+
+    function bind() {
+      for (const tab of TABS) {
+        const button = byId(`tab-button-${tab.id}`);
+        if (!button) continue;
         button.addEventListener('click', () => {
           void selectTab(tab.id);
         });
-        els.tabs.appendChild(button);
       }
+      bindFilters();
     }
 
     async function fetchJson(path) {
@@ -387,18 +564,18 @@
       try {
         const { res, body } = await fetchJson('/api/v1/workspace');
         if (!res || !res.ok) {
-          const status = res && res.status;
           setStatus(
-            status === 401
+            res && res.status === 401
               ? '未检测到飞牛登录会话，请在飞牛已登录状态下打开本页'
               : '内容加载失败，请刷新后重试',
             'error',
           );
           return null;
         }
+        revokeUrls();
         view = body && typeof body === 'object' ? body : {};
         setStatus(describe(view), 'ok');
-        await renderActive();
+        renderAll();
         return view;
       } catch (error) {
         setStatus('内容加载失败，请刷新后重试', 'error');
@@ -406,26 +583,9 @@
       }
     }
 
-    async function selectTab(id) {
-      if (!TABS.some((tab) => tab.id === id)) return;
-      activeTab = id;
-      renderTabs();
-      await renderActive();
-    }
-
-    function bind() {
-      if (els.navContent) {
-        els.navContent.addEventListener('click', () => showSection('content'));
-      }
-      if (els.navDevices) {
-        els.navDevices.addEventListener('click', () => showSection('devices'));
-      }
-    }
-
     async function init() {
       bind();
-      renderTabs();
-      showSection(section);
+      await selectTab(activeTab);
       await load();
     }
 
