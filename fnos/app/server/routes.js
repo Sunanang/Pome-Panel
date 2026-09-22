@@ -4,6 +4,7 @@ const { schemaEnvelope, isSchemaCompatible, SCHEMA_VERSION } = require('./schema
 const { isP0EnabledCollection } = require('../../../packages/sync-protocol');
 
 const SYNC_BODY_MAX_BYTES = 12 * 1024 * 1024;
+const { buildWorkspaceView, buildWorkspaceMedia } = require('./workspace-view');
 const { resolveIdentity, normalizeHeaderMap } = require('./auth');
 const { validatePairOrigin, readCsrfHeader } = require('./csrf');
 
@@ -260,6 +261,42 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
         };
         sendJson(res, 200, response);
         return;
+      }
+
+      if (method === 'GET' && path === '/api/v1/workspace') {
+        const id = resolveIdentity(headers, { listenMode, store });
+        if (!id.ok) {
+          sendJson(res, id.status, { error: id.reason || 'unauthenticated' });
+          return;
+        }
+        const live = [...store.bucket(id.uid).live.values()];
+        sendJson(res, 200, buildWorkspaceView(live, store.peekAccountSyncKey(id.uid)));
+        return;
+      }
+
+      {
+        const mediaMatch = /^\/api\/v1\/workspace\/media\/(.+)$/.exec(path);
+        if (method === 'GET' && mediaMatch) {
+          const id = resolveIdentity(headers, { listenMode, store });
+          if (!id.ok) {
+            sendJson(res, id.status, { error: id.reason || 'unauthenticated' });
+            return;
+          }
+          const entityId = decodeURIComponent(mediaMatch[1]);
+          const live = [...store.bucket(id.uid).live.values()];
+          const media = buildWorkspaceMedia(live, entityId);
+          if (!media || !media.bytes || !media.bytes.length) {
+            sendJson(res, 404, { error: 'not_found' });
+            return;
+          }
+          res.writeHead(200, {
+            'Content-Type': media.mime,
+            'Content-Length': media.bytes.length,
+            'Cache-Control': 'private, no-store',
+          });
+          res.end(media.bytes);
+          return;
+        }
       }
 
       if (method === 'GET' && path === '/api/v1/devices') {

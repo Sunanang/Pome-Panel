@@ -67,7 +67,10 @@ body {
 }
 
 .nas-web-shell {
-  width: min(560px, 100%);
+  width: min(880px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
 }
 
 .tile.settings-card,
@@ -259,6 +262,102 @@ body {
   border: 1px solid var(--accent-orange);
   color: var(--accent-orange);
   font-size: var(--fs-micro);
+}
+
+#panel-content[hidden],
+#panel-devices[hidden] {
+  display: none !important;
+}
+
+.nas-web-nav,
+.nas-web-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.nas-web-nav button[aria-current="page"],
+.nas-web-tabs button[aria-selected="true"] {
+  border-color: var(--text-1);
+  background: var(--text-1);
+  color: var(--bg-base);
+}
+
+.nas-web-item {
+  margin-top: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-tile);
+  background: var(--bg-base);
+}
+
+.nas-web-item h3,
+.nas-web-item p {
+  margin: 0;
+}
+
+.nas-web-item h3 {
+  color: var(--text-1);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.nas-web-item p,
+.nas-web-meta {
+  margin-top: var(--s-2);
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.nas-web-meta {
+  color: var(--text-3);
+}
+
+.nas-web-item img,
+.nas-web-item audio {
+  display: block;
+  width: min(100%, 420px);
+  margin-top: var(--s-3);
+  border-radius: var(--r-input);
+  background: var(--surface-2);
+}
+
+.nas-web-item a {
+  color: var(--focus-ring);
+  text-decoration: none;
+}
+
+.nas-web-item a:hover {
+  text-decoration: underline;
+}
+
+.nas-web-todo {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+
+.nas-web-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent-blue);
+  flex: none;
+}
+
+.nas-web-dot[data-priority="P0"] { background: var(--p0); }
+.nas-web-dot[data-priority="P1"] { background: var(--accent-orange); }
+.nas-web-dot[data-priority="P2"] { background: var(--accent-green); }
+.nas-web-dot[data-priority="P3"] { background: var(--accent-blue); }
+
+.nas-web-item[data-done="true"] h3 {
+  color: var(--text-3);
+  text-decoration: line-through;
 }
 
 @media (prefers-reduced-motion: reduce) {

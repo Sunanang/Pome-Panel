@@ -447,6 +447,8 @@ test('FPK skeleton files exist (manifest / privilege / resource / cmds / ui / wi
     'cmd/status.sh',
     'app/ui/index.html',
     'app/ui/styles.css',
+    'app/ui/panel.js',
+    'app/server/workspace-view.js',
     'wizard/index.html',
     'app/server/index.js',
     'app/server/createApp.js',

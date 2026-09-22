@@ -211,6 +211,11 @@ function createMemoryStore(options = {}) {
     return b.accountSyncKey;
   }
 
+  function peekAccountSyncKey(uid) {
+    const existing = byUid.get(String(uid));
+    return existing && existing.accountSyncKey ? existing.accountSyncKey : null;
+  }
+
   /** Test helper: peek pairing row by plaintext code (never expose in HTTP). */
   function _peekPairingByCode(code) {
     return pairingCodes.get(hashSecret(String(code).trim())) || null;
@@ -401,6 +406,7 @@ function createMemoryStore(options = {}) {
     startPairing,
     claimPairing,
     getOrCreateAccountSyncKey,
+    peekAccountSyncKey,
     _peekPairingByCode,
     syncState,
     startMigration,

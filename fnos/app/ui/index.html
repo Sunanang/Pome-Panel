@@ -4,67 +4,111 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="gateway-prefix" content="/app/pome-panel" />
-  <title>Pome Panel Sync</title>
+  <title>Pome Panel</title>
   <!-- Absolute under gatewayPrefix: avoids broken ./assets when URL lacks trailing slash -->
   <link rel="stylesheet" href="/app/pome-panel/styles.css" />
 </head>
 <body>
-  <main class="settings-page nas-web-shell" data-control-root="fnos-web-pair">
-    <section class="tile settings-card nas-web-card" aria-labelledby="nas-web-brand">
+  <main class="settings-page nas-web-shell" data-control-root="fnos-web-panel">
+    <header class="tile settings-card nas-web-card nas-web-top">
       <div class="settings-card-heading">
         <div>
-          <strong id="nas-web-brand">Pome Panel Sync</strong>
-          <small>飞牛 NAS · 设备配对</small>
+          <strong id="nas-web-brand">Pome Panel</strong>
+          <small>飞牛 NAS · 工作区</small>
         </div>
         <span class="nas-web-status-pill" id="session-pill" data-state="unknown" role="status">检测会话…</span>
       </div>
       <p class="settings-nas-sync-hint nas-web-lead">
-        在已登录的飞牛网关会话下生成配对码，于桌面客户端「设置 → NAS 同步」完成绑定。配对码只显示一次，请勿截图分享。
+        这里显示已配对桌面同步过来的内容。配对和设备管理在「设备」里。
       </p>
-
-      <div class="settings-card-heading settings-nas-pair-heading">
-        <div>
-          <strong>生成配对码</strong>
-          <small>需已登录飞牛；码约 5 分钟有效</small>
-        </div>
-      </div>
-      <div class="settings-nas-sync-actions pair-actions" aria-label="配对操作">
-        <button
-          type="button"
-          class="workspace-button compact primary"
-          id="pair-start-btn"
-          data-control-id="fnos.pair.start"
-        >生成配对码</button>
+      <nav class="nas-web-nav" aria-label="面板分区">
         <button
           type="button"
           class="workspace-button compact"
-          id="pair-refresh-btn"
-          data-control-id="fnos.pair.refresh"
-        >刷新</button>
-      </div>
-      <p class="settings-nas-sync-hint" id="pair-status" role="status" data-control-id="fnos.pair.status"></p>
-      <div class="nas-web-code-block" id="pair-code-wrap" hidden>
-        <p class="nas-web-code" id="pair-code" aria-live="polite" data-control-id="fnos.pair.code"></p>
-        <p class="settings-nas-sync-hint" id="pair-expiry" data-control-id="fnos.pair.expiry"></p>
-      </div>
+          id="nav-content"
+          data-control-id="fnos.panel.content"
+          aria-current="page"
+        >内容</button>
+        <button
+          type="button"
+          class="workspace-button compact"
+          id="nav-devices"
+          data-control-id="fnos.panel.devices"
+        >设备</button>
+      </nav>
+    </header>
 
-      <div class="settings-card-heading">
-        <div>
-          <strong>已配对设备</strong>
-          <small>桌面绑定成功后显示在此</small>
+    <section id="panel-content" data-control-id="fnos.panel.content-view" aria-label="工作区内容">
+      <div class="nas-web-tabs" id="workspace-tabs" role="tablist" aria-label="内容分类"></div>
+      <section class="tile settings-card nas-web-card">
+        <p class="settings-nas-sync-hint" id="workspace-status" role="status" data-control-id="fnos.workspace.status"></p>
+        <div id="workspace-list" data-control-id="fnos.workspace.list"></div>
+        <p class="settings-nas-sync-hint" id="workspace-empty" data-control-id="fnos.workspace.empty">
+          还没有同步内容。桌面完成配对并同步后，这里会显示笔记、剪贴板、录音、链接和待办。
+        </p>
+        <p class="settings-nas-sync-hint">
+          这些内容保存在飞牛应用的内存里。应用重启后，需要桌面再同步一次才会重新出现。
+        </p>
+      </section>
+    </section>
+
+    <section id="panel-devices" hidden aria-label="设备与配对">
+      <section class="tile settings-card nas-web-card" aria-labelledby="nas-web-devices-title">
+        <div class="settings-card-heading">
+          <div>
+            <strong id="nas-web-devices-title">设备</strong>
+            <small>生成配对码，并管理已配对的桌面</small>
+          </div>
         </div>
-      </div>
-      <ul
-        class="settings-nas-device-list"
-        id="device-list"
-        aria-label="已配对设备"
-        data-control-id="fnos.devices.list"
-      ></ul>
-      <p class="settings-nas-sync-hint" id="device-empty" data-control-id="fnos.devices.empty">
-        尚无设备。桌面配对成功后显示；不安全绑定会标注。
-      </p>
+        <p class="settings-nas-sync-hint nas-web-lead">
+          在已登录的飞牛网关会话下生成配对码，于桌面客户端「设置 → NAS 同步」完成绑定。配对码只显示一次，请勿截图分享。
+        </p>
+
+        <div class="settings-card-heading settings-nas-pair-heading">
+          <div>
+            <strong>生成配对码</strong>
+            <small>需已登录飞牛；码约 5 分钟有效</small>
+          </div>
+        </div>
+        <div class="settings-nas-sync-actions pair-actions" aria-label="配对操作">
+          <button
+            type="button"
+            class="workspace-button compact primary"
+            id="pair-start-btn"
+            data-control-id="fnos.pair.start"
+          >生成配对码</button>
+          <button
+            type="button"
+            class="workspace-button compact"
+            id="pair-refresh-btn"
+            data-control-id="fnos.pair.refresh"
+          >刷新</button>
+        </div>
+        <p class="settings-nas-sync-hint" id="pair-status" role="status" data-control-id="fnos.pair.status"></p>
+        <div class="nas-web-code-block" id="pair-code-wrap" hidden>
+          <p class="nas-web-code" id="pair-code" aria-live="polite" data-control-id="fnos.pair.code"></p>
+          <p class="settings-nas-sync-hint" id="pair-expiry" data-control-id="fnos.pair.expiry"></p>
+        </div>
+
+        <div class="settings-card-heading">
+          <div>
+            <strong>已配对设备</strong>
+            <small>桌面绑定成功后显示在此</small>
+          </div>
+        </div>
+        <ul
+          class="settings-nas-device-list"
+          id="device-list"
+          aria-label="已配对设备"
+          data-control-id="fnos.devices.list"
+        ></ul>
+        <p class="settings-nas-sync-hint" id="device-empty" data-control-id="fnos.devices.empty">
+          尚无设备。桌面配对成功后显示；不安全绑定会标注。
+        </p>
+      </section>
     </section>
   </main>
   <script src="/app/pome-panel/pair.js"></script>
+  <script src="/app/pome-panel/panel.js"></script>
 </body>
 </html>
