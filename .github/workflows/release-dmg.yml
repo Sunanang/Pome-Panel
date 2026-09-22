@@ -3,7 +3,8 @@ name: Release macOS and Windows
 on:
   workflow_dispatch:
   push:
-    branches: [feat/windows-support]
+    # cursor/build-arm64-dmg-8edc: temporary CI trigger for arm64 DMG artifact only (no GitHub Release)
+    branches: [feat/windows-support, cursor/build-arm64-dmg-8edc]
     tags: ['v*.*.*']
 
 permissions:
