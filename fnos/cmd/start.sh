@@ -3,13 +3,32 @@
 # Missing device port must not fail enable. The server reuses a saved port or asks the OS.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RUNTIME_DIR="${FNOS_RUNTIME_DIR:-$ROOT/runtime}"
-DATA_DIR="${FNOS_DATA_DIR:-$ROOT/data}"
-mkdir -p "$RUNTIME_DIR" "$DATA_DIR"
-if [[ -n "${TRIM_APPDEST:-}" ]]; then
-  SOCKET_PATH="${FNOS_SOCKET_PATH:-$TRIM_APPDEST/app.sock}"
+# Install tree /var/apps/<app> is not writable for run-as:package.
+# Runtime: FNOS_RUNTIME_DIR, else $TRIM_PKGVAR/runtime, else a local dir for tests.
+# Data: FNOS_DATA_DIR, else TRIM_PKGVAR, else TRIM_PKGHOME, else a local dir for tests.
+if [[ -n "${FNOS_RUNTIME_DIR:-}" ]]; then
+  RUNTIME_DIR="$FNOS_RUNTIME_DIR"
+elif [[ -n "${TRIM_PKGVAR:-}" ]]; then
+  RUNTIME_DIR="$TRIM_PKGVAR/runtime"
 else
-  SOCKET_PATH="${FNOS_SOCKET_PATH:-$RUNTIME_DIR/pomepanel-sync.sock}"
+  RUNTIME_DIR="$ROOT/runtime"
+fi
+if [[ -n "${FNOS_DATA_DIR:-}" ]]; then
+  DATA_DIR="$FNOS_DATA_DIR"
+elif [[ -n "${TRIM_PKGVAR:-}" ]]; then
+  DATA_DIR="$TRIM_PKGVAR"
+elif [[ -n "${TRIM_PKGHOME:-}" ]]; then
+  DATA_DIR="$TRIM_PKGHOME"
+else
+  DATA_DIR="$ROOT/data"
+fi
+mkdir -p "$RUNTIME_DIR" "$DATA_DIR"
+if [[ -n "${FNOS_SOCKET_PATH:-}" ]]; then
+  SOCKET_PATH="$FNOS_SOCKET_PATH"
+elif [[ -n "${TRIM_APPDEST:-}" ]]; then
+  SOCKET_PATH="$TRIM_APPDEST/app.sock"
+else
+  SOCKET_PATH="$RUNTIME_DIR/pomepanel-sync.sock"
 fi
 PID_FILE="${FNOS_PID_FILE:-$RUNTIME_DIR/server.pid}"
 # Stable data-dir file so an FPK upgrade that resets runtime/ keeps the FRP local port.

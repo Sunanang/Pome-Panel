@@ -204,7 +204,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.5');
+  assert.equal(manifestJson.version, '0.9.6');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'com.pomepanel.sync');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
@@ -215,7 +215,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.5$/m);
+  assert.match(official, /^version=0\.9\.6$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=com\.pomepanel\.sync\.main$/m);
@@ -224,7 +224,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^checkport=false$/m);
   assert.doesNotMatch(official, /service_port\s*=\s*5001|Sunanang|Pome Panel Sync/);
   const changelog = official.split('\n').find((line) => line.startsWith('changelog='));
-  assert.ok(changelog && changelog.includes('简单启动'));
+  assert.ok(changelog && changelog.includes('TRIM_PKGVAR'));
   assert.equal(changelog.includes('#'), false);
 
   const portPattern = /^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/;
@@ -645,6 +645,57 @@ exit 0
   const probe = fs.readFileSync(probePath, 'utf8');
   assert.match(probe, /^PORT=45875$/m);
   assert.match(probe, new RegExp(`^SOCK=${appdest}/app\\.sock$`, 'm'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('start.sh writes pid under TRIM_PKGVAR instead of the install tree', async (t) => {
+  if (process.platform === 'win32') {
+    t.skip('FPK start.sh is a bash script');
+    return;
+  }
+  const root = path.join(__dirname, '..');
+  for (const rel of ['fnos/cmd/start.sh', 'fnos/cmd/stop.sh', 'fnos/cmd/status.sh']) {
+    const text = fs.readFileSync(path.join(root, rel), 'utf8');
+    assert.doesNotMatch(text, /FNOS_RUNTIME_DIR:-\$ROOT\/runtime/);
+    assert.match(text, /TRIM_PKGVAR/);
+  }
+  const dir = tmpDir('fnos-trim-var-');
+  const pkgvar = path.join(dir, 'var');
+  const appdest = path.join(dir, 'target');
+  const installRuntime = path.join(root, 'fnos', 'runtime');
+  fs.mkdirSync(pkgvar, { recursive: true });
+  const fake = path.join(dir, 'fake-node.sh');
+  fs.writeFileSync(fake, `#!/bin/sh
+printf 'FILE=%s\\nSOCK=%s\\n' "\${FNOS_DEVICE_PORT_FILE-unset}" "\${FNOS_SOCKET_PATH-unset}" > "\${FNOS_DATA_DIR}/probe.txt"
+exit 0
+`, { mode: 0o755 });
+  const stdout = await new Promise((resolve, reject) => {
+    execFile('bash', [path.join(root, 'fnos/cmd/start.sh')], {
+      env: {
+        ...process.env,
+        FNOS_RUNTIME_DIR: '',
+        FNOS_DATA_DIR: '',
+        FNOS_SOCKET_PATH: '',
+        FNOS_DEVICE_PORT: '',
+        TRIM_PKGVAR: pkgvar,
+        TRIM_APPDEST: appdest,
+        NODE_BIN: fake,
+      },
+    }, (err, out, stderr) => (err ? reject(new Error(`${stderr || out || err.message}`)) : resolve(out)));
+  });
+  const pidFile = path.join(pkgvar, 'runtime', 'server.pid');
+  const probePath = path.join(pkgvar, 'probe.txt');
+  const started = Date.now();
+  while (!fs.existsSync(probePath) || !fs.existsSync(pidFile)) {
+    if (Date.now() - started > 3000) throw new Error(`trim var probe missing\n${stdout}`);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+  assert.match(stdout, new RegExp(`socket=${appdest}/app\\.sock`));
+  const probe = fs.readFileSync(probePath, 'utf8');
+  assert.match(probe, new RegExp(`^FILE=${pkgvar}/device-port$`, 'm'));
+  assert.match(probe, new RegExp(`^SOCK=${appdest}/app\\.sock$`, 'm'));
+  assert.equal(fs.existsSync(path.join(installRuntime, 'server.pid')), false);
+  assert.equal(fs.existsSync(path.join(pkgvar, 'runtime', 'server.log')), true);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

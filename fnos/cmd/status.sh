@@ -1,8 +1,23 @@
 #!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RUNTIME_DIR="${FNOS_RUNTIME_DIR:-$ROOT/runtime}"
-DATA_DIR="${FNOS_DATA_DIR:-$ROOT/data}"
+# Same path order as start.sh. Do not create directories under the install tree.
+if [[ -n "${FNOS_RUNTIME_DIR:-}" ]]; then
+  RUNTIME_DIR="$FNOS_RUNTIME_DIR"
+elif [[ -n "${TRIM_PKGVAR:-}" ]]; then
+  RUNTIME_DIR="$TRIM_PKGVAR/runtime"
+else
+  RUNTIME_DIR="$ROOT/runtime"
+fi
+if [[ -n "${FNOS_DATA_DIR:-}" ]]; then
+  DATA_DIR="$FNOS_DATA_DIR"
+elif [[ -n "${TRIM_PKGVAR:-}" ]]; then
+  DATA_DIR="$TRIM_PKGVAR"
+elif [[ -n "${TRIM_PKGHOME:-}" ]]; then
+  DATA_DIR="$TRIM_PKGHOME"
+else
+  DATA_DIR="$ROOT/data"
+fi
 PID_FILE="${FNOS_PID_FILE:-$RUNTIME_DIR/server.pid}"
 if [[ -n "${FNOS_DEVICE_PORT_FILE:-}" ]]; then
   DEVICE_PORT_FILE="$FNOS_DEVICE_PORT_FILE"
@@ -12,7 +27,13 @@ else
   DEVICE_PORT_FILE="$DATA_DIR/device-port"
 fi
 LEGACY_DEVICE_PORT_FILE="$RUNTIME_DIR/device-port.txt"
-SOCKET_PATH="${FNOS_SOCKET_PATH:-$RUNTIME_DIR/pomepanel-sync.sock}"
+if [[ -n "${FNOS_SOCKET_PATH:-}" ]]; then
+  SOCKET_PATH="$FNOS_SOCKET_PATH"
+elif [[ -n "${TRIM_APPDEST:-}" ]]; then
+  SOCKET_PATH="$TRIM_APPDEST/app.sock"
+else
+  SOCKET_PATH="$RUNTIME_DIR/pomepanel-sync.sock"
+fi
 
 if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
   PORT="—"

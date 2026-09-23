@@ -1,9 +1,22 @@
 #!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RUNTIME_DIR="${FNOS_RUNTIME_DIR:-$ROOT/runtime}"
+# Same path order as start.sh. Do not create directories under the install tree.
+if [[ -n "${FNOS_RUNTIME_DIR:-}" ]]; then
+  RUNTIME_DIR="$FNOS_RUNTIME_DIR"
+elif [[ -n "${TRIM_PKGVAR:-}" ]]; then
+  RUNTIME_DIR="$TRIM_PKGVAR/runtime"
+else
+  RUNTIME_DIR="$ROOT/runtime"
+fi
 PID_FILE="${FNOS_PID_FILE:-$RUNTIME_DIR/server.pid}"
-SOCKET_PATH="${FNOS_SOCKET_PATH:-$RUNTIME_DIR/pomepanel-sync.sock}"
+if [[ -n "${FNOS_SOCKET_PATH:-}" ]]; then
+  SOCKET_PATH="$FNOS_SOCKET_PATH"
+elif [[ -n "${TRIM_APPDEST:-}" ]]; then
+  SOCKET_PATH="$TRIM_APPDEST/app.sock"
+else
+  SOCKET_PATH="$RUNTIME_DIR/pomepanel-sync.sock"
+fi
 
 if [[ ! -f "$PID_FILE" ]]; then
   echo "not running"
