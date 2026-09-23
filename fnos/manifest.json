@@ -1,8 +1,8 @@
 {
   "id": "com.pomepanel.sync",
   "name": "Pome Panel",
-  "version": "0.9.9",
-  "description": "在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/com.pomepanel.sync。没配端口时网关仍会启动；配好后固定监听 127.0.0.1。",
+  "version": "0.9.10",
+  "description": "在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/pomepanel。没配端口时网关仍会启动；配好后固定监听 127.0.0.1。",
   "author": "Lando",
   "maintainer": "Lando",
   "distributor": "Lando",
@@ -18,7 +18,7 @@
     "uninstallInit": "cmd/uninstall_init",
     "uninstallCallback": "cmd/uninstall_callback"
   },
-  "appPath": "/app/com.pomepanel.sync",
+  "appPath": "/app/pomepanel",
   "socket": {
     "type": "unix",
     "pathHint": "app.sock"

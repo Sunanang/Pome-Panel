@@ -19,7 +19,7 @@
     }
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function factory() {
-  const DEFAULT_GATEWAY_PREFIX = '/app/com.pomepanel.sync';
+  const DEFAULT_GATEWAY_PREFIX = '/app/pomepanel';
   const DEFAULT_FETCH_TIMEOUT_MS = 12_000;
 
   const ERROR_COPY = Object.freeze({

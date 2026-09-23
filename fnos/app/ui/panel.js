@@ -22,7 +22,7 @@
     }
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function factory() {
-  const DEFAULT_GATEWAY_PREFIX = '/app/com.pomepanel.sync';
+  const DEFAULT_GATEWAY_PREFIX = '/app/pomepanel';
 
   const TABS = Object.freeze([
     { id: 'devices', label: '设备' },

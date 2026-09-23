@@ -2,15 +2,16 @@
 
 /**
  * Gateway prefix strip + static UI serving for FPK production entry.
- * Keeps /api/v1/* routes prefix-agnostic while iframe loads under /app/com.pomepanel.sync.
- * Also strips the previous /app/pome-panel prefix for one upgrade.
+ * Public path is /app/pomepanel. SAC treats a dotted last segment such as
+ * com.pomepanel.sync as a static file and returns Not Found before the socket.
+ * Older prefixes are still stripped so a previous registration can reach the app.
  */
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 
-const DEFAULT_GATEWAY_PREFIX = '/app/com.pomepanel.sync';
-const LEGACY_GATEWAY_PREFIX = '/app/pome-panel';
+const DEFAULT_GATEWAY_PREFIX = '/app/pomepanel';
+const LEGACY_GATEWAY_PREFIXES = ['/app/com.pomepanel.sync', '/app/pome-panel'];
 
 function normalizePrefix(prefix) {
   if (!prefix) return '';
@@ -23,7 +24,7 @@ function stripGatewayPrefix(urlPath, prefix) {
   const prefixes = [];
   const primary = normalizePrefix(prefix);
   if (primary) prefixes.push(primary);
-  for (const extra of [DEFAULT_GATEWAY_PREFIX, LEGACY_GATEWAY_PREFIX]) {
+  for (const extra of [DEFAULT_GATEWAY_PREFIX, ...LEGACY_GATEWAY_PREFIXES]) {
     if (!prefixes.includes(extra)) prefixes.push(extra);
   }
   for (const p of prefixes) {
@@ -143,7 +144,7 @@ function wrapWithGatewayPrefix(app, { gatewayPrefix, staticRoot }) {
 
 module.exports = {
   DEFAULT_GATEWAY_PREFIX,
-  LEGACY_GATEWAY_PREFIX,
+  LEGACY_GATEWAY_PREFIXES,
   stripGatewayPrefix,
   contentTypeFor,
   tryServeStatic,
