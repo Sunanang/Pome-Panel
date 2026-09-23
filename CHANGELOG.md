@@ -6,7 +6,7 @@
 
 ### 桌面
 
-- 产品版本改为 **0.9.3**。关于窗口显示 Pome Panel、开发者 Lando，以及当前版本；「查看 GitHub」打开 https://github.com/Sunanang/Pome-Panel。
+- 产品版本改为 **0.9.4**。关于窗口显示 Pome Panel、开发者 Lando，以及当前版本；「查看 GitHub」打开 https://github.com/Sunanang/Pome-Panel。
 - 菜单栏和 Windows 托盘只保留五项：显示功能、设置快捷键、开机自动启动、关于、退出。显示功能打开主界面。
 - 配对成功后自动打开一次「同步选项」。状态卡片上的「同步」可以再次打开。启动应用和之后的同步不会重复弹出。
 - 设置里的 NAS 同步收成「同步地址 → 配对 → 一行状态」（未配对 / 已连接 / 出错）。未配对不显示通道、上次同步和重试；配对成功后才是已连接，重试只表示重试同步。
@@ -24,10 +24,10 @@
 
 - 飞牛网页改成和桌面同一套面板：顶栏胶囊 Tab、四宫格待办、笔记库、剪贴卡片、链接分组、录音库和密钥卡片。没有「首页」。Tab 顺序与桌面对齐，第一项「设备」占桌面「首页」的位置，里面是配对码和已配对设备。密钥和 AI 只显示「已配置」或打码账号。面板没有外圈渐变描边，也不再显示底部计数、空状态说明和内存提示；内容区随窗口高度撑满，列表超出后再滚动。
 - 「笔记」后面增加「常用命令」，列出桌面同步过来的常用指令。没有指令时这一页保持空白。
-- 飞牛包 **0.9.3**。应用中心「发布者」读取 manifest 的 `distributor`，现为 Lando；`maintainer` 仍是 Lando。应用标识仍是 `com.pomepanel.sync`，入口仍是 `/app/pome-panel`。`desktop_uidir=ui`，对应包内 `app/ui`，入口名 `com.pomepanel.sync.main`。`install_dep_apps=nodejs_v22`，让包用户能读取应用中心的 Node.js v22。启动时 PATH 优先包含 `/var/apps/nodejs_v24/target/bin` 和 `/var/apps/nodejs_v22/target/bin`，并直接探测这两个 `node`。
+- 飞牛包 **0.9.4**。应用中心「发布者」读取 manifest 的 `distributor`，现为 Lando；`maintainer` 仍是 Lando。应用标识仍是 `com.pomepanel.sync`，入口仍是 `/app/pome-panel`。`desktop_uidir=ui`，对应包内 `app/ui`，入口名 `com.pomepanel.sync.main`。`install_dep_apps=nodejs_v22`，让包用户能读取应用中心的 Node.js v22。启动时 PATH 优先包含 `/var/apps/nodejs_v24/target/bin` 和 `/var/apps/nodejs_v22/target/bin`，并直接探测这两个 `node`。生命周期脚本改为系统自带的 bash。`config/resource` 使用官方 data-share 声明共享目录 `pome-panel`。
 - 没配设备同步端口时，Unix 网关仍会启动，应用中心可以启用应用并打开「应用设置」。这时不监听设备 TCP，也不使用随机端口，更不会写死 5001。在应用设置填写 1 到 65535 并重启后，才绑定该固定端口。找不到 Node.js 时仍把中文原因写入 `TRIM_TEMP_LOGFILE` 并退出。
 - 安装、升级和应用设置向导的端口校验为 1 到 65535。安装、配置和升级回调会把 `wizard_port`（以及常见大写别名）写到 `TRIM_PKGETC/device-port` 和数据目录。
-- 从 0.9.0 / 0.9.1 / 0.9.2 升级到 0.9.3 后，即使之前没写成端口，应用也能启用，再到应用设置填写端口并重启。此前 1.1.x 升到 0.9.x 仍可能被飞牛当成降级而拒绝覆盖安装。
+- 从 0.9.0 到 0.9.3 升级到 0.9.4 后，即使之前没写成端口，应用也能启用，再到应用设置填写端口并重启。此前 1.1.x 升到 0.9.x 仍可能被飞牛当成降级而拒绝覆盖安装。
 - 安装向导和应用设置要求用户填写设备同步端口（`wizard_port`）。配好之后启动只绑定这个端口；端口被占用就启动失败。没配端口时网关先起来，设备页提示去应用设置填写。设备页在端口可用时显示该固定端口，FRP 本地目标是 `127.0.0.1:此端口`。
 - 打开应用时的「已登录」来自飞牛当前会话，不是本应用的账号。有会话就显示飞牛用户名并允许配对；没有会话显示「未登录」并停用配对。不另做登录按钮。
 - FPK `pome-panel-1.1.3`：修复 Web UI「生成配对码 / 刷新」在网关前缀下失效；对齐桌面 Pome Panel 视觉 token 与控件模式。

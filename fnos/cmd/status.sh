@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUNTIME_DIR="${FNOS_RUNTIME_DIR:-$ROOT/runtime}"

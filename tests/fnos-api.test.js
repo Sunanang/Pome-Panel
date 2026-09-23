@@ -461,6 +461,7 @@ test('FPK skeleton files exist (manifest / privilege / resource / cmds / ui / wi
   for (const rel of [
     'manifest.json',
     'config/privilege.json',
+    'config/resource',
     'config/resource.json',
     'cmd/start.sh',
     'cmd/stop.sh',
@@ -482,6 +483,21 @@ test('FPK skeleton files exist (manifest / privilege / resource / cmds / ui / wi
   const start = fs.readFileSync(path.join(root, 'cmd/start.sh'), 'utf8');
   // Forbid assigning a fixed listen port; comments may mention 5001 as banned example.
   assert.equal(/\bFNOS_DEVICE_PORT\s*=\s*5001\b|\blisten\(\s*5001\b/.test(start), false);
+  const cmdDir = path.join(root, 'cmd');
+  for (const name of fs.readdirSync(cmdDir)) {
+    const full = path.join(cmdDir, name);
+    if (!fs.statSync(full).isFile()) continue;
+    const text = fs.readFileSync(full, 'utf8');
+    assert.equal(text.startsWith('#!/bin/bash\n'), true, name);
+    assert.equal(text.includes('/usr/bin/env bash'), false, name);
+  }
+  for (const rel of ['config/resource', 'config/resource.json']) {
+    const resource = JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8'));
+    assert.deepEqual(Object.keys(resource), ['data-share'], rel);
+    assert.equal(resource['data-share'].shares[0].name, 'pome-panel');
+    assert.equal(resource.cpu, undefined);
+    assert.equal(resource.memory, undefined);
+  }
   const createAppSrc = fs.readFileSync(path.join(root, 'app/server/createApp.js'), 'utf8');
   assert.match(createAppSrc, /NEVER hardcode 5001/);
   assert.equal(/\blisten\(\s*5001\b/.test(createAppSrc), false);

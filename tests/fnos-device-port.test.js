@@ -203,7 +203,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.3');
+  assert.equal(manifestJson.version, '0.9.4');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'com.pomepanel.sync');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
@@ -214,7 +214,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.3$/m);
+  assert.match(official, /^version=0\.9\.4$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=com\.pomepanel\.sync\.main$/m);
@@ -222,6 +222,9 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^appname=com\.pomepanel\.sync$/m);
   assert.match(official, /^checkport=false$/m);
   assert.doesNotMatch(official, /service_port\s*=\s*5001|Sunanang|Pome Panel Sync/);
+  const changelog = official.split('\n').find((line) => line.startsWith('changelog='));
+  assert.ok(changelog && changelog.includes('data-share'));
+  assert.equal(changelog.includes('#'), false);
 
   const portPattern = /^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/;
   for (const sample of ['1', '5', '80', '45875', '65535']) assert.match(sample, portPattern);

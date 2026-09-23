@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Persist the install/config/upgrade wizard port.
 # The value is whatever the user typed. This script does not invent a port.
 set -euo pipefail

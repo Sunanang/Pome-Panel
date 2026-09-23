@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # FPK start — always launch the Unix gateway. Device TCP waits for a configured port.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
