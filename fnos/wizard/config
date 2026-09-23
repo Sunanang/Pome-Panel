@@ -1,0 +1,21 @@
+[
+  {
+    "stepTitle": "设备同步端口",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "修改后请在应用中心重启本应用。FRP 本地目标要改成 127.0.0.1:新端口。公网端口和 Mac 同步地址不用跟着变，除非你也改了公网映射。"
+      },
+      {
+        "type": "text",
+        "field": "wizard_port",
+        "label": "设备同步端口",
+        "rules": [
+          { "required": true, "message": "请填写设备同步端口" },
+          { "pattern": "^[0-9]+$", "message": "端口只能是数字" },
+          { "min": 1, "max": 5, "message": "请输入 1 到 65535 之间的端口" }
+        ]
+      }
+    ]
+  }
+]

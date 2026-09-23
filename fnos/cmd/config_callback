@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# fnOS config_callback — app settings can change wizard_port. Restart to rebind.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$ROOT/cmd/save-device-port.sh"

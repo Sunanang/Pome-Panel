@@ -3,8 +3,8 @@
     "outbound": false,
     "listenUnix": true,
     "listenTcp": true,
-    "tcpPortFixed": false,
-    "note": "TCP 设备同步端口由运行时分配或配置，禁止写死 5001；可行性属 G0 真机门禁"
+    "tcpPortFixed": true,
+    "note": "设备同步端口由安装向导 wizard_port 写入，启动时固定绑定；禁止在代码里写死 5001"
   },
   "filesystem": {
     "dataDir": true,

@@ -1,27 +1,33 @@
 {
   "id": "com.pomepanel.sync",
-  "name": "Pome Panel Sync",
-  "version": "1.1.4",
-  "description": "Pome Panel × 飞牛 NAS 同步（统一网关 /app/pome-panel；G0 真机前勿宣称通道可用）",
-  "author": "Sunanang",
+  "name": "Pome Panel",
+  "version": "1.1.5",
+  "description": "在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/pome-panel。设备同步端口在安装时填写，固定监听 127.0.0.1。",
+  "author": "Lando",
+  "maintainer": "Lando",
   "arch": ["x86_64", "arm64"],
   "minFnOS": "0.8.0",
   "entry": {
     "start": "cmd/start.sh",
     "stop": "cmd/stop.sh",
-    "status": "cmd/status.sh"
+    "status": "cmd/status.sh",
+    "installCallback": "cmd/install_callback",
+    "configCallback": "cmd/config_callback"
   },
   "appPath": "/app/pome-panel",
   "socket": {
     "type": "unix",
-    "pathHint": "runtime/pomepanel-sync.sock"
+    "pathHint": "app.sock"
   },
   "devicePort": {
     "enabled": true,
-    "note": "端口不写死；运行时随机/配置并展示完整 URL；只认 deviceToken，永不信 X-Trim-*"
+    "field": "wizard_port",
+    "note": "安装向导和应用设置由用户填写端口；启动时固定绑定该端口。代码不写死 5001。只认 deviceToken，永不信 X-Trim-*"
   },
   "ui": {
     "path": "app/ui",
-    "wizard": "wizard"
+    "wizard": "wizard",
+    "install": "wizard/install",
+    "config": "wizard/config"
   }
 }

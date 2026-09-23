@@ -84,7 +84,7 @@
       const bindHost = !host || host === '0.0.0.0' || host === '::' ? '127.0.0.1' : String(host);
       return {
         value: String(n),
-        hint: `FRP 本地目标填 ${bindHost}:${n}；公网端口可自定（例如 34931）；Mac 同步地址用 http://公网IP:公网端口。不要填成 NAS:34931，除非本机真在听 34931。`,
+        hint: `这是安装时填写的固定端口。FRP 本地目标填 ${bindHost}:${n}；公网端口可自定（例如 34931）；Mac 同步地址用 http://公网IP:公网端口。不要填成 NAS:34931，除非安装时填的就是 34931。`,
         copyText: `${bindHost}:${n}`,
         available: true,
       };
@@ -92,14 +92,14 @@
     if (state && state.enabled === false) {
       return {
         value: '未开启',
-        hint: '设备同步端口未开启，本机没有在听。FRP 现在没有可填的本地目标。',
+        hint: '设备同步端口未开启，本机没有在听。请在飞牛安装向导或应用设置中填写端口后重启。',
         copyText: '',
         available: false,
       };
     }
     return {
-      value: '读不到',
-      hint: '读不到当前监听端口。请确认飞牛应用已启动，然后点刷新。',
+      value: '未配置',
+      hint: '尚未配置设备同步端口。请在飞牛安装向导或应用设置里填写，然后重启应用。',
       copyText: '',
       available: false,
     };
@@ -143,6 +143,7 @@
       startBtn: doc && doc.getElementById('pair-start-btn'),
       refreshBtn: doc && doc.getElementById('pair-refresh-btn'),
       sessionPill: doc && doc.getElementById('session-pill'),
+      sessionNote: doc && doc.getElementById('session-note'),
       portValue: doc && doc.getElementById('device-port-value'),
       portHint: doc && doc.getElementById('device-port-hint'),
       portCopy: doc && doc.getElementById('device-port-copy'),
@@ -159,6 +160,14 @@
       if (!els.sessionPill) return;
       els.sessionPill.dataset.state = state || 'unknown';
       els.sessionPill.textContent = text || '';
+    }
+
+    function setPairingEnabled(ok) {
+      if (els.startBtn) els.startBtn.disabled = !ok;
+      if (!els.sessionNote) return;
+      els.sessionNote.textContent = ok
+        ? '沿用飞牛当前登录，无需在本应用再次登录。'
+        : '未检测到飞牛登录。请先登录飞牛后再打开本应用，配对已停用。';
     }
 
     function clearExpiryTimer() {
@@ -248,6 +257,7 @@
         if (!res.ok) {
           sessionUser = null;
           setSessionPill('error', '未登录');
+          setPairingEnabled(false);
           setStatus(humanError(body.error, ERROR_COPY.gateway_session_required), 'error');
           return { ok: false, error: body.error || 'gateway_session_required' };
         }
@@ -257,10 +267,12 @@
         };
         const label = body.username ? `已登录 · ${body.username}` : '已登录';
         setSessionPill('ok', label);
+        setPairingEnabled(true);
         return { ok: true, user: sessionUser };
       } catch (err) {
         sessionUser = null;
         setSessionPill('error', '会话失败');
+        setPairingEnabled(false);
         setStatus(humanError(err.code || err.message, ERROR_COPY.network_error), 'error');
         return { ok: false, error: err.code || 'network_error' };
       }
@@ -332,7 +344,7 @@
         setStatus(humanError(err.code || err.message, `生成失败：${err.message || '未知错误'}`), 'error');
         return null;
       } finally {
-        if (els.startBtn) els.startBtn.disabled = false;
+        if (els.startBtn) els.startBtn.disabled = !sessionUser;
       }
     }
 

@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Persist the device sync TCP port so FRP can keep mapping the same local port
- * across process restarts. NEVER hardcode 5001 — 0 means "ask the OS".
+ * Bind the device sync port the user chose at install (wizard_port).
+ * NEVER hardcode 5001, and do not fall back to an ephemeral port.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -30,15 +30,22 @@ function readSavedDevicePort(filePath) {
 }
 
 /**
- * Explicit env (non-zero) wins. Otherwise reuse the saved file. Otherwise ephemeral.
- * @returns {{ port: number, source: 'env'|'file'|'ephemeral' }}
+ * User-chosen port only. Env wins, then the install wizard value, then the saved file.
+ * Missing config returns null — callers must not listen on 0.
+ * @returns {{ port: number, source: 'env'|'wizard'|'file' } | null}
  */
-function chooseDevicePort({ envValue, portFile } = {}) {
+function resolveConfiguredDevicePort({ envValue, wizardValue, portFile } = {}) {
   const explicit = parseRequestedDevicePort(envValue);
   if (explicit != null) return { port: explicit, source: 'env' };
+  const wizard = parseRequestedDevicePort(wizardValue);
+  if (wizard != null) return { port: wizard, source: 'wizard' };
   const saved = readSavedDevicePort(portFile);
   if (saved != null) return { port: saved, source: 'file' };
-  return { port: 0, source: 'ephemeral' };
+  return null;
+}
+
+function chooseDevicePort(options = {}) {
+  return resolveConfiguredDevicePort(options) || { port: null, source: 'missing' };
 }
 
 function writeDevicePortFile(filePath, port) {
@@ -87,44 +94,52 @@ function isAddressInUse(err) {
 }
 
 /**
- * Bind the preferred port. If that port is busy, bind an ephemeral port and
- * rewrite the file so the next start follows the port that is actually open.
+ * Bind exactly the configured port. A busy port fails and the saved file is left unchanged.
  */
-async function listenPersistedDevicePort(app, { envValue, portFile, host = '127.0.0.1' } = {}) {
-  const chosen = chooseDevicePort({ envValue, portFile });
-  const preferred = chosen.port;
+async function listenConfiguredDevicePort(app, { envValue, wizardValue, portFile, host = '127.0.0.1' } = {}) {
+  const chosen = resolveConfiguredDevicePort({ envValue, wizardValue, portFile });
+  if (!chosen) {
+    const err = new Error('未配置设备同步端口。请在安装向导或应用设置中填写端口。');
+    err.code = 'device_port_required';
+    throw err;
+  }
   try {
-    const info = await app.listenDevicePort(preferred, host);
+    const info = await app.listenDevicePort(chosen.port, host);
+    if (info.port !== chosen.port) {
+      const err = new Error('device_port_mismatch');
+      err.code = 'device_port_mismatch';
+      throw err;
+    }
     writeDevicePortFile(portFile, info.port);
     return {
       host: info.host,
       port: info.port,
-      reused: preferred !== 0 && info.port === preferred,
+      reused: true,
       source: chosen.source,
       fellBack: false,
-      preferredPort: preferred === 0 ? null : preferred,
+      preferredPort: chosen.port,
     };
   } catch (err) {
-    if (preferred === 0 || !isAddressInUse(err)) throw err;
-    const info = await app.listenDevicePort(0, host);
-    writeDevicePortFile(portFile, info.port);
-    return {
-      host: info.host,
-      port: info.port,
-      reused: false,
-      source: 'ephemeral',
-      fellBack: true,
-      preferredPort: preferred,
-      reason: err.code || 'EADDRINUSE',
-    };
+    if (err && err.code === 'device_port_mismatch') throw err;
+    if (!isAddressInUse(err)) throw err;
+    const busy = new Error(`设备同步端口 ${chosen.port} 已被占用。请在应用设置中更换端口，或停掉占用它的程序后再启动。`);
+    busy.code = 'device_port_in_use';
+    busy.port = chosen.port;
+    throw busy;
   }
+}
+
+async function listenPersistedDevicePort(app, options) {
+  return listenConfiguredDevicePort(app, options);
 }
 
 module.exports = {
   parseRequestedDevicePort,
   readSavedDevicePort,
   chooseDevicePort,
+  resolveConfiguredDevicePort,
   writeDevicePortFile,
+  listenConfiguredDevicePort,
   listenPersistedDevicePort,
   describeDeviceListenPort,
   normalizeDeviceHost,

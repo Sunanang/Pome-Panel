@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createApp } = require('./createApp');
 const { createMemoryStore } = require('./store');
-const { listenPersistedDevicePort } = require('./devicePort');
+const { listenConfiguredDevicePort } = require('./devicePort');
 const { wrapWithGatewayPrefix, stripGatewayPrefix } = require('./gatewayHttp');
 
 function readOrCreateServerId(filePath) {
@@ -36,9 +36,11 @@ async function main() {
   const socketPath = process.env.FNOS_SOCKET_PATH || path.join(process.cwd(), 'runtime', 'pomepanel-sync.sock');
   const serverIdFile = process.env.FNOS_SERVER_ID_FILE || '';
   const devicePortEnv = process.env.FNOS_DEVICE_PORT;
-  const dataDir = process.env.FNOS_DATA_DIR || path.join(process.cwd(), 'data');
+  const dataDir = process.env.FNOS_DATA_DIR || process.env.TRIM_PKGVAR || path.join(process.cwd(), 'data');
   const configuredPortFile = process.env.FNOS_DEVICE_PORT_FILE;
+  const etcPortFile = process.env.TRIM_PKGETC ? path.join(process.env.TRIM_PKGETC, 'device-port') : '';
   const devicePortFile = (configuredPortFile && String(configuredPortFile).trim())
+    || (etcPortFile && fs.existsSync(etcPortFile) ? etcPortFile : '')
     || path.join(dataDir, 'device-port');
   const enableDevicePort = process.env.FNOS_ENABLE_DEVICE_PORT !== '0';
   const wwwRoot = path.join(__dirname, '..', 'www');
@@ -66,8 +68,9 @@ async function main() {
 
   if (enableDevicePort) {
     const device = createApp({ listenMode: 'device-port', store });
-    const info = await listenPersistedDevicePort(device, {
+    const info = await listenConfiguredDevicePort(device, {
       envValue: devicePortEnv,
+      wizardValue: process.env.wizard_port,
       portFile: devicePortFile,
       host: '127.0.0.1',
     });

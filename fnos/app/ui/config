@@ -1,0 +1,13 @@
+{
+  ".url": {
+    "pome-panel.main": {
+      "title": "Pome Panel",
+      "type": "iframe",
+      "protocol": "",
+      "gatewayPrefix": "/app/pome-panel",
+      "gatewaySocket": "app.sock",
+      "url": "/app/pome-panel",
+      "allUsers": true
+    }
+  }
+}

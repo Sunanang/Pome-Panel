@@ -4,7 +4,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUNTIME_DIR="${FNOS_RUNTIME_DIR:-$ROOT/runtime}"
 DATA_DIR="${FNOS_DATA_DIR:-$ROOT/data}"
 PID_FILE="${FNOS_PID_FILE:-$RUNTIME_DIR/server.pid}"
-DEVICE_PORT_FILE="${FNOS_DEVICE_PORT_FILE:-$DATA_DIR/device-port}"
+if [[ -n "${FNOS_DEVICE_PORT_FILE:-}" ]]; then
+  DEVICE_PORT_FILE="$FNOS_DEVICE_PORT_FILE"
+elif [[ -n "${TRIM_PKGETC:-}" && -f "$TRIM_PKGETC/device-port" ]]; then
+  DEVICE_PORT_FILE="$TRIM_PKGETC/device-port"
+else
+  DEVICE_PORT_FILE="$DATA_DIR/device-port"
+fi
 LEGACY_DEVICE_PORT_FILE="$RUNTIME_DIR/device-port.txt"
 SOCKET_PATH="${FNOS_SOCKET_PATH:-$RUNTIME_DIR/pomepanel-sync.sock}"
 

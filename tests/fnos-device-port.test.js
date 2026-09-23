@@ -45,19 +45,25 @@ test('parseRequestedDevicePort treats empty and 0 as ephemeral', () => {
   assert.equal(parseRequestedDevicePort('65536'), null);
   assert.equal(parseRequestedDevicePort('-1'), null);
   assert.equal(parseRequestedDevicePort('41234'), 41234);
+  assert.equal(chooseDevicePort({}).port, null);
+  assert.equal(chooseDevicePort({}).source, 'missing');
   assert.notEqual(chooseDevicePort({}).port, 5001);
-  assert.equal(chooseDevicePort({}).port, 0);
 });
 
 test('saved device port is reused when it is free', async () => {
   const dir = tmpDir('fnos-port-reuse-');
   const portFile = path.join(dir, 'device-port');
+  const holder = http.createServer();
+  const reserved = await listen(holder);
+  await close(holder);
   const firstApp = createApp({ listenMode: 'device-port' });
-  const first = await listenPersistedDevicePort(firstApp, { portFile });
-  assert.equal(first.source, 'ephemeral');
-  assert.equal(first.reused, false);
+  const first = await listenPersistedDevicePort(firstApp, {
+    envValue: String(reserved.port),
+    portFile,
+  });
+  assert.equal(first.source, 'env');
+  assert.equal(first.port, reserved.port);
   assert.equal(first.fellBack, false);
-  assert.ok(first.port > 0);
   assert.notEqual(first.port, 5001);
   assert.equal(Number(fs.readFileSync(portFile, 'utf8')), first.port);
   await firstApp.close();
@@ -73,7 +79,7 @@ test('saved device port is reused when it is free', async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('busy saved port falls back to ephemeral and rewrites the file', async () => {
+test('busy saved port is rejected and the file stays unchanged', async () => {
   const dir = tmpDir('fnos-port-busy-');
   const portFile = path.join(dir, 'device-port');
   const blocker = http.createServer();
@@ -81,14 +87,11 @@ test('busy saved port falls back to ephemeral and rewrites the file', async () =
   fs.writeFileSync(portFile, `${addr.port}\n`);
 
   const app = createApp({ listenMode: 'device-port' });
-  const info = await listenPersistedDevicePort(app, { portFile });
-  assert.equal(info.fellBack, true);
-  assert.equal(info.reused, false);
-  assert.equal(info.source, 'ephemeral');
-  assert.equal(info.preferredPort, addr.port);
-  assert.notEqual(info.port, addr.port);
-  assert.equal(Number(fs.readFileSync(portFile, 'utf8')), info.port);
-  await app.close();
+  await assert.rejects(
+    () => listenPersistedDevicePort(app, { portFile }),
+    (err) => err.code === 'device_port_in_use' && err.port === addr.port,
+  );
+  assert.equal(Number(fs.readFileSync(portFile, 'utf8')), addr.port);
   await close(blocker);
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -123,18 +126,21 @@ test('explicit env port wins over the saved file; 0 and empty reuse the file', a
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('invalid port file falls back to ephemeral and is rewritten', async () => {
+test('missing or invalid port does not bind an ephemeral port', async () => {
   const dir = tmpDir('fnos-port-bad-');
   const portFile = path.join(dir, 'device-port');
   fs.writeFileSync(portFile, 'not-a-port\n');
   const app = createApp({ listenMode: 'device-port' });
-  const info = await listenPersistedDevicePort(app, { envValue: '0', portFile });
-  assert.equal(info.source, 'ephemeral');
-  assert.equal(info.fellBack, false);
-  assert.ok(info.port > 0);
-  assert.notEqual(info.port, 5001);
-  assert.equal(Number(fs.readFileSync(portFile, 'utf8')), info.port);
-  await app.close();
+  await assert.rejects(
+    () => listenPersistedDevicePort(app, { envValue: '0', wizardValue: '', portFile }),
+    (err) => err.code === 'device_port_required',
+  );
+  assert.equal(fs.readFileSync(portFile, 'utf8'), 'not-a-port\n');
+  const empty = createApp({ listenMode: 'device-port' });
+  await assert.rejects(
+    () => listenPersistedDevicePort(empty, { portFile: path.join(dir, 'missing-port') }),
+    (err) => err.code === 'device_port_required',
+  );
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -182,6 +188,42 @@ test('GET /api/v1/device-port reports the live bind, then the saved file', async
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('install wizard and package identity use a user-chosen port', () => {
+  const root = path.join(__dirname, '..', 'fnos');
+  const manifestJson = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  assert.equal(manifestJson.name, 'Pome Panel');
+  assert.equal(manifestJson.author, 'Lando');
+  assert.equal(manifestJson.maintainer, 'Lando');
+  assert.equal(manifestJson.version, '1.1.5');
+  assert.equal(manifestJson.id, 'com.pomepanel.sync');
+  assert.equal(manifestJson.appPath, '/app/pome-panel');
+  assert.equal(manifestJson.devicePort.field, 'wizard_port');
+  assert.doesNotMatch(JSON.stringify(manifestJson), /Sunanang|Pome Panel Sync/);
+
+  const official = fs.readFileSync(path.join(root, 'manifest'), 'utf8');
+  assert.match(official, /^display_name=Pome Panel$/m);
+  assert.match(official, /^maintainer=Lando$/m);
+  assert.match(official, /^version=1\.1\.5$/m);
+  assert.match(official, /^appname=com\.pomepanel\.sync$/m);
+  assert.match(official, /^checkport=false$/m);
+  assert.doesNotMatch(official, /service_port\s*=\s*5001|Sunanang|Pome Panel Sync/);
+
+  for (const rel of ['wizard/install', 'wizard/config']) {
+    const steps = JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8'));
+    const field = steps.flatMap((step) => step.items).find((item) => item.field === 'wizard_port');
+    assert.ok(field, rel);
+    assert.equal(field.type, 'text');
+    assert.equal(field.initValue, undefined);
+    assert.equal(JSON.stringify(field).includes('5001'), false);
+  }
+  const uiConfig = JSON.parse(fs.readFileSync(path.join(root, 'app/ui/config'), 'utf8'));
+  assert.equal(uiConfig['.url']['pome-panel.main'].title, 'Pome Panel');
+  assert.equal(uiConfig['.url']['pome-panel.main'].gatewayPrefix, '/app/pome-panel');
+  const wizardHtml = fs.readFileSync(path.join(root, 'wizard/index.html'), 'utf8');
+  assert.match(wizardHtml, /Pome Panel/);
+  assert.doesNotMatch(wizardHtml, /Pome Panel Sync|Sunanang/);
+});
+
 test('devices tab shows the current local port for FRP', async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'fnos/app/ui/index.html'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '..', 'fnos/app/ui/styles.css'), 'utf8');
@@ -197,11 +239,12 @@ test('devices tab shows the current local port for FRP', async () => {
   const shown = pairUi.formatDevicePortCopy(41234, '127.0.0.1', { enabled: true });
   assert.equal(shown.value, '41234');
   assert.equal(shown.copyText, '127.0.0.1:41234');
+  assert.match(shown.hint, /安装时填写的固定端口/);
   assert.match(shown.hint, /FRP 本地目标填 127\.0\.0\.1:41234/);
   assert.match(shown.hint, /http:\/\/公网IP:公网端口/);
   assert.equal(pairUi.formatDevicePortCopy(null, null, { enabled: false }).value, '未开启');
-  assert.match(pairUi.formatDevicePortCopy(null, null, { enabled: false }).hint, /没有在听/);
-  assert.equal(pairUi.formatDevicePortCopy(null).value, '读不到');
+  assert.match(pairUi.formatDevicePortCopy(null, null, { enabled: false }).hint, /安装向导/);
+  assert.equal(pairUi.formatDevicePortCopy(null).value, '未配置');
 
   const valueEl = { textContent: '' };
   const hintEl = { textContent: '' };
@@ -261,7 +304,7 @@ test('start.sh does not force an ephemeral port over the saved file', async (t) 
   const index = fs.readFileSync(path.join(root, 'fnos/app/server/index.js'), 'utf8');
   assert.match(start, /\$DATA_DIR\/device-port/);
   assert.doesNotMatch(start, /FNOS_DEVICE_PORT:-0/);
-  assert.match(index, /listenPersistedDevicePort/);
+  assert.match(index, /listenConfiguredDevicePort/);
   assert.equal(/\bFNOS_DEVICE_PORT\s*=\s*5001\b|\blisten\(\s*5001\b/.test(start), false);
   assert.equal(/\blisten\(\s*5001\b/.test(fs.readFileSync(path.join(root, 'fnos/app/server/createApp.js'), 'utf8')), false);
 
@@ -283,6 +326,7 @@ exit 0
         FNOS_RUNTIME_DIR: runtime,
         FNOS_DATA_DIR: data,
         FNOS_DEVICE_PORT: '0',
+        wizard_port: '',
         NODE_BIN: fake,
       },
     }, (err, stdout, stderr) => (err ? reject(new Error(`${stderr || stdout || err.message}`)) : resolve(stdout)));
@@ -299,8 +343,113 @@ exit 0
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
   const probe = fs.readFileSync(probePath, 'utf8');
-  assert.match(probe, /^PORT=unset$/m);
+  assert.match(probe, /^PORT=41234$/m);
   assert.match(probe, new RegExp(`FILE=${data}/device-port`));
   assert.equal(fs.readFileSync(path.join(data, 'device-port'), 'utf8').trim(), '41234');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('start.sh refuses to launch when no port was configured', async (t) => {
+  if (process.platform === 'win32') {
+    t.skip('FPK start.sh is a bash script');
+    return;
+  }
+  const dir = tmpDir('fnos-start-missing-');
+  const runtime = path.join(dir, 'runtime');
+  const data = path.join(dir, 'data');
+  fs.mkdirSync(runtime, { recursive: true });
+  const err = await new Promise((resolve) => {
+    execFile('bash', [path.join(__dirname, '..', 'fnos/cmd/start.sh')], {
+      env: {
+        ...process.env,
+        FNOS_RUNTIME_DIR: runtime,
+        FNOS_DATA_DIR: data,
+        FNOS_DEVICE_PORT: '',
+        wizard_port: '',
+        NODE_BIN: '/bin/false',
+      },
+    }, (error) => resolve(error));
+  });
+  assert.ok(err);
+  assert.match(String(err.stderr || err.message), /未配置设备同步端口/);
+  assert.equal(fs.existsSync(path.join(runtime, 'server.pid')), false);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('install callback saves wizard_port and rejects an empty value', async (t) => {
+  if (process.platform === 'win32') {
+    t.skip('FPK callbacks are bash scripts');
+    return;
+  }
+  const dir = tmpDir('fnos-callback-');
+  const etc = path.join(dir, 'etc');
+  const data = path.join(dir, 'data');
+  const script = path.join(__dirname, '..', 'fnos/cmd/install_callback');
+  await new Promise((resolve, reject) => {
+    execFile('bash', [script], {
+      env: {
+        ...process.env,
+        wizard_port: '41234',
+        TRIM_PKGETC: etc,
+        FNOS_DATA_DIR: data,
+      },
+    }, (err, stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve(stdout)));
+  });
+  assert.equal(fs.readFileSync(path.join(etc, 'device-port'), 'utf8').trim(), '41234');
+  assert.equal(fs.readFileSync(path.join(data, 'device-port'), 'utf8').trim(), '41234');
+  const rejected = await new Promise((resolve) => {
+    execFile('bash', [script], {
+      env: { ...process.env, wizard_port: '', TRIM_PKGETC: etc, FNOS_DATA_DIR: data },
+    }, (err) => resolve(err));
+  });
+  assert.ok(rejected);
+  assert.match(`${rejected.stdout || ''}\n${rejected.stderr || ''}\n${rejected.message || ''}`, /请填写设备同步端口/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('pairing stays off until the fnOS session is present', async () => {
+  const startBtn = { disabled: false };
+  const note = { textContent: '' };
+  const pill = { dataset: {}, textContent: '' };
+  const status = { textContent: '', attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; } };
+  function docFor() {
+    return {
+      getElementById(id) {
+        if (id === 'pair-start-btn') return startBtn;
+        if (id === 'session-note') return note;
+        if (id === 'session-pill') return pill;
+        if (id === 'pair-status') return status;
+        return null;
+      },
+      querySelector() { return { getAttribute: () => '/app/pome-panel' }; },
+    };
+  }
+  const denied = pairUi.createPairUiController({
+    document: docFor(),
+    window: { location: { pathname: '/app/pome-panel/' } },
+    fetch: async () => new Response(JSON.stringify({ error: 'gateway_session_required' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  });
+  const session = await denied.checkSession();
+  assert.equal(session.ok, false);
+  assert.equal(startBtn.disabled, true);
+  assert.equal(pill.textContent, '未登录');
+  assert.match(note.textContent, /飞牛/);
+  assert.match(note.textContent, /配对已停用/);
+
+  const allowed = pairUi.createPairUiController({
+    document: docFor(),
+    window: { location: { pathname: '/app/pome-panel/' } },
+    fetch: async () => new Response(JSON.stringify({ uid: 'uid-lando', username: 'Lando' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  });
+  const ok = await allowed.checkSession();
+  assert.equal(ok.ok, true);
+  assert.equal(startBtn.disabled, false);
+  assert.equal(pill.textContent, '已登录 · Lando');
+  assert.match(note.textContent, /无需在本应用再次登录/);
 });
