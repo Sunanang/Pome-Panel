@@ -432,6 +432,15 @@
           panel.className = on ? 'tab-panel active' : 'tab-panel';
         }
       }
+      if (id === 'devices') {
+        const pair = win && win.PomeFnOsPairUi;
+        const active = pair && typeof pair.getActiveController === 'function'
+          ? pair.getActiveController()
+          : null;
+        if (active && typeof active.loadDevicePort === 'function') {
+          void active.loadDevicePort();
+        }
+      }
       return Promise.resolve();
     }
 

@@ -77,6 +77,17 @@
       <div class="panels" id="panels">
         <section id="tab-devices" class="tab-panel active" role="tabpanel" aria-labelledby="tab-button-devices">
           <div class="devices-page">
+            <section class="tile settings-card device-port-card" aria-labelledby="device-port-title">
+              <div class="settings-card-heading">
+                <div>
+                  <span class="tile-label">FRP</span>
+                  <strong id="device-port-title">本机同步端口</strong>
+                </div>
+                <button type="button" class="workspace-button compact" id="device-port-copy" data-control-id="fnos.devices.port-copy" hidden>复制</button>
+              </div>
+              <p class="device-port-value" id="device-port-value" data-control-id="fnos.devices.port">读取中…</p>
+              <p class="device-port-hint" id="device-port-hint">FRP 本地目标填 127.0.0.1:此端口；公网端口可自定（例如 34931）；Mac 同步地址用 http://公网IP:公网端口。不要填成 NAS:34931，除非本机真在听 34931。</p>
+            </section>
             <section class="tile settings-card" aria-labelledby="nas-pair-title">
               <div class="settings-card-heading">
                 <div>
@@ -85,12 +96,7 @@
                 </div>
                 <small>约 5 分钟有效</small>
               </div>
-              <p>在已登录的飞牛会话下生成配对码，于桌面「设置 → NAS 同步」完成绑定。配对码只显示一次。桌面同步地址填公网 FRP 地址。</p>
-              <div class="device-port-note" id="device-port-note" data-control-id="fnos.devices.port">
-                <span class="device-port-label">本机设备同步端口</span>
-                <strong class="device-port-value" id="device-port-value">读取中…</strong>
-                <p class="settings-nas-sync-hint" id="device-port-hint">FRP 本地端口请指向这里。重启后若端口变了，请立刻改映射。</p>
-              </div>
+              <p>在已登录的飞牛会话下生成配对码，于桌面「设置 → NAS 同步」完成绑定。配对码只显示一次。</p>
               <div class="settings-nas-sync-actions pair-actions" aria-label="配对操作">
                 <button type="button" class="workspace-button compact primary" id="pair-start-btn" data-control-id="fnos.pair.start">生成配对码</button>
                 <button type="button" class="workspace-button compact" id="pair-refresh-btn" data-control-id="fnos.pair.refresh">刷新</button>

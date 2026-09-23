@@ -54,6 +54,33 @@ function writeDevicePortFile(filePath, port) {
   }
 }
 
+function normalizeDeviceHost(host) {
+  if (!host || host === '0.0.0.0' || host === '::') return '127.0.0.1';
+  return String(host);
+}
+
+/**
+ * What the Devices tab should show. Live bind wins. A saved file is used only
+ * while the device port is enabled but the socket is not recorded yet.
+ * Disabled listeners never advertise a stale file port.
+ */
+function describeDeviceListenPort(store) {
+  if (store && store.devicePortEnabled === false) {
+    return { enabled: false, port: null, host: null, target: null, source: 'disabled' };
+  }
+  const live = parseRequestedDevicePort(store && store.deviceListenPort);
+  if (live != null) {
+    const host = normalizeDeviceHost(store.deviceListenHost);
+    return { enabled: true, port: live, host, target: `${host}:${live}`, source: 'listen' };
+  }
+  const saved = readSavedDevicePort(store && store.devicePortFile);
+  if (saved != null) {
+    const host = '127.0.0.1';
+    return { enabled: true, port: saved, host, target: `${host}:${saved}`, source: 'file' };
+  }
+  return { enabled: false, port: null, host: null, target: null, source: 'unavailable' };
+}
+
 function isAddressInUse(err) {
   return Boolean(err) && (err.code === 'EADDRINUSE'
     || /EADDRINUSE|address already in use/i.test(String(err.message || '')));
@@ -99,4 +126,6 @@ module.exports = {
   chooseDevicePort,
   writeDevicePortFile,
   listenPersistedDevicePort,
+  describeDeviceListenPort,
+  normalizeDeviceHost,
 };

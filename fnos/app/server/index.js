@@ -48,6 +48,8 @@ async function main() {
   const resolvedStatic = fs.existsSync(staticRoot) ? staticRoot : uiRoot;
 
   const store = createMemoryStore({ serverId: readOrCreateServerId(serverIdFile) });
+  store.devicePortFile = devicePortFile;
+  store.devicePortEnabled = enableDevicePort;
 
   const gatewayBase = createApp({ listenMode: 'gateway', store });
   const gateway = wrapWithGatewayPrefix(gatewayBase, {

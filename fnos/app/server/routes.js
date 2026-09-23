@@ -6,6 +6,7 @@ const { isP0EnabledCollection } = require('../../../packages/sync-protocol');
 const SYNC_BODY_MAX_BYTES = 12 * 1024 * 1024;
 const { buildWorkspaceView, buildWorkspaceMedia } = require('./workspace-view');
 const { resolveIdentity, normalizeHeaderMap } = require('./auth');
+const { describeDeviceListenPort } = require('./devicePort');
 const { validatePairOrigin, readCsrfHeader } = require('./csrf');
 
 function sendJson(res, status, body) {
@@ -96,14 +97,27 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
 
     try {
       if (method === 'GET' && path === '/api/v1/health') {
-        const devicePort = Number.isInteger(store.deviceListenPort) ? store.deviceListenPort : null;
+        const reported = describeDeviceListenPort(store);
         sendJson(res, 200, {
           ok: true,
           serverId: store.serverId,
           gatewayMode: listenMode === 'gateway',
           listenMode,
-          devicePort,
-          deviceHost: devicePort ? (store.deviceListenHost || '127.0.0.1') : null,
+          devicePort: reported.port,
+          deviceHost: reported.host,
+        });
+        return;
+      }
+
+      if (method === 'GET' && path === '/api/v1/device-port') {
+        const reported = describeDeviceListenPort(store);
+        sendJson(res, 200, {
+          ok: true,
+          enabled: reported.enabled,
+          port: reported.port,
+          host: reported.host,
+          target: reported.target,
+          source: reported.source,
         });
         return;
       }

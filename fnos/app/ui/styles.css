@@ -52,7 +52,7 @@
   --fs-body: 13px;
   --fs-heading-3: 15px;
   --fs-heading-2: 17px;
-  --fs-device-port: 22px;
+  --fs-device-port: 36px;
   --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --d-1: 90ms;
@@ -294,27 +294,20 @@ body {
   line-height: 1.45;
 }
 
-.device-port-note {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  margin-top: var(--s-3);
-}
-
-.device-port-label {
-  color: var(--text-3);
-  font-size: var(--fs-caption);
-  letter-spacing: 0.02em;
-}
-
-.device-port-value {
+.settings-card.device-port-card .device-port-value {
+  margin: var(--s-3) 0 0;
   color: var(--text-1);
-  font: 640 var(--fs-device-port)/1.2 var(--font-mono);
+  font: 700 var(--fs-device-port)/1.1 var(--font-mono);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  user-select: text;
 }
 
-.device-port-note .settings-nas-sync-hint {
-  margin-top: 0;
+.device-port-card .device-port-hint {
+  margin: var(--s-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  line-height: 1.55;
 }
 
 .settings-nas-sync-hint[data-kind="error"] { color: var(--p0); }
@@ -449,6 +442,15 @@ body {
 .recordings-page > .recording-detail {
   min-height: 0;
   height: 100%;
+}
+
+.devices-page {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.devices-page > .device-port-card {
+  grid-column: 1 / -1;
+  height: auto;
 }
 
 .sections {

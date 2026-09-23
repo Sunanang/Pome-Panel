@@ -13,6 +13,7 @@ const { createMemoryStore } = require('../fnos/app/server/store');
 const { dispatch } = require('../fnos/app/server/testHarness');
 const {
   chooseDevicePort,
+  describeDeviceListenPort,
   listenPersistedDevicePort,
   parseRequestedDevicePort,
 } = require('../fnos/app/server/devicePort');
@@ -137,58 +138,101 @@ test('invalid port file falls back to ephemeral and is rewritten', async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('gateway health exposes the current device port', async () => {
-  const missing = createApp({ listenMode: 'gateway', serverId: 'srv-no-port' });
-  const empty = await dispatch(missing, { method: 'GET', url: '/api/v1/health' });
-  assert.equal(empty.getJson().devicePort, null);
-  assert.equal(empty.getJson().deviceHost, null);
+test('GET /api/v1/device-port reports the live bind, then the saved file', async () => {
+  const dir = tmpDir('fnos-port-api-');
+  const portFile = path.join(dir, 'device-port');
+  fs.writeFileSync(portFile, '41234\n');
+
+  const disabled = createMemoryStore({ serverId: 'srv-off' });
+  disabled.devicePortEnabled = false;
+  disabled.devicePortFile = portFile;
+  assert.equal(describeDeviceListenPort(disabled).source, 'disabled');
+  assert.equal(describeDeviceListenPort(disabled).port, null);
+
+  const fromFile = createMemoryStore({ serverId: 'srv-file' });
+  fromFile.devicePortEnabled = true;
+  fromFile.devicePortFile = portFile;
+  assert.equal(describeDeviceListenPort(fromFile).source, 'file');
+  assert.equal(describeDeviceListenPort(fromFile).target, '127.0.0.1:41234');
 
   const store = createMemoryStore({ serverId: 'srv-port' });
+  store.devicePortEnabled = true;
+  store.devicePortFile = portFile;
   store.deviceListenPort = 34931;
   store.deviceListenHost = '127.0.0.1';
   const app = createApp({ listenMode: 'gateway', store });
-  const res = await dispatch(app, { method: 'GET', url: '/api/v1/health' });
+  const res = await dispatch(app, { method: 'GET', url: '/api/v1/device-port' });
   const body = res.getJson();
-  assert.equal(body.devicePort, 34931);
-  assert.equal(body.deviceHost, '127.0.0.1');
+  assert.equal(res.statusCode, 200);
+  assert.equal(body.enabled, true);
+  assert.equal(body.port, 34931);
+  assert.equal(body.host, '127.0.0.1');
+  assert.equal(body.target, '127.0.0.1:34931');
+  assert.equal(body.source, 'listen');
   assert.equal(body.deviceToken, undefined);
+  assert.notEqual(body.port, 5001);
+
+  const health = await dispatch(app, { method: 'GET', url: '/api/v1/health' });
+  assert.equal(health.getJson().devicePort, 34931);
+
+  const offApp = createApp({ listenMode: 'gateway', store: disabled });
+  const off = await dispatch(offApp, { method: 'GET', url: '/api/v1/device-port' });
+  assert.equal(off.getJson().enabled, false);
+  assert.equal(off.getJson().port, null);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('devices tab shows the current local port for FRP', async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'fnos/app/ui/index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'fnos/app/ui/styles.css'), 'utf8');
   assert.match(html, /id="device-port-value"/);
-  assert.match(html, /data-control-id="fnos\.devices\.port"/);
-  assert.match(html, /本机设备同步端口/);
-  assert.match(html, /公网 FRP/);
+  assert.match(html, /class="tile settings-card device-port-card"/);
+  assert.match(html, /本机同步端口/);
+  assert.match(html, /127\.0\.0\.1:此端口/);
+  assert.match(html, /http:\/\/公网IP:公网端口/);
+  assert.match(html, /不要填成 NAS:34931/);
+  assert.match(css, /\.devices-page > \.device-port-card/);
+  assert.doesNotMatch(html.replace(/<script[\s\S]*?<\/script>/gi, ''), /\/api\/v1\//);
 
-  const shown = pairUi.formatDevicePortCopy(34931, '127.0.0.1');
-  assert.equal(shown.value, '127.0.0.1:34931');
-  assert.match(shown.hint, /FRP/);
-  assert.match(shown.hint, /公网 FRP/);
-  assert.equal(pairUi.formatDevicePortCopy(null).value, '尚未读到');
-  assert.equal(pairUi.formatDevicePortCopy(80, '0.0.0.0').value, '127.0.0.1:80');
+  const shown = pairUi.formatDevicePortCopy(41234, '127.0.0.1', { enabled: true });
+  assert.equal(shown.value, '41234');
+  assert.equal(shown.copyText, '127.0.0.1:41234');
+  assert.match(shown.hint, /FRP 本地目标填 127\.0\.0\.1:41234/);
+  assert.match(shown.hint, /http:\/\/公网IP:公网端口/);
+  assert.equal(pairUi.formatDevicePortCopy(null, null, { enabled: false }).value, '未开启');
+  assert.match(pairUi.formatDevicePortCopy(null, null, { enabled: false }).hint, /没有在听/);
+  assert.equal(pairUi.formatDevicePortCopy(null).value, '读不到');
 
   const valueEl = { textContent: '' };
   const hintEl = { textContent: '' };
+  const copyEl = { hidden: true, textContent: '复制', copyText: '' };
   const doc = {
     getElementById(id) {
       if (id === 'device-port-value') return valueEl;
       if (id === 'device-port-hint') return hintEl;
+      if (id === 'device-port-copy') return copyEl;
       return null;
     },
     querySelector() {
       return { getAttribute: () => '/app/pome-panel' };
     },
   };
+  let copied = '';
   const controller = pairUi.createPairUiController({
     document: doc,
-    window: { location: { pathname: '/app/pome-panel/' } },
+    window: {
+      location: { pathname: '/app/pome-panel/' },
+      navigator: { clipboard: { writeText: async (text) => { copied = text; } } },
+    },
     fetch: async (url) => {
-      assert.match(String(url), /\/app\/pome-panel\/api\/v1\/health$/);
+      assert.match(String(url), /\/app\/pome-panel\/api\/v1\/device-port$/);
       return new Response(JSON.stringify({
         ok: true,
-        devicePort: 34931,
-        deviceHost: '127.0.0.1',
+        enabled: true,
+        port: 41234,
+        host: '127.0.0.1',
+        target: '127.0.0.1:41234',
+        source: 'listen',
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -197,9 +241,14 @@ test('devices tab shows the current local port for FRP', async () => {
   });
   const loaded = await controller.loadDevicePort();
   assert.equal(loaded.ok, true);
-  assert.equal(loaded.port, 34931);
-  assert.equal(valueEl.textContent, '127.0.0.1:34931');
-  assert.match(hintEl.textContent, /改映射/);
+  assert.equal(loaded.port, 41234);
+  assert.equal(valueEl.textContent, '41234');
+  assert.equal(copyEl.hidden, false);
+  assert.match(hintEl.textContent, /127\.0\.0\.1:41234/);
+  assert.match(hintEl.textContent, /不要填成 NAS:34931/);
+  const copiedResult = await controller.copyDevicePort();
+  assert.equal(copiedResult.ok, true);
+  assert.equal(copied, '127.0.0.1:41234');
 });
 
 test('start.sh does not force an ephemeral port over the saved file', async (t) => {

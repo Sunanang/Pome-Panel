@@ -77,18 +77,31 @@
     return key;
   }
 
-  function formatDevicePortCopy(port, host) {
+  function formatDevicePortCopy(port, host, state) {
     const n = Number(port);
-    if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    const enabled = !state || state.enabled !== false;
+    if (enabled && Number.isInteger(n) && n >= 1 && n <= 65535) {
+      const bindHost = !host || host === '0.0.0.0' || host === '::' ? '127.0.0.1' : String(host);
       return {
-        value: '尚未读到',
-        hint: '请确认飞牛应用已启动。FRP 需要映射到当前的本机设备同步端口。',
+        value: String(n),
+        hint: `FRP 本地目标填 ${bindHost}:${n}；公网端口可自定（例如 34931）；Mac 同步地址用 http://公网IP:公网端口。不要填成 NAS:34931，除非本机真在听 34931。`,
+        copyText: `${bindHost}:${n}`,
+        available: true,
       };
     }
-    const bindHost = !host || host === '0.0.0.0' || host === '::' ? '127.0.0.1' : String(host);
+    if (state && state.enabled === false) {
+      return {
+        value: '未开启',
+        hint: '设备同步端口未开启，本机没有在听。FRP 现在没有可填的本地目标。',
+        copyText: '',
+        available: false,
+      };
+    }
     return {
-      value: `${bindHost}:${n}`,
-      hint: 'FRP 本地端口请指向这个端口。重启后若端口变了，请立刻改映射。桌面同步地址仍填公网 FRP 地址。',
+      value: '读不到',
+      hint: '读不到当前监听端口。请确认飞牛应用已启动，然后点刷新。',
+      copyText: '',
+      available: false,
     };
   }
 
@@ -132,6 +145,7 @@
       sessionPill: doc && doc.getElementById('session-pill'),
       portValue: doc && doc.getElementById('device-port-value'),
       portHint: doc && doc.getElementById('device-port-hint'),
+      portCopy: doc && doc.getElementById('device-port-copy'),
     };
 
     function setStatus(text, kind) {
@@ -322,30 +336,59 @@
       }
     }
 
-    function applyDevicePortCopy(port, host) {
-      const copy = formatDevicePortCopy(port, host);
-      if (els.portValue) els.portValue.textContent = copy.value;
+    function applyDevicePortCopy(port, host, state) {
+      const copy = formatDevicePortCopy(port, host, state);
+      if (els.portValue) {
+        els.portValue.textContent = copy.value;
+        els.portValue.copyText = copy.copyText || '';
+      }
       if (els.portHint) els.portHint.textContent = copy.hint;
+      if (els.portCopy) {
+        els.portCopy.hidden = !copy.available;
+        els.portCopy.copyText = copy.copyText || '';
+      }
       return copy;
+    }
+
+    async function copyDevicePort() {
+      const text = (els.portCopy && els.portCopy.copyText)
+        || (els.portValue && els.portValue.copyText)
+        || '';
+      if (!text) return { ok: false };
+      const clipboard = win && win.navigator && win.navigator.clipboard;
+      try {
+        if (clipboard && typeof clipboard.writeText === 'function') {
+          await clipboard.writeText(text);
+          if (els.portCopy) els.portCopy.textContent = '已复制';
+          return { ok: true, text };
+        }
+      } catch {
+        /* fall through */
+      }
+      if (els.portHint) {
+        els.portHint.textContent = `请手动复制 ${text}。${els.portHint.textContent || ''}`;
+      }
+      return { ok: false, text };
     }
 
     async function loadDevicePort() {
       try {
-        const { res, body } = await fetchJson('/api/v1/health');
-        if (!res.ok) {
-          applyDevicePortCopy(null, null);
-          return { ok: false, port: null, host: null };
+        const { res, body } = await fetchJson('/api/v1/device-port');
+        if (!res.ok || !body || typeof body !== 'object') {
+          applyDevicePortCopy(null, null, null);
+          return { ok: false, port: null, host: null, enabled: false };
         }
-        applyDevicePortCopy(body && body.devicePort, body && body.deviceHost);
-        const port = body && Number.isInteger(Number(body.devicePort)) ? Number(body.devicePort) : null;
+        const copy = applyDevicePortCopy(body.port, body.host, { enabled: body.enabled });
         return {
-          ok: port != null && port > 0,
-          port,
-          host: (body && body.deviceHost) || null,
+          ok: copy.available,
+          port: copy.available ? Number(body.port) : null,
+          host: copy.available ? (body.host || '127.0.0.1') : null,
+          enabled: body.enabled !== false,
+          target: copy.copyText || null,
         };
       } catch {
-        applyDevicePortCopy(null, null);
-        return { ok: false, port: null, host: null };
+        applyDevicePortCopy(null, null, null);
+        return { ok: false, port: null, host: null, enabled: false };
       }
     }
 
@@ -465,6 +508,11 @@
           });
         });
       }
+      if (els.portCopy) {
+        els.portCopy.addEventListener('click', () => {
+          void copyDevicePort();
+        });
+      }
     }
 
     async function init() {
@@ -488,6 +536,7 @@
       refreshCsrf,
       startPair,
       loadDevicePort,
+      copyDevicePort,
       loadDevices,
       refreshAll,
       revokeDevice,
@@ -503,10 +552,16 @@
     };
   }
 
+  let activeController = null;
+
   function boot(doc, win) {
-    const controller = createPairUiController({ document: doc, window: win });
-    void controller.init();
-    return controller;
+    activeController = createPairUiController({ document: doc, window: win });
+    void activeController.init();
+    return activeController;
+  }
+
+  function getActiveController() {
+    return activeController;
   }
 
   return {
@@ -521,5 +576,6 @@
     formatDevicePortCopy,
     createPairUiController,
     boot,
+    getActiveController,
   };
 });
