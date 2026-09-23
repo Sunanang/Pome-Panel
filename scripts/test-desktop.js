@@ -33,6 +33,7 @@ for (const file of [
   'sync-store.js',
   'sync-migration.js',
   'todos-sync.js',
+  'workspace-sync.js',
   'sync-settings.js',
   'packages/sync-protocol/index.js',
   'packages/sync-protocol/schema.js',
