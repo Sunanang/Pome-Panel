@@ -5,7 +5,7 @@
  * Secrets and API keys stay off the response. Media bytes are served separately.
  */
 
-const { decryptJson, isSealedPayload } = require('../../../packages/sync-protocol');
+const { decryptJson, isSealedPayload } = require('../packages/sync-protocol');
 
 const TODO_LABELS = Object.freeze({
   P0: '课程',

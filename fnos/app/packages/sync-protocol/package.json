@@ -1,0 +1,17 @@
+{
+  "name": "@pome-panel/sync-protocol",
+  "version": "0.1.0",
+  "description": "Shared sync protocol contract for Pome Panel desktop and fnOS FPK",
+  "main": "index.js",
+  "type": "commonjs",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "*.js"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}

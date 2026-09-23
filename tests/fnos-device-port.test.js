@@ -204,7 +204,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.6');
+  assert.equal(manifestJson.version, '0.9.7');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'com.pomepanel.sync');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
@@ -215,7 +215,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.6$/m);
+  assert.match(official, /^version=0\.9\.7$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=com\.pomepanel\.sync\.main$/m);
@@ -224,7 +224,8 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^checkport=false$/m);
   assert.doesNotMatch(official, /service_port\s*=\s*5001|Sunanang|Pome Panel Sync/);
   const changelog = official.split('\n').find((line) => line.startsWith('changelog='));
-  assert.ok(changelog && changelog.includes('TRIM_PKGVAR'));
+  assert.ok(changelog && changelog.includes('TRIM_APPDEST/server'));
+  assert.ok(changelog && changelog.includes('sync-protocol'));
   assert.equal(changelog.includes('#'), false);
 
   const portPattern = /^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/;
@@ -620,7 +621,7 @@ test('start.sh uses the app socket and keeps a configured device port', async (t
   fs.mkdirSync(runtime, { recursive: true });
   const fake = path.join(dir, 'fake-node.sh');
   fs.writeFileSync(fake, `#!/bin/sh
-printf 'PORT=%s\\nSOCK=%s\\n' "\${FNOS_DEVICE_PORT-unset}" "\${FNOS_SOCKET_PATH-unset}" > "\${FNOS_DATA_DIR}/probe.txt"
+printf 'PORT=%s\\nSOCK=%s\\nENTRY=%s\\n' "\${FNOS_DEVICE_PORT-unset}" "\${FNOS_SOCKET_PATH-unset}" "$1" > "\${FNOS_DATA_DIR}/probe.txt"
 exit 0
 `, { mode: 0o755 });
   const stdout = await new Promise((resolve, reject) => {
@@ -645,6 +646,54 @@ exit 0
   const probe = fs.readFileSync(probePath, 'utf8');
   assert.match(probe, /^PORT=45875$/m);
   assert.match(probe, new RegExp(`^SOCK=${appdest}/app\\.sock$`, 'm'));
+  assert.match(probe, new RegExp(`^ENTRY=${appdest}/server/index\\.js$`, 'm'));
+  assert.match(stdout, new RegExp(`entry=${appdest}/server/index\\.js`));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('packaged server loads vendored sync-protocol from TRIM_APPDEST', () => {
+  const root = path.join(__dirname, '..');
+  const start = fs.readFileSync(path.join(root, 'fnos/cmd/start.sh'), 'utf8');
+  const entryAt = start.indexOf('APP_ENTRY="$TRIM_APPDEST/server/index.js"');
+  const fallbackAt = start.indexOf('APP_ENTRY="$ROOT/app/server/index.js"');
+  assert.ok(entryAt > 0);
+  assert.ok(fallbackAt > entryAt);
+  assert.match(start, /nohup "\$NODE_BIN" "\$APP_ENTRY"/);
+
+  const srcDir = path.join(root, 'packages/sync-protocol');
+  const vendored = path.join(root, 'fnos/app/packages/sync-protocol');
+  const names = fs.readdirSync(srcDir).filter((name) => name.endsWith('.js') || name === 'package.json').sort();
+  assert.ok(names.includes('index.js'));
+  for (const name of names) {
+    assert.equal(
+      fs.readFileSync(path.join(vendored, name), 'utf8'),
+      fs.readFileSync(path.join(srcDir, name), 'utf8'),
+      name,
+    );
+  }
+  for (const rel of [
+    'fnos/app/server/pairing.js',
+    'fnos/app/server/schema.js',
+    'fnos/app/server/routes.js',
+    'fnos/app/server/workspace-view.js',
+  ]) {
+    const text = fs.readFileSync(path.join(root, rel), 'utf8');
+    assert.equal(text.includes("../../../packages/sync-protocol"), false, rel);
+    assert.equal(text.includes("..', '..', '..', 'packages'"), false, rel);
+  }
+
+  const dir = tmpDir('fnos-appdest-layout-');
+  const target = path.join(dir, 'target');
+  fs.cpSync(path.join(root, 'fnos/app/server'), path.join(target, 'server'), { recursive: true });
+  fs.cpSync(vendored, path.join(target, 'packages/sync-protocol'), { recursive: true });
+  const schema = require(path.join(target, 'server/schema.js'));
+  const pairing = require(path.join(target, 'server/pairing.js'));
+  const routes = require(path.join(target, 'server/routes.js'));
+  const view = require(path.join(target, 'server/workspace-view.js'));
+  assert.equal(typeof schema.SCHEMA_VERSION, 'number');
+  assert.equal(typeof pairing.hashSecret, 'function');
+  assert.equal(typeof routes.validateMutationShape, 'function');
+  assert.equal(typeof view.buildWorkspaceView, 'function');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

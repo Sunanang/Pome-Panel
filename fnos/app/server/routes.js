@@ -1,7 +1,7 @@
 'use strict';
 
 const { schemaEnvelope, isSchemaCompatible, SCHEMA_VERSION } = require('./schema');
-const { isP0EnabledCollection } = require('../../../packages/sync-protocol');
+const { isP0EnabledCollection } = require('../packages/sync-protocol');
 
 const SYNC_BODY_MAX_BYTES = 12 * 1024 * 1024;
 const { buildWorkspaceView, buildWorkspaceMedia } = require('./workspace-view');

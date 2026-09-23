@@ -58,8 +58,15 @@ export FNOS_SERVER_ID_FILE="${FNOS_SERVER_ID_FILE:-$DATA_DIR/server-id}"
 
 export PATH="/var/apps/nodejs_v24/target/bin:/var/apps/nodejs_v22/target/bin:${PATH:-/usr/local/bin:/usr/bin}"
 
+# fnpack extracts app/ into TRIM_APPDEST (target/). There is no app/ under /var/apps/<id>.
+if [[ -n "${TRIM_APPDEST:-}" ]]; then
+  APP_ENTRY="$TRIM_APPDEST/server/index.js"
+else
+  APP_ENTRY="$ROOT/app/server/index.js"
+fi
+
 NODE_BIN="${NODE_BIN:-node}"
-nohup "$NODE_BIN" "$ROOT/app/server/index.js" \
+nohup "$NODE_BIN" "$APP_ENTRY" \
   >"$RUNTIME_DIR/server.log" 2>&1 &
 echo $! >"$PID_FILE"
-echo "started pid=$(cat "$PID_FILE") socket=$SOCKET_PATH"
+echo "started pid=$(cat "$PID_FILE") socket=$SOCKET_PATH entry=$APP_ENTRY"
