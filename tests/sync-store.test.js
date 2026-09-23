@@ -495,18 +495,18 @@ test('todos LS projection keeps P0–P3 shell and item field set', () => {
   }
 });
 
-test('rejects unwired collections and accepts notes', () => {
+test('accepts commands and notes; home layout stays unwired', () => {
   const { store, accountId } = memoryStore();
   try {
     const write = store.writeLocalMutation(
       mutationInput(accountId, {
         collection: 'commands',
-        clientMutationId: 'n1',
-        payload: { title: 'nope' },
+        clientMutationId: 'cmd-1',
+        entityId: 'command:cmd-1',
+        payload: { id: 'cmd-1', text: 'npm test', createdAt: 1 },
       })
     );
-    assert.equal(write.ok, false);
-    assert.equal(write.reason, 'collection_not_enabled');
+    assert.equal(write.ok, true);
 
     const notes = store.writeLocalMutation(
       mutationInput(accountId, {
@@ -520,7 +520,7 @@ test('rejects unwired collections and accepts notes', () => {
 
     const pull = store.applyPullPage({
       accountId,
-      collection: 'commands',
+      collection: 'homeLayout',
       pull: { changes: [], nextCursor: null, hasMore: false, serverRev: 0 },
     });
     assert.equal(pull.ok, false);

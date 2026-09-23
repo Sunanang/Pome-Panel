@@ -3905,6 +3905,9 @@ function assembleWorkspaceSnapshot(rendererSnapshot) {
         : (readWorkspaceBagValue('notch-note-active-archive-v1') || ''),
     },
     links: Array.isArray(snap.links) ? snap.links : parseJsonArray(readWorkspaceBagValue('notch-link-groups')),
+    commands: Array.isArray(snap.commands)
+      ? snap.commands
+      : parseJsonArray(readWorkspaceBagValue('notch-home-commands')),
     clipboard: {
       history: history.map((item) => {
         if (!item || item.type !== 'image') return item;
@@ -3985,6 +3988,7 @@ function materializeWorkspaceSnapshot(projected, previousSnapshot) {
   const renderer = {
     notes: snapshot.notes,
     links: snapshot.links,
+    commands: snapshot.commands,
     clipboard: { history: [], favorites: snapshot.clipboard.favorites },
     recordings: [],
   };

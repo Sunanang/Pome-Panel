@@ -24,6 +24,7 @@ const MIGRATION_INLINE_MAX_BYTES = 6 * 1024 * 1024;
 const WORKSPACE_COLLECTIONS = Object.freeze([
   COLLECTIONS.NOTES,
   COLLECTIONS.LINKS,
+  COLLECTIONS.COMMANDS,
   COLLECTIONS.CLIPBOARD_HISTORY,
   COLLECTIONS.RECORDINGS,
   COLLECTIONS.AI_SETTINGS,
@@ -36,6 +37,7 @@ function emptySnapshot() {
   return {
     notes: { home: '', archive: [], activeId: '' },
     links: [],
+    commands: [],
     clipboard: { history: [], favorites: [] },
     recordings: [],
     aiSettings: null,
@@ -53,6 +55,7 @@ function countWorkspaceContent(snapshot, { todoLive = 0 } = {}) {
   const archive = asArray(notes.archive).filter((note) => note && String(note.content || note.markdown || '').trim());
   const noteCount = (String(notes.home || '').trim() ? 1 : 0) + archive.length;
   const links = asArray(source.links).filter((group) => group && (group.name || asArray(group.links).length));
+  const commands = asArray(source.commands).filter((row) => row && String(row.text || '').trim());
   const clips = asArray(source.clipboard && source.clipboard.history);
   const recordings = asArray(source.recordings).filter((row) => row && row.isDraft !== true);
   const ai = source.aiSettings && typeof source.aiSettings === 'object' ? source.aiSettings : null;
@@ -64,13 +67,14 @@ function countWorkspaceContent(snapshot, { todoLive = 0 } = {}) {
     todos: Math.max(0, Number(todoLive) || 0),
     notes: noteCount,
     links: links.length,
+    commands: commands.length,
     clipboardHistory: clips.length,
     recordings: recordings.length,
     aiSettings: aiCount,
     secrets: secrets.length,
   };
-  counts.total = counts.todos + counts.notes + counts.links + counts.clipboardHistory
-    + counts.recordings + counts.aiSettings + counts.secrets;
+  counts.total = counts.todos + counts.notes + counts.links + counts.commands
+    + counts.clipboardHistory + counts.recordings + counts.aiSettings + counts.secrets;
   return counts;
 }
 
@@ -91,6 +95,7 @@ function collectionForEntityId(entityId) {
   const id = String(entityId || '');
   if (id.startsWith('note:')) return COLLECTIONS.NOTES;
   if (id.startsWith('link:')) return COLLECTIONS.LINKS;
+  if (id.startsWith('command:')) return COLLECTIONS.COMMANDS;
   if (id.startsWith('clip:')) return COLLECTIONS.CLIPBOARD_HISTORY;
   if (id.startsWith('recording')) return COLLECTIONS.RECORDINGS;
   if (id.startsWith('secret:')) return COLLECTIONS.SECRETS;
@@ -221,6 +226,17 @@ function buildWorkspaceEntities(snapshot, { accountKey = null } = {}) {
         icon: String(link && link.icon || ''),
         createdAt: Number(link && link.createdAt) || 0,
       })).filter((link) => link.id && link.url),
+    });
+  }
+
+  for (const command of asArray(source.commands)) {
+    if (!command || !command.id) continue;
+    const text = String(command.text || '').trim();
+    if (!text) continue;
+    pushEntity(entities, COLLECTIONS.COMMANDS, `command:${command.id}`, {
+      id: String(command.id),
+      text,
+      createdAt: Number(command.createdAt) || 0,
     });
   }
 
@@ -438,6 +454,16 @@ function projectWorkspaceEntities(entities, { accountKey = null } = {}) {
       });
       continue;
     }
+    if (id.startsWith('command:')) {
+      const text = String(payload.text || '').trim();
+      if (!text) continue;
+      snapshot.commands.push({
+        id: String(payload.id || id.slice('command:'.length)),
+        text,
+        createdAt: Number(payload.createdAt) || 0,
+      });
+      continue;
+    }
     if (id === 'clip:favorites') {
       snapshot.clipboard.favorites = asArray(payload.ids).map((item) => String(item));
       continue;
@@ -489,6 +515,11 @@ function projectWorkspaceEntities(entities, { accountKey = null } = {}) {
   for (const [id, meta] of recordingMeta) {
     snapshot.recordings.push(reassembleRecording(meta, recordingBlobs.get(id)));
   }
+  snapshot.commands.sort((left, right) => {
+    const delta = (Number(right.createdAt) || 0) - (Number(left.createdAt) || 0);
+    if (delta) return delta;
+    return String(left.id).localeCompare(String(right.id));
+  });
   if (snapshot.secrets.length) secretsApplied = true;
   return { snapshot, warnings, secretsApplied, aiApplied };
 }

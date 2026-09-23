@@ -5054,6 +5054,12 @@ function getWorkspaceSnapshotForSync() {
   } else {
     try { recordings = JSON.parse(localStorage.getItem('notch-recordings') || '[]'); } catch (error) { recordings = []; }
   }
+  let commands = [];
+  if (typeof window.getCommandsForSync === 'function') {
+    commands = window.getCommandsForSync() || [];
+  } else {
+    try { commands = JSON.parse(localStorage.getItem('notch-home-commands') || '[]'); } catch (error) { commands = []; }
+  }
   let archive = [];
   try {
     archive = JSON.parse(localStorage.getItem(NOTE_ARCHIVE_KEY) || '[]');
@@ -5067,6 +5073,7 @@ function getWorkspaceSnapshotForSync() {
       activeId: localStorage.getItem(NOTE_ACTIVE_ARCHIVE_KEY) || '',
     },
     links: Array.isArray(links) ? links : [],
+    commands: Array.isArray(commands) ? commands : [],
     clipboard: {
       history: Array.isArray(clipHistory) ? clipHistory.map((item) => ({
         id: item.id,

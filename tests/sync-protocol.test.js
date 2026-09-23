@@ -104,11 +104,12 @@ test('evaluateSchemaNegotiation stops both directions and names upgrade target',
   assert.equal(ok.stopPush, false);
 });
 
-test('workspace collections are enabled; commands stay unwired', () => {
+test('workspace collections are enabled; home layout stays unwired', () => {
   assert.deepEqual(P0_ENABLED_COLLECTIONS, [
     COLLECTIONS.TODOS,
     COLLECTIONS.NOTES,
     COLLECTIONS.LINKS,
+    COLLECTIONS.COMMANDS,
     COLLECTIONS.CLIPBOARD_HISTORY,
     COLLECTIONS.RECORDINGS,
     COLLECTIONS.AI_SETTINGS,
@@ -116,11 +117,13 @@ test('workspace collections are enabled; commands stay unwired', () => {
   ]);
   assert.equal(protocol.isP0EnabledCollection('todos'), true);
   assert.equal(protocol.isP0EnabledCollection('notes'), true);
+  assert.equal(protocol.isP0EnabledCollection('commands'), true);
   assert.equal(protocol.isP0EnabledCollection('recordings'), true);
   assert.equal(protocol.isP0EnabledCollection('secrets'), true);
   assert.equal(protocol.isKnownCollection('notes'), true);
   assert.equal(protocol.assertP0Collection('notes').ok, true);
-  assert.equal(protocol.assertP0Collection('commands').reason, 'collection_not_enabled');
+  assert.equal(protocol.assertP0Collection('commands').ok, true);
+  assert.equal(protocol.assertP0Collection('homeLayout').reason, 'collection_not_enabled');
   assert.equal(protocol.assertP0Collection('vault').reason, 'collection_unknown');
 });
 
@@ -141,7 +144,8 @@ test('validateMutation rejects illegal inputs', () => {
   assert.equal(validateMutation(validMutation({ extra: 1 })).reason, 'mutation_unknown_field');
   assert.equal(validateMutation(validMutation({ schemaVersion: 99 })).reason, 'mutation_schema_version_mismatch');
   assert.equal(validateMutation(validMutation({ collection: 'notes' })).ok, true);
-  assert.equal(validateMutation(validMutation({ collection: 'commands' })).reason, 'collection_not_enabled');
+  assert.equal(validateMutation(validMutation({ collection: 'commands' })).ok, true);
+  assert.equal(validateMutation(validMutation({ collection: 'homeLayout' })).reason, 'collection_not_enabled');
   assert.equal(validateMutation(validMutation({ op: 'patch' })).reason, 'mutation_op_invalid');
   assert.equal(validateMutation(validMutation({ entityId: '' })).reason, 'mutation_entity_id_invalid');
   assert.equal(validateMutation(validMutation({ baseServerRev: -1 })).reason, 'mutation_base_server_rev_invalid');

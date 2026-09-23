@@ -397,7 +397,8 @@ body {
 .recordings-page,
 .sections,
 .clip-panel,
-.links-page {
+.links-page,
+.commands-page {
   flex: 1;
   min-height: 0;
   align-items: stretch;
@@ -716,9 +717,34 @@ body {
   word-break: break-word;
 }
 
-.links-page {
+.links-page,
+.commands-page {
   display: flex;
   flex-direction: column;
+}
+
+.nas-command-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  overflow: auto;
+}
+
+.nas-command-item {
+  padding: 12px 14px;
+  border-radius: var(--r-list-item);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.nas-command-text {
+  margin: 0;
+  color: var(--text-1);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .link-groups {

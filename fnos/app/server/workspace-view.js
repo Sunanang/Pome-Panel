@@ -44,6 +44,7 @@ function buildWorkspaceView(entities, accountKey) {
   const favorites = new Set();
   const recordings = [];
   const links = [];
+  const commands = [];
   const todos = [];
   const categories = { ...TODO_LABELS };
   const secrets = [];
@@ -107,6 +108,17 @@ function buildWorkspaceView(entities, accountKey) {
         createdAt: Number(payload.createdAt) || 0,
         hasAudio: hasInline || chunks > 0,
         audioOmitted: payload.audioOmitted === true,
+      });
+      continue;
+    }
+
+    if (collection === 'commands' || id.startsWith('command:')) {
+      const text = String(payload.text || '').trim();
+      if (!text) continue;
+      commands.push({
+        id: String(payload.id || (id.startsWith('command:') ? id.slice('command:'.length) : id)),
+        text: clipText(text, 2000),
+        createdAt: Number(payload.createdAt) || 0,
       });
       continue;
     }
@@ -187,6 +199,7 @@ function buildWorkspaceView(entities, accountKey) {
   });
   clipboard.sort((left, right) => right.timestamp - left.timestamp);
   recordings.sort((left, right) => right.createdAt - left.createdAt);
+  commands.sort((left, right) => (Number(right.createdAt) || 0) - (Number(left.createdAt) || 0));
   todos.sort((left, right) => Number(left.done) - Number(right.done));
 
   return {
@@ -194,6 +207,7 @@ function buildWorkspaceView(entities, accountKey) {
     clipboard,
     recordings,
     links,
+    commands,
     todos,
     categories,
     ai,
@@ -203,6 +217,7 @@ function buildWorkspaceView(entities, accountKey) {
       clipboard: clipboard.length,
       recordings: recordings.length,
       links: links.reduce((sum, group) => sum + group.links.length, 0),
+      commands: commands.length,
       todos: todos.length,
       secrets: secrets.length,
     },

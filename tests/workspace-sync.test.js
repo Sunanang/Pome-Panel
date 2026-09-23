@@ -41,6 +41,10 @@ function sampleSnapshot() {
       collapsed: false,
       links: [{ id: 'l1', url: 'https://example.com', title: 'Example', description: '', createdAt: 1 }],
     }],
+    commands: [
+      { id: 'cmd-old', text: 'git status', createdAt: 2 },
+      { id: 'cmd-new', text: 'npm test', createdAt: 9 },
+    ],
     clipboard: {
       history: [{
         id: 'c1',
@@ -91,6 +95,12 @@ test('any workspace category counts as non-empty', () => {
   });
   assert.equal(notesOnly.notes, 1);
   assert.equal(notesOnly.total, 1);
+  const commandsOnly = countWorkspaceContent({
+    commands: [{ id: 'cmd', text: 'npm test', createdAt: 1 }],
+  });
+  assert.equal(commandsOnly.commands, 1);
+  assert.equal(commandsOnly.total, 1);
+  assert.equal(countWorkspaceContent({ commands: [{ id: 'blank', text: '   ' }] }).total, 0);
   const decision = classifyMigrationDecision({
     localOk: true,
     localLive: notesOnly.total,
@@ -108,6 +118,7 @@ test('secrets and AI keys round-trip as ciphertext', () => {
   assert.equal(encoded.includes('llm-key'), false);
   assert.equal(built.entities.some((entity) => entity.collection === 'notes' && entity.entityId === 'note:home'), true);
   assert.equal(built.entities.some((entity) => entity.collection === 'links'), true);
+  assert.equal(built.entities.some((entity) => entity.entityId === 'command:cmd-new' && entity.collection === 'commands'), true);
   assert.equal(built.entities.some((entity) => entity.collection === 'clipboardHistory'), true);
   assert.equal(built.entities.some((entity) => entity.entityId === 'recording:rec1'), true);
   assert.equal(built.entities.some((entity) => entity.entityId.startsWith('recording-blob:')), true);
@@ -121,6 +132,7 @@ test('secrets and AI keys round-trip as ciphertext', () => {
   assert.equal(projected.snapshot.notes.home, '首页速记');
   assert.equal(projected.snapshot.notes.archive[0].content, '正文');
   assert.equal(projected.snapshot.links[0].links[0].url, 'https://example.com');
+  assert.deepEqual(projected.snapshot.commands.map((item) => item.text), ['npm test', 'git status']);
   assert.equal(projected.snapshot.clipboard.history.length, 2);
   assert.equal(projected.snapshot.clipboard.favorites[0], 'c1');
   assert.equal(projected.snapshot.recordings[0].transcript, '你好');

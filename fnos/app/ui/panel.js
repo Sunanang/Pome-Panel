@@ -29,6 +29,7 @@
     { id: 'todo', label: '待办' },
     { id: 'clip', label: '剪贴' },
     { id: 'notes', label: '笔记' },
+    { id: 'commands', label: '常用命令' },
     { id: 'links', label: '链接' },
     { id: 'recordings', label: '录制' },
     { id: 'credentials', label: '密钥' },
@@ -255,6 +256,20 @@
       if (current.transcript) detail.appendChild(el('p', 'recording-transcript', current.transcript));
     }
 
+    function renderCommands() {
+      const list = byId('command-list');
+      if (!list || !doc) return;
+      clearNode(list);
+      const items = (view && view.commands) || [];
+      for (const item of items) {
+        const text = item && item.text ? String(item.text) : '';
+        if (!text) continue;
+        const row = el('article', 'nas-command-item');
+        row.appendChild(el('p', 'nas-command-text', text));
+        list.appendChild(row);
+      }
+    }
+
     function renderLinks() {
       const host = byId('link-groups');
       if (!host || !doc) return;
@@ -391,6 +406,7 @@
 
     function renderAll() {
       renderNotes();
+      renderCommands();
       renderClips();
       renderRecordings();
       renderLinks();

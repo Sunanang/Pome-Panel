@@ -61,6 +61,7 @@ function makeDom() {
     'recording-detail',
     'recording-count',
     'link-groups',
+    'command-list',
     'credential-list',
     'credential-count',
     'nas-asr-status',
@@ -70,7 +71,7 @@ function makeDom() {
   for (const priority of ['P0', 'P1', 'P2', 'P3']) {
     ids.push(`todo-name-${priority}`, `todo-count-${priority}`, `todo-list-${priority}`);
   }
-  for (const tab of ['devices', 'todo', 'clip', 'notes', 'links', 'recordings', 'credentials']) {
+  for (const tab of ['devices', 'todo', 'clip', 'notes', 'commands', 'links', 'recordings', 'credentials']) {
     ids.push(`tab-button-${tab}`, `tab-${tab}`);
   }
   for (const filter of ['all', 'text', 'image', 'faved']) ids.push(`clip-filter-${filter}`);
@@ -112,7 +113,9 @@ test('NAS panel uses desktop tab chrome and puts 设备 in the home slot', () =>
   assert.doesNotMatch(html, />首页</);
   assert.doesNotMatch(html, /id="nav-content"/);
   const order = [...html.matchAll(/data-tab="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(order, ['devices', 'todo', 'clip', 'notes', 'links', 'recordings', 'credentials']);
+  assert.deepEqual(order, ['devices', 'todo', 'clip', 'notes', 'commands', 'links', 'recordings', 'credentials']);
+  assert.match(html, />常用命令</);
+  assert.doesNotMatch(html, /id="tab-commands"[\s\S]*还没有/);
   assert.match(html, /id="tab-devices"[^>]*class="tab-panel active"/);
   assert.match(html, /id="tab-todo"[^>]*hidden/);
   assert.match(html, /class="sections"/);
@@ -164,6 +167,11 @@ test('workspace view masks secrets and keeps media bytes off the JSON', () => {
       collection: 'clipboardHistory',
       payload: { id: 'c1', type: 'image', text: '配图', imageBase64: png },
     },
+    {
+      entityId: 'command:cmd-1',
+      collection: 'commands',
+      payload: { id: 'cmd-1', text: 'npm test', createdAt: 3 },
+    },
   ];
   const view = buildWorkspaceView(entities, key);
   const dumped = JSON.stringify(view);
@@ -173,6 +181,8 @@ test('workspace view masks secrets and keeps media bytes off the JSON', () => {
   assert.equal(view.ai.asr, '已配置');
   assert.equal(view.ai.llm, '未配置');
   assert.equal(view.clipboard[0].hasImage, true);
+  assert.equal(view.commands[0].text, 'npm test');
+  assert.equal(view.counts.commands, 1);
   assert.equal(view.clipboard[0].imageBase64, undefined);
   assert.equal(dumped.includes(password), false);
   assert.equal(dumped.includes(apiKey), false);
@@ -298,6 +308,10 @@ test('panel controller renders synced notes and switches to devices', async () =
       hasAudio: true,
       audioOmitted: false,
     }],
+    commands: [
+      { id: 'cmd-1', text: 'npm test', createdAt: 9 },
+      { id: 'cmd-2', text: 'git status', createdAt: 2 },
+    ],
     links: [{
       id: 'g1',
       name: '常用',
@@ -346,6 +360,12 @@ test('panel controller renders synced notes and switches to devices', async () =
   assert.match(textOf(store['recording-list']), /站会/);
   assert.match(textOf(store['recording-detail']), /今天先看同步/);
   assert.match(textOf(store['recording-detail']), /1:05/);
+
+  await controller.selectTab('commands');
+  assert.equal(store['tab-commands'].hidden, false);
+  assert.match(textOf(store['command-list']), /npm test/);
+  assert.match(textOf(store['command-list']), /git status/);
+  assert.doesNotMatch(textOf(store['command-list']), /还没有/);
 
   await controller.selectTab('links');
   assert.match(textOf(store['link-groups']), /示例/);

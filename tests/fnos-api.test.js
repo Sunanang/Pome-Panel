@@ -363,7 +363,7 @@ test('sync/state + migration/* + push/pull contract shapes', async () => {
   });
   assert.equal(notesAccepted.statusCode, 200);
 
-  const commandsRejected = await dispatch(app, {
+  const commandsAccepted = await dispatch(app, {
     method: 'POST',
     url: '/api/v1/sync/push',
     headers: auth,
@@ -371,9 +371,9 @@ test('sync/state + migration/* + push/pull contract shapes', async () => {
       mutations: [{
         schemaVersion: SCHEMA_VERSION,
         collection: 'commands',
-        entityId: 'cmd-1',
+        entityId: 'command:cmd-1',
         op: 'upsert',
-        payload: {},
+        payload: { id: 'cmd-1', text: 'npm test', createdAt: 1 },
         clientMutationId: 'c3',
         deviceId: 'dm',
         baseServerRev: 0,
@@ -381,8 +381,28 @@ test('sync/state + migration/* + push/pull contract shapes', async () => {
       }],
     },
   });
-  assert.equal(commandsRejected.statusCode, 422);
-  assert.equal(commandsRejected.getJson().error, 'collection_not_enabled');
+  assert.equal(commandsAccepted.statusCode, 200);
+
+  const layoutRejected = await dispatch(app, {
+    method: 'POST',
+    url: '/api/v1/sync/push',
+    headers: auth,
+    body: {
+      mutations: [{
+        schemaVersion: SCHEMA_VERSION,
+        collection: 'homeLayout',
+        entityId: 'layout:home',
+        op: 'upsert',
+        payload: {},
+        clientMutationId: 'c4',
+        deviceId: 'dm',
+        baseServerRev: 0,
+        clientTime: 1,
+      }],
+    },
+  });
+  assert.equal(layoutRejected.statusCode, 422);
+  assert.equal(layoutRejected.getJson().error, 'collection_not_enabled');
 });
 
 test('device port listen uses ephemeral port (not hardcoded 5001)', async () => {

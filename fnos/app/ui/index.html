@@ -42,6 +42,13 @@
             </svg>
             <span class="tab-label">笔记</span>
           </button>
+          <button class="tab" id="tab-button-commands" type="button" data-tab="commands" role="tab" aria-controls="tab-commands" aria-selected="false" tabindex="-1">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 7l6 5-6 5" />
+              <path d="M12 17h8" />
+            </svg>
+            <span class="tab-label">常用命令</span>
+          </button>
           <button class="tab" id="tab-button-links" type="button" data-tab="links" role="tab" aria-controls="tab-links" aria-selected="false" tabindex="-1">
             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" />
@@ -168,6 +175,12 @@
               <div class="notes-list" id="notes-list"></div>
             </aside>
             <section class="notes-detail tile" id="notes-detail"></section>
+          </div>
+        </section>
+
+        <section id="tab-commands" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-commands" hidden>
+          <div class="commands-page">
+            <div class="nas-command-list" id="command-list"></div>
           </div>
         </section>
 

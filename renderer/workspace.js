@@ -3562,6 +3562,11 @@
     if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
   });
 
+  window.getCommandsForSync = () => commands.map((command) => ({
+    id: command.id,
+    text: command.text,
+    createdAt: command.createdAt,
+  }));
   window.getLinkGroupsForSync = () => linkGroups.map((group) => ({
     id: group.id,
     name: group.name || '',
@@ -3594,6 +3599,15 @@
       linkGroups = detail.links;
       persistLinks();
       renderLinkGroups();
+    }
+    if (Array.isArray(detail.commands)) {
+      commands = detail.commands
+        .map((item) => Domain.createCommand(item && item.text, item && item.id, item && item.createdAt))
+        .filter(Boolean);
+      commandSelection = new Set();
+      commandSelectionAnchor = null;
+      persistCommands();
+      renderCommands();
     }
     if (Array.isArray(detail.recordings)) {
       const incoming = detail.recordings.map((row) => {
