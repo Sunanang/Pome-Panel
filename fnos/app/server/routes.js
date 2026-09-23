@@ -96,11 +96,14 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
 
     try {
       if (method === 'GET' && path === '/api/v1/health') {
+        const devicePort = Number.isInteger(store.deviceListenPort) ? store.deviceListenPort : null;
         sendJson(res, 200, {
           ok: true,
           serverId: store.serverId,
           gatewayMode: listenMode === 'gateway',
           listenMode,
+          devicePort,
+          deviceHost: devicePort ? (store.deviceListenHost || '127.0.0.1') : null,
         });
         return;
       }

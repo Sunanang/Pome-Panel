@@ -62,6 +62,7 @@ for (const file of [
   'fnos/app/server/store.js',
   'fnos/app/server/routes.js',
   'fnos/app/server/createApp.js',
+  'fnos/app/server/devicePort.js',
   'fnos/app/server/index.js',
   'fnos/app/server/gatewayHttp.js',
   'fnos/app/server/testHarness.js',

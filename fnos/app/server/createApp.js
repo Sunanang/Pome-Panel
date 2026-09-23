@@ -47,22 +47,39 @@ function createApp(options = {}) {
     },
     /**
      * Optional device sync port. Pass port=0 (default) for OS-assigned ephemeral port.
+     * A failed bind (for example EADDRINUSE) leaves the server idle so the caller can retry.
      * NEVER hardcode 5001.
      */
     listenDevicePort(port = 0, host = '127.0.0.1') {
       const tcpPort = port == null || port === '' ? 0 : Number(port);
-      if (!Number.isFinite(tcpPort) || tcpPort < 0) {
+      if (!Number.isInteger(tcpPort) || tcpPort < 0 || tcpPort > 65535) {
         return Promise.reject(new Error('invalid_device_port'));
       }
       return new Promise((resolve, reject) => {
-        server.listen(tcpPort, host, () => {
+        const onError = (err) => {
+          cleanup();
+          reject(err);
+        };
+        const onListening = () => {
+          cleanup();
           const addr = server.address();
           resolve({
             host,
             port: typeof addr === 'object' && addr ? addr.port : tcpPort,
           });
-        });
-        server.on('error', reject);
+        };
+        function cleanup() {
+          server.removeListener('error', onError);
+          server.removeListener('listening', onListening);
+        }
+        server.on('error', onError);
+        server.on('listening', onListening);
+        try {
+          server.listen(tcpPort, host);
+        } catch (err) {
+          cleanup();
+          reject(err);
+        }
       });
     },
     close() {

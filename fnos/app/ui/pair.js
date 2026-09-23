@@ -77,6 +77,21 @@
     return key;
   }
 
+  function formatDevicePortCopy(port, host) {
+    const n = Number(port);
+    if (!Number.isInteger(n) || n < 1 || n > 65535) {
+      return {
+        value: '尚未读到',
+        hint: '请确认飞牛应用已启动。FRP 需要映射到当前的本机设备同步端口。',
+      };
+    }
+    const bindHost = !host || host === '0.0.0.0' || host === '::' ? '127.0.0.1' : String(host);
+    return {
+      value: `${bindHost}:${n}`,
+      hint: 'FRP 本地端口请指向这个端口。重启后若端口变了，请立刻改映射。桌面同步地址仍填公网 FRP 地址。',
+    };
+  }
+
   function extractPairingCode(body) {
     if (!body || typeof body !== 'object') return '';
     const raw = body.pairingCode || body.code || '';
@@ -115,6 +130,8 @@
       startBtn: doc && doc.getElementById('pair-start-btn'),
       refreshBtn: doc && doc.getElementById('pair-refresh-btn'),
       sessionPill: doc && doc.getElementById('session-pill'),
+      portValue: doc && doc.getElementById('device-port-value'),
+      portHint: doc && doc.getElementById('device-port-hint'),
     };
 
     function setStatus(text, kind) {
@@ -305,6 +322,33 @@
       }
     }
 
+    function applyDevicePortCopy(port, host) {
+      const copy = formatDevicePortCopy(port, host);
+      if (els.portValue) els.portValue.textContent = copy.value;
+      if (els.portHint) els.portHint.textContent = copy.hint;
+      return copy;
+    }
+
+    async function loadDevicePort() {
+      try {
+        const { res, body } = await fetchJson('/api/v1/health');
+        if (!res.ok) {
+          applyDevicePortCopy(null, null);
+          return { ok: false, port: null, host: null };
+        }
+        applyDevicePortCopy(body && body.devicePort, body && body.deviceHost);
+        const port = body && Number.isInteger(Number(body.devicePort)) ? Number(body.devicePort) : null;
+        return {
+          ok: port != null && port > 0,
+          port,
+          host: (body && body.deviceHost) || null,
+        };
+      } catch {
+        applyDevicePortCopy(null, null);
+        return { ok: false, port: null, host: null };
+      }
+    }
+
     async function loadDevices() {
       try {
         const { res, body } = await fetchJson('/api/v1/devices');
@@ -390,6 +434,7 @@
       if (els.refreshBtn) els.refreshBtn.disabled = true;
       try {
         setStatus('刷新中…', '');
+        await loadDevicePort();
         const session = await checkSession();
         const devices = await loadDevices();
         if (session.ok && devices.ok) {
@@ -426,6 +471,7 @@
       bind();
       setSessionPill('unknown', '检测会话…');
       try {
+        await loadDevicePort();
         await checkSession();
         await loadDevices();
       } catch (err) {
@@ -441,6 +487,7 @@
       checkSession,
       refreshCsrf,
       startPair,
+      loadDevicePort,
       loadDevices,
       refreshAll,
       revokeDevice,
@@ -471,6 +518,7 @@
     formatRemaining,
     humanError,
     extractPairingCode,
+    formatDevicePortCopy,
     createPairUiController,
     boot,
   };
