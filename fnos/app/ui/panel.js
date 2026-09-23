@@ -22,7 +22,7 @@
     }
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function factory() {
-  const DEFAULT_GATEWAY_PREFIX = '/app/pomepanel';
+  const DEFAULT_GATEWAY_PREFIX = '/app/pome-panel';
 
   const TABS = Object.freeze([
     { id: 'devices', label: '设备' },
@@ -42,7 +42,7 @@
       return String(metaPrefix).trim().replace(/\/$/, '');
     }
     const raw = String(pathname || '/');
-    // App id com.pomepanel.sync contains dots. Only strip real static assets.
+    // Only strip real static assets. A dotted name is not a file by itself.
     const withoutFile = raw.replace(/\/[^/]+\.(?:html|js|css|png|svg|json)$/i, '');
     const cleaned = withoutFile.replace(/\/$/, '');
     if (cleaned) return cleaned;

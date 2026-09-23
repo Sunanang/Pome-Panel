@@ -84,7 +84,7 @@ function makeDom() {
     getElementById(id) { return store[id] || null; },
     querySelector(sel) {
       if (sel === 'meta[name="gateway-prefix"]') {
-        return { getAttribute: () => '/app/pomepanel' };
+        return { getAttribute: () => '/app/pome-panel' };
       }
       return null;
     },
@@ -129,7 +129,7 @@ test('NAS panel uses desktop tab chrome and puts 设备 in the home slot', () =>
   assert.doesNotMatch(html, /还没有同步内容/);
   assert.doesNotMatch(html, /还没有待办|还没有笔记|还没有链接|还没有密钥|还没有同步的笔记/);
   assert.doesNotMatch(html, /id="workspace-status"|id="workspace-empty"|nas-memory-note/);
-  assert.match(html, /\/app\/pomepanel\/panel\.js/);
+  assert.match(html, /\/app\/pome-panel\/panel\.js/);
   const visible = html.replace(/<script[\s\S]*?<\/script>/gi, '');
   assert.doesNotMatch(visible, /\/api\/v1\//);
   assert.doesNotMatch(panelSrc, /fetch\(\s*'\/api\/v1\//);
@@ -339,7 +339,7 @@ test('panel controller renders synced notes and switches to devices', async () =
   const controller = panelUi.createPanelController({
     document: doc,
     fetch: fetchImpl,
-    gatewayPrefix: '/app/pomepanel',
+    gatewayPrefix: '/app/pome-panel',
   });
   await controller.init();
   assert.match(textOf(store['notes-list']), /会议纪要/);
@@ -354,7 +354,7 @@ test('panel controller renders synced notes and switches to devices', async () =
   assert.equal(store['tab-devices'].hidden, true);
   assert.match(textOf(store['clip-list']), /配图/);
   assert.match(textOf(store['clip-list']), /已收藏/);
-  assert.ok(mediaUrls.some((url) => url.includes('/app/pomepanel/api/v1/workspace/media/clip%3Ac1')));
+  assert.ok(mediaUrls.some((url) => url.includes('/app/pome-panel/api/v1/workspace/media/clip%3Ac1')));
 
   await controller.selectTab('recordings');
   assert.match(textOf(store['recording-list']), /站会/);

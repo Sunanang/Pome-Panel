@@ -40,19 +40,29 @@ app_data_path() {
     *..*) return 1 ;;
     /var|/vol1|/usr|/etc|/home|/tmp|/root|/opt|/bin|/sbin) return 1 ;;
   esac
-  case "$trimmed" in
-    *com.pomepanel.sync*) ;;
-    *) return 1 ;;
-  esac
+  if ! path_belongs_to_app "$trimmed"; then
+    return 1
+  fi
   if [[ -e "$trimmed" ]]; then
     local canon
     canon="$(readlink -f "$trimmed")"
-    case "$canon" in
-      *com.pomepanel.sync*) trimmed="$canon" ;;
-      *) return 1 ;;
-    esac
+    if ! path_belongs_to_app "$canon"; then
+      return 1
+    fi
+    trimmed="$canon"
   fi
   printf '%s' "$trimmed"
+}
+
+path_belongs_to_app() {
+  local candidate="$1"
+  if [[ "$candidate" == *com.pomepanel.sync* ]]; then
+    return 0
+  fi
+  if [[ "$candidate" =~ (^|/)pome-panel(/|$) ]]; then
+    return 0
+  fi
+  return 1
 }
 
 remove_tree() {

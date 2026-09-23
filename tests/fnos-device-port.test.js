@@ -204,10 +204,10 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.10');
+  assert.equal(manifestJson.version, '0.9.11');
   assert.equal(manifestJson.distributor, 'Lando');
-  assert.equal(manifestJson.id, 'com.pomepanel.sync');
-  assert.equal(manifestJson.appPath, '/app/pomepanel');
+  assert.equal(manifestJson.id, 'pome-panel');
+  assert.equal(manifestJson.appPath, '/app/pome-panel');
   assert.equal(manifestJson.appPath.includes('.'), false);
   assert.equal(manifestJson.devicePort.field, 'wizard_port');
   assert.doesNotMatch(JSON.stringify(manifestJson), /Sunanang|Pome Panel Sync/);
@@ -216,12 +216,12 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.10$/m);
+  assert.match(official, /^version=0\.9\.11$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
-  assert.match(official, /^desktop_applaunchname=com\.pomepanel\.sync\.main$/m);
+  assert.match(official, /^desktop_applaunchname=pome-panel\.main$/m);
   assert.ok(fs.existsSync(path.join(root, 'app/ui/config')));
-  assert.match(official, /^appname=com\.pomepanel\.sync$/m);
+  assert.match(official, /^appname=pome-panel$/m);
   assert.match(official, /^checkport=false$/m);
   assert.doesNotMatch(official, /service_port\s*=\s*5001|Sunanang|Pome Panel Sync/);
   const changelog = official.split('\n').find((line) => line.startsWith('changelog='));
@@ -252,9 +252,16 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(configTips.helpText, /没填端口时应用也能启用/);
   assert.match(configTips.helpText, /重启/);
   const uiConfig = JSON.parse(fs.readFileSync(path.join(root, 'app/ui/config'), 'utf8'));
-  assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].title, 'Pome Panel');
-  assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].gatewayPrefix, '/app/pomepanel');
-  assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].url, '/app/pomepanel');
+  const launch = uiConfig['.url']['pome-panel.main'];
+  assert.equal(launch.title, 'Pome Panel');
+  assert.equal(launch.gatewayPrefix, '/app/pome-panel');
+  assert.equal(launch.url, '/app/pome-panel');
+  assert.equal(launch.icon, 'images/icon_{0}.png');
+  assert.equal(launch.gatewaySocket, 'app.sock');
+  for (const size of ['64', '256']) {
+    const iconPath = path.join(root, 'app/ui/images', `icon_${size}.png`);
+    assert.equal(fs.readFileSync(iconPath).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', iconPath);
+  }
   const uninstallSteps = JSON.parse(fs.readFileSync(path.join(root, 'wizard/uninstall'), 'utf8'));
   const radio = uninstallSteps.flatMap((step) => step.items).find((item) => item.field === 'wizard_data_action');
   assert.equal(radio.type, 'radio');
@@ -307,18 +314,18 @@ test('devices tab shows the current local port for FRP', async () => {
       return null;
     },
     querySelector() {
-      return { getAttribute: () => '/app/pomepanel' };
+      return { getAttribute: () => '/app/pome-panel' };
     },
   };
   let copied = '';
   const controller = pairUi.createPairUiController({
     document: doc,
     window: {
-      location: { pathname: '/app/pomepanel/' },
+      location: { pathname: '/app/pome-panel/' },
       navigator: { clipboard: { writeText: async (text) => { copied = text; } } },
     },
     fetch: async (url) => {
-      assert.match(String(url), /\/app\/pomepanel\/api\/v1\/device-port$/);
+      assert.match(String(url), /\/app\/pome-panel\/api\/v1\/device-port$/);
       return new Response(JSON.stringify({
         ok: true,
         enabled: true,
@@ -354,12 +361,12 @@ test('devices tab shows the current local port for FRP', async () => {
       return null;
     },
     querySelector() {
-      return { getAttribute: () => '/app/pomepanel' };
+      return { getAttribute: () => '/app/pome-panel' };
     },
   };
   const unsetController = pairUi.createPairUiController({
     document: unsetDoc,
-    window: { location: { pathname: '/app/pomepanel/' } },
+    window: { location: { pathname: '/app/pome-panel/' } },
     fetch: async () => new Response(JSON.stringify({
       ok: true,
       enabled: false,
@@ -672,7 +679,7 @@ test('packaged server loads vendored sync-protocol from TRIM_APPDEST', () => {
   assert.ok(entryAt > 0);
   assert.ok(fallbackAt > entryAt);
   assert.match(start, /nohup "\$NODE_BIN" "\$APP_ENTRY"/);
-  assert.match(start, /export FNOS_GATEWAY_PREFIX="\$\{FNOS_GATEWAY_PREFIX:-\/app\/pomepanel\}"/);
+  assert.match(start, /export FNOS_GATEWAY_PREFIX="\$\{FNOS_GATEWAY_PREFIX:-\/app\/pome-panel\}"/);
 
   const srcDir = path.join(root, 'packages/sync-protocol');
   const vendored = path.join(root, 'fnos/app/packages/sync-protocol');
@@ -823,7 +830,7 @@ test('uninstall wizard keeps data unless the user chooses delete', async (t) => 
     return;
   }
   const dir = tmpDir('fnos-uninstall-');
-  const app = path.join(dir, 'com.pomepanel.sync');
+  const app = path.join(dir, 'pome-panel');
   const varDir = path.join(app, 'var');
   const homeDir = path.join(app, 'home');
   const etcDir = path.join(app, 'etc');
@@ -884,6 +891,20 @@ test('uninstall wizard keeps data unless the user chooses delete', async (t) => 
   assert.match(unset.stderr, /keep app data/);
   assert.equal(fs.readFileSync(path.join(varDir, 'device-port'), 'utf8').trim(), '41234');
 
+  const oldVar = path.join(dir, 'com.pomepanel.sync', 'var');
+  fs.mkdirSync(oldVar, { recursive: true });
+  fs.writeFileSync(path.join(oldVar, 'old.txt'), 'gone');
+  const oldRemoved = await runScript(callback, {
+    ...process.env,
+    wizard_data_action: 'delete',
+    TRIM_PKGVAR: oldVar,
+    TRIM_PKGHOME: '',
+    TRIM_PKGETC: '',
+  });
+  assert.equal(oldRemoved.err, null, oldRemoved.stderr);
+  assert.equal(fs.existsSync(oldVar), false);
+  assert.equal(fs.readFileSync(path.join(homeDir, 'note.txt'), 'utf8'), 'keep-me');
+
   const unsafe = path.join(dir, 'not-this-app');
   fs.mkdirSync(unsafe, { recursive: true });
   fs.writeFileSync(path.join(unsafe, 'keep-me'), 'x');
@@ -929,12 +950,12 @@ test('pairing stays off until the fnOS session is present', async () => {
         if (id === 'pair-status') return status;
         return null;
       },
-      querySelector() { return { getAttribute: () => '/app/pomepanel' }; },
+      querySelector() { return { getAttribute: () => '/app/pome-panel' }; },
     };
   }
   const denied = pairUi.createPairUiController({
     document: docFor(),
-    window: { location: { pathname: '/app/pomepanel/' } },
+    window: { location: { pathname: '/app/pome-panel/' } },
     fetch: async () => new Response(JSON.stringify({ error: 'gateway_session_required' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -949,7 +970,7 @@ test('pairing stays off until the fnOS session is present', async () => {
 
   const allowed = pairUi.createPairUiController({
     document: docFor(),
-    window: { location: { pathname: '/app/pomepanel/' } },
+    window: { location: { pathname: '/app/pome-panel/' } },
     fetch: async () => new Response(JSON.stringify({ uid: 'uid-lando', username: 'Lando' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

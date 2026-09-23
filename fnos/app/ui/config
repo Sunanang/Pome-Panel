@@ -1,12 +1,13 @@
 {
   ".url": {
-    "com.pomepanel.sync.main": {
+    "pome-panel.main": {
       "title": "Pome Panel",
+      "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "",
-      "gatewayPrefix": "/app/pomepanel",
+      "gatewayPrefix": "/app/pome-panel",
       "gatewaySocket": "app.sock",
-      "url": "/app/pomepanel",
+      "url": "/app/pome-panel",
       "allUsers": true
     }
   }

@@ -1,6 +1,6 @@
 {
   "name": "pome-panel",
-  "version": "0.9.10",
+  "version": "0.9.11",
   "description": "Pome Panel - a local desktop workspace for macOS and Windows",
   "main": "main.js",
   "author": "Lando",

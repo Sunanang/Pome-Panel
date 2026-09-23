@@ -57,8 +57,8 @@ export FNOS_DEVICE_PORT_FILE="$DEVICE_PORT_FILE"
 export FNOS_SERVER_ID_FILE="${FNOS_SERVER_ID_FILE:-$DATA_DIR/server-id}"
 
 export PATH="/var/apps/nodejs_v24/target/bin:/var/apps/nodejs_v22/target/bin:${PATH:-/usr/local/bin:/usr/bin}"
-# Public path must not contain a dot. A dotted segment is treated as a static file.
-export FNOS_GATEWAY_PREFIX="${FNOS_GATEWAY_PREFIX:-/app/pomepanel}"
+# SAC registers /app/<appname>. appname is pome-panel; a dotted id is a static-file 404.
+export FNOS_GATEWAY_PREFIX="${FNOS_GATEWAY_PREFIX:-/app/pome-panel}"
 
 # fnpack extracts app/ into TRIM_APPDEST (target/). There is no app/ under /var/apps/<id>.
 if [[ -n "${TRIM_APPDEST:-}" ]]; then

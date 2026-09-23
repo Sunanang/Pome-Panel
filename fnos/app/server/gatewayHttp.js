@@ -2,16 +2,16 @@
 
 /**
  * Gateway prefix strip + static UI serving for FPK production entry.
- * Public path is /app/pomepanel. SAC treats a dotted last segment such as
- * com.pomepanel.sync as a static file and returns Not Found before the socket.
- * Older prefixes are still stripped so a previous registration can reach the app.
+ * SAC registers /app/<appname>. A dotted appname is treated as a static file
+ * and returns Not Found before the Unix socket, so the public path is /app/pome-panel.
+ * Older prefixes are still stripped for one upgrade.
  */
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 
-const DEFAULT_GATEWAY_PREFIX = '/app/pomepanel';
-const LEGACY_GATEWAY_PREFIXES = ['/app/com.pomepanel.sync', '/app/pome-panel'];
+const DEFAULT_GATEWAY_PREFIX = '/app/pome-panel';
+const LEGACY_GATEWAY_PREFIXES = ['/app/com.pomepanel.sync', '/app/pomepanel'];
 
 function normalizePrefix(prefix) {
   if (!prefix) return '';
