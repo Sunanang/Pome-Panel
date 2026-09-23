@@ -194,7 +194,8 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.0');
+  assert.equal(manifestJson.version, '0.9.1');
+  assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'com.pomepanel.sync');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
   assert.equal(manifestJson.devicePort.field, 'wizard_port');
@@ -203,18 +204,31 @@ test('install wizard and package identity use a user-chosen port', () => {
   const official = fs.readFileSync(path.join(root, 'manifest'), 'utf8');
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
-  assert.match(official, /^version=0\.9\.0$/m);
+  assert.match(official, /^distributor=Lando$/m);
+  assert.match(official, /^version=0\.9\.1$/m);
+  assert.match(official, /^desktop_uidir=ui$/m);
+  assert.match(official, /^desktop_applaunchname=pome-panel\.main$/m);
+  assert.ok(fs.existsSync(path.join(root, 'app/ui/config')));
   assert.match(official, /^appname=com\.pomepanel\.sync$/m);
   assert.match(official, /^checkport=false$/m);
   assert.doesNotMatch(official, /service_port\s*=\s*5001|Sunanang|Pome Panel Sync/);
 
-  for (const rel of ['wizard/install', 'wizard/config']) {
+  const portPattern = /^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/;
+  for (const sample of ['1', '5', '80', '45875', '65535']) assert.match(sample, portPattern);
+  for (const sample of ['0', '65536', '01234', '99999']) assert.doesNotMatch(sample, portPattern);
+  for (const rel of ['wizard/install', 'wizard/config', 'wizard/upgrade']) {
     const steps = JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8'));
     const field = steps.flatMap((step) => step.items).find((item) => item.field === 'wizard_port');
     assert.ok(field, rel);
     assert.equal(field.type, 'text');
     assert.equal(field.initValue, undefined);
-    assert.equal(JSON.stringify(field).includes('5001'), false);
+    const serialized = JSON.stringify(field);
+    assert.equal(serialized.includes('5001'), false);
+    assert.equal(serialized.includes('"max":5'), false);
+    const range = field.rules.find((rule) => Object.prototype.hasOwnProperty.call(rule, 'max'));
+    assert.equal(range.min, 1);
+    assert.equal(range.max, 65535);
+    assert.equal(field.rules.some((rule) => rule.pattern === portPattern.source), true);
   }
   const uiConfig = JSON.parse(fs.readFileSync(path.join(root, 'app/ui/config'), 'utf8'));
   assert.equal(uiConfig['.url']['pome-panel.main'].title, 'Pome Panel');
@@ -366,13 +380,61 @@ test('start.sh refuses to launch when no port was configured', async (t) => {
         FNOS_DATA_DIR: data,
         FNOS_DEVICE_PORT: '',
         wizard_port: '',
+        WIZARD_PORT: '',
         NODE_BIN: '/bin/false',
+        TRIM_TEMP_LOGFILE: path.join(dir, 'start.log'),
       },
     }, (error) => resolve(error));
   });
   assert.ok(err);
-  assert.match(String(err.stderr || err.message), /未配置设备同步端口/);
+  const logged = fs.existsSync(path.join(dir, 'start.log'))
+    ? fs.readFileSync(path.join(dir, 'start.log'), 'utf8')
+    : '';
+  assert.match(`${err.stderr || ''}\n${err.message || ''}\n${logged}`, /未配置设备同步端口/);
+  assert.match(logged, /1 到 65535/);
   assert.equal(fs.existsSync(path.join(runtime, 'server.pid')), false);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('start.sh accepts the uppercase wizard port alias', async (t) => {
+  if (process.platform === 'win32') {
+    t.skip('FPK start.sh is a bash script');
+    return;
+  }
+  const root = path.join(__dirname, '..');
+  const dir = tmpDir('fnos-start-alias-');
+  const runtime = path.join(dir, 'runtime');
+  const data = path.join(dir, 'data');
+  const etc = path.join(dir, 'etc');
+  fs.mkdirSync(runtime, { recursive: true });
+  const fake = path.join(dir, 'fake-node.sh');
+  fs.writeFileSync(fake, `#!/bin/sh
+printf 'PORT=%s\\n' "\${FNOS_DEVICE_PORT-unset}" > "\${FNOS_DATA_DIR}/probe.txt"
+exit 0
+`, { mode: 0o755 });
+  await new Promise((resolve, reject) => {
+    execFile('bash', [path.join(root, 'fnos/cmd/start.sh')], {
+      env: {
+        ...process.env,
+        FNOS_RUNTIME_DIR: runtime,
+        FNOS_DATA_DIR: data,
+        TRIM_PKGETC: etc,
+        FNOS_DEVICE_PORT: '',
+        wizard_port: '',
+        WIZARD_PORT: '45875',
+        NODE_BIN: fake,
+      },
+    }, (err, stdout, stderr) => (err ? reject(new Error(`${stderr || stdout || err.message}`)) : resolve(stdout)));
+  });
+  const probePath = path.join(data, 'probe.txt');
+  const started = Date.now();
+  while (!fs.existsSync(probePath)) {
+    if (Date.now() - started > 3000) throw new Error('alias probe missing');
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+  assert.equal(fs.readFileSync(probePath, 'utf8').trim(), 'PORT=45875');
+  assert.equal(fs.readFileSync(path.join(etc, 'device-port'), 'utf8').trim(), '45875');
+  assert.equal(fs.readFileSync(path.join(data, 'device-port'), 'utf8').trim(), '45875');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -404,6 +466,22 @@ test('install callback saves wizard_port and rejects an empty value', async (t) 
   });
   assert.ok(rejected);
   assert.match(`${rejected.stdout || ''}\n${rejected.stderr || ''}\n${rejected.message || ''}`, /请填写设备同步端口/);
+
+  const varDir = path.join(dir, 'var');
+  await new Promise((resolve, reject) => {
+    execFile('bash', [path.join(__dirname, '..', 'fnos/cmd/upgrade_callback')], {
+      env: {
+        ...process.env,
+        wizard_port: '',
+        WIZARD_PORT: '45875',
+        TRIM_PKGETC: etc,
+        TRIM_PKGVAR: varDir,
+        FNOS_DATA_DIR: '',
+      },
+    }, (err, stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve(stdout)));
+  });
+  assert.equal(fs.readFileSync(path.join(etc, 'device-port'), 'utf8').trim(), '45875');
+  assert.equal(fs.readFileSync(path.join(varDir, 'device-port'), 'utf8').trim(), '45875');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

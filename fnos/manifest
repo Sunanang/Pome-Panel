@@ -1,13 +1,14 @@
 appname=com.pomepanel.sync
-version=0.9.0
+version=0.9.1
 display_name=Pome Panel
 desc=在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/pome-panel。设备同步端口在安装时填写，固定监听 127.0.0.1。
 source=thirdparty
 platform=all
 maintainer=Lando
+distributor=Lando
 os_min_version=0.8.0
-desktop_uidir=app/ui
+desktop_uidir=ui
 desktop_applaunchname=pome-panel.main
 ctl_stop=true
 checkport=false
-changelog=产品版本重置为 0.9.0。安装时由用户填写固定的设备同步端口，不再每次启动随机分配。开发者 Lando。
+changelog=0.9.1：发布者改为 Lando。安装向导接受 1 到 65535 的端口，并在启动前写入配置。
