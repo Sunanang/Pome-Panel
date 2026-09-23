@@ -71,7 +71,23 @@ function normalizeDeviceHost(host) {
  * while the device port is enabled but the socket is not recorded yet.
  * Disabled listeners never advertise a stale file port.
  */
+/**
+ * Whether this process should bind device TCP.
+ * A missing port skips the bind so the Unix gateway can still come up.
+ * An explicit enable flag of "0" only disables TCP when a real port exists.
+ * @returns {{ listen: boolean, reason: 'configured'|'disabled'|'unconfigured', chosen: { port: number, source: string } | null }}
+ */
+function planDeviceListen({ enableFlag, envValue, wizardValue, portFile } = {}) {
+  const chosen = resolveConfiguredDevicePort({ envValue, wizardValue, portFile });
+  if (!chosen) return { listen: false, reason: 'unconfigured', chosen: null };
+  if (String(enableFlag) === '0') return { listen: false, reason: 'disabled', chosen };
+  return { listen: true, reason: 'configured', chosen };
+}
+
 function describeDeviceListenPort(store) {
+  if (store && store.devicePortUnconfigured) {
+    return { enabled: false, port: null, host: null, target: null, source: 'unconfigured' };
+  }
   if (store && store.devicePortEnabled === false) {
     return { enabled: false, port: null, host: null, target: null, source: 'disabled' };
   }
@@ -138,6 +154,7 @@ module.exports = {
   readSavedDevicePort,
   chooseDevicePort,
   resolveConfiguredDevicePort,
+  planDeviceListen,
   writeDevicePortFile,
   listenConfiguredDevicePort,
   listenPersistedDevicePort,

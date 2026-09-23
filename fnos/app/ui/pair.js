@@ -89,6 +89,14 @@
         available: true,
       };
     }
+    if (state && state.source === 'unconfigured') {
+      return {
+        value: '未配置',
+        hint: '尚未配置设备同步端口。请打开飞牛「应用设置」，填写 1 到 65535 的端口，然后重启本应用。',
+        copyText: '',
+        available: false,
+      };
+    }
     if (state && state.enabled === false) {
       return {
         value: '未开启',
@@ -390,7 +398,10 @@
           applyDevicePortCopy(null, null, null);
           return { ok: false, port: null, host: null, enabled: false };
         }
-        const copy = applyDevicePortCopy(body.port, body.host, { enabled: body.enabled });
+        const copy = applyDevicePortCopy(body.port, body.host, {
+          enabled: body.enabled,
+          source: body.source,
+        });
         return {
           ok: copy.available,
           port: copy.available ? Number(body.port) : null,

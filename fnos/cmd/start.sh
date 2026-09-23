@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FPK start — launch Pome Panel (Unix gateway socket + the install-time device port).
+# FPK start — always launch the Unix gateway. Device TCP waits for a configured port.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUNTIME_DIR="${FNOS_RUNTIME_DIR:-$ROOT/runtime}"
@@ -88,10 +88,6 @@ if ! port_ok "$CHOSEN"; then
   done
 fi
 
-if ! port_ok "$CHOSEN"; then
-  report_fail "未配置设备同步端口。请在飞牛安装向导或应用设置中填写 1 到 65535 的端口后再启动。"
-fi
-
 write_port() {
   local file="$1"
   [[ -n "$file" ]] || return 0
@@ -100,12 +96,24 @@ write_port() {
   chmod 600 "$file" || true
 }
 
-if [[ -n "${TRIM_PKGETC:-}" ]]; then
-  write_port "$TRIM_PKGETC/device-port"
-fi
-write_port "$PRIMARY_PORT_FILE"
-if [[ -n "${TRIM_PKGVAR:-}" && "$TRIM_PKGVAR" != "$DATA_DIR" ]]; then
-  write_port "$TRIM_PKGVAR/device-port"
+# Missing port must not fail the app: Feiniu only opens 应用设置 after enable succeeds.
+# Do not invent a port, and do not write TRIM_TEMP_LOGFILE for this case.
+if port_ok "$CHOSEN"; then
+  if [[ -n "${TRIM_PKGETC:-}" ]]; then
+    write_port "$TRIM_PKGETC/device-port"
+  fi
+  write_port "$PRIMARY_PORT_FILE"
+  if [[ -n "${TRIM_PKGVAR:-}" && "$TRIM_PKGVAR" != "$DATA_DIR" ]]; then
+    write_port "$TRIM_PKGVAR/device-port"
+  fi
+  if [[ "${FNOS_ENABLE_DEVICE_PORT:-}" != "0" ]]; then
+    export FNOS_ENABLE_DEVICE_PORT=1
+  fi
+  export FNOS_DEVICE_PORT="$CHOSEN"
+else
+  echo "未配置设备同步端口。网关会先启动。请在飞牛「应用设置」填写 1 到 65535 的端口，然后重启本应用。" >&2
+  export FNOS_ENABLE_DEVICE_PORT=0
+  unset FNOS_DEVICE_PORT
 fi
 
 NODE_BIN_RESOLVED=""
@@ -135,11 +143,14 @@ fi
 
 export FNOS_SOCKET_PATH="$SOCKET_PATH"
 export FNOS_DATA_DIR="$DATA_DIR"
-export FNOS_DEVICE_PORT="$CHOSEN"
 export FNOS_DEVICE_PORT_FILE="$PRIMARY_PORT_FILE"
 export FNOS_SERVER_ID_FILE="${FNOS_SERVER_ID_FILE:-$DATA_DIR/server-id}"
 
 nohup "$NODE_BIN_RESOLVED" "$ROOT/app/server/index.js" \
   >"$RUNTIME_DIR/server.log" 2>&1 &
 echo $! >"$PID_FILE"
-echo "started pid=$(cat "$PID_FILE") socket=$SOCKET_PATH devicePort=$CHOSEN"
+if [[ -n "${FNOS_DEVICE_PORT:-}" ]]; then
+  echo "started pid=$(cat "$PID_FILE") socket=$SOCKET_PATH devicePort=$FNOS_DEVICE_PORT"
+else
+  echo "started pid=$(cat "$PID_FILE") socket=$SOCKET_PATH devicePort=unset"
+fi

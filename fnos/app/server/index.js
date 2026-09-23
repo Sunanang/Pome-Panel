@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createApp } = require('./createApp');
 const { createMemoryStore } = require('./store');
-const { listenConfiguredDevicePort } = require('./devicePort');
+const { listenConfiguredDevicePort, planDeviceListen, parseRequestedDevicePort } = require('./devicePort');
 const { wrapWithGatewayPrefix, stripGatewayPrefix } = require('./gatewayHttp');
 
 function readOrCreateServerId(filePath) {
@@ -31,6 +31,22 @@ function readOrCreateServerId(filePath) {
   return id;
 }
 
+function wizardPortFromEnv(env = process.env) {
+  for (const key of ['wizard_port', 'WIZARD_PORT', 'Wizard_port', 'TRIM_WIZARD_PORT']) {
+    if (parseRequestedDevicePort(env[key]) != null) return env[key];
+  }
+  return '';
+}
+
+function logDevicePortSkipped(portFile) {
+  console.log(JSON.stringify({
+    event: 'device_port_skipped',
+    reason: 'unconfigured',
+    portFile,
+    note: '网关已启动。请在飞牛「应用设置」填写 1 到 65535 的设备同步端口，然后重启本应用。',
+  }));
+}
+
 async function main() {
   const gatewayPrefix = process.env.FNOS_GATEWAY_PREFIX || '/app/pome-panel';
   const socketPath = process.env.FNOS_SOCKET_PATH || path.join(process.cwd(), 'runtime', 'pomepanel-sync.sock');
@@ -42,7 +58,13 @@ async function main() {
   const devicePortFile = (configuredPortFile && String(configuredPortFile).trim())
     || (etcPortFile && fs.existsSync(etcPortFile) ? etcPortFile : '')
     || path.join(dataDir, 'device-port');
-  const enableDevicePort = process.env.FNOS_ENABLE_DEVICE_PORT !== '0';
+  const wizardValue = wizardPortFromEnv();
+  const devicePlan = planDeviceListen({
+    enableFlag: process.env.FNOS_ENABLE_DEVICE_PORT,
+    envValue: devicePortEnv,
+    wizardValue,
+    portFile: devicePortFile,
+  });
   const wwwRoot = path.join(__dirname, '..', 'www');
   const uiRoot = path.join(__dirname, '..', 'ui');
   const staticRoot = process.env.FNOS_STATIC_ROOT
@@ -51,7 +73,8 @@ async function main() {
 
   const store = createMemoryStore({ serverId: readOrCreateServerId(serverIdFile) });
   store.devicePortFile = devicePortFile;
-  store.devicePortEnabled = enableDevicePort;
+  store.devicePortEnabled = devicePlan.listen;
+  store.devicePortUnconfigured = devicePlan.reason === 'unconfigured';
 
   const gatewayBase = createApp({ listenMode: 'gateway', store });
   const gateway = wrapWithGatewayPrefix(gatewayBase, {
@@ -66,16 +89,22 @@ async function main() {
     serverId: store.serverId,
   }));
 
-  if (enableDevicePort) {
+  if (!devicePlan.listen) {
+    if (devicePlan.reason === 'unconfigured') logDevicePortSkipped(devicePortFile);
+    return;
+  }
+
+  try {
     const device = createApp({ listenMode: 'device-port', store });
     const info = await listenConfiguredDevicePort(device, {
       envValue: devicePortEnv,
-      wizardValue: process.env.wizard_port,
+      wizardValue,
       portFile: devicePortFile,
       host: '127.0.0.1',
     });
     store.deviceListenPort = info.port;
     store.deviceListenHost = info.host;
+    store.devicePortUnconfigured = false;
     console.log(JSON.stringify({
       event: 'device_port_listen',
       host: info.host,
@@ -86,6 +115,11 @@ async function main() {
       portFile: devicePortFile,
       note: 'port not hardcoded; clients must use full URL; never trust X-Trim-*',
     }));
+  } catch (err) {
+    if (!err || err.code !== 'device_port_required') throw err;
+    store.devicePortEnabled = false;
+    store.devicePortUnconfigured = true;
+    logDevicePortSkipped(devicePortFile);
   }
 }
 
@@ -96,4 +130,9 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, readOrCreateServerId, stripGatewayPrefix };
+module.exports = {
+  main,
+  readOrCreateServerId,
+  stripGatewayPrefix,
+  wizardPortFromEnv,
+};
