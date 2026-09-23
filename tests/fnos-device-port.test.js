@@ -17,7 +17,6 @@ const {
   describeDeviceListenPort,
   listenPersistedDevicePort,
   parseRequestedDevicePort,
-  planDeviceListen,
 } = require('../fnos/app/server/devicePort');
 const pairUi = require('../fnos/app/ui/pair.js');
 
@@ -47,8 +46,8 @@ test('parseRequestedDevicePort treats empty and 0 as ephemeral', () => {
   assert.equal(parseRequestedDevicePort('65536'), null);
   assert.equal(parseRequestedDevicePort('-1'), null);
   assert.equal(parseRequestedDevicePort('41234'), 41234);
-  assert.equal(chooseDevicePort({}).port, null);
-  assert.equal(chooseDevicePort({}).source, 'missing');
+  assert.equal(chooseDevicePort({}).port, 0);
+  assert.equal(chooseDevicePort({}).source, 'ephemeral');
   assert.notEqual(chooseDevicePort({}).port, 5001);
 });
 
@@ -81,7 +80,7 @@ test('saved device port is reused when it is free', async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('busy saved port is rejected and the file stays unchanged', async () => {
+test('busy saved port falls back to ephemeral and rewrites the file', async () => {
   const dir = tmpDir('fnos-port-busy-');
   const portFile = path.join(dir, 'device-port');
   const blocker = http.createServer();
@@ -89,11 +88,15 @@ test('busy saved port is rejected and the file stays unchanged', async () => {
   fs.writeFileSync(portFile, `${addr.port}\n`);
 
   const app = createApp({ listenMode: 'device-port' });
-  await assert.rejects(
-    () => listenPersistedDevicePort(app, { portFile }),
-    (err) => err.code === 'device_port_in_use' && err.port === addr.port,
-  );
-  assert.equal(Number(fs.readFileSync(portFile, 'utf8')), addr.port);
+  const info = await listenPersistedDevicePort(app, { portFile });
+  assert.equal(info.fellBack, true);
+  assert.equal(info.reused, false);
+  assert.equal(info.source, 'ephemeral');
+  assert.equal(info.preferredPort, addr.port);
+  assert.notEqual(info.port, addr.port);
+  assert.notEqual(info.port, 5001);
+  assert.equal(Number(fs.readFileSync(portFile, 'utf8')), info.port);
+  await app.close();
   await close(blocker);
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -128,21 +131,26 @@ test('explicit env port wins over the saved file; 0 and empty reuse the file', a
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('missing or invalid port does not bind an ephemeral port', async () => {
+test('invalid or missing port falls back to ephemeral and is saved', async () => {
   const dir = tmpDir('fnos-port-bad-');
   const portFile = path.join(dir, 'device-port');
   fs.writeFileSync(portFile, 'not-a-port\n');
   const app = createApp({ listenMode: 'device-port' });
-  await assert.rejects(
-    () => listenPersistedDevicePort(app, { envValue: '0', wizardValue: '', portFile }),
-    (err) => err.code === 'device_port_required',
-  );
-  assert.equal(fs.readFileSync(portFile, 'utf8'), 'not-a-port\n');
+  const info = await listenPersistedDevicePort(app, { envValue: '0', portFile });
+  assert.equal(info.source, 'ephemeral');
+  assert.equal(info.fellBack, false);
+  assert.ok(info.port > 0);
+  assert.notEqual(info.port, 5001);
+  assert.equal(Number(fs.readFileSync(portFile, 'utf8')), info.port);
+  await app.close();
+
+  const missingFile = path.join(dir, 'missing-port');
   const empty = createApp({ listenMode: 'device-port' });
-  await assert.rejects(
-    () => listenPersistedDevicePort(empty, { portFile: path.join(dir, 'missing-port') }),
-    (err) => err.code === 'device_port_required',
-  );
+  const opened = await listenPersistedDevicePort(empty, { portFile: missingFile });
+  assert.equal(opened.source, 'ephemeral');
+  assert.ok(opened.port > 0);
+  assert.equal(Number(fs.readFileSync(missingFile, 'utf8')), opened.port);
+  await empty.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -156,13 +164,6 @@ test('GET /api/v1/device-port reports the live bind, then the saved file', async
   disabled.devicePortFile = portFile;
   assert.equal(describeDeviceListenPort(disabled).source, 'disabled');
   assert.equal(describeDeviceListenPort(disabled).port, null);
-
-  const unset = createMemoryStore({ serverId: 'srv-unset' });
-  unset.devicePortEnabled = false;
-  unset.devicePortUnconfigured = true;
-  unset.devicePortFile = portFile;
-  assert.equal(describeDeviceListenPort(unset).source, 'unconfigured');
-  assert.equal(describeDeviceListenPort(unset).port, null);
 
   const fromFile = createMemoryStore({ serverId: 'srv-file' });
   fromFile.devicePortEnabled = true;
@@ -203,7 +204,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.4');
+  assert.equal(manifestJson.version, '0.9.5');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'com.pomepanel.sync');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
@@ -214,7 +215,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.4$/m);
+  assert.match(official, /^version=0\.9\.5$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=com\.pomepanel\.sync\.main$/m);
@@ -223,7 +224,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^checkport=false$/m);
   assert.doesNotMatch(official, /service_port\s*=\s*5001|Sunanang|Pome Panel Sync/);
   const changelog = official.split('\n').find((line) => line.startsWith('changelog='));
-  assert.ok(changelog && changelog.includes('data-share'));
+  assert.ok(changelog && changelog.includes('简单启动'));
   assert.equal(changelog.includes('#'), false);
 
   const portPattern = /^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/;
@@ -370,15 +371,15 @@ test('start.sh does not force an ephemeral port over the saved file', async (t) 
   const start = fs.readFileSync(path.join(root, 'fnos/cmd/start.sh'), 'utf8');
   const index = fs.readFileSync(path.join(root, 'fnos/app/server/index.js'), 'utf8');
   assert.match(start, /\$DATA_DIR\/device-port/);
+  assert.match(start, /TRIM_APPDEST/);
+  assert.match(start, /NODE_BIN="\$\{NODE_BIN:-node\}"/);
+  assert.doesNotMatch(start, /report_fail/);
   assert.doesNotMatch(start, /FNOS_DEVICE_PORT:-0/);
-  assert.match(index, /listenConfiguredDevicePort/);
+  assert.match(index, /listenPersistedDevicePort/);
+  assert.doesNotMatch(index, /listenConfiguredDevicePort/);
   assert.equal(/\bFNOS_DEVICE_PORT\s*=\s*5001\b|\blisten\(\s*5001\b/.test(start), false);
   assert.equal(/\blisten\(\s*5001\b/.test(fs.readFileSync(path.join(root, 'fnos/app/server/createApp.js'), 'utf8')), false);
   assert.match(start, /export PATH="\/var\/apps\/nodejs_v24\/target\/bin:\/var\/apps\/nodejs_v22\/target\/bin:/);
-  assert.match(start, /请在飞牛应用中心安装并启用 Node\.js v22 或 v24/);
-  const v24At = start.indexOf('/var/apps/nodejs_v24/target/bin/node');
-  const v22At = start.indexOf('/var/apps/nodejs_v22/target/bin/node');
-  assert.ok(v24At > 0 && v22At > v24At);
 
   const dir = tmpDir('fnos-start-');
   const runtime = path.join(dir, 'runtime');
@@ -415,30 +416,10 @@ exit 0
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
   const probe = fs.readFileSync(probePath, 'utf8');
-  assert.match(probe, /^PORT=41234$/m);
+  assert.match(probe, /^PORT=unset$/m);
   assert.match(probe, new RegExp(`FILE=${data}/device-port`));
   assert.equal(fs.readFileSync(path.join(data, 'device-port'), 'utf8').trim(), '41234');
   fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test('planDeviceListen skips TCP until a real port is configured', () => {
-  assert.deepEqual(
-    planDeviceListen({ enableFlag: undefined, envValue: '', wizardValue: '', portFile: '/no/such-port' }),
-    { listen: false, reason: 'unconfigured', chosen: null },
-  );
-  assert.equal(
-    planDeviceListen({ enableFlag: '0', envValue: '0', portFile: '/no/such-port' }).reason,
-    'unconfigured',
-  );
-  const ready = planDeviceListen({ enableFlag: '1', envValue: '45875', portFile: '/no/such-port' });
-  assert.equal(ready.listen, true);
-  assert.equal(ready.reason, 'configured');
-  assert.equal(ready.chosen.port, 45875);
-  assert.equal(ready.chosen.source, 'env');
-  const held = planDeviceListen({ enableFlag: '0', envValue: '45875' });
-  assert.equal(held.listen, false);
-  assert.equal(held.reason, 'disabled');
-  assert.equal(held.chosen.port, 45875);
 });
 
 test('start.sh launches the gateway when no port was configured', async (t) => {
@@ -472,8 +453,8 @@ exit 0
       },
     }, (err, out, stderr) => (err ? reject(new Error(`${stderr || out || err.message}`)) : resolve(`${out}\n${stderr}`)));
   });
-  assert.match(stdout, /未配置设备同步端口/);
-  assert.match(stdout, /devicePort=unset/);
+  assert.match(stdout, /started pid=/);
+  assert.doesNotMatch(stdout, /未配置设备同步端口/);
   const probePath = path.join(data, 'probe.txt');
   const started = Date.now();
   while (!fs.existsSync(probePath)) {
@@ -481,7 +462,6 @@ exit 0
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
   const probe = fs.readFileSync(probePath, 'utf8');
-  assert.match(probe, /^ENABLE=0$/m);
   assert.match(probe, /^PORT=unset$/m);
   assert.match(probe, /^PATH=\/var\/apps\/nodejs_v24\/target\/bin:\/var\/apps\/nodejs_v22\/target\/bin:/m);
   assert.equal(fs.existsSync(path.join(runtime, 'server.pid')), true);
@@ -555,16 +535,19 @@ test('server keeps the gateway up when no device port is configured', async () =
   child.stderr.on('data', (chunk) => { out += chunk; });
   const started = Date.now();
   try {
-    while (!out.includes('device_port_skipped') || !fs.existsSync(socketPath)) {
+    while (!out.includes('device_port_listen') || !fs.existsSync(socketPath)) {
       if (child.exitCode != null) throw new Error(`exited ${child.exitCode}\n${out}`);
       if (Date.now() - started > 4000) throw new Error(`timeout\n${out}`);
       await new Promise((resolve) => setTimeout(resolve, 30));
     }
     assert.equal(child.exitCode, null);
     assert.match(out, /gateway_listen/);
-    assert.match(out, /unconfigured/);
+    assert.match(out, /"source":"ephemeral"/);
+    assert.match(out, /"fellBack":false/);
     assert.doesNotMatch(out, /5001/);
-    assert.equal(fs.existsSync(path.join(dir, 'device-port')), false);
+    const saved = fs.readFileSync(path.join(dir, 'missing-port'), 'utf8').trim();
+    assert.match(saved, /^[1-9][0-9]*$/);
+    assert.notEqual(Number(saved), 5001);
   } finally {
     if (child.exitCode == null) child.kill('SIGTERM');
     await new Promise((resolve) => child.once('exit', resolve));
@@ -624,45 +607,44 @@ test('server binds the saved device port once it is configured', async () => {
   }
 });
 
-test('start.sh accepts the uppercase wizard port alias', async (t) => {
+test('start.sh uses the app socket and keeps a configured device port', async (t) => {
   if (process.platform === 'win32') {
     t.skip('FPK start.sh is a bash script');
     return;
   }
   const root = path.join(__dirname, '..');
-  const dir = tmpDir('fnos-start-alias-');
+  const dir = tmpDir('fnos-start-sock-');
   const runtime = path.join(dir, 'runtime');
   const data = path.join(dir, 'data');
-  const etc = path.join(dir, 'etc');
+  const appdest = path.join(dir, 'appdest');
   fs.mkdirSync(runtime, { recursive: true });
   const fake = path.join(dir, 'fake-node.sh');
   fs.writeFileSync(fake, `#!/bin/sh
-printf 'PORT=%s\\n' "\${FNOS_DEVICE_PORT-unset}" > "\${FNOS_DATA_DIR}/probe.txt"
+printf 'PORT=%s\\nSOCK=%s\\n' "\${FNOS_DEVICE_PORT-unset}" "\${FNOS_SOCKET_PATH-unset}" > "\${FNOS_DATA_DIR}/probe.txt"
 exit 0
 `, { mode: 0o755 });
-  await new Promise((resolve, reject) => {
+  const stdout = await new Promise((resolve, reject) => {
     execFile('bash', [path.join(root, 'fnos/cmd/start.sh')], {
       env: {
         ...process.env,
         FNOS_RUNTIME_DIR: runtime,
         FNOS_DATA_DIR: data,
-        TRIM_PKGETC: etc,
-        FNOS_DEVICE_PORT: '',
-        wizard_port: '',
-        WIZARD_PORT: '45875',
+        TRIM_APPDEST: appdest,
+        FNOS_DEVICE_PORT: '45875',
         NODE_BIN: fake,
       },
-    }, (err, stdout, stderr) => (err ? reject(new Error(`${stderr || stdout || err.message}`)) : resolve(stdout)));
+    }, (err, out, stderr) => (err ? reject(new Error(`${stderr || out || err.message}`)) : resolve(out)));
   });
+  assert.match(stdout, new RegExp(`socket=${appdest}/app\\.sock`));
   const probePath = path.join(data, 'probe.txt');
   const started = Date.now();
   while (!fs.existsSync(probePath)) {
-    if (Date.now() - started > 3000) throw new Error('alias probe missing');
+    if (Date.now() - started > 3000) throw new Error('socket probe missing');
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
-  assert.equal(fs.readFileSync(probePath, 'utf8').trim(), 'PORT=45875');
-  assert.equal(fs.readFileSync(path.join(etc, 'device-port'), 'utf8').trim(), '45875');
-  assert.equal(fs.readFileSync(path.join(data, 'device-port'), 'utf8').trim(), '45875');
+  const probe = fs.readFileSync(probePath, 'utf8');
+  assert.match(probe, /^PORT=45875$/m);
+  assert.match(probe, new RegExp(`^SOCK=${appdest}/app\\.sock$`, 'm'));
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

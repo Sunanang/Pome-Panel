@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Bind the device sync port the user chose at install (wizard_port).
- * NEVER hardcode 5001, and do not fall back to an ephemeral port.
+ * Persist the device sync TCP port so FRP can keep mapping the same local port
+ * across process restarts. NEVER hardcode 5001 — 0 means "ask the OS".
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -30,22 +30,15 @@ function readSavedDevicePort(filePath) {
 }
 
 /**
- * User-chosen port only. Env wins, then the install wizard value, then the saved file.
- * Missing config returns null — callers must not listen on 0.
- * @returns {{ port: number, source: 'env'|'wizard'|'file' } | null}
+ * Explicit env (non-zero) wins. Otherwise reuse the saved file. Otherwise ephemeral.
+ * @returns {{ port: number, source: 'env'|'file'|'ephemeral' }}
  */
-function resolveConfiguredDevicePort({ envValue, wizardValue, portFile } = {}) {
+function chooseDevicePort({ envValue, portFile } = {}) {
   const explicit = parseRequestedDevicePort(envValue);
   if (explicit != null) return { port: explicit, source: 'env' };
-  const wizard = parseRequestedDevicePort(wizardValue);
-  if (wizard != null) return { port: wizard, source: 'wizard' };
   const saved = readSavedDevicePort(portFile);
   if (saved != null) return { port: saved, source: 'file' };
-  return null;
-}
-
-function chooseDevicePort(options = {}) {
-  return resolveConfiguredDevicePort(options) || { port: null, source: 'missing' };
+  return { port: 0, source: 'ephemeral' };
 }
 
 function writeDevicePortFile(filePath, port) {
@@ -71,23 +64,7 @@ function normalizeDeviceHost(host) {
  * while the device port is enabled but the socket is not recorded yet.
  * Disabled listeners never advertise a stale file port.
  */
-/**
- * Whether this process should bind device TCP.
- * A missing port skips the bind so the Unix gateway can still come up.
- * An explicit enable flag of "0" only disables TCP when a real port exists.
- * @returns {{ listen: boolean, reason: 'configured'|'disabled'|'unconfigured', chosen: { port: number, source: string } | null }}
- */
-function planDeviceListen({ enableFlag, envValue, wizardValue, portFile } = {}) {
-  const chosen = resolveConfiguredDevicePort({ envValue, wizardValue, portFile });
-  if (!chosen) return { listen: false, reason: 'unconfigured', chosen: null };
-  if (String(enableFlag) === '0') return { listen: false, reason: 'disabled', chosen };
-  return { listen: true, reason: 'configured', chosen };
-}
-
 function describeDeviceListenPort(store) {
-  if (store && store.devicePortUnconfigured) {
-    return { enabled: false, port: null, host: null, target: null, source: 'unconfigured' };
-  }
   if (store && store.devicePortEnabled === false) {
     return { enabled: false, port: null, host: null, target: null, source: 'disabled' };
   }
@@ -110,53 +87,44 @@ function isAddressInUse(err) {
 }
 
 /**
- * Bind exactly the configured port. A busy port fails and the saved file is left unchanged.
+ * Bind the preferred port. If that port is busy, bind an ephemeral port and
+ * rewrite the file so the next start follows the port that is actually open.
  */
-async function listenConfiguredDevicePort(app, { envValue, wizardValue, portFile, host = '127.0.0.1' } = {}) {
-  const chosen = resolveConfiguredDevicePort({ envValue, wizardValue, portFile });
-  if (!chosen) {
-    const err = new Error('未配置设备同步端口。请在安装向导或应用设置中填写端口。');
-    err.code = 'device_port_required';
-    throw err;
-  }
+async function listenPersistedDevicePort(app, { envValue, portFile, host = '127.0.0.1' } = {}) {
+  const chosen = chooseDevicePort({ envValue, portFile });
+  const preferred = chosen.port;
   try {
-    const info = await app.listenDevicePort(chosen.port, host);
-    if (info.port !== chosen.port) {
-      const err = new Error('device_port_mismatch');
-      err.code = 'device_port_mismatch';
-      throw err;
-    }
+    const info = await app.listenDevicePort(preferred, host);
     writeDevicePortFile(portFile, info.port);
     return {
       host: info.host,
       port: info.port,
-      reused: true,
+      reused: preferred !== 0 && info.port === preferred,
       source: chosen.source,
       fellBack: false,
-      preferredPort: chosen.port,
+      preferredPort: preferred === 0 ? null : preferred,
     };
   } catch (err) {
-    if (err && err.code === 'device_port_mismatch') throw err;
-    if (!isAddressInUse(err)) throw err;
-    const busy = new Error(`设备同步端口 ${chosen.port} 已被占用。请在应用设置中更换端口，或停掉占用它的程序后再启动。`);
-    busy.code = 'device_port_in_use';
-    busy.port = chosen.port;
-    throw busy;
+    if (preferred === 0 || !isAddressInUse(err)) throw err;
+    const info = await app.listenDevicePort(0, host);
+    writeDevicePortFile(portFile, info.port);
+    return {
+      host: info.host,
+      port: info.port,
+      reused: false,
+      source: 'ephemeral',
+      fellBack: true,
+      preferredPort: preferred,
+      reason: err.code || 'EADDRINUSE',
+    };
   }
-}
-
-async function listenPersistedDevicePort(app, options) {
-  return listenConfiguredDevicePort(app, options);
 }
 
 module.exports = {
   parseRequestedDevicePort,
   readSavedDevicePort,
   chooseDevicePort,
-  resolveConfiguredDevicePort,
-  planDeviceListen,
   writeDevicePortFile,
-  listenConfiguredDevicePort,
   listenPersistedDevicePort,
   describeDeviceListenPort,
   normalizeDeviceHost,
