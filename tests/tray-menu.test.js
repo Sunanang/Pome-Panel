@@ -34,7 +34,7 @@ test('about dialog names Pome Panel and Lando and opens the current GitHub repo'
   assert.match(menu, /app\.getVersion\(\)/);
   assert.match(menu, /shell\.openExternal\('https:\/\/github\.com\/Sunanang\/Pome-Panel'\)/);
   assert.doesNotMatch(menu, /to-do-panel|todo-panel|Todo Panel/);
-  assert.equal(pkg.version, '0.9.8');
+  assert.equal(pkg.version, '0.9.9');
   assert.equal(pkg.author, 'Lando');
   assert.equal(pkg.homepage, 'https://github.com/Sunanang/Pome-Panel');
   assert.equal(pkg.repository.url, 'https://github.com/Sunanang/Pome-Panel.git');

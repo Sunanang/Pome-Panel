@@ -204,7 +204,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.8');
+  assert.equal(manifestJson.version, '0.9.9');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'com.pomepanel.sync');
   assert.equal(manifestJson.appPath, '/app/com.pomepanel.sync');
@@ -215,7 +215,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.8$/m);
+  assert.match(official, /^version=0\.9\.9$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=com\.pomepanel\.sync\.main$/m);
@@ -226,6 +226,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   const changelog = official.split('\n').find((line) => line.startsWith('changelog='));
   assert.ok(changelog && changelog.includes('TRIM_APPDEST/server'));
   assert.ok(changelog && changelog.includes('sync-protocol'));
+  assert.ok(changelog && changelog.includes('卸载'));
   assert.equal(changelog.includes('#'), false);
 
   const portPattern = /^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/;
@@ -253,6 +254,16 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].title, 'Pome Panel');
   assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].gatewayPrefix, '/app/com.pomepanel.sync');
   assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].url, '/app/com.pomepanel.sync');
+  const uninstallSteps = JSON.parse(fs.readFileSync(path.join(root, 'wizard/uninstall'), 'utf8'));
+  const radio = uninstallSteps.flatMap((step) => step.items).find((item) => item.field === 'wizard_data_action');
+  assert.equal(radio.type, 'radio');
+  assert.equal(radio.initValue, 'keep');
+  assert.deepEqual(radio.options.map((option) => option.value), ['keep', 'delete']);
+  assert.match(radio.options[0].label, /保留现有文件/);
+  assert.match(radio.options[1].label, /清除所有应用数据文件（不可恢复）/);
+  const uninstallTips = uninstallSteps.flatMap((step) => step.items).filter((item) => item.type === 'tips').map((item) => item.helpText).join('\n');
+  assert.match(uninstallTips, /保留或删除应用设置/);
+  assert.match(uninstallTips, /仅卸载可保留现有文件以便重装/);
   const wizardHtml = fs.readFileSync(path.join(root, 'wizard/index.html'), 'utf8');
   assert.match(wizardHtml, /Pome Panel/);
   assert.doesNotMatch(wizardHtml, /Pome Panel Sync|Sunanang/);
@@ -794,6 +805,112 @@ test('install callback saves wizard_port and rejects an empty value', async (t) 
   });
   assert.equal(fs.readFileSync(path.join(etc, 'device-port'), 'utf8').trim(), '45875');
   assert.equal(fs.readFileSync(path.join(varDir, 'device-port'), 'utf8').trim(), '45875');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+function runScript(script, env) {
+  return new Promise((resolve) => {
+    execFile('bash', [script], { env }, (err, stdout, stderr) => {
+      resolve({ err, stdout: stdout || '', stderr: stderr || '' });
+    });
+  });
+}
+
+test('uninstall wizard keeps data unless the user chooses delete', async (t) => {
+  if (process.platform === 'win32') {
+    t.skip('FPK callbacks are shell scripts');
+    return;
+  }
+  const dir = tmpDir('fnos-uninstall-');
+  const app = path.join(dir, 'com.pomepanel.sync');
+  const varDir = path.join(app, 'var');
+  const homeDir = path.join(app, 'home');
+  const etcDir = path.join(app, 'etc');
+  const outside = path.join(dir, 'outside.txt');
+  const callback = path.join(__dirname, '..', 'fnos/cmd/uninstall_callback');
+  const init = path.join(__dirname, '..', 'fnos/cmd/uninstall_init');
+  fs.writeFileSync(outside, 'stay');
+
+  function seed() {
+    fs.mkdirSync(path.join(varDir, 'runtime'), { recursive: true });
+    fs.mkdirSync(homeDir, { recursive: true });
+    fs.mkdirSync(etcDir, { recursive: true });
+    fs.writeFileSync(path.join(varDir, 'device-port'), '41234');
+    fs.writeFileSync(path.join(homeDir, 'note.txt'), 'keep-me');
+    fs.writeFileSync(path.join(etcDir, 'device-port'), '41234');
+  }
+
+  seed();
+  const sleeper = spawn('sleep', ['30'], { stdio: 'ignore' });
+  fs.writeFileSync(path.join(varDir, 'runtime', 'server.pid'), `${sleeper.pid}\n`);
+  const removed = await runScript(callback, {
+    ...process.env,
+    wizard_data_action: 'delete',
+    TRIM_PKGVAR: varDir,
+    TRIM_PKGHOME: homeDir,
+    TRIM_PKGETC: etcDir,
+  });
+  assert.equal(removed.err, null, removed.stderr);
+  assert.match(removed.stderr, /deleted app data/);
+  assert.equal(fs.existsSync(varDir), false);
+  assert.equal(fs.existsSync(homeDir), false);
+  assert.equal(fs.existsSync(etcDir), false);
+  assert.equal(fs.readFileSync(outside, 'utf8'), 'stay');
+  if (sleeper.exitCode == null && sleeper.signalCode == null) {
+    await new Promise((resolve) => sleeper.once('exit', resolve));
+  }
+  try { sleeper.kill('SIGKILL'); } catch { /* already gone */ }
+
+  seed();
+  const kept = await runScript(callback, {
+    ...process.env,
+    wizard_data_action: 'keep',
+    TRIM_PKGVAR: varDir,
+    TRIM_PKGHOME: homeDir,
+    TRIM_PKGETC: etcDir,
+  });
+  assert.equal(kept.err, null, kept.stderr);
+  assert.match(kept.stderr, /keep app data/);
+  assert.equal(fs.readFileSync(path.join(homeDir, 'note.txt'), 'utf8'), 'keep-me');
+  const unset = await runScript(callback, {
+    ...process.env,
+    wizard_data_action: '',
+    TRIM_PKGVAR: varDir,
+    TRIM_PKGHOME: homeDir,
+    TRIM_PKGETC: etcDir,
+  });
+  assert.equal(unset.err, null, unset.stderr);
+  assert.match(unset.stderr, /keep app data/);
+  assert.equal(fs.readFileSync(path.join(varDir, 'device-port'), 'utf8').trim(), '41234');
+
+  const unsafe = path.join(dir, 'not-this-app');
+  fs.mkdirSync(unsafe, { recursive: true });
+  fs.writeFileSync(path.join(unsafe, 'keep-me'), 'x');
+  const refused = await runScript(callback, {
+    ...process.env,
+    wizard_data_action: 'delete',
+    TRIM_PKGVAR: unsafe,
+    TRIM_PKGHOME: '',
+    TRIM_PKGETC: '',
+  });
+  assert.ok(refused.err);
+  assert.match(refused.stderr, /refuse to delete/);
+  assert.equal(fs.readFileSync(path.join(unsafe, 'keep-me'), 'utf8'), 'x');
+  assert.equal(fs.readFileSync(path.join(homeDir, 'note.txt'), 'utf8'), 'keep-me');
+
+  const leftover = spawn('sleep', ['30'], { stdio: 'ignore' });
+  fs.writeFileSync(path.join(varDir, 'runtime', 'server.pid'), `${leftover.pid}\n`);
+  const stopped = await runScript(init, {
+    ...process.env,
+    TRIM_PKGVAR: varDir,
+    FNOS_SOCKET_PATH: path.join(varDir, 'runtime', 'unused.sock'),
+  });
+  assert.equal(stopped.err, null, stopped.stderr);
+  if (leftover.exitCode == null && leftover.signalCode == null) {
+    await new Promise((resolve) => leftover.once('exit', resolve));
+  }
+  try { leftover.kill('SIGKILL'); } catch { /* already gone */ }
+  assert.equal(fs.readFileSync(path.join(homeDir, 'note.txt'), 'utf8'), 'keep-me');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

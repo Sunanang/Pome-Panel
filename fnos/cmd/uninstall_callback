@@ -1,0 +1,86 @@
+#!/bin/bash
+# fnOS uninstall_callback. wizard_data_action=delete removes this app's data only.
+set -euo pipefail
+
+log() {
+  printf '%s\n' "$1" >&2
+}
+
+stop_leftover() {
+  if [[ -z "${TRIM_PKGVAR:-}" ]]; then
+    return 0
+  fi
+  local pid_file="${TRIM_PKGVAR}/runtime/server.pid"
+  if [[ ! -f "$pid_file" ]]; then
+    return 0
+  fi
+  local pid
+  pid="$(tr -d '[:space:]' <"$pid_file" || true)"
+  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    log "stopping leftover pid=$pid"
+    kill "$pid" 2>/dev/null || true
+    local _
+    for _ in 1 2 3 4 5; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.2
+    done
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+  rm -f "$pid_file"
+}
+
+# ${name:?} rejects empty values. The path must stay inside this app.
+app_data_path() {
+  local value="$1"
+  [[ -n "$value" ]] || return 1
+  [[ "$value" == /* ]] || return 1
+  local trimmed="${value%/}"
+  [[ -n "$trimmed" && "$trimmed" != "/" ]] || return 1
+  case "$trimmed" in
+    *..*) return 1 ;;
+    /var|/vol1|/usr|/etc|/home|/tmp|/root|/opt|/bin|/sbin) return 1 ;;
+  esac
+  case "$trimmed" in
+    *com.pomepanel.sync*) ;;
+    *) return 1 ;;
+  esac
+  if [[ -e "$trimmed" ]]; then
+    local canon
+    canon="$(readlink -f "$trimmed")"
+    case "$canon" in
+      *com.pomepanel.sync*) trimmed="$canon" ;;
+      *) return 1 ;;
+    esac
+  fi
+  printf '%s' "$trimmed"
+}
+
+remove_tree() {
+  local name="$1"
+  local raw="${!name-}"
+  if [[ -z "$raw" ]]; then
+    log "skip $name (unset)"
+    return 0
+  fi
+  local guarded="${raw:?}"
+  local safe
+  if ! safe="$(app_data_path "$guarded")"; then
+    log "refuse to delete $name=$guarded"
+    exit 1
+  fi
+  rm -rf "${safe:?}"
+  log "deleted $name=$safe"
+}
+
+stop_leftover
+
+action="${wizard_data_action:-${WIZARD_DATA_ACTION:-keep}}"
+if [[ "$action" == "delete" ]]; then
+  remove_tree TRIM_PKGVAR
+  remove_tree TRIM_PKGHOME
+  remove_tree TRIM_PKGETC
+  log "deleted app data"
+else
+  log "keep app data (wizard_data_action=${action})"
+fi
+exit 0

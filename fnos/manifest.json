@@ -1,7 +1,7 @@
 {
   "id": "com.pomepanel.sync",
   "name": "Pome Panel",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/com.pomepanel.sync。没配端口时网关仍会启动；配好后固定监听 127.0.0.1。",
   "author": "Lando",
   "maintainer": "Lando",
@@ -14,7 +14,9 @@
     "status": "cmd/status.sh",
     "installCallback": "cmd/install_callback",
     "configCallback": "cmd/config_callback",
-    "upgradeCallback": "cmd/upgrade_callback"
+    "upgradeCallback": "cmd/upgrade_callback",
+    "uninstallInit": "cmd/uninstall_init",
+    "uninstallCallback": "cmd/uninstall_callback"
   },
   "appPath": "/app/com.pomepanel.sync",
   "socket": {
@@ -30,6 +32,7 @@
     "path": "app/ui",
     "wizard": "wizard",
     "install": "wizard/install",
-    "config": "wizard/config"
+    "config": "wizard/config",
+    "uninstall": "wizard/uninstall"
   }
 }
