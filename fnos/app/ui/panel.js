@@ -22,7 +22,7 @@
     }
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function factory() {
-  const DEFAULT_GATEWAY_PREFIX = '/app/pome-panel';
+  const DEFAULT_GATEWAY_PREFIX = '/app/com.pomepanel.sync';
 
   const TABS = Object.freeze([
     { id: 'devices', label: '设备' },
@@ -42,7 +42,8 @@
       return String(metaPrefix).trim().replace(/\/$/, '');
     }
     const raw = String(pathname || '/');
-    const withoutFile = raw.replace(/\/[^/]*\.[a-zA-Z0-9]+$/, '');
+    // App id com.pomepanel.sync contains dots. Only strip real static assets.
+    const withoutFile = raw.replace(/\/[^/]+\.(?:html|js|css|png|svg|json)$/i, '');
     const cleaned = withoutFile.replace(/\/$/, '');
     if (cleaned) return cleaned;
     return '';

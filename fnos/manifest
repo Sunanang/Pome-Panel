@@ -1,7 +1,7 @@
 appname=com.pomepanel.sync
-version=0.9.7
+version=0.9.8
 display_name=Pome Panel
-desc=在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/pome-panel。没配端口时网关仍会启动；配好后固定监听 127.0.0.1。
+desc=在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/com.pomepanel.sync。没配端口时网关仍会启动；配好后固定监听 127.0.0.1。
 source=thirdparty
 platform=all
 maintainer=Lando
@@ -12,4 +12,4 @@ desktop_uidir=ui
 desktop_applaunchname=com.pomepanel.sync.main
 ctl_stop=true
 checkport=false
-changelog=0.9.7：启动入口改为 TRIM_APPDEST/server。同步协议随包放进 target/packages/sync-protocol。运行文件仍在 TRIM_PKGVAR。
+changelog=0.9.8：网关路径改为 /app/com.pomepanel.sync。启动入口仍是 TRIM_APPDEST/server。同步协议仍在 target/packages/sync-protocol。

@@ -2,17 +2,34 @@
 
 /**
  * Gateway prefix strip + static UI serving for FPK production entry.
- * Keeps /api/v1/* routes prefix-agnostic while iframe loads under /app/pome-panel.
+ * Keeps /api/v1/* routes prefix-agnostic while iframe loads under /app/com.pomepanel.sync.
+ * Also strips the previous /app/pome-panel prefix for one upgrade.
  */
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 
+const DEFAULT_GATEWAY_PREFIX = '/app/com.pomepanel.sync';
+const LEGACY_GATEWAY_PREFIX = '/app/pome-panel';
+
+function normalizePrefix(prefix) {
+  if (!prefix) return '';
+  const text = String(prefix).trim();
+  if (!text) return '';
+  return text.endsWith('/') ? text.slice(0, -1) : text;
+}
+
 function stripGatewayPrefix(urlPath, prefix) {
-  if (!prefix) return urlPath;
-  const p = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
-  if (urlPath === p) return '/';
-  if (urlPath.startsWith(`${p}/`)) return urlPath.slice(p.length) || '/';
+  const prefixes = [];
+  const primary = normalizePrefix(prefix);
+  if (primary) prefixes.push(primary);
+  for (const extra of [DEFAULT_GATEWAY_PREFIX, LEGACY_GATEWAY_PREFIX]) {
+    if (!prefixes.includes(extra)) prefixes.push(extra);
+  }
+  for (const p of prefixes) {
+    if (urlPath === p) return '/';
+    if (urlPath.startsWith(`${p}/`)) return urlPath.slice(p.length) || '/';
+  }
   return urlPath;
 }
 
@@ -125,6 +142,8 @@ function wrapWithGatewayPrefix(app, { gatewayPrefix, staticRoot }) {
 }
 
 module.exports = {
+  DEFAULT_GATEWAY_PREFIX,
+  LEGACY_GATEWAY_PREFIX,
   stripGatewayPrefix,
   contentTypeFor,
   tryServeStatic,

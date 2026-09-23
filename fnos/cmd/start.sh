@@ -57,6 +57,8 @@ export FNOS_DEVICE_PORT_FILE="$DEVICE_PORT_FILE"
 export FNOS_SERVER_ID_FILE="${FNOS_SERVER_ID_FILE:-$DATA_DIR/server-id}"
 
 export PATH="/var/apps/nodejs_v24/target/bin:/var/apps/nodejs_v22/target/bin:${PATH:-/usr/local/bin:/usr/bin}"
+# SAC registers /app/<appname>. Empty must not fall back to the old unbound prefix.
+export FNOS_GATEWAY_PREFIX="${FNOS_GATEWAY_PREFIX:-/app/com.pomepanel.sync}"
 
 # fnpack extracts app/ into TRIM_APPDEST (target/). There is no app/ under /var/apps/<id>.
 if [[ -n "${TRIM_APPDEST:-}" ]]; then

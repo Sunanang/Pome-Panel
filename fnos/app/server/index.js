@@ -11,7 +11,7 @@ const path = require('node:path');
 const { createApp } = require('./createApp');
 const { createMemoryStore } = require('./store');
 const { listenPersistedDevicePort } = require('./devicePort');
-const { wrapWithGatewayPrefix, stripGatewayPrefix } = require('./gatewayHttp');
+const { wrapWithGatewayPrefix, stripGatewayPrefix, DEFAULT_GATEWAY_PREFIX } = require('./gatewayHttp');
 
 function readOrCreateServerId(filePath) {
   try {
@@ -32,7 +32,7 @@ function readOrCreateServerId(filePath) {
 }
 
 async function main() {
-  const gatewayPrefix = process.env.FNOS_GATEWAY_PREFIX || '/app/pome-panel';
+  const gatewayPrefix = process.env.FNOS_GATEWAY_PREFIX || DEFAULT_GATEWAY_PREFIX;
   const socketPath = process.env.FNOS_SOCKET_PATH || path.join(process.cwd(), 'runtime', 'pomepanel-sync.sock');
   const serverIdFile = process.env.FNOS_SERVER_ID_FILE || '';
   const devicePortEnv = process.env.FNOS_DEVICE_PORT;

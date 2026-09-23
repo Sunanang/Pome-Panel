@@ -19,7 +19,7 @@
     }
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function factory() {
-  const DEFAULT_GATEWAY_PREFIX = '/app/pome-panel';
+  const DEFAULT_GATEWAY_PREFIX = '/app/com.pomepanel.sync';
   const DEFAULT_FETCH_TIMEOUT_MS = 12_000;
 
   const ERROR_COPY = Object.freeze({
@@ -45,7 +45,8 @@
       return String(metaPrefix).trim().replace(/\/$/, '');
     }
     const raw = String(pathname || '/');
-    const withoutFile = raw.replace(/\/[^/]*\.[a-zA-Z0-9]+$/, '');
+    // App id com.pomepanel.sync contains dots. Only strip real static assets.
+    const withoutFile = raw.replace(/\/[^/]+\.(?:html|js|css|png|svg|json)$/i, '');
     const cleaned = withoutFile.replace(/\/$/, '');
     if (cleaned && cleaned !== '') return cleaned;
     return '';

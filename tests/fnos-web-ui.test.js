@@ -31,7 +31,7 @@ test('FPK Web UI controls exist with workspace-button / settings-card (S3/S7)', 
   assert.match(html, /id="pair-refresh-btn"/);
   assert.match(html, />生成配对码</);
   assert.match(html, />刷新</);
-  assert.match(html, /meta name="gateway-prefix" content="\/app\/pome-panel"/);
+  assert.match(html, /meta name="gateway-prefix" content="\/app\/com\.pomepanel\.sync"/);
   for (const row of CONTROL_CHECKLIST) {
     assert.match(html, new RegExp(row.mark.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
@@ -72,13 +72,14 @@ test('FPK Web style uses desktop tokens — no banned palette / no inline color 
 });
 
 test('resolveApiPrefix / apiUrl honor gatewayPrefix (absolute /api was the break)', () => {
-  assert.equal(pairUi.resolveApiPrefix('/app/pome-panel/', null), '/app/pome-panel');
-  assert.equal(pairUi.resolveApiPrefix('/app/pome-panel/index.html', null), '/app/pome-panel');
-  assert.equal(pairUi.resolveApiPrefix('/app/pome-panel', null), '/app/pome-panel');
-  assert.equal(pairUi.resolveApiPrefix('/', '/app/pome-panel'), '/app/pome-panel');
+  assert.equal(pairUi.resolveApiPrefix('/app/com.pomepanel.sync/', null), '/app/com.pomepanel.sync');
+  assert.equal(pairUi.resolveApiPrefix('/app/com.pomepanel.sync/index.html', null), '/app/com.pomepanel.sync');
+  assert.equal(pairUi.resolveApiPrefix('/app/com.pomepanel.sync', null), '/app/com.pomepanel.sync');
+  assert.equal(pairUi.resolveApiPrefix('/app/com.pomepanel.sync/panel.js', null), '/app/com.pomepanel.sync');
+  assert.equal(pairUi.resolveApiPrefix('/', '/app/com.pomepanel.sync'), '/app/com.pomepanel.sync');
   assert.equal(
-    pairUi.apiUrl('/app/pome-panel', '/api/v1/pair/start'),
-    '/app/pome-panel/api/v1/pair/start',
+    pairUi.apiUrl('/app/com.pomepanel.sync', '/api/v1/pair/start'),
+    '/app/com.pomepanel.sync/api/v1/pair/start',
   );
   assert.equal(pairUi.apiUrl('', '/api/v1/pair/csrf'), '/api/v1/pair/csrf');
   assert.doesNotMatch(pairSrc, /fetch\(\s*'\/api\/v1\//);
@@ -107,9 +108,13 @@ test('extractPairingCode accepts pairingCode or code', () => {
 });
 
 test('stripGatewayPrefix maps iframe paths to /api/v1', () => {
-  assert.equal(stripGatewayPrefix('/app/pome-panel/api/v1/health', '/app/pome-panel'), '/api/v1/health');
-  assert.equal(stripGatewayPrefix('/app/pome-panel', '/app/pome-panel'), '/');
-  assert.equal(stripGatewayPrefix('/app/pome-panel/', '/app/pome-panel'), '/');
+  assert.equal(stripGatewayPrefix('/app/com.pomepanel.sync/api/v1/health', '/app/com.pomepanel.sync'), '/api/v1/health');
+  assert.equal(stripGatewayPrefix('/app/com.pomepanel.sync', '/app/com.pomepanel.sync'), '/');
+  assert.equal(stripGatewayPrefix('/app/com.pomepanel.sync/', '/app/com.pomepanel.sync'), '/');
+  assert.equal(stripGatewayPrefix('/app/pome-panel/api/v1/health', '/app/com.pomepanel.sync'), '/api/v1/health');
+  assert.equal(stripGatewayPrefix('/app/pome-panel', '/app/com.pomepanel.sync'), '/');
+  assert.equal(stripGatewayPrefix('/app/com.pomepanel.sync/index.html', '/app/pome-panel'), '/index.html');
+  assert.equal(stripGatewayPrefix('/api/v1/health', '/app/com.pomepanel.sync'), '/api/v1/health');
 });
 
 function gatewayHeaders(uid = 'uid-alice', extra = {}) {
@@ -152,7 +157,7 @@ function makeDomStore() {
     getElementById(id) { return store[id] || null; },
     querySelector(sel) {
       if (sel === 'meta[name="gateway-prefix"]') {
-        return { getAttribute: () => '/app/pome-panel' };
+        return { getAttribute: () => '/app/com.pomepanel.sync' };
       }
       return null;
     },
@@ -178,7 +183,7 @@ test('pair UI controller: generate code via prefixed pair/start + refresh device
   const app = createApp({ listenMode: 'gateway', serverId: 'srv-ui' });
   const staticRoot = uiRoot;
   const wrapped = wrapWithGatewayPrefix(app, {
-    gatewayPrefix: '/app/pome-panel',
+    gatewayPrefix: '/app/com.pomepanel.sync',
     staticRoot,
   });
 
@@ -186,7 +191,7 @@ test('pair UI controller: generate code via prefixed pair/start + refresh device
     wrapped.server.listen(0, '127.0.0.1', (err) => (err ? reject(err) : resolve()));
   });
   const { port } = wrapped.server.address();
-  const base = `http://127.0.0.1:${port}/app/pome-panel`;
+  const base = `http://127.0.0.1:${port}/app/com.pomepanel.sync`;
 
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
@@ -210,7 +215,7 @@ test('pair UI controller: generate code via prefixed pair/start + refresh device
   const controller = pairUi.createPairUiController({
     document: doc,
     window: {
-      location: { pathname: '/app/pome-panel/' },
+      location: { pathname: '/app/com.pomepanel.sync/' },
       setInterval: () => 1,
       clearInterval: () => {},
       confirm: () => true,
@@ -219,7 +224,7 @@ test('pair UI controller: generate code via prefixed pair/start + refresh device
     preferDefaultPrefix: true,
   });
 
-  assert.equal(controller.apiPrefix, '/app/pome-panel');
+  assert.equal(controller.apiPrefix, '/app/com.pomepanel.sync');
 
   const session = await controller.checkSession();
   assert.equal(session.ok, true);
@@ -241,11 +246,11 @@ test('pair UI controller: generate code via prefixed pair/start + refresh device
   assert.equal(refreshed.sessionOk, true);
   assert.equal(refreshed.devices.ok, true);
 
-  assert.ok(calls.some((c) => c.url.includes('/app/pome-panel/api/v1/me')));
-  assert.ok(calls.some((c) => c.url.includes('/app/pome-panel/api/v1/pair/csrf')));
-  assert.ok(calls.some((c) => c.url.includes('/app/pome-panel/api/v1/pair/start') && c.method === 'POST'));
-  assert.ok(calls.some((c) => c.url.includes('/app/pome-panel/api/v1/devices')));
-  assert.ok(!calls.some((c) => /^https?:\/\/[^/]+\/api\/v1\//.test(c.url) && !c.url.includes('/app/pome-panel/')));
+  assert.ok(calls.some((c) => c.url.includes('/app/com.pomepanel.sync/api/v1/me')));
+  assert.ok(calls.some((c) => c.url.includes('/app/com.pomepanel.sync/api/v1/pair/csrf')));
+  assert.ok(calls.some((c) => c.url.includes('/app/com.pomepanel.sync/api/v1/pair/start') && c.method === 'POST'));
+  assert.ok(calls.some((c) => c.url.includes('/app/com.pomepanel.sync/api/v1/devices')));
+  assert.ok(!calls.some((c) => /^https?:\/\/[^/]+\/api\/v1\//.test(c.url) && !c.url.includes('/app/com.pomepanel.sync/')));
 
   const uiRes = await fetch(`${base}/`);
   assert.equal(uiRes.status, 200);
@@ -266,7 +271,7 @@ test('pair UI shows visible error when unauthenticated (no silent hang on 检测
   };
   const controller = pairUi.createPairUiController({
     document: doc,
-    window: { location: { pathname: '/app/pome-panel/' }, setInterval() { return 1; }, clearInterval() {} },
+    window: { location: { pathname: '/app/com.pomepanel.sync/' }, setInterval() { return 1; }, clearInterval() {} },
     fetch: fetchImpl,
   });
   await controller.init();
@@ -289,7 +294,7 @@ test('pair UI surfaces network/timeout failures instead of silent fail', async (
   };
   const controller = pairUi.createPairUiController({
     document: doc,
-    window: { location: { pathname: '/app/pome-panel/' }, setInterval() { return 1; }, clearInterval() {} },
+    window: { location: { pathname: '/app/com.pomepanel.sync/' }, setInterval() { return 1; }, clearInterval() {} },
     fetch: fetchImpl,
     fetchTimeoutMs: 50,
   });
@@ -334,7 +339,7 @@ test('pair UI shows CSRF / 4xx body on pair/start failure', async () => {
   };
   const controller = pairUi.createPairUiController({
     document: doc,
-    window: { location: { pathname: '/app/pome-panel/' }, setInterval() { return 1; }, clearInterval() {} },
+    window: { location: { pathname: '/app/com.pomepanel.sync/' }, setInterval() { return 1; }, clearInterval() {} },
     fetch: fetchImpl,
   });
   const started = await controller.startPair();

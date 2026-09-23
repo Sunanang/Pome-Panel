@@ -204,10 +204,10 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.7');
+  assert.equal(manifestJson.version, '0.9.8');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'com.pomepanel.sync');
-  assert.equal(manifestJson.appPath, '/app/pome-panel');
+  assert.equal(manifestJson.appPath, '/app/com.pomepanel.sync');
   assert.equal(manifestJson.devicePort.field, 'wizard_port');
   assert.doesNotMatch(JSON.stringify(manifestJson), /Sunanang|Pome Panel Sync/);
 
@@ -215,7 +215,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.7$/m);
+  assert.match(official, /^version=0\.9\.8$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=com\.pomepanel\.sync\.main$/m);
@@ -251,7 +251,8 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(configTips.helpText, /重启/);
   const uiConfig = JSON.parse(fs.readFileSync(path.join(root, 'app/ui/config'), 'utf8'));
   assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].title, 'Pome Panel');
-  assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].gatewayPrefix, '/app/pome-panel');
+  assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].gatewayPrefix, '/app/com.pomepanel.sync');
+  assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].url, '/app/com.pomepanel.sync');
   const wizardHtml = fs.readFileSync(path.join(root, 'wizard/index.html'), 'utf8');
   assert.match(wizardHtml, /Pome Panel/);
   assert.doesNotMatch(wizardHtml, /Pome Panel Sync|Sunanang/);
@@ -294,18 +295,18 @@ test('devices tab shows the current local port for FRP', async () => {
       return null;
     },
     querySelector() {
-      return { getAttribute: () => '/app/pome-panel' };
+      return { getAttribute: () => '/app/com.pomepanel.sync' };
     },
   };
   let copied = '';
   const controller = pairUi.createPairUiController({
     document: doc,
     window: {
-      location: { pathname: '/app/pome-panel/' },
+      location: { pathname: '/app/com.pomepanel.sync/' },
       navigator: { clipboard: { writeText: async (text) => { copied = text; } } },
     },
     fetch: async (url) => {
-      assert.match(String(url), /\/app\/pome-panel\/api\/v1\/device-port$/);
+      assert.match(String(url), /\/app\/com\.pomepanel\.sync\/api\/v1\/device-port$/);
       return new Response(JSON.stringify({
         ok: true,
         enabled: true,
@@ -341,12 +342,12 @@ test('devices tab shows the current local port for FRP', async () => {
       return null;
     },
     querySelector() {
-      return { getAttribute: () => '/app/pome-panel' };
+      return { getAttribute: () => '/app/com.pomepanel.sync' };
     },
   };
   const unsetController = pairUi.createPairUiController({
     document: unsetDoc,
-    window: { location: { pathname: '/app/pome-panel/' } },
+    window: { location: { pathname: '/app/com.pomepanel.sync/' } },
     fetch: async () => new Response(JSON.stringify({
       ok: true,
       enabled: false,
@@ -659,6 +660,7 @@ test('packaged server loads vendored sync-protocol from TRIM_APPDEST', () => {
   assert.ok(entryAt > 0);
   assert.ok(fallbackAt > entryAt);
   assert.match(start, /nohup "\$NODE_BIN" "\$APP_ENTRY"/);
+  assert.match(start, /export FNOS_GATEWAY_PREFIX="\$\{FNOS_GATEWAY_PREFIX:-\/app\/com\.pomepanel\.sync\}"/);
 
   const srcDir = path.join(root, 'packages/sync-protocol');
   const vendored = path.join(root, 'fnos/app/packages/sync-protocol');
@@ -809,12 +811,12 @@ test('pairing stays off until the fnOS session is present', async () => {
         if (id === 'pair-status') return status;
         return null;
       },
-      querySelector() { return { getAttribute: () => '/app/pome-panel' }; },
+      querySelector() { return { getAttribute: () => '/app/com.pomepanel.sync' }; },
     };
   }
   const denied = pairUi.createPairUiController({
     document: docFor(),
-    window: { location: { pathname: '/app/pome-panel/' } },
+    window: { location: { pathname: '/app/com.pomepanel.sync/' } },
     fetch: async () => new Response(JSON.stringify({ error: 'gateway_session_required' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -829,7 +831,7 @@ test('pairing stays off until the fnOS session is present', async () => {
 
   const allowed = pairUi.createPairUiController({
     document: docFor(),
-    window: { location: { pathname: '/app/pome-panel/' } },
+    window: { location: { pathname: '/app/com.pomepanel.sync/' } },
     fetch: async () => new Response(JSON.stringify({ uid: 'uid-lando', username: 'Lando' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

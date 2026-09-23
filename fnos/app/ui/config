@@ -4,9 +4,9 @@
       "title": "Pome Panel",
       "type": "iframe",
       "protocol": "",
-      "gatewayPrefix": "/app/pome-panel",
+      "gatewayPrefix": "/app/com.pomepanel.sync",
       "gatewaySocket": "app.sock",
-      "url": "/app/pome-panel",
+      "url": "/app/com.pomepanel.sync",
       "allUsers": true
     }
   }
