@@ -203,7 +203,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.2');
+  assert.equal(manifestJson.version, '0.9.3');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'com.pomepanel.sync');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
@@ -214,7 +214,8 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.2$/m);
+  assert.match(official, /^version=0\.9\.3$/m);
+  assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=com\.pomepanel\.sync\.main$/m);
   assert.ok(fs.existsSync(path.join(root, 'app/ui/config')));
@@ -370,6 +371,11 @@ test('start.sh does not force an ephemeral port over the saved file', async (t) 
   assert.match(index, /listenConfiguredDevicePort/);
   assert.equal(/\bFNOS_DEVICE_PORT\s*=\s*5001\b|\blisten\(\s*5001\b/.test(start), false);
   assert.equal(/\blisten\(\s*5001\b/.test(fs.readFileSync(path.join(root, 'fnos/app/server/createApp.js'), 'utf8')), false);
+  assert.match(start, /export PATH="\/var\/apps\/nodejs_v24\/target\/bin:\/var\/apps\/nodejs_v22\/target\/bin:/);
+  assert.match(start, /请在飞牛应用中心安装并启用 Node\.js v22 或 v24/);
+  const v24At = start.indexOf('/var/apps/nodejs_v24/target/bin/node');
+  const v22At = start.indexOf('/var/apps/nodejs_v22/target/bin/node');
+  assert.ok(v24At > 0 && v22At > v24At);
 
   const dir = tmpDir('fnos-start-');
   const runtime = path.join(dir, 'runtime');
@@ -444,7 +450,7 @@ test('start.sh launches the gateway when no port was configured', async (t) => {
   fs.mkdirSync(runtime, { recursive: true });
   const fake = path.join(dir, 'fake-node.sh');
   fs.writeFileSync(fake, `#!/bin/sh
-printf 'ENABLE=%s\\nPORT=%s\\n' "\${FNOS_ENABLE_DEVICE_PORT-unset}" "\${FNOS_DEVICE_PORT-unset}" > "\${FNOS_DATA_DIR}/probe.txt"
+printf 'ENABLE=%s\\nPORT=%s\\nPATH=%s\\n' "\${FNOS_ENABLE_DEVICE_PORT-unset}" "\${FNOS_DEVICE_PORT-unset}" "$PATH" > "\${FNOS_DATA_DIR}/probe.txt"
 exit 0
 `, { mode: 0o755 });
   const stdout = await new Promise((resolve, reject) => {
@@ -474,6 +480,7 @@ exit 0
   const probe = fs.readFileSync(probePath, 'utf8');
   assert.match(probe, /^ENABLE=0$/m);
   assert.match(probe, /^PORT=unset$/m);
+  assert.match(probe, /^PATH=\/var\/apps\/nodejs_v24\/target\/bin:\/var\/apps\/nodejs_v22\/target\/bin:/m);
   assert.equal(fs.existsSync(path.join(runtime, 'server.pid')), true);
   assert.equal(fs.existsSync(path.join(data, 'device-port')), false);
   const logged = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';

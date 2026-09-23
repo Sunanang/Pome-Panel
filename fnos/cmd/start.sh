@@ -116,18 +116,21 @@ else
   unset FNOS_DEVICE_PORT
 fi
 
+# fnOS installs Node as another app. install_dep_apps=nodejs_v22 lets this package
+# read /var/apps/nodejs_v22. v24 is probed the same way when that app is present.
+export PATH="/var/apps/nodejs_v24/target/bin:/var/apps/nodejs_v22/target/bin:/var/apps/nodejs_v20/target/bin:/var/apps/nodejs_v18/target/bin:${PATH:-/usr/local/bin:/usr/bin}"
+
 NODE_BIN_RESOLVED=""
 if [[ -n "${NODE_BIN:-}" && -x "${NODE_BIN}" ]]; then
   NODE_BIN_RESOLVED="$NODE_BIN"
-elif command -v node >/dev/null 2>&1; then
-  NODE_BIN_RESOLVED="$(command -v node)"
 else
   for candidate in \
-    /usr/local/bin/node \
-    /usr/bin/node \
+    /var/apps/nodejs_v24/target/bin/node \
     /var/apps/nodejs_v22/target/bin/node \
     /var/apps/nodejs_v20/target/bin/node \
     /var/apps/nodejs_v18/target/bin/node \
+    /usr/local/bin/node \
+    /usr/bin/node \
     /var/packages/Node.js_v18/target/bin/node
   do
     if [[ -x "$candidate" ]]; then
@@ -135,10 +138,13 @@ else
       break
     fi
   done
+  if [[ -z "$NODE_BIN_RESOLVED" ]] && command -v node >/dev/null 2>&1; then
+    NODE_BIN_RESOLVED="$(command -v node)"
+  fi
 fi
 
 if [[ -z "$NODE_BIN_RESOLVED" ]]; then
-  report_fail "找不到 Node.js，无法启动 Pome Panel。请确认系统里有 Node 18 或更新版本。"
+  report_fail "找不到 Node.js，无法启动 Pome Panel。请在飞牛应用中心安装并启用 Node.js v22 或 v24。"
 fi
 
 export FNOS_SOCKET_PATH="$SOCKET_PATH"
