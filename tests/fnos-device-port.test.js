@@ -207,7 +207,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^distributor=Lando$/m);
   assert.match(official, /^version=0\.9\.1$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
-  assert.match(official, /^desktop_applaunchname=pome-panel\.main$/m);
+  assert.match(official, /^desktop_applaunchname=com\.pomepanel\.sync\.main$/m);
   assert.ok(fs.existsSync(path.join(root, 'app/ui/config')));
   assert.match(official, /^appname=com\.pomepanel\.sync$/m);
   assert.match(official, /^checkport=false$/m);
@@ -231,8 +231,8 @@ test('install wizard and package identity use a user-chosen port', () => {
     assert.equal(field.rules.some((rule) => rule.pattern === portPattern.source), true);
   }
   const uiConfig = JSON.parse(fs.readFileSync(path.join(root, 'app/ui/config'), 'utf8'));
-  assert.equal(uiConfig['.url']['pome-panel.main'].title, 'Pome Panel');
-  assert.equal(uiConfig['.url']['pome-panel.main'].gatewayPrefix, '/app/pome-panel');
+  assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].title, 'Pome Panel');
+  assert.equal(uiConfig['.url']['com.pomepanel.sync.main'].gatewayPrefix, '/app/pome-panel');
   const wizardHtml = fs.readFileSync(path.join(root, 'wizard/index.html'), 'utf8');
   assert.match(wizardHtml, /Pome Panel/);
   assert.doesNotMatch(wizardHtml, /Pome Panel Sync|Sunanang/);

@@ -1,6 +1,6 @@
 {
   ".url": {
-    "pome-panel.main": {
+    "com.pomepanel.sync.main": {
       "title": "Pome Panel",
       "type": "iframe",
       "protocol": "",
