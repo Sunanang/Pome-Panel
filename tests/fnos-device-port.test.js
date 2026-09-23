@@ -194,7 +194,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '1.1.5');
+  assert.equal(manifestJson.version, '0.9.0');
   assert.equal(manifestJson.id, 'com.pomepanel.sync');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
   assert.equal(manifestJson.devicePort.field, 'wizard_port');
@@ -203,7 +203,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   const official = fs.readFileSync(path.join(root, 'manifest'), 'utf8');
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
-  assert.match(official, /^version=1\.1\.5$/m);
+  assert.match(official, /^version=0\.9\.0$/m);
   assert.match(official, /^appname=com\.pomepanel\.sync$/m);
   assert.match(official, /^checkport=false$/m);
   assert.doesNotMatch(official, /service_port\s*=\s*5001|Sunanang|Pome Panel Sync/);

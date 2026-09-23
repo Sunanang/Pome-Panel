@@ -1,7 +1,7 @@
 {
   "id": "com.pomepanel.sync",
   "name": "Pome Panel",
-  "version": "1.1.5",
+  "version": "0.9.0",
   "description": "在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/pome-panel。设备同步端口在安装时填写，固定监听 127.0.0.1。",
   "author": "Lando",
   "maintainer": "Lando",

@@ -136,6 +136,20 @@ test('unpaired status hides channel and retry; lost token is one line', () => {
   assert.match(css, /\.settings-nas-status-meta\[hidden\]/);
 });
 
+test('successful pairing opens sync options once; the sync button can open them again', () => {
+  assert.match(html, /id="settings-nas-sync-open"[^>]*hidden>同步</);
+  assert.match(html, /id="settings-nas-sync-options"/);
+  assert.match(html, /id="settings-nas-sync-options-start"/);
+  assert.match(workspaceJs, /function openNasSyncOptions\(\)/);
+  const successAt = workspaceJs.indexOf("setNasSyncHint('配对成功', 'success')");
+  assert.ok(successAt > 0);
+  const successTail = workspaceJs.slice(successAt, successAt + 280);
+  assert.match(successTail, /openNasSyncOptions\(\)/);
+  assert.doesNotMatch(successTail, /startNasMigration|syncRetry/);
+  assert.match(workspaceJs, /settingsNasSyncOpen\.addEventListener/);
+  assert.match(workspaceJs, /settingsNasSyncOptionsStart\.addEventListener/);
+});
+
 test('retry API wiring exists in workspace + preload', () => {
   assert.match(workspaceJs, /syncRetry/);
   assert.match(workspaceJs, /settings-nas-sync-retry/);

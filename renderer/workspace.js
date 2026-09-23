@@ -758,6 +758,10 @@
   const settingsNasLastSync = document.getElementById('settings-nas-last-sync');
   const settingsNasHttpWarning = document.getElementById('settings-nas-http-warning');
   const settingsNasDevicePortGuide = document.getElementById('settings-nas-device-port-guide');
+  const settingsNasSyncOpen = document.getElementById('settings-nas-sync-open');
+  const settingsNasSyncOptions = document.getElementById('settings-nas-sync-options');
+  const settingsNasSyncOptionsCancel = document.getElementById('settings-nas-sync-options-cancel');
+  const settingsNasSyncOptionsStart = document.getElementById('settings-nas-sync-options-start');
   const settingsNasSyncRetry = document.getElementById('settings-nas-sync-retry');
   const settingsNasExportBackup = document.getElementById('settings-nas-export-backup');
   const settingsNasRestoreBackup = document.getElementById('settings-nas-restore-backup');
@@ -1758,6 +1762,10 @@
   function renderNasBoundChrome() {
     const bound = Boolean(nasPairUi.bound);
     if (settingsNasStatusMeta) settingsNasStatusMeta.hidden = !bound;
+    if (settingsNasSyncOpen) {
+      settingsNasSyncOpen.hidden = !bound;
+      settingsNasSyncOpen.disabled = !bound || nasSettingsUi.busy;
+    }
     if (settingsNasSyncRetry) {
       settingsNasSyncRetry.hidden = !bound;
       settingsNasSyncRetry.disabled = !bound || nasSettingsUi.retryEnabled === false || nasSettingsUi.busy;
@@ -1902,6 +1910,15 @@
     }
     if (settingsNasMigrationActions) settingsNasMigrationActions.hidden = !bound;
     renderNasEndpoints();
+  }
+
+  function openNasSyncOptions() {
+    if (!settingsNasSyncOptions) return;
+    settingsNasSyncOptions.hidden = false;
+  }
+
+  function closeNasSyncOptions() {
+    if (settingsNasSyncOptions) settingsNasSyncOptions.hidden = true;
   }
 
   function openNasDialog(dialog) {
@@ -2163,9 +2180,10 @@
     }
     applyNasPairUi({ type: 'success', status: result.status });
     if (settingsNasPairCode) settingsNasPairCode.value = '';
-    setNasSyncHint('配对成功，正在检查迁移…', 'success');
+    setNasSyncHint('配对成功', 'success');
     await refreshNasSyncStatus();
-    void startNasMigration();
+    // One shot per successful pair. Launch and later syncs do not reopen this.
+    openNasSyncOptions();
   }
 
   if (settingsCursorTokenSave) settingsCursorTokenSave.addEventListener('click', async () => {
@@ -2290,6 +2308,23 @@
         event.preventDefault();
         void addNasEndpoint();
       }
+    });
+  }
+  if (settingsNasSyncOpen) {
+    settingsNasSyncOpen.addEventListener('click', () => {
+      if (!nasPairUi.bound) return;
+      openNasSyncOptions();
+    });
+  }
+  if (settingsNasSyncOptionsCancel) {
+    settingsNasSyncOptionsCancel.addEventListener('click', () => {
+      closeNasSyncOptions();
+    });
+  }
+  if (settingsNasSyncOptionsStart) {
+    settingsNasSyncOptionsStart.addEventListener('click', () => {
+      closeNasSyncOptions();
+      void startNasMigration();
     });
   }
   if (settingsNasSyncRetry) {

@@ -1697,47 +1697,29 @@ async function chooseMirrorImage() {
   }
 }
 
+function showMainPanelFromTray() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  hideWhenCollapsed = false;
+  if (!mainWindow.isVisible()) mainWindow.show();
+  repositionWindow(getTargetDisplay());
+  mainWindow.show();
+  if (currentMode !== 'expanded') {
+    mainWindow.webContents.send('shortcut:toggle-panel');
+  }
+}
+
 function refreshTrayMenu() {
   if (!tray) return;
   const autoLaunch = isAutoLaunchEnabled();
-  const settings = readAppSettings();
-  const featureLabels = { todo: '待办', notes: '笔记', links: '链接', recordings: '录制', credentials: '密钥', clip: '剪贴板' };
   const menu = Menu.buildFromTemplate([
     {
-      label: 'API 配置…',
-      click: () => openRendererPanel('app:open-api-settings'),
-    },
-    {
-      label: '替换镜子配图…',
-      click: chooseMirrorImage,
-    },
-    {
       label: '显示功能',
-      submenu: Object.entries(featureLabels).map(([id, label]) => ({
-        label,
-        type: 'checkbox',
-        checked: settings.features[id] !== false,
-        click: (item) => {
-          const next = readAppSettings();
-          next.features[id] = item.checked;
-          saveAppSettings(next);
-          applyAppSettings();
-          refreshTrayMenu();
-        },
-      })),
+      click: showMainPanelFromTray,
     },
     {
-      label: `设置快捷键…  当前：${settings.shortcut}`,
+      label: '设置快捷键',
       click: () => openRendererPanel('app:record-shortcut'),
     },
-    {
-      label: '数据文件夹',
-      submenu: [
-        { label: '打开文件夹', click: () => shell.openPath(workspaceRoot()) },
-        { label: '更换文件夹…', click: chooseWorkspaceFolder },
-      ],
-    },
-    { type: 'separator' },
     {
       label: '开机自动启动',
       type: 'checkbox',
@@ -1756,7 +1738,7 @@ function refreshTrayMenu() {
           title: '关于 Pome Panel',
           message: 'Pome Panel',
           detail:
-            `版本 ${app.getVersion()}\n\n一个开源、常驻屏幕顶部的本地工作台。工作区数据默认保存在本机；账号密码与 API Key 由系统安全存储加密。\n\nMIT License`,
+            `版本 ${app.getVersion()}\n开发者 Lando\n\n贴在屏幕顶部的个人工作台。可以记笔记、管剪贴板、录音、放常用指令，并和飞牛 NAS 同步。`,
           buttons: ['查看 GitHub', '好'],
           defaultId: 1,
           cancelId: 1,
@@ -1766,20 +1748,6 @@ function refreshTrayMenu() {
         });
       },
     },
-    { type: 'separator' },
-    {
-      label: '重置面板位置（顶部中间）',
-      click: () => {
-        panelDragOffset = null;
-        writePanelPosition(null);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          hideWhenCollapsed = false;
-          if (!mainWindow.isVisible()) mainWindow.show();
-          repositionWindow(getTargetDisplay());
-        }
-      },
-    },
-    { type: 'separator' },
     {
       label: '退出',
       accelerator: 'CommandOrControl+Q',

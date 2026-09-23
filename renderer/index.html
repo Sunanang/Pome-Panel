@@ -622,6 +622,7 @@
                     不安全连接：已启用明文 HTTP endpoint，设备令牌与待办可能被窃听或篡改
                   </p>
                   <div class="settings-nas-sync-actions" id="settings-nas-sync-actions">
+                    <button class="workspace-button compact primary" id="settings-nas-sync-open" type="button" data-control-id="settings.nas-sync.open" hidden>同步</button>
                     <button class="workspace-button compact" id="settings-nas-sync-retry" type="button" data-control-id="settings.nas-sync.retry" hidden>重试同步</button>
                     <span class="settings-nas-action-split" aria-hidden="true"></span>
                     <button class="workspace-button compact settings-nas-quiet" id="settings-nas-export-backup" type="button" data-control-id="settings.nas-sync.export-backup">导出备份</button>
@@ -629,6 +630,19 @@
                   </div>
                   <p class="settings-nas-sync-hint" id="settings-nas-status-hint" role="status"></p>
                 </section>
+
+                <div class="settings-nas-dialog-root" id="settings-nas-sync-options" hidden>
+                  <section class="transcription-settings-card settings-nas-dialog" id="settings-nas-sync-options-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-nas-sync-options-title" data-control-id="settings.nas-sync.options">
+                    <div class="transcription-settings-heading">
+                      <strong id="settings-nas-sync-options-title">同步选项</strong>
+                    </div>
+                    <p class="transcription-settings-note" id="settings-nas-sync-options-body">开始后会同步待办、笔记、剪贴板、录音、链接、常用指令、AI 配置和密钥。两边都有内容时，再选择以本机或飞牛为准。</p>
+                    <div class="transcription-settings-actions">
+                      <button class="workspace-button compact" id="settings-nas-sync-options-cancel" type="button">稍后</button>
+                      <button class="workspace-button compact primary" id="settings-nas-sync-options-start" type="button" data-control-id="settings.nas-sync.options.start">开始同步</button>
+                    </div>
+                  </section>
+                </div>
 
                 <div class="settings-nas-dialog-root" id="settings-nas-dialog-root" hidden>
                   <section class="transcription-settings-card settings-nas-dialog" id="settings-nas-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-nas-dialog-title" data-control-id="pair.http-extra-confirm">
