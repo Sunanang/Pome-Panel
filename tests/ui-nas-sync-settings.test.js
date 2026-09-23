@@ -70,6 +70,30 @@ test('retry not_bound is Chinese and is not shown as a raw code', () => {
     settingsUi.humanizeSyncError({ ok: false, error: 'not_bound' }, '重试失败'),
     /not_bound/,
   );
+  const hangup = settingsUi.humanizeSyncError({ error: 'socket hang up', message: 'socket hang up' }, '配对失败');
+  assert.match(hangup, /同步服务没有回应/);
+  assert.match(hangup, /http:\/\//);
+  assert.doesNotMatch(hangup, /socket hang up/);
+  assert.match(
+    settingsUi.humanizeSyncError({ error: 'remote_closed' }, '配对失败'),
+    /同步服务没有回应/,
+  );
+  assert.match(
+    settingsUi.humanizeSyncError({ code: 'ECONNRESET', message: 'socket hang up' }, '配对失败'),
+    /同步服务没有回应/,
+  );
+  assert.match(
+    settingsUi.humanizeSyncError('Empty reply from server', '配对失败'),
+    /同步服务没有回应/,
+  );
+  assert.match(
+    settingsUi.humanizeSyncError({ error: 'ECONNREFUSED' }, '配对失败'),
+    /连不上同步端口/,
+  );
+  assert.doesNotMatch(
+    settingsUi.humanizeSyncError({ error: 'UND_ERR_SOCKET' }, '配对失败'),
+    /UND_ERR_SOCKET/,
+  );
   const retryBlock = workspaceJs.slice(
     workspaceJs.indexOf('settingsNasSyncRetry.addEventListener'),
   );

@@ -243,6 +243,11 @@
     https_on_http: '该地址说的是 HTTP，不是 HTTPS。请把 Base URL 改为 http://…',
     certificate_error: '证书错误',
     timeout: '连接超时',
+    remote_closed: '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。',
+    connection_refused: '连不上同步端口。请确认飞牛应用正在运行，并且 FRP 或局域网指向当前的设备同步端口。',
+    ECONNRESET: '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。',
+    UND_ERR_SOCKET: '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。',
+    ECONNREFUSED: '连不上同步端口。请确认飞牛应用正在运行，并且 FRP 或局域网指向当前的设备同步端口。',
     invalid_url: 'URL 无效',
     invalid_json: '服务器返回无法解析',
     write_failed: '写入失败',
@@ -271,6 +276,18 @@
     return /^[A-Za-z0-9_.:-]+$/.test(text);
   }
 
+  function transportFailureCopy(value) {
+    const text = String(value || '').toLowerCase();
+    if (!text) return '';
+    if (/econnrefused|connection refused|connection_refused/.test(text)) {
+      return SYNC_ERROR_COPY.connection_refused;
+    }
+    if (/socket hang up|econnreset|empty reply from server|und_err_socket|remote_closed/.test(text)) {
+      return SYNC_ERROR_COPY.remote_closed;
+    }
+    return '';
+  }
+
   /**
    * User-facing sync failure. Known codes become Chinese; unknown raw codes
    * fall back instead of being shown (for example `not_bound`).
@@ -279,11 +296,16 @@
     const fallbackText = fallback || '操作失败';
     if (result == null || result === '') return fallbackText;
     if (typeof result === 'string') {
-      return SYNC_ERROR_COPY[result] || (isRawErrorCode(result) ? fallbackText : result);
+      return SYNC_ERROR_COPY[result]
+        || transportFailureCopy(result)
+        || (isRawErrorCode(result) ? fallbackText : result);
     }
     const code = result.error || result.code || '';
-    if (code && SYNC_ERROR_COPY[code]) return SYNC_ERROR_COPY[code];
+    const fromCode = transportFailureCopy(code) || (code && SYNC_ERROR_COPY[code]);
+    if (fromCode) return fromCode;
     const message = result.message;
+    const fromMessage = transportFailureCopy(message);
+    if (fromMessage) return fromMessage;
     if (message && !isRawErrorCode(message)) return message;
     return fallbackText;
   }

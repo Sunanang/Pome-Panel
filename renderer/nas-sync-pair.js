@@ -220,6 +220,8 @@
         code_consumed: '配对码已使用',
         code_expired: '配对码已过期',
         certificate_error: '证书错误',
+        remote_closed: '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。',
+        connection_refused: '连不上同步端口。请确认飞牛应用正在运行，并且 FRP 或局域网指向当前的设备同步端口。',
         schema_incompatible: result.message
           || (result.upgradeTarget === 'desktop'
             ? '协议不兼容：请升级桌面端 Pome Panel 后再同步'

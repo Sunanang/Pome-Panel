@@ -27,6 +27,13 @@ const HTTP_INSECURE_CONFIRM_TEXT =
 const HTTPS_ON_HTTP_MESSAGE =
   '该地址说的是 HTTP，不是 HTTPS。请把 Base URL 改为 http://…';
 
+/** TCP connected, then the peer closed without an HTTP response (stale FRP, stopped app). */
+const REMOTE_CLOSED_MESSAGE =
+  '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。';
+
+const CONNECTION_REFUSED_MESSAGE =
+  '连不上同步端口。请确认飞牛应用正在运行，并且 FRP 或局域网指向当前的设备同步端口。';
+
 const HTTP_INSECURE_WARNING_TEXT = '不安全连接：当前有启用的明文 HTTP endpoint';
 
 const DEVICE_PORT_GUIDANCE_TEXT =
@@ -276,13 +283,26 @@ function classifyTransportError(errorOrStatus) {
   if (/enotfound|getaddrinfo|dns/.test(raw)) {
     return { kind: 'dns', transferable: true };
   }
-  if (/econnrefused|connection refused/.test(raw)) {
-    return { kind: 'connection_refused', transferable: true };
+  if (/econnrefused|connection refused|connection_refused/.test(raw)) {
+    return {
+      kind: 'connection_refused',
+      transferable: true,
+      userMessage: CONNECTION_REFUSED_MESSAGE,
+    };
   }
   if (/etimedout|timeout|esockettimedout/.test(raw)) {
     return { kind: 'timeout', transferable: true };
   }
-  if (/econnreset|network|eai_again/.test(raw)) {
+  if (
+    /socket hang up|econnreset|empty reply from server|und_err_socket|remote_closed/.test(raw)
+  ) {
+    return {
+      kind: 'remote_closed',
+      transferable: true,
+      userMessage: REMOTE_CLOSED_MESSAGE,
+    };
+  }
+  if (/network|eai_again/.test(raw)) {
     return { kind: 'network', transferable: true };
   }
   return { kind: 'unknown', transferable: false };
@@ -321,8 +341,8 @@ function shouldFailover(errorOrStatus) {
 }
 
 /**
- * User-facing transport failure for certificate trust vs HTTPS-on-HTTP.
- * Returns null for ordinary network/HTTP failures so callers keep their own copy.
+ * User-facing transport failure. Stable `error` codes are safe to store.
+ * Returns null for ordinary HTTP failures so callers keep their own copy.
  */
 function describeTransportFailure(errorOrStatus) {
   const classified = classifyTransportError(errorOrStatus);
@@ -346,6 +366,17 @@ function describeTransportFailure(errorOrStatus) {
       certificateError: true,
       needsTrustConfirm: true,
       uiState: 'certificate_error',
+    };
+  }
+  if (classified.kind === 'remote_closed' || classified.kind === 'connection_refused') {
+    return {
+      ok: false,
+      error: classified.kind,
+      message: classified.userMessage,
+      transferable: classified.transferable === true,
+      certificateError: false,
+      needsTrustConfirm: false,
+      uiState: null,
     };
   }
   return null;
@@ -527,6 +558,8 @@ module.exports = {
   SYNC_UI_STATES,
   HTTP_INSECURE_CONFIRM_TEXT,
   HTTPS_ON_HTTP_MESSAGE,
+  REMOTE_CLOSED_MESSAGE,
+  CONNECTION_REFUSED_MESSAGE,
   HTTP_INSECURE_WARNING_TEXT,
   DEVICE_PORT_GUIDANCE_TEXT,
   APP_PATH_SEGMENT,

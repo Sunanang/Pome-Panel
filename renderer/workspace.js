@@ -1818,7 +1818,7 @@
         + `</div>`
         + `<div class="settings-nas-endpoint-meta${metaTone}">优先级 ${ep.priority}`
         + `${ep.lastHealth && ep.lastHealth.ok ? ' · 健康' : ''}`
-        + `${ep.lastError ? ` · 错误 ${ep.lastError.code || ''}` : ''}`
+        + `${ep.lastError ? ` · ${describeNasSyncError({ error: ep.lastError.code, message: ep.lastError.code }, '连接失败')}` : ''}`
         + `</div></div></div>`
         + `<div class="settings-nas-endpoint-actions">`
         + (showHttpToggle
