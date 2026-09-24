@@ -204,7 +204,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.11');
+  assert.equal(manifestJson.version, '0.9.12');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'pome-panel');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
@@ -216,7 +216,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.11$/m);
+  assert.match(official, /^version=0\.9\.12$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=pome-panel\.main$/m);

@@ -115,10 +115,75 @@
     }
 
     function el(tag, className, text) {
-      const node = doc.createElement(tag);
-      if (className) node.className = className;
+      const svg = tag === 'svg' || tag === 'path';
+      const node = svg && doc.createElementNS
+        ? doc.createElementNS('http://www.w3.org/2000/svg', tag)
+        : doc.createElement(tag);
+      if (className) {
+        if (svg && node.setAttribute) node.setAttribute('class', className);
+        else node.className = className;
+      }
       if (text != null) node.textContent = text;
       return node;
+    }
+
+    function starIcon(filled) {
+      const svg = el('svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('aria-hidden', 'true');
+      if (filled) {
+        svg.setAttribute('fill', 'currentColor');
+      } else {
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '1.8');
+        svg.setAttribute('stroke-linejoin', 'round');
+      }
+      const path = el('path');
+      path.setAttribute('d', 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z');
+      svg.appendChild(path);
+      return svg;
+    }
+
+    function formatClipTime(ts) {
+      const value = Number(ts);
+      if (!Number.isFinite(value) || value <= 0) return '';
+      const diff = Date.now() - value;
+      if (diff < 60 * 1000) return '刚刚';
+      if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`;
+      if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)} 小时前`;
+      const date = new Date(value);
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    }
+
+    function isImageClip(item) {
+      return item.type === 'image' || !!item.hasImage;
+    }
+
+    function clipTypeClass(item) {
+      if (isImageClip(item)) return 'image';
+      if (item.type === 'url' || (item.text && /^https?:\/\//i.test(item.text))) return 'url';
+      return 'text';
+    }
+
+    function markCopied(card) {
+      const base = String(card.className || '').replace(/\s*copied\b/g, '').trim();
+      card.className = `${base} copied`;
+      setTimeout(() => {
+        card.className = String(card.className || '').replace(/\s*copied\b/g, '').trim();
+      }, 800);
+    }
+
+    async function copyClipText(text) {
+      if (!text) return false;
+      const clipboard = win && win.navigator && win.navigator.clipboard;
+      if (!clipboard || typeof clipboard.writeText !== 'function') return false;
+      try {
+        await clipboard.writeText(text);
+        return true;
+      } catch (error) {
+        return false;
+      }
     }
 
     function noteItems() {
@@ -177,8 +242,8 @@
     function filteredClips() {
       const items = (view && view.clipboard) || [];
       if (clipFilter === 'faved') return items.filter((item) => item.favorite);
-      if (clipFilter === 'image') return items.filter((item) => item.type === 'image' || item.hasImage);
-      if (clipFilter === 'text') return items.filter((item) => item.type !== 'image');
+      if (clipFilter === 'image') return items.filter((item) => isImageClip(item));
+      if (clipFilter === 'text') return items.filter((item) => !isImageClip(item));
       return items;
     }
 
@@ -187,22 +252,66 @@
       if (!list || !doc) return;
       clearNode(list);
       const items = filteredClips();
-      if (!items.length) return;
+      const total = ((view && view.clipboard) || []).length;
+      if (!items.length) {
+        list.appendChild(el(
+          'div',
+          'clip-empty',
+          total ? '没有符合条件的记录' : '复制点什么，历史会出现在这里',
+        ));
+        return;
+      }
       for (const item of items) {
-        const type = item.type === 'url' || item.type === 'image' ? item.type : 'text';
-        const card = el('article', `clip-item clip-item-${type} clip-type-${type}`);
-        if (item.hasImage && item.id) {
-          const wrap = el('div', 'clip-thumb-wrap');
-          const img = el('img', 'clip-thumb');
-          img.alt = '剪贴板图片';
-          wrap.appendChild(img);
-          card.appendChild(wrap);
-          attachMedia(img, `clip:${item.id}`);
+        const type = clipTypeClass(item);
+        const card = el(
+          'div',
+          type === 'image'
+            ? 'clip-item clip-item-image clip-type-image'
+            : `clip-item clip-item-text clip-type-${type}`,
+        );
+        if (item.id) card.setAttribute('data-id', item.id);
+        const copy = el('button', 'clip-copy-target');
+        copy.type = 'button';
+        if (type === 'image') {
+          copy.setAttribute('aria-label', '复制图片');
+          const wrap = el('span', 'clip-thumb-wrap');
+          if (item.hasImage && item.id) {
+            const img = el('img', 'clip-thumb');
+            img.alt = '图片';
+            img.setAttribute('draggable', 'false');
+            wrap.appendChild(img);
+            attachMedia(img, `clip:${item.id}`);
+          } else {
+            wrap.appendChild(el('span', 'clip-thumb-placeholder', '图片加载中…'));
+          }
+          copy.appendChild(wrap);
+        } else {
+          const preview = String(item.text || '').replace(/\s+/g, ' ').trim().slice(0, 80) || '空白内容';
+          copy.setAttribute('aria-label', `复制：${preview}`);
+          copy.appendChild(el('span', 'clip-text', item.text || ''));
+          copy.addEventListener('click', () => {
+            void copyClipText(item.text).then((ok) => {
+              if (ok) markCopied(card);
+            });
+          });
         }
-        if (item.text) card.appendChild(el('p', 'clip-text', item.text));
-        const meta = el('div', 'clip-meta');
-        meta.appendChild(el('span', 'clip-time', item.favorite ? '已收藏' : (type === 'url' ? '链接' : type === 'image' ? '图片' : '文字')));
-        card.appendChild(meta);
+        const meta = el('span', 'clip-meta');
+        meta.appendChild(el('span', 'clip-time', formatClipTime(item.timestamp)));
+        copy.appendChild(meta);
+        card.appendChild(copy);
+
+        const fav = el('button', item.favorite ? 'clip-fav-btn faved' : 'clip-fav-btn');
+        fav.type = 'button';
+        fav.setAttribute('aria-label', item.favorite ? '取消收藏' : '收藏');
+        fav.appendChild(starIcon(!!item.favorite));
+        card.appendChild(fav);
+
+        const del = el('button', 'clip-del-btn');
+        del.type = 'button';
+        del.setAttribute('aria-label', '删除');
+        del.title = '随桌面同步，这里不能删除';
+        del.textContent = '×';
+        card.appendChild(del);
         list.appendChild(card);
       }
     }

@@ -105,6 +105,18 @@ function hrefsOf(node, acc = []) {
   return acc;
 }
 
+function classesOf(node, acc = []) {
+  if (node && node.className) acc.push(node.className);
+  for (const child of (node && node.children) || []) classesOf(child, acc);
+  return acc;
+}
+
+function labelsOf(node, acc = []) {
+  if (node && node.attrs && node.attrs['aria-label']) acc.push(node.attrs['aria-label']);
+  for (const child of (node && node.children) || []) labelsOf(child, acc);
+  return acc;
+}
+
 test('NAS panel uses desktop tab chrome and puts 设备 in the home slot', () => {
   assert.match(html, /class="tabs"/);
   assert.match(html, /class="tab active"/);
@@ -352,9 +364,21 @@ test('panel controller renders synced notes and switches to devices', async () =
   await controller.selectTab('clip');
   assert.equal(store['tab-clip'].hidden, false);
   assert.equal(store['tab-devices'].hidden, true);
-  assert.match(textOf(store['clip-list']), /配图/);
-  assert.match(textOf(store['clip-list']), /已收藏/);
+  assert.match(html, /id="clip-clear-btn"/);
+  assert.match(html, /class="clip-empty"/);
+  assert.match(html, /复制点什么，历史会出现在这里/);
+  const clipClasses = classesOf(store['clip-list']).join(' ');
+  assert.match(clipClasses, /clip-item clip-item-image clip-type-image/);
+  assert.match(clipClasses, /clip-copy-target/);
+  assert.match(clipClasses, /clip-thumb/);
+  assert.match(clipClasses, /clip-meta/);
+  assert.match(clipClasses, /clip-time/);
+  assert.match(clipClasses, /clip-fav-btn faved/);
+  assert.match(clipClasses, /clip-del-btn/);
+  assert.equal(labelsOf(store['clip-list']).includes('取消收藏'), true);
   assert.ok(mediaUrls.some((url) => url.includes('/app/pome-panel/api/v1/workspace/media/clip%3Ac1')));
+  store['clip-filter-text'].listeners.click[0]();
+  assert.match(textOf(store['clip-list']), /没有符合条件的记录/);
 
   await controller.selectTab('recordings');
   assert.match(textOf(store['recording-list']), /站会/);

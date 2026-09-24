@@ -166,8 +166,17 @@
               <button class="clip-filter" id="clip-filter-text" data-filter="text" type="button">文字</button>
               <button class="clip-filter" id="clip-filter-image" data-filter="image" type="button">图片</button>
               <button class="clip-filter" id="clip-filter-faved" data-filter="faved" type="button">收藏</button>
+              <button class="clip-clear-btn" id="clip-clear-btn" type="button" aria-label="清空历史" title="剪贴板随桌面同步，这里不能清空">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 7h16" />
+                  <path d="M9 7V5h6v2" />
+                  <path d="M6 7l1 12h10l1-12" />
+                </svg>
+              </button>
             </div>
-            <div class="clip-list" id="clip-list"></div>
+            <div class="clip-list" id="clip-list">
+              <div class="clip-empty" id="clip-empty">复制点什么，历史会出现在这里</div>
+            </div>
           </div>
         </section>
 
