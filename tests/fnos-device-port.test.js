@@ -204,7 +204,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.12');
+  assert.equal(manifestJson.version, '0.9.13');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'pome-panel');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
@@ -216,7 +216,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.12$/m);
+  assert.match(official, /^version=0\.9\.13$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=pome-panel\.main$/m);
@@ -258,10 +258,22 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(launch.url, '/app/pome-panel');
   assert.equal(launch.icon, 'images/icon_{0}.png');
   assert.equal(launch.gatewaySocket, 'app.sock');
-  for (const size of ['64', '256']) {
+  for (const size of [16, 32, 48, 64, 128, 256]) {
     const iconPath = path.join(root, 'app/ui/images', `icon_${size}.png`);
-    assert.equal(fs.readFileSync(iconPath).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', iconPath);
+    const bytes = fs.readFileSync(iconPath);
+    assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', iconPath);
+    const width = bytes.readUInt32BE(16);
+    const height = bytes.readUInt32BE(20);
+    assert.equal(width, size, iconPath);
+    assert.equal(height, size, iconPath);
+    assert.ok(bytes.length > 800, iconPath);
   }
+  const brandIcon = fs.readFileSync(path.join(__dirname, '..', 'build/pome-panel-icon.png'));
+  assert.equal(fs.readFileSync(path.join(root, 'ICON.PNG')).equals(brandIcon), true);
+  const icon256 = fs.readFileSync(path.join(root, 'ICON_256.PNG'));
+  assert.equal(icon256.readUInt32BE(16), 256);
+  assert.equal(icon256.readUInt32BE(20), 256);
+  assert.ok(icon256.length > 8000);
   const uninstallSteps = JSON.parse(fs.readFileSync(path.join(root, 'wizard/uninstall'), 'utf8'));
   const radio = uninstallSteps.flatMap((step) => step.items).find((item) => item.field === 'wizard_data_action');
   assert.equal(radio.type, 'radio');

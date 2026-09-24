@@ -6,7 +6,7 @@
 
 ### 桌面
 
-- 产品版本改为 **0.9.12**。关于窗口显示 Pome Panel、开发者 Lando，以及当前版本；「查看 GitHub」打开 https://github.com/Sunanang/Pome-Panel。
+- 产品版本改为 **0.9.13**。关于窗口显示 Pome Panel、开发者 Lando，以及当前版本；「查看 GitHub」打开 https://github.com/Sunanang/Pome-Panel。
 - 菜单栏和 Windows 托盘只保留五项：显示功能、设置快捷键、开机自动启动、关于、退出。显示功能打开主界面。
 - 配对成功后自动打开一次「同步选项」。状态卡片上的「同步」可以再次打开。启动应用和之后的同步不会重复弹出。
 - 设置里的 NAS 同步收成「同步地址 → 配对 → 一行状态」（未配对 / 已连接 / 出错）。未配对不显示通道、上次同步和重试；配对成功后才是已连接，重试只表示重试同步。
@@ -24,6 +24,7 @@
 
 - 飞牛网页改成和桌面同一套面板：顶栏胶囊 Tab、四宫格待办、笔记库、剪贴卡片、链接分组、录音库和密钥卡片。没有「首页」。Tab 顺序与桌面对齐，第一项「设备」占桌面「首页」的位置，里面是配对码和已配对设备。密钥和 AI 只显示「已配置」或打码账号。面板没有外圈渐变描边，也不再显示底部计数、空状态说明和内存提示；内容区随窗口高度撑满，列表超出后再滚动。
 - 「笔记」后面增加「常用命令」，列出桌面同步过来的常用指令。没有指令时这一页保持空白。
+- 飞牛包 **0.9.13**。桌面图标改为正式 Pome Panel 石榴图标，去掉 0.9.11 放进 `images/icon_{0}.png` 的黑底占位图。包根 `ICON.PNG` 与 `build/pome-panel-icon.png` 相同，`ICON_256.PNG` 是同一图标的 256 像素版本。
 - 飞牛包 **0.9.12**。剪贴板页面对齐 Mac 桌面：筛选胶囊、固定高度卡片、类型描边、四行截断、相对时间、空状态，以及收藏星标和清空按钮。记录仍随桌面同步，网页上的清空和删除不改 NAS 数据。
 - 飞牛包 **0.9.11**。应用 ID 改回 `pome-panel`。飞牛按包名登记 `/app/pome-panel`；带点的 `com.pomepanel.sync` 会被网关当成静态文件，打开页面返回 Not Found。桌面入口补上 `images/icon_{0}.png`。卸载向导仍可保留或删除应用数据；选择清除时也会清掉旧 ID `com.pomepanel.sync` 留下的数据目录。启动入口在设置了 `TRIM_APPDEST` 时是 `$TRIM_APPDEST/server/index.js`。`packages/sync-protocol` 仍随包放在 `target/packages/sync-protocol`。pid 和日志仍在 `TRIM_PKGVAR/runtime`。发布者仍是 Lando，入口名是 `pome-panel.main`，`install_dep_apps=nodejs_v22`。
 - 没配设备同步端口时，Unix 网关仍会启动，应用中心可以启用应用并打开「应用设置」。这时不监听设备 TCP，也不使用随机端口，更不会写死 5001。在应用设置填写 1 到 65535 并重启后，才绑定该固定端口。找不到 Node.js 时仍把中文原因写入 `TRIM_TEMP_LOGFILE` 并退出。

@@ -16,4 +16,12 @@ rm -rf "$DEST"
 mkdir -p "$DEST"
 cp -a "$SRC"/. "$DEST"/
 echo "vendored $SRC -> $DEST"
+
+# Package-root icons stay the pomegranate brand. ICON.PNG is the square
+# desktop asset. ICON_256.PNG follows the desktop tile icon, which is that
+# same artwork resized. Do not point either file at a generated placeholder.
+BRAND="$ROOT/build/pome-panel-icon.png"
+cp "$BRAND" "$ROOT/fnos/ICON.PNG"
+cp "$ROOT/fnos/app/ui/images/icon_256.png" "$ROOT/fnos/ICON_256.PNG"
+echo "icons: $BRAND -> fnos/ICON.PNG, desktop icon_256 -> fnos/ICON_256.PNG"
 echo "next: pack fnos/ with fnpack on the NAS"
