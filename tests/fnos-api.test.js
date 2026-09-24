@@ -343,7 +343,7 @@ test('sync/state + migration/* + push/pull contract shapes', async () => {
   }
   assert.equal(pulled.changes.length, 1);
 
-  const notesRejected = await dispatch(app, {
+  const notesAccepted = await dispatch(app, {
     method: 'POST',
     url: '/api/v1/sync/push',
     headers: auth,
@@ -351,9 +351,9 @@ test('sync/state + migration/* + push/pull contract shapes', async () => {
       mutations: [{
         schemaVersion: SCHEMA_VERSION,
         collection: 'notes',
-        entityId: 'n1',
+        entityId: 'note:home',
         op: 'upsert',
-        payload: {},
+        payload: { kind: 'home', markdown: 'synced' },
         clientMutationId: 'c2',
         deviceId: 'dm',
         baseServerRev: 0,
@@ -361,8 +361,48 @@ test('sync/state + migration/* + push/pull contract shapes', async () => {
       }],
     },
   });
-  assert.equal(notesRejected.statusCode, 422);
-  assert.equal(notesRejected.getJson().error, 'collection_not_enabled');
+  assert.equal(notesAccepted.statusCode, 200);
+
+  const commandsAccepted = await dispatch(app, {
+    method: 'POST',
+    url: '/api/v1/sync/push',
+    headers: auth,
+    body: {
+      mutations: [{
+        schemaVersion: SCHEMA_VERSION,
+        collection: 'commands',
+        entityId: 'command:cmd-1',
+        op: 'upsert',
+        payload: { id: 'cmd-1', text: 'npm test', createdAt: 1 },
+        clientMutationId: 'c3',
+        deviceId: 'dm',
+        baseServerRev: 0,
+        clientTime: 1,
+      }],
+    },
+  });
+  assert.equal(commandsAccepted.statusCode, 200);
+
+  const layoutRejected = await dispatch(app, {
+    method: 'POST',
+    url: '/api/v1/sync/push',
+    headers: auth,
+    body: {
+      mutations: [{
+        schemaVersion: SCHEMA_VERSION,
+        collection: 'homeLayout',
+        entityId: 'layout:home',
+        op: 'upsert',
+        payload: {},
+        clientMutationId: 'c4',
+        deviceId: 'dm',
+        baseServerRev: 0,
+        clientTime: 1,
+      }],
+    },
+  });
+  assert.equal(layoutRejected.statusCode, 422);
+  assert.equal(layoutRejected.getJson().error, 'collection_not_enabled');
 });
 
 test('device port listen uses ephemeral port (not hardcoded 5001)', async () => {
@@ -421,12 +461,15 @@ test('FPK skeleton files exist (manifest / privilege / resource / cmds / ui / wi
   for (const rel of [
     'manifest.json',
     'config/privilege.json',
+    'config/resource',
     'config/resource.json',
     'cmd/start.sh',
     'cmd/stop.sh',
     'cmd/status.sh',
     'app/ui/index.html',
     'app/ui/styles.css',
+    'app/ui/panel.js',
+    'app/server/workspace-view.js',
     'wizard/index.html',
     'app/server/index.js',
     'app/server/createApp.js',
@@ -440,6 +483,21 @@ test('FPK skeleton files exist (manifest / privilege / resource / cmds / ui / wi
   const start = fs.readFileSync(path.join(root, 'cmd/start.sh'), 'utf8');
   // Forbid assigning a fixed listen port; comments may mention 5001 as banned example.
   assert.equal(/\bFNOS_DEVICE_PORT\s*=\s*5001\b|\blisten\(\s*5001\b/.test(start), false);
+  const cmdDir = path.join(root, 'cmd');
+  for (const name of fs.readdirSync(cmdDir)) {
+    const full = path.join(cmdDir, name);
+    if (!fs.statSync(full).isFile()) continue;
+    const text = fs.readFileSync(full, 'utf8');
+    assert.equal(text.startsWith('#!/bin/bash\n'), true, name);
+    assert.equal(text.includes('/usr/bin/env bash'), false, name);
+  }
+  for (const rel of ['config/resource', 'config/resource.json']) {
+    const resource = JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8'));
+    assert.deepEqual(Object.keys(resource), ['data-share'], rel);
+    assert.equal(resource['data-share'].shares[0].name, 'pome-panel');
+    assert.equal(resource.cpu, undefined);
+    assert.equal(resource.memory, undefined);
+  }
   const createAppSrc = fs.readFileSync(path.join(root, 'app/server/createApp.js'), 'utf8');
   assert.match(createAppSrc, /NEVER hardcode 5001/);
   assert.equal(/\blisten\(\s*5001\b/.test(createAppSrc), false);

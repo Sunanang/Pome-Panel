@@ -1,11 +1,12 @@
 'use strict';
 
 /**
- * Schema negotiation for FPK — single source of truth is packages/sync-protocol.
+ * Schema negotiation for FPK. Source of truth is packages/sync-protocol,
+ * vendored beside this server at ../packages/sync-protocol.
  * Do not duplicate SCHEMA_VERSION / min / max constants locally.
  */
 const path = require('node:path');
-const protocol = require(path.join(__dirname, '..', '..', '..', 'packages', 'sync-protocol'));
+const protocol = require(path.join(__dirname, '..', 'packages', 'sync-protocol'));
 
 const SCHEMA_VERSION = protocol.SCHEMA_VERSION;
 const MIN_SUPPORTED = protocol.MIN_SUPPORTED_SCHEMA_VERSION;

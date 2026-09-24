@@ -181,6 +181,30 @@ test('HTTPS-on-HTTP pair failure explains the scheme and does not ask to trust a
   assert.equal(trustedCert.dialog, null);
 });
 
+test('pair hang-up uses the Chinese remote_closed line, not the Node message', async () => {
+  const result = await pairUi.runPairSubmit({
+    code: '111222',
+    baseUrl: 'http://39.106.162.144:34931',
+    api: {
+      syncPairHttpPolicy: async () => ({ ok: true, requiresExtraConfirm: false, insecureBound: true }),
+      syncPairClaim: async () => ({
+        ok: false,
+        error: 'remote_closed',
+        message: 'socket hang up',
+      }),
+    },
+    httpConfirmAccepted: true,
+    allowInsecureHttp: true,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'remote_closed');
+  assert.match(result.message, /同步服务没有回应/);
+  assert.doesNotMatch(result.message, /socket hang up/);
+  let state = pairUi.initialPairUiState();
+  state = pairUi.reducePairUi(state, { type: 'failure', error: result.error, message: result.message });
+  assert.equal(state.error, result.message);
+});
+
 test('workspace wires Enter submit and notchAPI pair IPC (no electron require)', () => {
   assert.match(workspaceJs, /submitNasPair/);
   assert.match(workspaceJs, /keydown/);

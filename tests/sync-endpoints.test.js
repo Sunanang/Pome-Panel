@@ -94,6 +94,24 @@ test('closing HTTP switch → disabledByPolicy; never rewrite https', () => {
   assert.equal(canRequestEndpoint(off.endpoint).error, 'disabled_by_policy');
 });
 
+test('hang up and refused connections use stable transport codes', () => {
+  const { describeTransportFailure, REMOTE_CLOSED_MESSAGE, CONNECTION_REFUSED_MESSAGE } = require('../packages/sync-protocol/endpoints');
+  for (const sample of ['socket hang up', 'ECONNRESET', 'Empty reply from server', 'UND_ERR_SOCKET', { code: 'ECONNRESET', message: 'socket hang up' }]) {
+    const classified = classifyTransportError(sample);
+    assert.equal(classified.kind, 'remote_closed', `kind for ${JSON.stringify(sample)}`);
+    assert.equal(classified.transferable, true);
+    const described = describeTransportFailure(sample);
+    assert.equal(described.error, 'remote_closed');
+    assert.equal(described.message, REMOTE_CLOSED_MESSAGE);
+    assert.match(described.message, /http:\/\//);
+    assert.doesNotMatch(described.message, /socket hang up/);
+  }
+  const refused = describeTransportFailure('ECONNREFUSED');
+  assert.equal(refused.error, 'connection_refused');
+  assert.equal(refused.message, CONNECTION_REFUSED_MESSAGE);
+  assert.equal(classifyTransportError('connect ECONNREFUSED 127.0.0.1:1').kind, 'connection_refused');
+});
+
 test('failover: DNS/timeout/502 transfer; 401 and certificate do not', () => {
   assert.equal(shouldFailover('ENOTFOUND'), true);
   assert.equal(shouldFailover('timeout'), true);

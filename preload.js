@@ -126,6 +126,8 @@ contextBridge.exposeInMainWorld('notchAPI', {
   syncTodosGetProjection: () => ipcRenderer.invoke('sync:todos-get-projection'),
   onSyncTodosProjection: (cb) =>
     subscribe('sync:todos-projection', (event, projection) => cb(projection)),
+  onSyncWorkspaceProjection: (cb) =>
+    subscribe('sync:workspace-projection', (event, projection) => cb(projection)),
   onSyncStatus: (cb) =>
     subscribe('sync:status', (event, status) => cb(status)),
 });

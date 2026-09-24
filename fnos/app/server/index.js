@@ -10,7 +10,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createApp } = require('./createApp');
 const { createMemoryStore } = require('./store');
-const { wrapWithGatewayPrefix, stripGatewayPrefix } = require('./gatewayHttp');
+const { listenPersistedDevicePort } = require('./devicePort');
+const { wrapWithGatewayPrefix, stripGatewayPrefix, DEFAULT_GATEWAY_PREFIX } = require('./gatewayHttp');
 
 function readOrCreateServerId(filePath) {
   try {
@@ -31,11 +32,14 @@ function readOrCreateServerId(filePath) {
 }
 
 async function main() {
-  const gatewayPrefix = process.env.FNOS_GATEWAY_PREFIX || '/app/pome-panel';
+  const gatewayPrefix = process.env.FNOS_GATEWAY_PREFIX || DEFAULT_GATEWAY_PREFIX;
   const socketPath = process.env.FNOS_SOCKET_PATH || path.join(process.cwd(), 'runtime', 'pomepanel-sync.sock');
   const serverIdFile = process.env.FNOS_SERVER_ID_FILE || '';
   const devicePortEnv = process.env.FNOS_DEVICE_PORT;
-  const devicePortFile = process.env.FNOS_DEVICE_PORT_FILE || '';
+  const dataDir = process.env.FNOS_DATA_DIR || path.join(process.cwd(), 'data');
+  const configuredPortFile = process.env.FNOS_DEVICE_PORT_FILE;
+  const devicePortFile = (configuredPortFile && String(configuredPortFile).trim())
+    || path.join(dataDir, 'device-port');
   const enableDevicePort = process.env.FNOS_ENABLE_DEVICE_PORT !== '0';
   const wwwRoot = path.join(__dirname, '..', 'www');
   const uiRoot = path.join(__dirname, '..', 'ui');
@@ -44,6 +48,8 @@ async function main() {
   const resolvedStatic = fs.existsSync(staticRoot) ? staticRoot : uiRoot;
 
   const store = createMemoryStore({ serverId: readOrCreateServerId(serverIdFile) });
+  store.devicePortFile = devicePortFile;
+  store.devicePortEnabled = enableDevicePort;
 
   const gatewayBase = createApp({ listenMode: 'gateway', store });
   const gateway = wrapWithGatewayPrefix(gatewayBase, {
@@ -60,16 +66,21 @@ async function main() {
 
   if (enableDevicePort) {
     const device = createApp({ listenMode: 'device-port', store });
-    const port = devicePortEnv === undefined || devicePortEnv === '' ? 0 : Number(devicePortEnv);
-    const info = await device.listenDevicePort(Number.isFinite(port) ? port : 0, '127.0.0.1');
-    if (devicePortFile) {
-      fs.mkdirSync(path.dirname(devicePortFile), { recursive: true });
-      fs.writeFileSync(devicePortFile, String(info.port), { encoding: 'utf8', mode: 0o600 });
-    }
+    const info = await listenPersistedDevicePort(device, {
+      envValue: devicePortEnv,
+      portFile: devicePortFile,
+      host: '127.0.0.1',
+    });
+    store.deviceListenPort = info.port;
+    store.deviceListenHost = info.host;
     console.log(JSON.stringify({
       event: 'device_port_listen',
       host: info.host,
       port: info.port,
+      reused: info.reused,
+      fellBack: info.fellBack,
+      source: info.source,
+      portFile: devicePortFile,
       note: 'port not hardcoded; clients must use full URL; never trust X-Trim-*',
     }));
   }

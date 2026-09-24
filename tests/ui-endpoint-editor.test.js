@@ -120,3 +120,20 @@ test('A.2 endpoint.enable / HTTP toggle disable paths wired', async () => {
   });
   assert.equal(toggled.ok, true);
 });
+
+test('endpoint test result stays off the pair card hint', () => {
+  assert.match(html, /id="settings-nas-endpoint-hint"/);
+  assert.match(html, /id="settings-nas-status-hint"/);
+  assert.match(html, /id="settings-nas-sync-hint"/);
+  const pairCard = html.match(/settings-nas-pair-card[\s\S]*?<\/section>/)?.[0] || '';
+  assert.match(pairCard, /id="settings-nas-sync-hint"/);
+  assert.doesNotMatch(pairCard, /id="settings-nas-endpoint-hint"/);
+  assert.doesNotMatch(pairCard, /连接成功/);
+  const testBranch = workspaceJs.slice(workspaceJs.indexOf("const testBtn = target.closest('[data-nas-test]')"));
+  const testHead = testBranch.slice(0, testBranch.indexOf('if (delBtn)'));
+  assert.match(testHead, /setNasEndpointHint\('连接成功', 'success'\)/);
+  assert.doesNotMatch(testHead, /setNasSyncHint\(/);
+  assert.match(workspaceJs, /function setNasSyncHint/);
+  assert.match(workspaceJs, /settings-nas-sync-hint/);
+  assert.match(workspaceJs, /settings-nas-endpoint-hint/);
+});

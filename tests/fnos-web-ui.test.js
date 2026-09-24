@@ -58,12 +58,24 @@ test('FPK Web style uses desktop tokens — no banned palette / no inline color 
   assert.doesNotMatch(css, /\b(?:Inter|Roboto|Arial)\b/);
   assert.doesNotMatch(css, /linear-gradient\([^)]*(?:purple|indigo|#7[cC]|#6[dD])/i);
   assert.doesNotMatch(css, /#F4F1EA/i);
+  // Pairing code must beat `.settings-card p { font-size: 11px }` and stay display-sized.
+  assert.match(css, /\.settings-card\s+\.nas-web-code|#pair-code\.nas-web-code/);
+  assert.match(css, /font:\s*700\s+4[0-9]px/);
+  // Empty tabs must not invent page scroll with huge shell min-heights.
+  assert.doesNotMatch(css, /\.panel\s*\{[^}]*min-height:\s*(?:[6-9]\d{2}|[1-9]\d{3,})px/s);
+  assert.doesNotMatch(css, /\.panels\s*\{[^}]*min-height:\s*(?:[5-9]\d{2}|[1-9]\d{3,})px/s);
+  assert.doesNotMatch(css, /min-height:\s*100vh/);
+  assert.match(css, /\.tab-panel:not\(\.active\)\s*\{\s*display:\s*none/);
+  assert.match(css, /\.tab-panel\.active\s*\{[^}]*flex:\s*1/s);
+  assert.doesNotMatch(css, /\.panel::after/);
+  assert.doesNotMatch(css, /conic-gradient/);
 });
 
 test('resolveApiPrefix / apiUrl honor gatewayPrefix (absolute /api was the break)', () => {
   assert.equal(pairUi.resolveApiPrefix('/app/pome-panel/', null), '/app/pome-panel');
   assert.equal(pairUi.resolveApiPrefix('/app/pome-panel/index.html', null), '/app/pome-panel');
   assert.equal(pairUi.resolveApiPrefix('/app/pome-panel', null), '/app/pome-panel');
+  assert.equal(pairUi.resolveApiPrefix('/app/pome-panel/panel.js', null), '/app/pome-panel');
   assert.equal(pairUi.resolveApiPrefix('/', '/app/pome-panel'), '/app/pome-panel');
   assert.equal(
     pairUi.apiUrl('/app/pome-panel', '/api/v1/pair/start'),
@@ -99,6 +111,13 @@ test('stripGatewayPrefix maps iframe paths to /api/v1', () => {
   assert.equal(stripGatewayPrefix('/app/pome-panel/api/v1/health', '/app/pome-panel'), '/api/v1/health');
   assert.equal(stripGatewayPrefix('/app/pome-panel', '/app/pome-panel'), '/');
   assert.equal(stripGatewayPrefix('/app/pome-panel/', '/app/pome-panel'), '/');
+  assert.equal(stripGatewayPrefix('/app/pomepanel/api/v1/health', '/app/pome-panel'), '/api/v1/health');
+  assert.equal(stripGatewayPrefix('/app/pomepanel', '/app/pome-panel'), '/');
+  assert.equal(stripGatewayPrefix('/app/com.pomepanel.sync/api/v1/health', '/app/pome-panel'), '/api/v1/health');
+  assert.equal(stripGatewayPrefix('/app/com.pomepanel.sync', '/app/pome-panel'), '/');
+  assert.equal(stripGatewayPrefix('/app/pome-panel/index.html', '/app/pomepanel'), '/index.html');
+  assert.equal(stripGatewayPrefix('/app/pome-panel-sync/api', '/app/pome-panel'), '/app/pome-panel-sync/api');
+  assert.equal(stripGatewayPrefix('/api/v1/health', '/app/pome-panel'), '/api/v1/health');
 });
 
 function gatewayHeaders(uid = 'uid-alice', extra = {}) {

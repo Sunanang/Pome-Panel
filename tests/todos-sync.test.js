@@ -41,8 +41,8 @@ function memoryBound(overrides = {}) {
   return { store, accountId, deviceId, binding, ctx: { accountId, deviceId } };
 }
 
-test('notes collection is not wired for P0', () => {
-  assert.equal(notesCollectionIsNotWired(), true);
+test('notes are wired for workspace sync; todo writer still refuses them', () => {
+  assert.equal(notesCollectionIsNotWired(), false);
   const rejected = assertTodosOnlyCollection(COLLECTIONS.NOTES);
   assert.equal(rejected.ok, false);
   assert.equal(rejected.reason, 'collection_not_enabled');

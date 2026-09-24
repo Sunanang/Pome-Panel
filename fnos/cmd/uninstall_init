@@ -1,0 +1,8 @@
+#!/bin/bash
+# Stop the app before uninstall. Data removal is uninstall_callback only.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ -f "$ROOT/cmd/stop.sh" ]]; then
+  "$ROOT/cmd/stop.sh" || true
+fi
+exit 0

@@ -63,32 +63,118 @@ function parseLocalTodosStrict(raw) {
   let latestUpdatedAt = null;
   for (const key of TODO_PRIORITIES) {
     for (const item of parsed[key]) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        return { ok: false, corrupt: true, reason: 'item_invalid' };
-      }
-      if (typeof item.text !== 'string' || !item.text.trim()) {
-        return { ok: false, corrupt: true, reason: 'item_text_invalid' };
-      }
-      if (typeof item.id !== 'string' || !item.id) {
-        return { ok: false, corrupt: true, reason: 'item_id_invalid' };
-      }
+      const coerced = coerceLocalTodoItem(item, key, data[key].length);
+      if (!coerced.ok) return coerced;
       live += 1;
-      const stamp = Number(item.createdAt) || 0;
+      const stamp = Number(coerced.item.createdAt) || 0;
       if (stamp && (!latestUpdatedAt || stamp > latestUpdatedAt)) {
         latestUpdatedAt = stamp;
       }
-      data[key].push({
-        id: item.id,
-        text: item.text.trim(),
-        done: item.done === true,
-        createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
-        deadline: typeof item.deadline === 'string' ? item.deadline : '',
-        remindedAt: Math.max(0, Number(item.remindedAt) || 0),
-        categoryId: key,
-      });
+      data[key].push(coerced.item);
     }
   }
   return { ok: true, corrupt: false, data, live, latestUpdatedAt };
+}
+
+/**
+ * The visible list accepts a plain string or an object that still needs an id.
+ * Those are the same todos the desktop shows; they must count as live, not corrupt.
+ */
+function coerceLocalTodoItem(item, categoryId, index) {
+  if (typeof item === 'string') {
+    const text = item.trim();
+    if (!text) return { ok: false, corrupt: true, reason: 'item_text_invalid' };
+    return {
+      ok: true,
+      item: {
+        id: `legacy-${categoryId}-${index}`,
+        text,
+        done: false,
+        createdAt: Date.now(),
+        deadline: '',
+        remindedAt: 0,
+        categoryId,
+      },
+    };
+  }
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    return { ok: false, corrupt: true, reason: 'item_invalid' };
+  }
+  if (typeof item.text !== 'string' || !item.text.trim()) {
+    return { ok: false, corrupt: true, reason: 'item_text_invalid' };
+  }
+  const id = typeof item.id === 'string' && item.id ? item.id : `legacy-${categoryId}-${index}`;
+  return {
+    ok: true,
+    item: {
+      id,
+      text: item.text.trim(),
+      done: item.done === true,
+      createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+      deadline: typeof item.deadline === 'string' ? item.deadline : '',
+      remindedAt: Math.max(0, Number(item.remindedAt) || 0),
+      categoryId,
+    },
+  };
+}
+
+function canonicalLocalTodosJson(data) {
+  const todos = { P0: [], P1: [], P2: [], P3: [] };
+  for (const key of TODO_PRIORITIES) {
+    todos[key] = (data[key] || []).map((item) => ({
+      id: item.id,
+      text: item.text,
+      done: item.done === true,
+      createdAt: item.createdAt,
+      deadline: item.deadline || '',
+      remindedAt: item.remindedAt || 0,
+    }));
+  }
+  return JSON.stringify(todos);
+}
+
+/**
+ * Prefer the todos the screen is showing. If that list is empty, use the
+ * workspace.json copy — localStorage can stay empty while the file still has them.
+ * A corrupt screen payload is not replaced.
+ */
+function selectMigrationLocalTodos(rendererRaw, workspaceRaw) {
+  const renderer = parseLocalTodosStrict(rendererRaw);
+  if (!renderer.ok) {
+    return {
+      ok: false,
+      corrupt: true,
+      live: 0,
+      raw: rendererRaw == null ? '' : String(rendererRaw),
+      source: 'screen',
+    };
+  }
+  if (renderer.live > 0) {
+    return {
+      ok: true,
+      corrupt: false,
+      live: renderer.live,
+      raw: canonicalLocalTodosJson(renderer.data),
+      source: 'screen',
+    };
+  }
+  const workspace = parseLocalTodosStrict(workspaceRaw);
+  if (workspace.ok && workspace.live > 0) {
+    return {
+      ok: true,
+      corrupt: false,
+      live: workspace.live,
+      raw: canonicalLocalTodosJson(workspace.data),
+      source: 'workspace',
+    };
+  }
+  return {
+    ok: true,
+    corrupt: false,
+    live: 0,
+    raw: canonicalLocalTodosJson(renderer.data),
+    source: 'screen',
+  };
 }
 
 function resolveSyncBackupsRoot(userDataPath) {
@@ -377,8 +463,11 @@ async function runMigrationAttempt(ctx) {
   store.updateMigrationState(migrationId, 'prepared');
 
   const local = parseLocalTodosStrict(localRaw == null || localRaw === '' ? null : localRaw);
+  const extraEntities = Array.isArray(ctx.extraEntities) ? ctx.extraEntities : [];
   const entities =
-    resolvedAuthority === AUTHORITY.LOCAL && local.ok ? localTodosToEntities(local.data) : [];
+    resolvedAuthority === AUTHORITY.LOCAL && local.ok
+      ? localTodosToEntities(local.data).concat(extraEntities)
+      : [];
 
   const commitBody = {
     migrationId,
@@ -409,13 +498,18 @@ async function runMigrationAttempt(ctx) {
     backupId: commit.body && commit.body.backupId,
   });
 
+  let remoteChanges = [];
   try {
     if (resolvedAuthority === AUTHORITY.NAS || decision.decision === MIGRATION_DECISIONS.ENTER_SYNC_NAS_HISTORY) {
       let projectionJson;
       if (typeof api.pullAll === 'function') {
         const pulled = await api.pullAll();
+        remoteChanges = Array.isArray(pulled.changes) ? pulled.changes : [];
+        const todoChanges = remoteChanges.filter((change) => (
+          !change || !change.collection || change.collection === 'todos'
+        ));
         const projection = entitiesToTodosProjection(
-          (pulled.changes || []).map((c) => ({
+          todoChanges.map((c) => ({
             entityId: c.entityId,
             op: c.op,
             payload: c.payload,
@@ -425,7 +519,7 @@ async function runMigrationAttempt(ctx) {
         if (store.replaceTodosFromEntities) {
           const applied = store.replaceTodosFromEntities(
             accountId,
-            (pulled.changes || []).filter((c) => c.op !== 'delete'),
+            todoChanges.filter((c) => c.op !== 'delete'),
             Number(pulled.serverRev) || 0,
           );
           if (!applied.ok) throw new Error(applied.reason || 'apply_failed');
@@ -436,7 +530,8 @@ async function runMigrationAttempt(ctx) {
       applyLocalProjection(projectionJson);
     } else if (resolvedAuthority === AUTHORITY.LOCAL) {
       if (store.replaceTodosFromEntities) {
-        const applied = store.replaceTodosFromEntities(accountId, entities, Number(commit.body.serverRev) || 0);
+        const todoEntities = entities.filter((ent) => !ent.collection || ent.collection === 'todos');
+        const applied = store.replaceTodosFromEntities(accountId, todoEntities, Number(commit.body.serverRev) || 0);
         if (!applied.ok) throw new Error(applied.reason || 'apply_failed');
       }
       if (local.ok) {
@@ -471,6 +566,8 @@ async function runMigrationAttempt(ctx) {
     authority: resolvedAuthority,
     decision,
     serverRev: commit.body && commit.body.serverRev,
+    remoteChanges,
+    uploadedEntities: entities,
   };
 }
 
@@ -509,6 +606,7 @@ module.exports = {
   MIGRATION_STATES,
   AUTHORITY,
   parseLocalTodosStrict,
+  selectMigrationLocalTodos,
   classifyMigrationDecision,
   resolveMigrationChoice,
   normalizeNasSyncState,

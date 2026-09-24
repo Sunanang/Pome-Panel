@@ -1,0 +1,5 @@
+#!/bin/bash
+# fnOS install_callback — wizard_port is provided as an environment variable.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$ROOT/cmd/save-device-port.sh"
