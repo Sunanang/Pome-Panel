@@ -535,6 +535,14 @@ function createSyncStore(db, meta = {}) {
     try {
       runInTransaction(() => {
         for (const change of pull.changes) {
+          if (
+            change
+            && typeof change.collection === 'string'
+            && change.collection
+            && change.collection !== collection
+          ) {
+            continue;
+          }
           if (!change || typeof change !== 'object' || Array.isArray(change)) {
             throw Object.assign(new Error('pull_change_invalid'), { code: 'pull_change_invalid' });
           }

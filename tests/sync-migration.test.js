@@ -16,6 +16,7 @@ const {
 
 const {
   parseLocalTodosStrict,
+  selectMigrationLocalTodos,
   classifyFromLocalAndNas,
   isInsideSyncBackupDir,
   resolveSyncBackupsRoot,
@@ -57,6 +58,27 @@ test('parseLocalTodosStrict: empty ok; corrupt blocks; live counts', () => {
   const ok = parseLocalTodosStrict(JSON.stringify(liveTodos(2)));
   assert.equal(ok.ok, true);
   assert.equal(ok.live, 2);
+  const legacy = { P0: ['买菜'], P1: [], P2: [], P3: [{ text: '还没有 id' }] };
+  const coerced = parseLocalTodosStrict(JSON.stringify(legacy));
+  assert.equal(coerced.ok, true);
+  assert.equal(coerced.live, 2);
+  assert.equal(coerced.data.P0[0].text, '买菜');
+  assert.ok(coerced.data.P3[0].id);
+});
+
+test('empty screen todos fall back to workspace.json; corrupt screen does not', () => {
+  const workspace = JSON.stringify(liveTodos(3));
+  const empty = JSON.stringify({ P0: [], P1: [], P2: [], P3: [] });
+  const picked = selectMigrationLocalTodos(empty, workspace);
+  assert.equal(picked.ok, true);
+  assert.equal(picked.live, 3);
+  assert.equal(picked.source, 'workspace');
+  const screen = selectMigrationLocalTodos(JSON.stringify(liveTodos(1)), workspace);
+  assert.equal(screen.live, 1);
+  assert.equal(screen.source, 'screen');
+  const corrupt = selectMigrationLocalTodos('{', workspace);
+  assert.equal(corrupt.ok, false);
+  assert.equal(corrupt.corrupt, true);
 });
 
 test('four-state + history-empty + corrupt decision table (§5/§7)', () => {

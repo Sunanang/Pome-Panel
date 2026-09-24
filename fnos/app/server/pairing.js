@@ -11,7 +11,7 @@ const {
   computeTokenExpiresAt,
   maybeSlideTokenExpiry,
   isTokenExpired,
-} = require(path.join(__dirname, '..', '..', '..', 'packages', 'sync-protocol'));
+} = require(path.join(__dirname, '..', 'packages', 'sync-protocol'));
 
 function hashSecret(value) {
   return crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');

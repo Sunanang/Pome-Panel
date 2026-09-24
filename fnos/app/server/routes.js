@@ -1,7 +1,12 @@
 'use strict';
 
 const { schemaEnvelope, isSchemaCompatible, SCHEMA_VERSION } = require('./schema');
+const { isP0EnabledCollection } = require('../packages/sync-protocol');
+
+const SYNC_BODY_MAX_BYTES = 12 * 1024 * 1024;
+const { buildWorkspaceView, buildWorkspaceMedia } = require('./workspace-view');
 const { resolveIdentity, normalizeHeaderMap } = require('./auth');
+const { describeDeviceListenPort } = require('./devicePort');
 const { validatePairOrigin, readCsrfHeader } = require('./csrf');
 
 function sendJson(res, status, body) {
@@ -72,7 +77,7 @@ function validateMutationShape(m) {
     if (m[key] === undefined || m[key] === null || m[key] === '') return `missing_${key}`;
   }
   if (m.op !== 'upsert' && m.op !== 'delete') return 'invalid_op';
-  if (m.collection !== 'todos') return 'collection_not_enabled';
+  if (!isP0EnabledCollection(m.collection)) return 'collection_not_enabled';
   if (!isSchemaCompatible(m.schemaVersion)) return 'schema_incompatible';
   return null;
 }
@@ -92,11 +97,27 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
 
     try {
       if (method === 'GET' && path === '/api/v1/health') {
+        const reported = describeDeviceListenPort(store);
         sendJson(res, 200, {
           ok: true,
           serverId: store.serverId,
           gatewayMode: listenMode === 'gateway',
           listenMode,
+          devicePort: reported.port,
+          deviceHost: reported.host,
+        });
+        return;
+      }
+
+      if (method === 'GET' && path === '/api/v1/device-port') {
+        const reported = describeDeviceListenPort(store);
+        sendJson(res, 200, {
+          ok: true,
+          enabled: reported.enabled,
+          port: reported.port,
+          host: reported.host,
+          target: reported.target,
+          source: reported.source,
         });
         return;
       }
@@ -253,9 +274,46 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
           serverId: result.serverId,
           expiresAt: result.expiresAt,
           insecureBound: result.insecureBound,
+          accountSyncKey: result.accountSyncKey,
         };
         sendJson(res, 200, response);
         return;
+      }
+
+      if (method === 'GET' && path === '/api/v1/workspace') {
+        const id = resolveIdentity(headers, { listenMode, store });
+        if (!id.ok) {
+          sendJson(res, id.status, { error: id.reason || 'unauthenticated' });
+          return;
+        }
+        const live = [...store.bucket(id.uid).live.values()];
+        sendJson(res, 200, buildWorkspaceView(live, store.peekAccountSyncKey(id.uid)));
+        return;
+      }
+
+      {
+        const mediaMatch = /^\/api\/v1\/workspace\/media\/(.+)$/.exec(path);
+        if (method === 'GET' && mediaMatch) {
+          const id = resolveIdentity(headers, { listenMode, store });
+          if (!id.ok) {
+            sendJson(res, id.status, { error: id.reason || 'unauthenticated' });
+            return;
+          }
+          const entityId = decodeURIComponent(mediaMatch[1]);
+          const live = [...store.bucket(id.uid).live.values()];
+          const media = buildWorkspaceMedia(live, entityId);
+          if (!media || !media.bytes || !media.bytes.length) {
+            sendJson(res, 404, { error: 'not_found' });
+            return;
+          }
+          res.writeHead(200, {
+            'Content-Type': media.mime,
+            'Content-Length': media.bytes.length,
+            'Cache-Control': 'private, no-store',
+          });
+          res.end(media.bytes);
+          return;
+        }
       }
 
       if (method === 'GET' && path === '/api/v1/devices') {
@@ -287,6 +345,16 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
         }
       }
 
+      if (method === 'GET' && path === '/api/v1/account/sync-key') {
+        const id = resolveIdentity(headers, { listenMode, store });
+        if (!id.ok) {
+          sendJson(res, id.status, { error: id.reason || 'unauthenticated' });
+          return;
+        }
+        sendJson(res, 200, { accountSyncKey: store.getOrCreateAccountSyncKey(id.uid) });
+        return;
+      }
+
       if (method === 'GET' && path === '/api/v1/sync/state') {
         const id = resolveIdentity(headers, { listenMode, store });
         if (!id.ok) {
@@ -294,7 +362,7 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
           return;
         }
         const collection = url.searchParams.get('collection') || 'todos';
-        if (collection !== 'todos') {
+        if (!isP0EnabledCollection(collection)) {
           sendJson(res, 422, { error: 'collection_not_enabled' });
           return;
         }
@@ -326,10 +394,18 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
           sendJson(res, id.status, { error: id.reason || 'unauthenticated' });
           return;
         }
-        const body = (await readJsonBody(req)) || {};
+        const body = (await readJsonBody(req, { maxBytes: SYNC_BODY_MAX_BYTES })) || {};
         if (!body.migrationId || body.expectedServerRev == null) {
           sendJson(res, 422, { error: 'missing_migration_fields' });
           return;
+        }
+        if (Array.isArray(body.entities)) {
+          for (const ent of body.entities) {
+            if (ent && ent.collection && !isP0EnabledCollection(ent.collection)) {
+              sendJson(res, 422, { error: 'collection_not_enabled' });
+              return;
+            }
+          }
         }
         const result = store.commitMigration(id.uid, {
           migrationId: body.migrationId,
@@ -388,7 +464,7 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
         }
         let body;
         try {
-          body = (await readJsonBody(req, { maxBytes: 1024 * 1024 })) || {};
+          body = (await readJsonBody(req, { maxBytes: SYNC_BODY_MAX_BYTES })) || {};
         } catch (err) {
           sendJson(res, err.statusCode || 422, { error: err.message });
           return;

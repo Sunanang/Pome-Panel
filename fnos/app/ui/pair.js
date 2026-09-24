@@ -45,7 +45,8 @@
       return String(metaPrefix).trim().replace(/\/$/, '');
     }
     const raw = String(pathname || '/');
-    const withoutFile = raw.replace(/\/[^/]*\.[a-zA-Z0-9]+$/, '');
+    // Only strip real static assets. A dotted name is not a file by itself.
+    const withoutFile = raw.replace(/\/[^/]+\.(?:html|js|css|png|svg|json)$/i, '');
     const cleaned = withoutFile.replace(/\/$/, '');
     if (cleaned && cleaned !== '') return cleaned;
     return '';
@@ -75,6 +76,42 @@
     // Never surface raw /api paths in status copy.
     if (/\/api\/v1\//i.test(key)) return fallback || '操作失败，请重试';
     return key;
+  }
+
+  function formatDevicePortCopy(port, host, state) {
+    const n = Number(port);
+    const enabled = !state || state.enabled !== false;
+    if (enabled && Number.isInteger(n) && n >= 1 && n <= 65535) {
+      const bindHost = !host || host === '0.0.0.0' || host === '::' ? '127.0.0.1' : String(host);
+      return {
+        value: String(n),
+        hint: `这是安装时填写的固定端口。FRP 本地目标填 ${bindHost}:${n}；公网端口可自定（例如 34931）；Mac 同步地址用 http://公网IP:公网端口。不要填成 NAS:34931，除非安装时填的就是 34931。`,
+        copyText: `${bindHost}:${n}`,
+        available: true,
+      };
+    }
+    if (state && state.source === 'unconfigured') {
+      return {
+        value: '未配置',
+        hint: '尚未配置设备同步端口。请打开飞牛「应用设置」，填写 1 到 65535 的端口，然后重启本应用。',
+        copyText: '',
+        available: false,
+      };
+    }
+    if (state && state.enabled === false) {
+      return {
+        value: '未开启',
+        hint: '设备同步端口未开启，本机没有在听。请在飞牛安装向导或应用设置中填写端口后重启。',
+        copyText: '',
+        available: false,
+      };
+    }
+    return {
+      value: '未配置',
+      hint: '尚未配置设备同步端口。请在飞牛安装向导或应用设置里填写，然后重启应用。',
+      copyText: '',
+      available: false,
+    };
   }
 
   function extractPairingCode(body) {
@@ -115,6 +152,10 @@
       startBtn: doc && doc.getElementById('pair-start-btn'),
       refreshBtn: doc && doc.getElementById('pair-refresh-btn'),
       sessionPill: doc && doc.getElementById('session-pill'),
+      sessionNote: doc && doc.getElementById('session-note'),
+      portValue: doc && doc.getElementById('device-port-value'),
+      portHint: doc && doc.getElementById('device-port-hint'),
+      portCopy: doc && doc.getElementById('device-port-copy'),
     };
 
     function setStatus(text, kind) {
@@ -128,6 +169,14 @@
       if (!els.sessionPill) return;
       els.sessionPill.dataset.state = state || 'unknown';
       els.sessionPill.textContent = text || '';
+    }
+
+    function setPairingEnabled(ok) {
+      if (els.startBtn) els.startBtn.disabled = !ok;
+      if (!els.sessionNote) return;
+      els.sessionNote.textContent = ok
+        ? '沿用飞牛当前登录，无需在本应用再次登录。'
+        : '未检测到飞牛登录。请先登录飞牛后再打开本应用，配对已停用。';
     }
 
     function clearExpiryTimer() {
@@ -217,6 +266,7 @@
         if (!res.ok) {
           sessionUser = null;
           setSessionPill('error', '未登录');
+          setPairingEnabled(false);
           setStatus(humanError(body.error, ERROR_COPY.gateway_session_required), 'error');
           return { ok: false, error: body.error || 'gateway_session_required' };
         }
@@ -226,10 +276,12 @@
         };
         const label = body.username ? `已登录 · ${body.username}` : '已登录';
         setSessionPill('ok', label);
+        setPairingEnabled(true);
         return { ok: true, user: sessionUser };
       } catch (err) {
         sessionUser = null;
         setSessionPill('error', '会话失败');
+        setPairingEnabled(false);
         setStatus(humanError(err.code || err.message, ERROR_COPY.network_error), 'error');
         return { ok: false, error: err.code || 'network_error' };
       }
@@ -301,7 +353,66 @@
         setStatus(humanError(err.code || err.message, `生成失败：${err.message || '未知错误'}`), 'error');
         return null;
       } finally {
-        if (els.startBtn) els.startBtn.disabled = false;
+        if (els.startBtn) els.startBtn.disabled = !sessionUser;
+      }
+    }
+
+    function applyDevicePortCopy(port, host, state) {
+      const copy = formatDevicePortCopy(port, host, state);
+      if (els.portValue) {
+        els.portValue.textContent = copy.value;
+        els.portValue.copyText = copy.copyText || '';
+      }
+      if (els.portHint) els.portHint.textContent = copy.hint;
+      if (els.portCopy) {
+        els.portCopy.hidden = !copy.available;
+        els.portCopy.copyText = copy.copyText || '';
+      }
+      return copy;
+    }
+
+    async function copyDevicePort() {
+      const text = (els.portCopy && els.portCopy.copyText)
+        || (els.portValue && els.portValue.copyText)
+        || '';
+      if (!text) return { ok: false };
+      const clipboard = win && win.navigator && win.navigator.clipboard;
+      try {
+        if (clipboard && typeof clipboard.writeText === 'function') {
+          await clipboard.writeText(text);
+          if (els.portCopy) els.portCopy.textContent = '已复制';
+          return { ok: true, text };
+        }
+      } catch {
+        /* fall through */
+      }
+      if (els.portHint) {
+        els.portHint.textContent = `请手动复制 ${text}。${els.portHint.textContent || ''}`;
+      }
+      return { ok: false, text };
+    }
+
+    async function loadDevicePort() {
+      try {
+        const { res, body } = await fetchJson('/api/v1/device-port');
+        if (!res.ok || !body || typeof body !== 'object') {
+          applyDevicePortCopy(null, null, null);
+          return { ok: false, port: null, host: null, enabled: false };
+        }
+        const copy = applyDevicePortCopy(body.port, body.host, {
+          enabled: body.enabled,
+          source: body.source,
+        });
+        return {
+          ok: copy.available,
+          port: copy.available ? Number(body.port) : null,
+          host: copy.available ? (body.host || '127.0.0.1') : null,
+          enabled: body.enabled !== false,
+          target: copy.copyText || null,
+        };
+      } catch {
+        applyDevicePortCopy(null, null, null);
+        return { ok: false, port: null, host: null, enabled: false };
       }
     }
 
@@ -390,6 +501,7 @@
       if (els.refreshBtn) els.refreshBtn.disabled = true;
       try {
         setStatus('刷新中…', '');
+        await loadDevicePort();
         const session = await checkSession();
         const devices = await loadDevices();
         if (session.ok && devices.ok) {
@@ -420,12 +532,18 @@
           });
         });
       }
+      if (els.portCopy) {
+        els.portCopy.addEventListener('click', () => {
+          void copyDevicePort();
+        });
+      }
     }
 
     async function init() {
       bind();
       setSessionPill('unknown', '检测会话…');
       try {
+        await loadDevicePort();
         await checkSession();
         await loadDevices();
       } catch (err) {
@@ -441,6 +559,8 @@
       checkSession,
       refreshCsrf,
       startPair,
+      loadDevicePort,
+      copyDevicePort,
       loadDevices,
       refreshAll,
       revokeDevice,
@@ -456,10 +576,16 @@
     };
   }
 
+  let activeController = null;
+
   function boot(doc, win) {
-    const controller = createPairUiController({ document: doc, window: win });
-    void controller.init();
-    return controller;
+    activeController = createPairUiController({ document: doc, window: win });
+    void activeController.init();
+    return activeController;
+  }
+
+  function getActiveController() {
+    return activeController;
   }
 
   return {
@@ -471,7 +597,9 @@
     formatRemaining,
     humanError,
     extractPairingCode,
+    formatDevicePortCopy,
     createPairUiController,
     boot,
+    getActiveController,
   };
 });

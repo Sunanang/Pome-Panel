@@ -1,10 +1,18 @@
 {
   "name": "pome-panel",
-  "version": "1.1.2",
+  "version": "0.9.13",
   "description": "Pome Panel - a local desktop workspace for macOS and Windows",
   "main": "main.js",
-  "author": "Sunanang",
+  "author": "Lando",
   "license": "MIT",
+  "homepage": "https://github.com/Sunanang/Pome-Panel",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sunanang/Pome-Panel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Sunanang/Pome-Panel/issues"
+  },
   "scripts": {
     "test": "node scripts/test-desktop.js",
     "start": "electron .",
@@ -21,7 +29,7 @@
     "appId": "com.dynamicpanel.app",
     "productName": "Pome Panel",
     "artifactName": "Pome-Panel-${version}-${arch}.${ext}",
-    "copyright": "© 2026 Sunanang",
+    "copyright": "© 2026 Lando",
     "asar": false,
     "directories": {
       "output": "dist.noindex",
@@ -38,6 +46,7 @@
       "sync-store.js",
       "sync-migration.js",
       "todos-sync.js",
+      "workspace-sync.js",
       "sync-settings.js",
       "packages/sync-protocol/**/*",
       "renderer/**/*",

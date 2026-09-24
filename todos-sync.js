@@ -7,8 +7,8 @@
  * then online push; pull applies remote changes and rebuilds LS projection.
  * LocalStorage `notch-todo-data` stays a {P0..P3} projection only.
  *
- * P0 collection is todos only — notes and other collections are rejected.
- * First-bind migration (T5b) is intentionally out of scope.
+ * Todo rows still use the todos collection. Notes and the rest of the workspace
+ * sync through workspace-sync.js; this module refuses to write them as todos.
  */
 
 const crypto = require('node:crypto');
@@ -150,13 +150,11 @@ function assertTodosOnlyCollection(collection) {
 }
 
 /**
- * True when P0_ENABLED_COLLECTIONS still excludes notes (packaging / regression guard).
+ * True only when notes are still excluded from the sync allowlist.
+ * Workspace sync enables notes, so this stays false.
  */
 function notesCollectionIsNotWired() {
-  return (
-    !P0_ENABLED_COLLECTIONS.includes(COLLECTIONS.NOTES) &&
-    assertP0Collection(COLLECTIONS.NOTES).ok === false
-  );
+  return !P0_ENABLED_COLLECTIONS.includes(COLLECTIONS.NOTES);
 }
 
 /**
@@ -184,12 +182,16 @@ function normalizePullResponse(body) {
   const rawChanges = Array.isArray(source.changes) ? source.changes : [];
   const changes = rawChanges.map((change) => {
     const op = change && change.op === 'delete' ? 'delete' : 'upsert';
-    return {
+    const row = {
       entityId: change && change.entityId,
       op,
       payload: op === 'delete' ? {} : (change && change.payload) || {},
       serverRev: change && change.serverRev,
     };
+    if (change && typeof change.collection === 'string' && change.collection) {
+      row.collection = change.collection;
+    }
+    return row;
   });
   return {
     changes,

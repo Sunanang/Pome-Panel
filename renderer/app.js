@@ -247,6 +247,22 @@ function normalizeTodoItems(value) {
     .filter(Boolean);
 }
 
+function getLocalTodosForSync() {
+  const snapshot = { P0: [], P1: [], P2: [], P3: [] };
+  PRIORITIES.forEach((priority) => {
+    snapshot[priority] = (data[priority] || []).map((item) => ({
+      id: item.id,
+      text: item.text,
+      done: item.done === true,
+      createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+      deadline: typeof item.deadline === 'string' ? item.deadline : '',
+      remindedAt: Math.max(0, Number(item.remindedAt) || 0),
+    }));
+  });
+  return JSON.stringify(snapshot);
+}
+window.getLocalTodosForSync = getLocalTodosForSync;
+
 function saveData(data) {
   if (window.NasSyncMigration && typeof window.NasSyncMigration.isReadonly === 'function') {
     // Prefer live UI state if workspace exposed it
@@ -5024,6 +5040,98 @@ if (window.notchAPI && typeof window.notchAPI.onNewClipEntry === 'function') {
 }
 
 renderAll();
+
+function getWorkspaceSnapshotForSync() {
+  let links = [];
+  let recordings = [];
+  if (typeof window.getLinkGroupsForSync === 'function') {
+    links = window.getLinkGroupsForSync() || [];
+  } else {
+    try { links = JSON.parse(localStorage.getItem('notch-link-groups') || '[]'); } catch (error) { links = []; }
+  }
+  if (typeof window.getRecordingsForSync === 'function') {
+    recordings = window.getRecordingsForSync() || [];
+  } else {
+    try { recordings = JSON.parse(localStorage.getItem('notch-recordings') || '[]'); } catch (error) { recordings = []; }
+  }
+  let commands = [];
+  if (typeof window.getCommandsForSync === 'function') {
+    commands = window.getCommandsForSync() || [];
+  } else {
+    try { commands = JSON.parse(localStorage.getItem('notch-home-commands') || '[]'); } catch (error) { commands = []; }
+  }
+  let archive = [];
+  try {
+    archive = JSON.parse(localStorage.getItem(NOTE_ARCHIVE_KEY) || '[]');
+  } catch (error) {
+    archive = [];
+  }
+  return {
+    notes: {
+      home: noteInput ? noteInput.value : (localStorage.getItem(NOTE_KEY) || ''),
+      archive: Array.isArray(archive) ? archive : [],
+      activeId: localStorage.getItem(NOTE_ACTIVE_ARCHIVE_KEY) || '',
+    },
+    links: Array.isArray(links) ? links : [],
+    commands: Array.isArray(commands) ? commands : [],
+    clipboard: {
+      history: Array.isArray(clipHistory) ? clipHistory.map((item) => ({
+        id: item.id,
+        type: item.type,
+        text: item.text,
+        imagePath: item.imagePath,
+        timestamp: item.timestamp,
+      })) : [],
+      favorites: Array.isArray(clipFavorites) ? clipFavorites.slice() : [],
+    },
+    recordings: Array.isArray(recordings) ? recordings : [],
+  };
+}
+window.getWorkspaceSnapshotForSync = getWorkspaceSnapshotForSync;
+
+function applyWorkspaceNotes(notes) {
+  if (!notes || typeof notes !== 'object') return;
+  if (typeof notes.home === 'string') {
+    if (notes.home) localStorage.setItem(NOTE_KEY, notes.home);
+    else localStorage.removeItem(NOTE_KEY);
+    if (noteInput) noteInput.value = notes.home;
+  }
+  if (Array.isArray(notes.archive)) {
+    localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes.archive));
+  }
+  if (notes.activeId) localStorage.setItem(NOTE_ACTIVE_ARCHIVE_KEY, String(notes.activeId));
+  else localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
+  if (typeof renderNotesLibrary === 'function') renderNotesLibrary();
+  if (noteInput && typeof setNoteMode === 'function') {
+    setNoteMode(noteInput.value.trim() ? 'preview' : 'edit', false);
+  }
+}
+
+function applyWorkspaceClipboard(clipboard) {
+  if (!clipboard || typeof clipboard !== 'object') return;
+  if (Array.isArray(clipboard.history)) {
+    clipHistory = clipboard.history.map(normalizeClipEntry).filter(Boolean);
+    saveClipHistory(clipHistory);
+  }
+  if (Array.isArray(clipboard.favorites)) {
+    clipFavorites = clipboard.favorites.filter((id) => typeof id === 'string');
+    saveClipFavorites(clipFavorites);
+  }
+  if (typeof renderClipList === 'function') renderClipList();
+  if (typeof renderClipFavs === 'function') renderClipFavs();
+}
+
+document.addEventListener('nas-sync:workspace-projection', (event) => {
+  const detail = event && event.detail ? event.detail : {};
+  if (detail.notes) applyWorkspaceNotes(detail.notes);
+  if (detail.clipboard) applyWorkspaceClipboard(detail.clipboard);
+});
+
+if (window.notchAPI && typeof window.notchAPI.onSyncWorkspaceProjection === 'function') {
+  window.notchAPI.onSyncWorkspaceProjection((payload) => {
+    document.dispatchEvent(new CustomEvent('nas-sync:workspace-projection', { detail: payload }));
+  });
+}
 
 document.addEventListener('nas-sync:todos-projection', (event) => {
   const todosJson = event && event.detail && event.detail.todosJson;

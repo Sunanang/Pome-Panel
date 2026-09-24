@@ -1,0 +1,5 @@
+#!/bin/bash
+# fnOS upgrade_callback — wizard/upgrade supplies wizard_port again.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$ROOT/cmd/save-device-port.sh"

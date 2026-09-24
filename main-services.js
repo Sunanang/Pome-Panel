@@ -607,6 +607,43 @@ function createSyncCredentialsStore(deps = {}) {
     return pathMod.join(getUserDataPath(), fileName);
   }
 
+  // userData is pinned to "Dynamic Panel". Older runs may have written the
+  // same ciphertext under the product name or the pre-rename folder.
+  function credentialCandidates() {
+    const primary = credentialsPath();
+    const paths = [primary];
+    if (typeof deps.getAppDataPath === 'function') {
+      const appData = deps.getAppDataPath();
+      if (appData) {
+        for (const name of ['Pome Panel', 'pome-panel', 'notch-todo', 'Dynamic Panel']) {
+          paths.push(pathMod.join(appData, name, fileName));
+        }
+      }
+    }
+    const seen = new Set();
+    const unique = [];
+    for (const candidate of paths) {
+      const key = pathMod.resolve(candidate);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(candidate);
+    }
+    return { primary, candidates: unique };
+  }
+
+  function tryDecodeCredentialFile(filePath) {
+    const raw = fsMod.readFileSync(filePath, 'utf8');
+    const envelope = JSON.parse(raw);
+    const payload = envelope && envelope.payload;
+    if (!payload) return { ok: false, error: 'credentials_unreadable' };
+    const decoded = safeStorage.decryptString(Buffer.from(String(payload), 'base64'));
+    const record = JSON.parse(decoded);
+    if (!record || typeof record !== 'object' || !record.deviceToken) {
+      return { ok: false, error: 'credentials_unreadable' };
+    }
+    return { ok: true, record };
+  }
+
   function encryptionAvailable() {
     return safeStorage.isEncryptionAvailable() === true;
   }
@@ -615,21 +652,56 @@ function createSyncCredentialsStore(deps = {}) {
     if (!encryptionAvailable()) {
       return { ok: false, error: 'secure_storage_unavailable', bound: false, record: null };
     }
-    try {
-      const raw = fsMod.readFileSync(credentialsPath(), 'utf8');
-      const envelope = JSON.parse(raw);
-      const decoded = safeStorage.decryptString(Buffer.from(String(envelope.payload || ''), 'base64'));
-      const record = JSON.parse(decoded);
-      if (!record || typeof record !== 'object' || !record.deviceToken) {
-        return { ok: true, bound: false, record: null, secureStorage: true };
+    const { primary, candidates } = credentialCandidates();
+    let sawFile = false;
+    let recovered = null;
+    for (const filePath of candidates) {
+      let exists = false;
+      try {
+        exists = fsMod.existsSync(filePath);
+      } catch (error) {
+        continue;
       }
-      return { ok: true, bound: true, record, secureStorage: true };
-    } catch (error) {
-      if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
-        return { ok: true, bound: false, record: null, secureStorage: true };
+      if (!exists) continue;
+      const fromPrimary = pathMod.resolve(filePath) === pathMod.resolve(primary);
+      sawFile = true;
+      try {
+        const decoded = tryDecodeCredentialFile(filePath);
+        if (!decoded.ok) {
+          if (fromPrimary) break;
+          continue;
+        }
+        if (!fromPrimary) {
+          try {
+            fsMod.mkdirSync(pathMod.dirname(primary), { recursive: true });
+            fsMod.copyFileSync(filePath, primary);
+            try { fsMod.chmodSync(primary, 0o600); } catch (chmodError) { /* best-effort */ }
+          } catch (copyError) {
+            /* Keep using the copy we could read. */
+          }
+        }
+        recovered = decoded.record;
+        break;
+      } catch (error) {
+        // Current userData ciphertext stays put. A new ad-hoc signature cannot
+        // open the old keychain item, and another folder must not replace it.
+        if (fromPrimary) break;
       }
-      return { ok: false, error: 'read_failed', bound: false, record: null, secureStorage: true };
     }
+    if (recovered) {
+      return { ok: true, bound: true, record: recovered, secureStorage: true, credentialsUnreadable: false };
+    }
+    if (sawFile) {
+      return {
+        ok: false,
+        error: 'credentials_unreadable',
+        bound: false,
+        record: null,
+        secureStorage: true,
+        credentialsUnreadable: true,
+      };
+    }
+    return { ok: true, bound: false, record: null, secureStorage: true, credentialsUnreadable: false };
   }
 
   function publicStatus(record) {
@@ -700,10 +772,17 @@ function createSyncCredentialsStore(deps = {}) {
       };
     }
     const result = read();
-    if (!result.ok && result.error === 'read_failed') {
-      return { ok: false, error: 'read_failed', bound: false, secureStorage: true };
+    if (!result.ok && result.credentialsUnreadable) {
+      return {
+        ok: true,
+        error: 'credentials_unreadable',
+        bound: false,
+        secureStorage: true,
+        needsReauth: false,
+        credentialsUnreadable: true,
+      };
     }
-    return { ok: true, ...publicStatus(result.record) };
+    return { ok: true, ...publicStatus(result.record), credentialsUnreadable: false };
   }
 
   function getDeviceToken() {
