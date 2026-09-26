@@ -792,6 +792,8 @@
   const settingsWorkspaceOpen = document.getElementById('settings-workspace-open');
   const settingsWorkspaceChoose = document.getElementById('settings-workspace-choose');
   const settingsAutoLaunch = document.getElementById('settings-auto-launch');
+  const settingsWinNativeRow = document.getElementById('settings-win-native-row');
+  const settingsWinNative = document.getElementById('settings-win-native');
   const settingsInlineNote = document.getElementById('settings-inline-note');
 
   let recordings = loadJson(RECORDINGS_KEY, []).map(Domain.createRecording).filter(Boolean);
@@ -1006,7 +1008,11 @@
       settingsCursorTokenStatus.dataset.state = settingsCursorTokenMeta.state || 'empty';
     }
     renderNasSyncPanel();
-    if (settingsShortcutValue) settingsShortcutValue.textContent = summary.shortcut;
+    if (settingsShortcutValue) {
+      // 存的是 Electron accelerator，显示要按平台换成 ⌘⌥⌃⇧ 或 Ctrl/Alt/Shift/Win（P2-3）。
+      settingsShortcutValue.textContent =
+        window.NotchPlatform?.formatAccelerator(summary.shortcut, window.notchAPI?.capabilities) || summary.shortcut;
+    }
     if (settingsDefaultTab) {
       const visibleTabs = new Set(Domain.visiblePanelTabs(
         ['home', 'todo', 'notes', 'links', 'recordings', 'credentials', 'clip', 'settings'],
@@ -1025,6 +1031,11 @@
       settingsWorkspacePath.title = summary.workspacePath || '';
     }
     if (settingsAutoLaunch) settingsAutoLaunch.checked = summary.autoLaunch;
+    // Windows 原生能力（P4 / D16）：杀软首轮测试没跑，默认关，只在 Windows 上露出这一行。
+    if (settingsWinNativeRow) {
+      settingsWinNativeRow.hidden = window.notchAPI?.capabilities?.features?.winNativeSetting !== true;
+    }
+    if (settingsWinNative) settingsWinNative.checked = settingsAppSettings?.winNative === true;
     settingsFeatureList?.querySelectorAll('input[data-settings-feature]').forEach((input) => {
       input.checked = settingsAppSettings?.features?.[input.dataset.settingsFeature] !== false;
     });
@@ -1573,14 +1584,31 @@
     updateRecordingUi();
   }
 
+  // 麦克风被系统挡住时给出可点的出路（P3-2）：Windows 没有授权弹窗，
+  // 用户必须自己去「隐私和安全性 → 麦克风」把「允许应用访问麦克风」打开。
+  // 这段文案与按钮标题由能力层给，渲染层不判断平台。
+  async function showMicrophonePermissionHint() {
+    if (!liveTranscript) return;
+    const prompt = (await window.notchAPI?.getMediaAccessStatus?.('microphone').catch(() => null))
+      || { message: '无法访问麦克风 · 请在系统设置中授权', canOpenSettings: false };
+    liveTranscript.replaceChildren();
+    liveTranscript.append(prompt.message);
+    if (prompt.canOpenSettings) {
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'transcript-permission-open';
+      action.textContent = prompt.actionLabel;
+      action.addEventListener('click', () => window.notchAPI?.openPrivacySettings?.(prompt.pane));
+      liveTranscript.append(action);
+    }
+    liveTranscript.hidden = false;
+  }
+
   async function startRecordingAttempt() {
     if (recordingStatus !== 'idle' || !navigator.mediaDevices || !window.MediaRecorder) return;
     try {
       if (window.notchAPI && !(await window.notchAPI.ensureMicrophone())) {
-        if (liveTranscript) {
-          liveTranscript.textContent = '无法访问麦克风 · 请在系统设置中授权';
-          liveTranscript.hidden = false;
-        }
+        await showMicrophonePermissionHint();
         return;
       }
       mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -1647,8 +1675,10 @@
       recordingStatus = 'idle';
       recordingCaptureIssue = '';
       discardRecordingDraft();
-      if (liveTranscript) {
-        liveTranscript.textContent = '无法开始录音 · 请检查麦克风权限';
+      const denied = error && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
+      if (denied) await showMicrophonePermissionHint();
+      else if (liveTranscript) {
+        liveTranscript.textContent = '无法开始录音 · 请检查麦克风设备';
         liveTranscript.hidden = false;
       }
       updateRecordingUi();
@@ -2711,6 +2741,22 @@
     if (settingsAppSettings) settingsAppSettings.autoLaunch = result.autoLaunch === true;
     setSettingsNote(result.autoLaunch ? '已开启开机自动启动。' : '已关闭开机自动启动。');
   });
+  settingsWinNative?.addEventListener('change', async () => {
+    if (!window.notchAPI?.setWinNative) return;
+    settingsWinNative.disabled = true;
+    const result = await window.notchAPI.setWinNative(settingsWinNative.checked).catch(() => ({ ok: false }));
+    settingsWinNative.disabled = false;
+    if (!result?.ok) {
+      settingsWinNative.checked = !settingsWinNative.checked;
+      setSettingsNote('原生能力开关保存失败。', true);
+      return;
+    }
+    settingsWinNative.checked = result.winNative === true;
+    if (settingsAppSettings) settingsAppSettings.winNative = result.winNative === true;
+    setSettingsNote(result.winNative
+      ? '已开启 Windows 原生能力 · 首页「当前窗口」与自动粘贴可用'
+      : '已关闭 Windows 原生能力');
+  });
   window.notchAPI?.onAppSettingsChanged?.((settings) => {
     settingsAppSettings = settings;
     renderSettingsPanel();
@@ -3036,6 +3082,19 @@
     // 轮询可能在长按过程中重建列表；先清理捕获与卡片移除态，避免红色区域残留。
     clearWindowDragVisuals();
     windowList.replaceChildren();
+    if (error === 'native_unavailable' || error === 'unsupported') {
+      // Windows：原生绑定没加载（实验开关关着、POME_DISABLE_WIN_NATIVE=1 或 koffi 加载失败）。
+      // 这里不是权限问题，也没有系统设置可开，只说清状态。
+      const empty = document.createElement('div');
+      empty.className = 'window-empty permission';
+      const heading = document.createElement('strong');
+      heading.textContent = '当前窗口暂不可用';
+      const hint = document.createElement('span');
+      hint.textContent = '请在设置页开启「Windows 原生能力 · 实验功能」后重试。';
+      empty.append(heading, hint);
+      windowList.appendChild(empty);
+      return;
+    }
     if (error) {
       const empty = document.createElement('div');
       empty.className = 'window-empty permission';

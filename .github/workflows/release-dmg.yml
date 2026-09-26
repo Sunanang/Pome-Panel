@@ -33,6 +33,15 @@ jobs:
         shell: bash
         run: |
           version=$(node -p "require('./package.json').version")
+          # P4-0：Mac 不使用 koffi。多余的未签名 Mach-O 会让 ad-hoc 签名与下面的
+          # --deep --strict 校验失败，所以先确认 build.mac.files 的排除真的生效了。
+          app_modules='dist.noindex/mac-arm64/Pome Panel.app/Contents/Resources/app/node_modules'
+          for excluded in koffi @koromix; do
+            if [ -e "${app_modules}/${excluded}" ]; then
+              echo "Mac build must not ship ${excluded}" >&2
+              exit 1
+            fi
+          done
           codesign --verify --deep --strict 'dist.noindex/mac-arm64/Pome Panel.app'
           hdiutil verify "dist.noindex/Pome-Panel-${version}-arm64.dmg"
           cd dist.noindex

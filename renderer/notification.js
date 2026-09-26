@@ -8,7 +8,23 @@ const detailElement = document.getElementById('notification-detail');
 const queueElement = document.getElementById('notification-queue');
 
 const api = window.notchAPI;
-if (api?.platform === 'win32') shell.setAttribute('aria-label', '关闭任务提醒');
+// notification.html 不加载 platform.js（CSP 不允许内联脚本），平台标识在这里设置。
+let capabilities = api?.capabilities || null;
+const platformName = String(capabilities?.platform || api?.platform || '');
+if (/^[a-z0-9]+$/.test(platformName)) {
+  document.documentElement.dataset.platform = platformName;
+  document.documentElement.classList.add(`platform-${platformName}`);
+}
+// 没有窗口聚焦能力时点击只关闭提醒，标签也照此说明。
+const canFocusWindows = () => capabilities?.features?.windowFocus === true;
+function applyShellLabel() {
+  shell.setAttribute('aria-label', canFocusWindows() ? '打开任务对应窗口' : '关闭任务提醒');
+}
+applyShellLabel();
+api?.onCapabilitiesChanged?.((next) => {
+  capabilities = next;
+  applyShellLabel();
+});
 const HIDE_FALLBACK_MS = 420;
 const MAX_QUEUE_COUNT = 99;
 
@@ -161,7 +177,7 @@ function subscribe(method, callback) {
 shell.addEventListener('pointerenter', () => reportHover(true));
 shell.addEventListener('pointerleave', () => reportHover(false));
 shell.addEventListener('click', async () => {
-  if (api?.platform !== 'win32' && api && typeof api.activateTaskNotification === 'function') {
+  if (canFocusWindows() && api && typeof api.activateTaskNotification === 'function') {
     try { await api.activateTaskNotification(currentEventId); } catch (error) {}
   }
   hideNotification(currentEventId);

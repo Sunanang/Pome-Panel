@@ -12,6 +12,26 @@ const profile = process.argv[3] || fs.mkdtempSync(path.join(os.tmpdir(), 'todo-s
 const retained = process.argv[4] === 'retained';
 const evidence = process.env.SMOKE_ARTIFACT_DIR || path.join(profile, 'evidence');
 fs.mkdirSync(evidence, { recursive: true });
+const smokeSettingsPath = path.join(profile, 'app-settings.json');
+const firstRunMarker = path.join(profile, '.first-run-done');
+// P3-1（D13）：fresh 轮是真正的全新安装（profile 里没有本应用写过的任何文件），
+// 首启应自动打开开机自启。retained 轮反过来模拟从旧版本升级：旧版本从未写过
+// 首启标记，删掉它之后自启状态必须保持 fresh 轮末尾留下的"关"。
+if (retained) {
+  // P1-1：顺带模拟老用户保存过侧边位置；启动时的一次性迁移应把它清掉。
+  let smokeSettings = {};
+  try {
+    if (fs.existsSync(smokeSettingsPath)) {
+      smokeSettings = JSON.parse(fs.readFileSync(smokeSettingsPath, 'utf8'));
+    }
+  } catch {
+    smokeSettings = {};
+  }
+  smokeSettings.panelPosition = { x: 0, y: 300, edge: 'left', displayId: null };
+  delete smokeSettings.layoutVersion;
+  fs.writeFileSync(smokeSettingsPath, JSON.stringify(smokeSettings, null, 2));
+  fs.rmSync(firstRunMarker, { force: true });
+}
 const activePortFile = path.join(profile, 'DevToolsActivePort');
 if (fs.existsSync(activePortFile)) fs.unlinkSync(activePortFile);
 const env = { ...process.env };
@@ -85,15 +105,50 @@ async function main() {
   await send('Runtime.enable');
   await until(() => evaluate('Boolean(window.NotchHome && window.NotchWorkspace && window.notchAPI)'), 'renderer initialization');
   assert.equal(await evaluate('window.notchAPI.platform'), 'win32');
+  // 能力层 v2：主进程下发的 capabilities 与渲染层的平台标识必须都到位。
+  assert.equal(await evaluate('window.notchAPI.capabilities.platform'), 'win32');
+  assert.equal(await evaluate('document.documentElement.dataset.platform'), 'win32');
+  assert.equal(await evaluate('window.notchAPI.capabilities.features.musicControl'), false);
+  assert.deepEqual(await evaluate('window.notchAPI.capabilities.unavailableHomeModules'), ['music', 'windows']);
   assert.equal(await evaluate('window.notchAPI.getAppSettings().then(s => s.features.clip)'), false);
   assert.equal(await evaluate('document.getElementById("mirror-video").srcObject === null'), true);
   assert.deepEqual(await evaluate('window.NotchHome.getVisibility().visibleIds'), ['pomodoro', 'recorder', 'mirror', 'note', 'commands']);
   assert.equal(await evaluate('window.NotchHome.setModuleVisible("music", true).ok'), false);
-  assert.equal(await evaluate('window.notchAPI.listWindows().then(r => r.error)'), 'unsupported');
+  // P4（D16）：WIN_NATIVE_DEFAULT=false，所以 CI 里原生能力是关的——「当前窗口」不可用，
+  // 错误码取决于是被能力层挡住（unsupported）还是适配层报告原生不可用（native_unavailable）。
+  // CI 不要求 koffi 能在 runner 上真的加载；实机开启设置里的实验开关后才会有窗口列表。
+  assert.equal(await evaluate('window.notchAPI.capabilities.features.windowSwitcher'), false);
+  assert.equal(await evaluate('window.notchAPI.capabilities.features.automaticPaste'), false);
+  assert.equal(await evaluate('window.notchAPI.capabilities.features.winNativeSetting'), true);
+  assert.equal(await evaluate('window.notchAPI.getAppSettings().then(s => s.winNative)'), false);
+  assert.ok(
+    ['unsupported', 'native_unavailable'].includes(await evaluate('window.notchAPI.listWindows().then(r => r.error)')),
+    '原生能力关闭时窗口列表必须明确不可用'
+  );
+  // P1-1：迁移把老用户保存的 left 位置清掉，胶囊回到工作区顶部，拖动重新可用。
+  const layoutMetrics = await evaluate('window.notchAPI.getMetrics()');
+  assert.equal(layoutMetrics.dockEdge, 'top');
+  assert.equal(layoutMetrics.dockAlign, 'center');
+  assert.equal(layoutMetrics.collapsedWidth, 85);
+  assert.equal(layoutMetrics.collapsedHeight, 9);
+  assert.equal(layoutMetrics.menuBarHeight, 0);
+  assert.equal(layoutMetrics.dragEnabled, true);
+  if (retained) assert.equal(JSON.parse(fs.readFileSync(smokeSettingsPath, 'utf8')).panelPosition, null);
+  // P3-1：全新安装默认开自启；升级用户保持原状（fresh 轮末尾把它设成了关）。
+  // 必须在下面的 setAutoLaunch(true/false) 往返之前断言。
+  assert.equal(await evaluate('window.notchAPI.getAppSettings().then(r => r.autoLaunch)'), !retained);
+  assert.ok(fs.existsSync(firstRunMarker), '首启标记必须补写，否则每次启动都会重来一次');
+  // 拖动只在收起态可用；拿到后立即结束并复位，免得留下拖动状态或侧边位置。
+  assert.equal(await evaluate('window.notchAPI.startPanelDrag()'), true);
+  await evaluate('window.notchAPI.endPanelDrag()');
+  await evaluate('window.notchAPI.resetPanelPosition()');
   await evaluate('document.getElementById("notch").click()');
   await until(() => evaluate('document.getElementById("app").classList.contains("expanded")'), 'expand');
   assert.equal(await evaluate('window.notchAPI.getMetrics().then(m => m.stripHeight)'), 38);
-  assert.deepEqual(await evaluate('window.notchAPI.pasteClipboard({type:"text", text:"Windows smoke copy"})'), { ok: true, pasted: false });
+  // 原生能力关闭时自动粘贴被能力层挡在最前面：只写系统剪贴板，不发任何按键（P4-1）。
+  const pasted = await evaluate('window.notchAPI.pasteClipboard({type:"text", text:"Windows smoke copy"})');
+  assert.equal(pasted.ok, true);
+  assert.equal(pasted.pasted, false);
   assert.equal(await evaluate('window.notchAPI.setAutoLaunch(true).then(r => r.ok)'), true);
   assert.equal(await evaluate('window.notchAPI.getAppSettings().then(r => r.autoLaunch)'), true);
   assert.equal(await evaluate('window.notchAPI.setAutoLaunch(false).then(r => r.ok)'), true);
@@ -141,6 +196,9 @@ async function main() {
   await evaluate('document.getElementById("tab-button-settings").click()');
   await delay(300);
   assert.deepEqual(await evaluate('Array.from(document.querySelectorAll("[data-settings-home-module]")).filter(i => !i.closest("label").hidden).map(i => i.dataset.settingsHomeModule)'), ['pomodoro', 'recorder', 'mirror', 'note', 'commands']);
+  // 「实验功能」这一行只在 Windows 上出现，是用户唯一的原生能力入口（D16）。
+  assert.equal(await evaluate('document.getElementById("settings-win-native-row").hidden'), false);
+  assert.equal(await evaluate('document.getElementById("settings-win-native").checked'), false);
   const screenshot = await send('Page.captureScreenshot', { format: 'png' });
   fs.writeFileSync(path.join(evidence, retained ? 'retained.png' : 'windows-settings.png'), Buffer.from(screenshot.data, 'base64'));
   assert.deepEqual(exceptions, [], 'No uncaught renderer errors');
@@ -154,7 +212,7 @@ async function main() {
   await until(() => child.exitCode !== null, 'normal application exit');
   shutdown.close();
   assert.equal(child.exitCode, 0, 'Application exits cleanly before reinstall/uninstall');
-  fs.writeFileSync(path.join(evidence, retained ? 'retained.json' : 'smoke.json'), JSON.stringify({ ok: true, platform: process.platform, retained, profile, checks: ['real startup', 'eight home modules', 'IPC', 'clipboard copy', 'auto-launch', 'shortcuts', 'encrypted credentials', 'fake camera release', 'fake recording release and persistence', 'notifications', 'settings'] }, null, 2));
+  fs.writeFileSync(path.join(evidence, retained ? 'retained.json' : 'smoke.json'), JSON.stringify({ ok: true, platform: process.platform, retained, profile, checks: ['real startup', 'eight home modules', 'IPC', 'clipboard copy', 'first-run auto-launch', 'auto-launch', 'shortcuts', 'encrypted credentials', 'fake camera release', 'fake recording release and persistence', 'notifications', 'settings'] }, null, 2));
   console.log(`Windows application smoke passed (${retained ? 'retained profile' : 'fresh profile'})`);
 }
 main().catch(async (error) => {

@@ -22,15 +22,20 @@ const http = require('http');
 const dns = require('dns');
 const zlib = require('zlib');
 const crypto = require('crypto');
-const { execFile } = require('child_process');
 const platformPolicy = require('./platform');
+const { loadAdapter } = require('./platform-adapters');
 const { fetchCursorUsage } = require('./cursor-usage');
-const PLATFORM_CAPABILITIES = platformPolicy.capabilities(process.platform);
+// 能力层 v2（P0-1）：启动时按平台 + 运行时（原生模块是否可用、用户开关）解析一次，
+// 通过 additionalArguments 下发给渲染层；运行期变化走 capabilities:changed。
+// 这里的初值不读设置：模块加载早于 app.whenReady，不能碰 screen / 设置文件。
+let platformCapabilities = platformPolicy.resolveCapabilities(process.platform, {
+  nativeAvailable: false,
+  winNativeEnabled: false,
+});
 const {
   isPrivateAddress,
   extractPageTitle,
   recordingExtension,
-  normalizeWindowRows,
   todoReminderState,
   todoReminderTimerDelay,
   taskNotificationIdentity,
@@ -44,11 +49,12 @@ const {
   installLocalWebContentsGuards,
   runOwnedOpenDialog,
   readClipboardObservation,
-  screenRecordingProbePolicy,
   taskNotificationWindowPolicy,
+  appSettingsLayoutPreferences,
+  pasteResultToIpc,
+  windowsLayoutMigration,
+  firstRunAutoLaunchPlan,
   updateFeaturePreference,
-  controlSodaMusic,
-  sodaShortcutSpec,
   selectTranscriptionSettings,
   createWorkspacePersistenceGate,
   hoverSpacePollingPolicy,
@@ -225,6 +231,13 @@ function makeNotchPng(scale) {
 function createNotchTrayIcon() {
   // 菜单栏小图标：22pt Template（@2x=44px），与系统图标同量级，避免撑满被裁切
   if (process.platform === 'win32') {
+    // Windows 托盘要交给系统按 DPI 从 .ico 里挑帧；先前把 1024 的 png 缩到 16×16，
+    // 125%/150% 缩放下发糊（P2-4）。ico 缺失时仍退回 png。
+    const ico = path.join(__dirname, 'build', 'pome-panel-icon.ico');
+    if (fs.existsSync(ico)) {
+      const icon = nativeImage.createFromPath(ico);
+      if (!icon.isEmpty()) return icon;
+    }
     return nativeImage.createFromPath(path.join(__dirname, 'build', 'pome-panel-icon.png')).resize({ width: 16, height: 16 });
   }
   const trayPng = path.join(__dirname, 'build', 'pome-trayTemplate.png');
@@ -245,9 +258,9 @@ function createNotchTrayIcon() {
 }
 
 const COLLAPSED_WIDTH = 200;
-const COLLAPSED_SIDE_LENGTH = 85;
-const COLLAPSED_SIDE_THICKNESS = 9;
-const COLLAPSED_MIN_HEIGHT = 38;
+// 折叠尺寸、展开尺寸与安全边等几何常量的单一来源是 platform.js（M0-1），
+// 主进程不再保留第二份字面量；需要取值时读 platformPolicy.layout.constants。
+//
 // NOTCH_LIP（原 6px 唇边）已移除：折叠条高度现在恰好等于菜单栏高（≈物理刘海高），
 // 一个像素都不超出物理刘海。虽然折叠条完全在菜单栏拦截带内，
 // 但本项目窗口使用 setAlwaysOnTop(true,'floating') 级别（不压截图/输入法），
@@ -256,22 +269,7 @@ const COLLAPSED_MIN_HEIGHT = 38;
 
 // 所有 Tab 共用同一展开尺寸，切换内容时不再改变原生窗口边界。
 // 原生窗口只在折叠/展开两个模式间切换，避免 Tab 切换产生明显的宽高跳变。
-const EXPANDED_WIDTH = 1240;
-const EXPANDED_PANEL_HEIGHT = 540;
-const TAB_SIZES = {
-  home: { width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT },
-  todo: { width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT },
-  notes: { width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT },
-  clip: { width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT },
-  links: { width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT },
-  recordings: { width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT },
-  credentials: { width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT },
-  settings: { width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT },
-};
-// 与渲染层结构常量对应：panel padding-top(--s-2 8) + 顶栏(--topbar-h，液态玻璃试验约 52)
-// + panels margin-top(--s-3 12) + panel padding-bottom(--s-4 16)。内容顶到屏幕最上沿，不留菜单栏带。
-const EXPANDED_CHROME_Y = 98;
-const SCREEN_MARGIN = 24; // 宽度超屏时两侧保留的安全边
+const TAB_SIZES = platformPolicy.layout.tabSizes();
 const COLLAPSE_WATCHDOG_MS = 650;
 
 const CLIP_MAX_ITEMS = 100;
@@ -290,7 +288,6 @@ const WORKSPACE_DATA_FILE = 'workspace.json';
 const MIRROR_IMAGE_FILE = 'mirror-cover.jpg';
 const SYNC_CREDENTIALS_FILE_NAME = 'sync-credentials.json';
 const workspacePersistenceGate = createWorkspacePersistenceGate();
-const SODA_MUSIC_APP = '/Applications/汽水音乐.app';
 const TRANSCRIPTION_MODEL = 'qwen3-asr-flash-realtime';
 const TRANSCRIPTION_SAMPLE_RATE = 16000;
 const TRANSCRIPTION_FINISH_TIMEOUT_MS = 7000;
@@ -327,8 +324,18 @@ let mediaPermissionRequests = 0;
 let mediaPermissionBatchHadCamera = false;
 let transientSystemInteractionRequests = 0;
 let cameraBlurDeferred = false;
-let sodaMusicPlaying = false;
 const mediaPermissionCoordinator = createForegroundMediaPermissionCoordinator();
+
+// 适配层（P0-2）：JXA / osascript 等"怎么做"的实现都在 platform-adapters/ 下，
+// main.js 只做 IPC 与生命周期。Electron 依赖与窗口相关的钩子由这里注入。
+const platformAdapter = loadAdapter(process.platform, {
+  electron: { app, systemPreferences, shell, dialog, desktopCapturer },
+  mediaPermissionCoordinator,
+  hooks: {
+    getOwnerWindow: () => mainWindow,
+    trackMediaPermission: (delta, mediaType) => trackMediaPermissionRequest(delta, mediaType),
+  },
+});
 
 let notificationWindow = null;
 let notificationWindowReady = false;
@@ -357,9 +364,6 @@ let clipPollingGeneration = 0;
 let spaceShortcutTimer = null;
 let spaceShortcutRegistered = false;
 let configuredShortcut = '';
-let previousPasteTarget = null;
-let windowScanCache = new Map();
-const windowIconCache = new Map();
 const transcriptionSessions = new Map();
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -399,7 +403,34 @@ function getWindowDisplay() {
   return getTargetDisplay();
 }
 
-function getCenteredBounds(width, height, display) {
+// 沙箱 preload 不能 require 本地模块，能力层只能随 additionalArguments 下发。
+// 只在创建窗口时生效，运行期变化必须走 capabilities:changed。
+function capabilitiesArgument() {
+  return `--pome-caps=${Buffer.from(JSON.stringify(platformCapabilities), 'utf8').toString('base64')}`;
+}
+
+function broadcastCapabilities() {
+  for (const target of [mainWindow, notificationWindow]) {
+    if (!target || target.isDestroyed()) continue;
+    try { target.webContents.send('capabilities:changed', platformCapabilities); } catch (error) {}
+  }
+}
+
+// 运行期重新解析：原生模块加载失败或用户关掉 Windows 原生开关时能力要降级。
+function refreshRuntimeCapabilities() {
+  const next = platformPolicy.resolveCapabilities(process.platform, {
+    nativeAvailable: platformAdapter.native.available === true,
+    winNativeEnabled: readAppSettings().winNative === true,
+  });
+  if (JSON.stringify(next) === JSON.stringify(platformCapabilities)) return platformCapabilities;
+  platformCapabilities = next;
+  broadcastCapabilities();
+  return platformCapabilities;
+}
+
+// 提醒窗口专用：贴在 Mac 物理顶端（类似灵动岛），Windows 上贴工作区顶端。
+// M0-2 起只服务通知窗口，面板几何一律走 platformPolicy.layout.*。
+function notificationBounds(width, height, display) {
   const d = display || getTargetDisplay();
   const area = process.platform === 'win32' ? d.workArea : d.bounds;
   return {
@@ -410,32 +441,25 @@ function getCenteredBounds(width, height, display) {
   };
 }
 
-// macOS 菜单栏会拦截其高度带内的所有鼠标点击（即使窗口绘制在其上方），
-// 刘海屏机型菜单栏高约 37pt，等于物理刘海高度。
-function getMenuBarHeight(display) {
-  return Math.max(0, display.workArea.y - display.bounds.y);
-}
-
-function getCollapsedHeight(display) {
-  if (process.platform === 'win32') return COLLAPSED_MIN_HEIGHT;
-  const mb = getMenuBarHeight(display);
-  // 折叠条高度恰好等于菜单栏带（≈物理刘海高），一个像素都不超出物理刘海。
-  // 无刘海的外接屏 menuBarHeight 仍是真实菜单栏高，能正常露头；
-  // 异常取到 0 才回退兜底（COLLAPSED_MIN_HEIGHT = 38px）。
-  return mb > 0 ? mb : COLLAPSED_MIN_HEIGHT;
-}
-
-// 展开尺寸按当前 Tab 取值；宽度超出屏幕时 clamp 到工作区内。
-// 窗口从屏幕最顶垂下（y=0），内容直接顶到最上沿，高度不含菜单栏带。
-function getExpandedSize(display) {
-  const size = TAB_SIZES[currentTab] || TAB_SIZES.home;
+// 布局纯函数的输入：只含屏幕几何与当前 Tab，不读设置（供 readAppSettings 内部安全调用）。
+function layoutDisplayContext(display) {
   return {
-    width: Math.min(size.width, display.workArea.width - SCREEN_MARGIN),
-    height: Math.min(
-      EXPANDED_CHROME_Y + size.panelHeight,
-      Math.max(getCollapsedHeight(display), display.bounds.height - SCREEN_MARGIN)
-    ),
+    platform: process.platform,
+    display: display || getWindowDisplay(),
+    position: null,
+    tab: currentTab,
+    tabSizes: TAB_SIZES,
+    legacyWinLayout: false,
   };
+}
+
+function layoutContext(display) {
+  const ctx = layoutDisplayContext(display);
+  const settings = readAppSettings();
+  ctx.position = settings.panelPosition;
+  ctx.legacyWinLayout = process.platform === 'win32'
+    && (LEGACY_WIN_LAYOUT_ENV || settings.legacyWinLayout === true);
+  return ctx;
 }
 
 // display 不传时锚定窗口当前所在屏；只有"召唤"类动作（启动/重新居中/显示）才传光标屏。
@@ -446,36 +470,12 @@ function getBoundsForMode(mode, display) {
   const d = hasCustom
     ? resolvePositionDisplay(display)
     : (display || getWindowDisplay());
-  if (process.platform === 'win32') return platformPolicy.panelBounds(process.platform, d, mode === 'expanded');
-  if (mode === 'expanded') {
-    const { width, height } = getExpandedSize(d);
-    const bounds = getAnchoredBounds(width, height, d);
-    // 展开态不要钻进菜单栏：否则顶部圆角/描边会被菜单栏裁成一条直线。
-    const edge = hasCustom ? currentDockEdge() : 'top';
-    if (edge === 'top' && process.platform === 'darwin') {
-      const minY = d.workArea.y;
-      if (bounds.y < minY) {
-        const grew = minY - bounds.y;
-        bounds.y = minY;
-        bounds.height = Math.max(getCollapsedHeight(d), bounds.height - grew);
-      }
-      const maxHeight = d.workArea.y + d.workArea.height - bounds.y - SCREEN_MARGIN;
-      bounds.height = Math.min(bounds.height, Math.max(getCollapsedHeight(d), maxHeight));
-    }
-    return bounds;
-  }
-  if (!hasCustom) {
-    return getCenteredBounds(COLLAPSED_SIDE_LENGTH, COLLAPSED_SIDE_THICKNESS, d);
-  }
-  const pos = readAppSettings().panelPosition;
-  const edge = normalizePanelEdge(pos.edge);
-  const size = getCollapsedSizeForEdge(edge, d);
-  const snapped = snapCollapsedBounds(
-    { x: pos.x, y: pos.y, width: size.width, height: size.height },
-    d,
-    edge
-  );
-  return { x: snapped.x, y: snapped.y, width: snapped.width, height: snapped.height };
+  // P1-1：Windows 与 Mac 共用同一套几何；只有显式回退开关才走旧的顶部居中计算。
+  if (isLegacyWinLayout()) return platformPolicy.panelBounds(process.platform, d, mode === 'expanded');
+  const ctx = layoutContext(d);
+  return mode === 'expanded'
+    ? platformPolicy.layout.expandedBounds(ctx)
+    : platformPolicy.layout.collapsedBounds(ctx);
 }
 
 function cancelCollapseWatchdog() {
@@ -495,8 +495,9 @@ function applyMode(mode, display) {
   currentMode = mode;
   if (mode === 'expanded') hideWhenCollapsed = false;
   if (mode === 'collapsed') {
-    // 把纠正后的落点写回，避免下次仍用旧坐标算出错位动画种子
-    const pos = readAppSettings().panelPosition;
+    // 把纠正后的落点写回，避免下次仍用旧坐标算出错位动画种子。
+    // 回退到旧 Windows 布局时不写回：那条路径的坐标恒为顶部居中，会把旧 edge 一起腌坏。
+    const pos = isLegacyWinLayout() ? null : readAppSettings().panelPosition;
     if (pos) {
       const d = resolvePositionDisplay(display);
       writePanelPosition({
@@ -513,7 +514,20 @@ function applyMode(mode, display) {
     }
   }
   syncHoverSpacePolling();
+  syncPasteTracking();
   syncDockMetrics();
+}
+
+// P4-1：Windows 的粘贴目标只能在收起态跟踪前台窗口——点击胶囊会先激活 Pome 自己，
+// 展开后再问前台就只剩自己了。展开态、剪贴板关闭、原生能力不可用时一律停掉轮询。
+// Mac 的 startTracking/stopTracking 是空实现（前台应用由 JXA 现场读取）。
+function syncPasteTracking() {
+  const shouldTrack = !isQuitting
+    && currentMode !== 'expanded'
+    && platformCapabilities.features.automaticPaste === true
+    && readAppSettings().features.clip === true;
+  if (shouldTrack) platformAdapter.paste.startTracking();
+  else platformAdapter.paste.stopTracking();
 }
 
 // 纯重新定位不能改变收起事务，否则屏幕变化会取消 watchdog 并重新吞掉鼠标。
@@ -799,7 +813,7 @@ function getTaskNotificationBounds(display) {
     TASK_NOTIFICATION_WIDTH,
     Math.max(280, d.bounds.width - TASK_NOTIFICATION_SCREEN_MARGIN * 2)
   );
-  return getCenteredBounds(width, TASK_NOTIFICATION_HEIGHT, d);
+  return notificationBounds(width, TASK_NOTIFICATION_HEIGHT, d);
 }
 
 function recoverClosedTaskNotificationWindow(targetWindow) {
@@ -845,6 +859,7 @@ function createTaskNotificationWindow() {
       nodeIntegration: false,
       sandbox: true,
       backgroundThrottling: false,
+      additionalArguments: [capabilitiesArgument()],
     },
   });
 
@@ -1129,6 +1144,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      additionalArguments: [capabilitiesArgument()],
     },
   });
 
@@ -1205,18 +1221,25 @@ function toggleVisibility() {
 }
 
 function isAutoLaunchEnabled() {
-  if (!PLATFORM_CAPABILITIES.autoLaunch) return false;
+  if (!platformCapabilities.features.autoLaunch) return false;
   try {
-    return app.getLoginItemSettings().openAtLogin;
+    const settings = app.getLoginItemSettings();
+    // Windows：openAtLogin 只看 Run 键还在不在，用户在任务管理器里禁用后它仍为 true，
+    // 界面会显示"开"但实际不启动。executableWillLaunchAtLogin 同时考虑 StartupApproved。
+    if (process.platform === 'win32' && typeof settings.executableWillLaunchAtLogin === 'boolean') {
+      return settings.executableWillLaunchAtLogin;
+    }
+    return settings.openAtLogin;
   } catch (e) {
     return false;
   }
 }
 
 function setAutoLaunch(enabled) {
-  if (!PLATFORM_CAPABILITIES.autoLaunch) return false;
+  if (!platformCapabilities.features.autoLaunch) return false;
   try {
-    app.setLoginItemSettings({ openAtLogin: enabled, openAsHidden: false });
+    // openAsHidden 已被 Electron 移除，不再传。
+    app.setLoginItemSettings({ openAtLogin: enabled });
     return isAutoLaunchEnabled() === enabled;
   } catch (e) {
     return false;
@@ -1268,42 +1291,46 @@ function readAppSettings() {
     shortcut: isValidPanelShortcut(stored.shortcut) ? stored.shortcut : 'Space',
     defaultTab: normalizeDefaultTabPreference(stored.defaultTab, features),
     panelPosition,
+    // 白名单必须带上布局键：writePanelPosition 是 read-modify-write，漏一个就会被丢掉。
+    ...appSettingsLayoutPreferences(stored),
     encryptedCursorToken: typeof stored.encryptedCursorToken === 'string' ? stored.encryptedCursorToken : '',
   };
 }
 
-const PANEL_EDGE_SNAP_PX = 72;
-const PANEL_TOP_SIDE_ALIGN_PX = 120;
+// POME_LEGACY_WIN_LAYOUT=1 或设置 legacyWinLayout 时回到旧的 Windows 顶部居中布局，
+// 保留一个版本作为回滚开关（旧布局下胶囊不能拖动）。
+const LEGACY_WIN_LAYOUT_ENV = process.env.POME_LEGACY_WIN_LAYOUT === '1';
+
+function isLegacyWinLayout() {
+  if (process.platform !== 'win32') return false;
+  return LEGACY_WIN_LAYOUT_ENV || readAppSettings().legacyWinLayout === true;
+}
+
+// Windows 接入统一布局时清空一次旧的、此前被忽略的 panelPosition。
+function migrateWindowsLayoutSettings() {
+  const migrated = windowsLayoutMigration(process.platform, readAppSettings());
+  if (!migrated) return false;
+  return saveAppSettings(migrated);
+}
 
 function normalizePanelEdge(value) {
-  return value === 'left' || value === 'right' || value === 'top' || value === 'bottom'
-    ? value
-    : 'top';
+  return platformPolicy.layout.normalizeEdge(value);
 }
 
 function normalizePanelPosition(value) {
-  if (!value || typeof value !== 'object') return null;
-  const x = Number(value.x);
-  const y = Number(value.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  let edge = value.edge;
-  if (edge !== 'left' && edge !== 'right' && edge !== 'top' && edge !== 'bottom') {
+  // edge 合法时不必碰 screen：readAppSettings 每次调用都会走到这里。
+  let ctx = null;
+  if (value && typeof value === 'object' && !platformPolicy.layout.isDockEdge(value.edge)) {
     try {
-      const display = value.displayId != null
+      const display = (value.displayId != null
         ? screen.getAllDisplays().find((d) => d.id === value.displayId)
-        : null;
-      const d = display || screen.getDisplayNearestPoint({ x, y });
-      edge = inferDockEdgeFromPoint({ x, y }, d);
+        : null) || screen.getDisplayNearestPoint({ x: Number(value.x), y: Number(value.y) });
+      if (display) ctx = layoutDisplayContext(display);
     } catch (e) {
-      edge = 'top';
+      ctx = null;
     }
   }
-  return {
-    x,
-    y,
-    displayId: value.displayId == null ? null : value.displayId,
-    edge: normalizePanelEdge(edge),
-  };
+  return platformPolicy.layout.normalizePosition(ctx, value);
 }
 
 function writePanelPosition(pos) {
@@ -1315,187 +1342,32 @@ function writePanelPosition(pos) {
 
 function resolvePositionDisplay(preferredDisplay) {
   const pos = readAppSettings().panelPosition;
-  if (pos && pos.displayId != null) {
-    try {
-      const match = screen.getAllDisplays().find((d) => d.id === pos.displayId);
-      if (match) return match;
-    } catch (e) {}
-  }
-  return preferredDisplay || getWindowDisplay();
-}
-
-function getDisplayArea(display) {
-  const d = display || getWindowDisplay();
-  return process.platform === 'win32' ? d.workArea : d.bounds;
+  let displays = [];
+  try {
+    displays = screen.getAllDisplays();
+  } catch (e) {}
+  const match = platformPolicy.layout.resolvePositionDisplay(displays, pos, null);
+  return match || preferredDisplay || getWindowDisplay();
 }
 
 function clampBoundsToDisplay(bounds, display) {
-  const area = getDisplayArea(display);
-  const maxX = area.x + area.width - bounds.width;
-  const maxY = area.y + area.height - bounds.height;
-  return {
-    width: bounds.width,
-    height: bounds.height,
-    x: Math.round(Math.min(Math.max(bounds.x, area.x), Math.max(area.x, maxX))),
-    y: Math.round(Math.min(Math.max(bounds.y, area.y), Math.max(area.y, maxY))),
-  };
+  return platformPolicy.layout.clampToArea(layoutDisplayContext(display), bounds);
 }
 
-function getCollapsedStripThickness(display) {
-  return getCollapsedHeight(display);
+function getCollapsedSizeForEdge(edge) {
+  return platformPolicy.layout.collapsedSize(edge);
 }
 
-function getCollapsedSizeForEdge(edge, display) {
-  const dock = normalizePanelEdge(edge);
-  // 四边同一颗胶囊：侧边竖着 厚×长，顶/底横着 长×厚（尺寸一致，只旋转）。
-  if (dock === 'left' || dock === 'right') {
-    return { width: COLLAPSED_SIDE_THICKNESS, height: COLLAPSED_SIDE_LENGTH };
-  }
-  return { width: COLLAPSED_SIDE_LENGTH, height: COLLAPSED_SIDE_THICKNESS };
-}
-
-function pickNearestDockEdge(distLeft, distRight, distTop, distBottom) {
-  const candidates = [
-    { edge: 'top', d: distTop },
-    { edge: 'bottom', d: distBottom },
-    { edge: 'left', d: distLeft },
-    { edge: 'right', d: distRight },
-  ];
-  candidates.sort((a, b) => a.d - b.d || ['top', 'bottom', 'left', 'right'].indexOf(a.edge) - ['top', 'bottom', 'left', 'right'].indexOf(b.edge));
-  return candidates[0].edge;
-}
-
-function inferPanelEdge(bounds, display) {
-  const area = getDisplayArea(display);
-  const distLeft = bounds.x - area.x;
-  const distRight = area.x + area.width - (bounds.x + bounds.width);
-  const distTop = bounds.y - area.y;
-  const distBottom = area.y + area.height - (bounds.y + bounds.height);
-  return pickNearestDockEdge(distLeft, distRight, distTop, distBottom);
-}
-
-// 拖动中按指针距四边远近判定，避免竖条贴左时中心永远更靠近侧边、拖到顶也判不成 top。
 function inferDockEdgeFromPoint(point, display) {
-  const area = getDisplayArea(display);
-  const distLeft = point.x - area.x;
-  const distRight = area.x + area.width - point.x;
-  const distTop = point.y - area.y;
-  const distBottom = area.y + area.height - point.y;
-  return pickNearestDockEdge(distLeft, distRight, distTop, distBottom);
-}
-
-function topDockY(display) {
-  const d = display || getWindowDisplay();
-  // 展开窗在 darwin 上会顶到 workArea.y；收起动画落点也在那里。
-  // 折叠胶囊跟 workArea 对齐，避免收起后再往菜单栏里跳一下。
-  if (process.platform === 'darwin') return d.workArea.y;
-  return getDisplayArea(d).y;
-}
-
-function bottomDockY(display, height) {
-  const d = display || getWindowDisplay();
-  if (process.platform === 'darwin') {
-    return d.workArea.y + d.workArea.height - height;
-  }
-  const area = getDisplayArea(d);
-  return area.y + area.height - height;
+  return platformPolicy.layout.inferDockEdgeFromPoint(layoutDisplayContext(display), point);
 }
 
 function snapCollapsedBounds(bounds, display, edge) {
-  const d = display || getWindowDisplay();
-  const dock = normalizePanelEdge(edge || inferPanelEdge(bounds, d));
-  const size = getCollapsedSizeForEdge(dock, d);
-  const area = getDisplayArea(d);
-  // 用当前 bounds 的尺寸做中心对齐；调用方必须传入真实折叠尺寸，
-  // 否则侧边 18×128 会被 200×38 带偏，收起后跳一下。
-  let x = bounds.x + (bounds.width - size.width) / 2;
-  let y = bounds.y + (bounds.height - size.height) / 2;
-  if (dock === 'top') y = topDockY(d);
-  else if (dock === 'bottom') y = bottomDockY(d, size.height);
-  else if (dock === 'left') x = area.x;
-  else x = area.x + area.width - size.width;
-  return {
-    ...clampBoundsToDisplay({ x, y, width: size.width, height: size.height }, d),
-    edge: dock,
-  };
-}
-
-function currentDockEdge() {
-  const pos = readAppSettings().panelPosition;
-  return pos ? normalizePanelEdge(pos.edge) : 'top';
+  return platformPolicy.layout.snapCollapsed(layoutDisplayContext(display), bounds, edge);
 }
 
 function resolveEdgeAlign(pos, edge, display) {
-  const area = getDisplayArea(display);
-  const collapsed = getCollapsedSizeForEdge(edge, display);
-  if (edge === 'left' || edge === 'right') {
-    const topGap = pos.y - area.y;
-    const bottomGap = area.y + area.height - (pos.y + collapsed.height);
-    if (topGap <= PANEL_TOP_SIDE_ALIGN_PX && topGap <= bottomGap) return 'start';
-    if (bottomGap <= PANEL_TOP_SIDE_ALIGN_PX) return 'end';
-    return 'center';
-  }
-  const leftGap = pos.x - area.x;
-  const rightGap = area.x + area.width - (pos.x + collapsed.width);
-  if (leftGap <= PANEL_TOP_SIDE_ALIGN_PX && leftGap <= rightGap) return 'start';
-  if (rightGap <= PANEL_TOP_SIDE_ALIGN_PX) return 'end';
-  return 'center';
-}
-
-function currentDockAlign(display) {
-  const pos = readAppSettings().panelPosition;
-  if (!pos) return 'center';
-  const d = display || resolvePositionDisplay();
-  return resolveEdgeAlign(pos, normalizePanelEdge(pos.edge), d);
-}
-
-function resolveTopExpandX(pos, width, display) {
-  const collapsed = getCollapsedSizeForEdge('top', display);
-  const align = resolveEdgeAlign(pos, 'top', display);
-  if (align === 'start') return pos.x;
-  if (align === 'end') return pos.x + collapsed.width - width;
-  return Math.round(pos.x + collapsed.width / 2 - width / 2);
-}
-
-function resolveBottomExpandX(pos, width, display) {
-  const collapsed = getCollapsedSizeForEdge('bottom', display);
-  const align = resolveEdgeAlign(pos, 'bottom', display);
-  if (align === 'start') return pos.x;
-  if (align === 'end') return pos.x + collapsed.width - width;
-  return Math.round(pos.x + collapsed.width / 2 - width / 2);
-}
-
-function resolveSideExpandY(pos, height, display, edge) {
-  const collapsed = getCollapsedSizeForEdge(edge, display);
-  const align = resolveEdgeAlign(pos, edge, display);
-  if (align === 'start') return pos.y;
-  if (align === 'end') return pos.y + collapsed.height - height;
-  return Math.round(pos.y + collapsed.height / 2 - height / 2);
-}
-
-function getAnchoredBounds(width, height, display) {
-  const pos = readAppSettings().panelPosition;
-  if (!pos) return getCenteredBounds(width, height, display || getTargetDisplay());
-  const d = resolvePositionDisplay(display);
-  const edge = normalizePanelEdge(pos.edge);
-  const collapsed = getCollapsedSizeForEdge(edge, d);
-  let x;
-  let y;
-  if (edge === 'left') {
-    x = pos.x;
-    y = resolveSideExpandY(pos, height, d, 'left');
-  } else if (edge === 'right') {
-    x = pos.x + collapsed.width - width;
-    y = resolveSideExpandY(pos, height, d, 'right');
-  } else if (edge === 'bottom') {
-    x = resolveBottomExpandX(pos, width, d);
-    y = bottomDockY(d, height);
-  } else {
-    x = resolveTopExpandX(pos, width, d);
-    // 与折叠落点一致：顶部停靠贴 workArea，避免展开原点在菜单栏、收起动画却在其下。
-    y = (process.platform === 'darwin') ? topDockY(d) : pos.y;
-  }
-  return clampBoundsToDisplay({ x, y, width, height }, d);
+  return platformPolicy.layout.resolveEdgeAlign(layoutDisplayContext(display), pos, edge);
 }
 
 function syncDockMetrics() {
@@ -1589,6 +1461,7 @@ function applyFeatureServices(features) {
   const policy = clipboardServicePolicy(features);
   if (policy.recordHistory) startClipboardPolling();
   else stopClipboardPolling();
+  syncPasteTracking();
 }
 
 function isValidPanelShortcut(shortcut) {
@@ -1597,7 +1470,8 @@ function isValidPanelShortcut(shortcut) {
   const tokens = shortcut.split('+');
   if (tokens.length < 2) return false;
   const key = tokens.pop();
-  const modifiers = new Set(['CommandOrControl', 'Command', 'Control', 'Alt', 'Option', 'Shift']);
+  // Super 就是 Windows 键（Mac 上等价于 Command），P2-3 起允许作为修饰符录入。
+  const modifiers = new Set(['CommandOrControl', 'Command', 'Control', 'Alt', 'Option', 'Shift', 'Super']);
   return tokens.length > 0
     && tokens.every((token) => modifiers.has(token))
     && /^(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Space|Tab|Escape|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete|Enter)$/.test(key);
@@ -1636,6 +1510,7 @@ function setPanelShortcut(shortcut) {
 
 function applyAppSettings() {
   const settings = readAppSettings();
+  refreshRuntimeCapabilities();
   applyFeatureServices(settings.features);
   if (!setPanelShortcut(settings.shortcut)) {
     settings.shortcut = 'Space';
@@ -1782,6 +1657,7 @@ ipcMain.handle('window:begin-collapse', () => {
 });
 
 ipcMain.handle('window:panel-drag-start', () => {
+  if (isLegacyWinLayout()) return false;
   if (!mainWindow || mainWindow.isDestroyed() || currentMode !== 'collapsed') return false;
   const cursor = screen.getCursorScreenPoint();
   const bounds = mainWindow.getBounds();
@@ -1889,6 +1765,16 @@ ipcMain.handle('settings:set-feature', (event, payload) => {
   refreshTrayMenu();
   return { ok: true, settings: publicAppSettings() };
 });
+// Windows 原生能力开关（P4-1 / D16）：默认关（WIN_NATIVE_DEFAULT），用户在设置页
+// 「实验功能」里打开后才解析出 windowSwitcher / windowFocus / automaticPaste。
+ipcMain.handle('settings:set-win-native', (event, enabled) => {
+  if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
+  if (process.platform !== 'win32') return { ok: false, error: 'unsupported' };
+  const next = { ...readAppSettings(), winNative: enabled };
+  if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  applyAppSettings();
+  return { ok: true, winNative: readAppSettings().winNative, capabilities: platformCapabilities };
+});
 ipcMain.handle('settings:set-default-tab', (event, defaultTab) => {
   const next = updateDefaultTabPreference(readAppSettings(), defaultTab);
   if (!next) return { ok: false, error: 'invalid_default_tab' };
@@ -1906,7 +1792,10 @@ ipcMain.handle('settings:set-auto-launch', (event, enabled) => {
 });
 ipcMain.handle('settings:set-shortcut', (event, accelerator) => {
   if (!isValidPanelShortcut(accelerator)) return { ok: false, error: 'invalid' };
-  if (!setPanelShortcut(accelerator)) return { ok: false, error: 'occupied' };
+  if (!setPanelShortcut(accelerator)) {
+    // 注册失败没有原因码：Win 组合基本都被系统留着，要和"被别的应用占用"分开提示。
+    return { ok: false, error: platformPolicy.shortcutFailureReason(accelerator, platformCapabilities) };
+  }
   const next = readAppSettings();
   next.shortcut = accelerator;
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
@@ -1960,19 +1849,7 @@ ipcMain.handle('workspace:open', () => shell.openPath(workspaceRoot()));
 ipcMain.handle('workspace:choose', () => chooseWorkspaceFolder());
 
 function getLayoutMetrics(display) {
-  const d = display || getWindowDisplay();
-  const edge = currentDockEdge();
-  const collapsed = getCollapsedSizeForEdge(edge, d);
-  return {
-    stripHeight: getCollapsedHeight(d), // 折叠黑条总高（= 菜单栏高 = 物理刘海高，不含唇边）
-    menuBarHeight: getMenuBarHeight(d), // 折叠态菜单栏带高（折叠条上半部分被其拦截）
-    chromeY: EXPANDED_CHROME_Y,
-    tabSizes: TAB_SIZES,
-    dockEdge: edge,
-    dockAlign: currentDockAlign(d),
-    collapsedWidth: collapsed.width,
-    collapsedHeight: collapsed.height,
-  };
+  return platformPolicy.layout.layoutMetrics(layoutContext(display));
 }
 
 ipcMain.handle('window:metrics', () => {
@@ -1984,41 +1861,47 @@ ipcMain.handle('window:set-tab', (event, tab) => {
   currentTab = Object.prototype.hasOwnProperty.call(TAB_SIZES, tab) ? tab : 'home';
 });
 
-async function requestMacMediaAccess(mediaType) {
-  if (process.platform !== 'darwin') return true;
-  if (systemPreferences.getMediaAccessStatus(mediaType) === 'granted') return true;
-  return mediaPermissionCoordinator.run({
-    owner: mainWindow,
-    // screen-saver 层级会压住 macOS 的 TCC 授权气泡。请求前临时降到普通层，
-    // 并把应用激活，让“不允许 / 允许”确实处在可点击的最前方。
-    activate: () => app.focus({ steal: true }),
-    track: (delta) => {
-      if (delta > 0 && mediaType === 'camera') mediaPermissionBatchHadCamera = true;
-      mediaPermissionRequests = Math.max(0, mediaPermissionRequests + delta);
-      if (delta >= 0 || mediaPermissionRequests > 0) return;
-      const shouldCollapse = cameraBlurDeferred && mediaPermissionBatchHadCamera;
-      mediaPermissionBatchHadCamera = false;
-      cameraBlurDeferred = false;
-      if (!shouldCollapse) return;
-      const targetWindow = mainWindow;
-      setTimeout(() => {
-        if (
-          mainWindow === targetWindow &&
-          targetWindow &&
-          !targetWindow.isDestroyed() &&
-          !targetWindow.isFocused()
-        ) {
-          requestRendererCollapse();
-        }
-      }, 200);
-    },
-    request: () => systemPreferences.askForMediaAccess(mediaType),
-  });
+// 授权期间的窗口层级与失焦收起协调留在主进程（和 mainWindow 状态机强耦合），
+// 真正的授权动作在适配层：Mac 走 TCC 弹窗，Windows 只读系统总开关。
+function trackMediaPermissionRequest(delta, mediaType) {
+  if (delta > 0 && mediaType === 'camera') mediaPermissionBatchHadCamera = true;
+  mediaPermissionRequests = Math.max(0, mediaPermissionRequests + delta);
+  if (delta >= 0 || mediaPermissionRequests > 0) return;
+  const shouldCollapse = cameraBlurDeferred && mediaPermissionBatchHadCamera;
+  mediaPermissionBatchHadCamera = false;
+  cameraBlurDeferred = false;
+  if (!shouldCollapse) return;
+  const targetWindow = mainWindow;
+  setTimeout(() => {
+    if (
+      mainWindow === targetWindow &&
+      targetWindow &&
+      !targetWindow.isDestroyed() &&
+      !targetWindow.isFocused()
+    ) {
+      requestRendererCollapse();
+    }
+  }, 200);
+}
+
+function requestMediaAccess(mediaType) {
+  if (!platformCapabilities.features.mediaAccessStatus) return Promise.resolve(true);
+  return Promise.resolve(platformAdapter.media.request(mediaType));
 }
 
 // macOS 渲染层 getUserMedia 不会自动弹 TCC 授权，必须由主进程申请摄像头/麦克风权限。
-ipcMain.handle('media:camera', () => requestMacMediaAccess('camera'));
-ipcMain.handle('media:microphone', () => requestMacMediaAccess('microphone'));
+ipcMain.handle('media:camera', () => requestMediaAccess('camera'));
+ipcMain.handle('media:microphone', () => requestMediaAccess('microphone'));
+
+// P3-2：只读状态 + 提示文案，刻意和上面两个通道分开——ensureCamera/ensureMicrophone
+// 的布尔返回值是渲染层的既有契约（`!(await ensureMicrophone())`），不能改成对象。
+ipcMain.handle('media:access-status', (event, mediaType) => {
+  const type = mediaType === 'camera' ? 'camera' : 'microphone';
+  const status = platformCapabilities.features.mediaAccessStatus
+    ? platformAdapter.media.status(type)
+    : 'unknown';
+  return { type, status, ...platformPolicy.mediaAccessPrompt(type, status, platformCapabilities) };
+});
 
 ipcMain.handle('tasks:recent', () => taskCompletionHistory);
 
@@ -2035,88 +1918,20 @@ ipcMain.handle('shell:openPath', (event, p) => {
   }
 });
 
-// 只放行固定的几个隐私面板，渲染层传来的值只能当作枚举的键来查，
-// 绝不能拼进 URL：x-apple.systempreferences: 能打开任意设置面板。
-const PRIVACY_SETTINGS_PANES = process.platform === 'win32' ? {
-  microphone: 'ms-settings:privacy-microphone',
-  camera: 'ms-settings:privacy-webcam',
-} : {
-  accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
-  'screen-recording': 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
-  microphone: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
-  camera: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',
-};
-
+// 只放行固定的几个隐私面板：面板表在适配层，渲染层传来的值只能当作枚举的键来查，
+// 绝不能拼进 URL（x-apple.systempreferences: 能打开任意设置面板）。
 ipcMain.handle('shell:open-privacy-settings', (event, pane) => {
-  const target = PRIVACY_SETTINGS_PANES[String(pane || '')];
+  const target = platformAdapter.privacyPaneUrl(pane);
   if (!target) return false;
   shell.openExternal(target);
   return true;
 });
 
-// ============ 启动时的权限自检 ============
-// DMG 装的是全新二进制，TCC 授权不会从开发版继承，而这几项缺失时的表现都是「静默失效」：
-// 缺「屏幕录制」→ CGWindowList 照样返回窗口但标题全空，当前窗口看起来像真的没窗口；
-// 缺「辅助功能」→ 枚举、聚焦窗口和汽水音乐发按键全部无效。
-// 系统对前者根本不弹提示，所以只能由应用自己说，否则用户完全无从下手。
-const PERMISSION_PROMPT_SKIP_FILE = 'permission-prompt-skipped';
-
-// 先尊重系统的明确状态，尤其不能在 not-determined 时调用 desktopCapturer，
-// 否则启动自检本身就会抢先弹出系统录屏框。只有系统报告 granted 时才通过
-// 无缩略图的窗口标题做二次确认；未知状态 fail-open，等用户实际使用时再申请。
-async function hasScreenRecordingAccess() {
-  const policy = screenRecordingProbePolicy(systemPreferences.getMediaAccessStatus('screen'));
-  if (!policy.inspectWindowTitles) return policy.hasAccess;
-  try {
-    const sources = await desktopCapturer.getSources({
-      types: ['window'],
-      thumbnailSize: { width: 0, height: 0 },
-      fetchWindowIcons: false,
-    });
-    if (sources.length === 0) return true; // 拿不到源无法判定，不误报
-    return sources.some((source) => String(source.name || '').trim().length > 0);
-  } catch (error) {
-    return true; // 探测本身失败时不打扰用户
-  }
-}
-
+// 启动时的权限自检是 Mac 专属能力（缺失时的表现都是「静默失效」，系统不弹提示），
+// 实现在 platform-adapters/darwin.js。
 async function promptForMissingPermissions() {
-  if (process.platform !== 'darwin') return;
-  const skipFlag = path.join(app.getPath('userData'), PERMISSION_PROMPT_SKIP_FILE);
-  if (fs.existsSync(skipFlag)) return;
-
-  const missing = [];
-  // 传 false 只查询不弹系统框：先把缺失项攒齐一次性告知，避免连弹两个系统对话框。
-  if (!systemPreferences.isTrustedAccessibilityClient(false)) missing.push('accessibility');
-  if (!await hasScreenRecordingAccess()) missing.push('screen-recording');
-  if (missing.length === 0) return;
-
-  const names = missing.map((key) => (key === 'accessibility' ? '辅助功能' : '屏幕录制'));
-  const { response, checkboxChecked } = await dialog.showMessageBox({
-    type: 'info',
-    message: `Pome Panel 需要「${names.join('」和「')}」权限`,
-    detail: [
-      '缺少这些权限时，「当前窗口」会读不到任何窗口，汽水音乐的播放控制也不会生效。',
-      '',
-      '授权后需要重新启动 Pome Panel 才会生效。',
-      'ad-hoc 签名的应用每次重新打包都要重新授权一次，这是没有开发者账号分发的固有限制。',
-    ].join('\n'),
-    buttons: ['打开系统设置', '以后再说'],
-    defaultId: 0,
-    cancelId: 1,
-    checkboxLabel: '不再提示',
-    checkboxChecked: false,
-  });
-
-  if (checkboxChecked) {
-    try { fs.writeFileSync(skipFlag, new Date().toISOString()); } catch (error) {}
-  }
-  if (response !== 0) return;
-
-  // 顺带用 true 触发一次系统的辅助功能提示：这一步会把应用登记进系统设置的列表里，
-  // 否则用户打开设置面板可能找不到 Pome Panel 这一项、只能手动拖进去。
-  if (missing.includes('accessibility')) systemPreferences.isTrustedAccessibilityClient(true);
-  shell.openExternal(PRIVACY_SETTINGS_PANES[missing[0]]);
+  if (!platformCapabilities.features.permissionSelfCheck || !platformAdapter.permissions) return;
+  await platformAdapter.permissions.selfCheck();
 }
 
 async function validatePublicHttpUrl(value) {
@@ -2337,160 +2152,16 @@ ipcMain.handle('smart:organize-material', async (event, payload) => {
   }
 });
 
-const WINDOWS_LIST_JXA = `
-ObjC.import('AppKit');
-ObjC.import('CoreGraphics');
-ObjC.import('Foundation');
-function run() {
-  const rows = [];
-  let candidates = 0;
-  let titled = 0;
-  const options = $.kCGWindowListOptionAll | $.kCGWindowListExcludeDesktopElements;
-  const windowList = ObjC.castRefToObject(
-    $.CGWindowListCopyWindowInfo(options, $.kCGNullWindowID)
-  );
-  const appPaths = {};
-  for (let index = 0; index < Number(windowList.count); index++) {
-    const info = windowList.objectAtIndex(index);
-    const get = (key) => ObjC.unwrap(info.objectForKey($(key)));
-    const layer = Number(get('kCGWindowLayer'));
-    const pid = Number(get('kCGWindowOwnerPID'));
-    const appName = String(get('kCGWindowOwnerName') || '').trim();
-    const title = String(get('kCGWindowName') || '').replace(/\\s+/g, ' ').trim();
-    const windowNumber = Number(get('kCGWindowNumber'));
-    // 没有「屏幕录制」权限时 CGWindowList 仍会返回别的应用的窗口，只是 kCGWindowName
-    // 一律为空，系统不报任何错。于是下面这句会把所有行丢掉、列表看起来像「真的没窗口」。
-    // 统计候选数与其中有标题的条数，好让主进程区分这两种情况。
-    if (layer === 0 && pid && appName && windowNumber) {
-      candidates += 1;
-      if (title) titled += 1;
-    }
-    if (layer !== 0 || !pid || !appName || !title || !windowNumber) continue;
-    if (!Object.prototype.hasOwnProperty.call(appPaths, pid)) {
-      const meta = { appPath: '', policy: -1 };
-      try {
-        const runningApp = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
-        if (runningApp && !runningApp.isNil()) {
-          meta.policy = Number(runningApp.activationPolicy);
-          if (runningApp.bundleURL && !runningApp.bundleURL.isNil()) {
-            meta.appPath = String(ObjC.unwrap(runningApp.bundleURL.path) || '');
-          }
-        }
-      } catch (error) {}
-      appPaths[pid] = meta;
-    }
-    const appMeta = appPaths[pid];
-    // activationPolicy 2 = NSApplicationActivationPolicyProhibited：XPC 与系统辅助进程
-    // （如 AuthenticationServicesHelper，bundle 是 .xpc 不是 .app）。它们在系统层面就
-    // 不能被激活，列出来点了也不会有任何反应，属于纯粹的假窗口。
-    // 注意不能用 kCGWindowIsOnscreen 过滤：真实窗口在其他 Space 或被遮挡时该字段也是
-    // nil，实测微信 / Arc / Chrome / 飞书都会被误删。
-    if (appMeta.policy === 2) continue;
-    rows.push({ pid, appName, appPath: appMeta.appPath, title, windowIndex: index, windowNumber });
-  }
-  // candidates 是本可列出的窗口数，titled 是其中拿到标题的数量。
-  // candidates > 0 而 titled === 0 时几乎一定是缺「屏幕录制」权限，不是真的没窗口。
-  return JSON.stringify({ rows: rows, candidates: candidates, titled: titled });
-}`;
-
-const WINDOW_FOCUS_JXA = `
-function run(argv) {
-  const pid = Number(argv[0]);
-  const wantedTitle = String(argv[1] || '');
-  const fallbackIndex = Number(argv[2] || 0);
-  const se = Application('System Events');
-  const matches = se.applicationProcesses.whose({ unixId: pid })();
-  if (!matches.length) return 'false';
-  const process = matches[0];
-  process.frontmost = true;
-  delay(0.08);
-  const windows = process.windows();
-  let target = windows[fallbackIndex];
-  for (let i = 0; i < windows.length; i++) {
-    try {
-      if (String(windows[i].name()) === wantedTitle) { target = windows[i]; break; }
-    } catch (error) {}
-  }
-  if (target) {
-    try { target.actions.byName('AXRaise').perform(); } catch (error) {}
-  }
-  try {
-    const menuBarItems = process.menuBars[0].menuBarItems();
-    let windowMenu = null;
-    for (let i = 0; i < menuBarItems.length; i++) {
-      const name = String(menuBarItems[i].name());
-      if (name === 'Window' || name === '窗口') { windowMenu = menuBarItems[i]; break; }
-    }
-    if (windowMenu) {
-      const items = windowMenu.menus[0].menuItems();
-      for (let i = 0; i < items.length; i++) {
-        if (String(items[i].name()) === wantedTitle) {
-          items[i].click();
-          break;
-        }
-      }
-    }
-  } catch (error) {}
-  return 'true';
-}`;
-
-function runJxa(script, args = []) {
-  return new Promise((resolve, reject) => {
-    execFile(
-      '/usr/bin/osascript',
-      ['-l', 'JavaScript', '-e', script, '--', ...args.map(String)],
-      { timeout: 6000, maxBuffer: 2 * 1024 * 1024 },
-      (error, stdout) => error ? reject(error) : resolve(String(stdout || '').trim())
-    );
-  });
-}
-
-async function scanCurrentWindows() {
-  if (process.platform !== 'darwin') return { items: [], error: 'unsupported' };
-  try {
-    const raw = await runJxa(WINDOWS_LIST_JXA);
-    const parsed = JSON.parse(raw || '{}');
-    // 兼容旧格式（裸数组），新格式是 { rows, candidates, titled }。
-    const payload = Array.isArray(parsed)
-      ? { rows: parsed, candidates: parsed.length, titled: parsed.length }
-      : parsed;
-    const rows = normalizeWindowRows(payload.rows || []).filter((item) => item.pid !== process.pid);
-    // 有候选窗口却一个标题都读不到 = 缺「屏幕录制」权限。macOS 10.15 起读取其他应用的
-    // 窗口标题需要该权限，系统不会报错也不会弹提示，只是静默返回空标题，
-    // 结果界面上只剩一句「没有读取到可切换窗口」，把权限问题伪装成了「真的没窗口」。
-    if (rows.length === 0 && Number(payload.candidates) > 0 && Number(payload.titled) === 0) {
-      windowScanCache = new Map();
-      return { items: [], error: 'screen_recording_permission_required' };
-    }
-    const appPaths = [...new Set(rows.map((item) => item.appPath).filter(Boolean))];
-    await Promise.all(appPaths.map(async (appPath) => {
-      if (windowIconCache.has(appPath)) return;
-      const icon = await withTimeout(readWindowAppIcon(appPath), 3500, null);
-      windowIconCache.set(appPath, icon);
-    }));
-    rows.forEach((item) => {
-      item.icon = item.appPath ? windowIconCache.get(item.appPath) || null : null;
-    });
-    windowScanCache = new Map(rows.map((item) => [item.id, item]));
-    return { items: rows, error: null };
-  } catch (error) {
-    windowScanCache = new Map();
-    return { items: [], error: 'accessibility_permission_required' };
-  }
-}
-
+// 窗口枚举与聚焦在适配层实现（Mac 走 JXA，Windows 暂时 unsupported）。
+// 聚焦只接受最近一次扫描缓存里的窗口 ID，缓存也留在适配层实例里。
 ipcMain.handle('windows:list', async () => {
-  return scanCurrentWindows();
+  if (!platformCapabilities.features.windowSwitcher) return { items: [], error: 'unsupported' };
+  return platformAdapter.windows.list();
 });
 
 ipcMain.handle('windows:focus', async (event, windowId) => {
-  const target = windowScanCache.get(windowId);
-  if (!target || process.platform !== 'darwin') return false;
-  try {
-    return (await runJxa(WINDOW_FOCUS_JXA, [target.pid, target.title, target.windowIndex])) === 'true';
-  } catch (error) {
-    return false;
-  }
+  if (!platformCapabilities.features.windowSwitcher) return false;
+  return platformAdapter.windows.focus(windowId);
 });
 
 function taskWindowMatchScore(notification, target) {
@@ -2508,19 +2179,16 @@ function taskWindowMatchScore(notification, target) {
 async function activateActiveTaskNotification(eventId = null) {
   const notification = activeTaskNotification;
   if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return false;
-  const result = await scanCurrentWindows();
+  if (!platformCapabilities.features.windowFocus) return false;
+  const result = await platformAdapter.windows.list();
   const target = (result.items || [])
     .map((item) => ({ item, score: taskWindowMatchScore(notification, item) }))
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score)[0]?.item;
   if (!target) return false;
-  try {
-    const focused = (await runJxa(WINDOW_FOCUS_JXA, [target.pid, target.title, target.windowIndex])) === 'true';
-    if (focused) beginTaskNotificationDismiss();
-    return focused;
-  } catch (error) {
-    return false;
-  }
+  const focused = await platformAdapter.windows.focusRow(target);
+  if (focused) beginTaskNotificationDismiss();
+  return focused;
 }
 
 ipcMain.handle('task-notification:activate', async (event, eventId) => {
@@ -2528,198 +2196,10 @@ ipcMain.handle('task-notification:activate', async (event, eventId) => {
   return activateActiveTaskNotification(eventId);
 });
 
-// 当前窗口模块仍需要安全读取本机应用图标。
-// 优先直接从 .icns 提取内嵌 PNG；失败时通过独立 JXA 进程向 NSWorkspace 取系统图标。
-// 不直接调用 app.getFileIcon：它曾在部分 .app 上触发 Electron 内部 FATAL Check，
-// 独立进程即使失败也不会带崩主进程。
-const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-// icns 内 PNG 块按"贴近 48px 网格展示"优先：128 → 256 → 64@2x …
-const ICNS_PREF = ['ic07', 'ic12', 'ic08', 'ic11', 'ic13', 'ic09', 'ic14', 'ic05', 'ic04'];
-
-function extractPngFromIcns(buf) {
-  if (buf.length < 8 || buf.toString('ascii', 0, 4) !== 'icns') return null;
-  const candidates = [];
-  let off = 8;
-  while (off + 8 <= buf.length) {
-    const type = buf.toString('ascii', off, off + 4);
-    const len = buf.readUInt32BE(off + 4);
-    if (len < 8 || off + len > buf.length) break;
-    const data = buf.subarray(off + 8, off + len);
-    if (data.length > 8 && data.subarray(0, 4).equals(PNG_SIG)) {
-      candidates.push({ type, data });
-    }
-    off += len;
-  }
-  if (!candidates.length) return null; // 老式 RLE 图标 → 交给渲染层首字母兜底
-  candidates.sort((a, b) => {
-    const ia = ICNS_PREF.indexOf(a.type);
-    const ib = ICNS_PREF.indexOf(b.type);
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-  });
-  return candidates[0].data;
-}
-
-async function readEmbeddedAppIcon(appPath) {
-  try {
-    const resDir = path.join(appPath, 'Contents', 'Resources');
-    const files = await fs.promises.readdir(resDir);
-    const icns = files.filter((f) => f.toLowerCase().endsWith('.icns'));
-    if (!icns.length) return null;
-    // 优先 AppIcon.icns，其次名字含 app/icon 的，避免选中文档类型图标
-    const score = (n) => {
-      const s = n.toLowerCase();
-      if (s === 'appicon.icns') return 0;
-      if (s.includes('app')) return 1;
-      if (s.includes('icon')) return 2;
-      return 3;
-    };
-    icns.sort((a, b) => score(a) - score(b) || a.length - b.length);
-    const buf = await fs.promises.readFile(path.join(resDir, icns[0]));
-    const png = extractPngFromIcns(buf);
-    return png ? `data:image/png;base64,${png.toString('base64')}` : null;
-  } catch (e) {
-    return null; // 单个应用读不到图标不影响整体
-  }
-}
-
-const SYSTEM_ICON_JXA = `
-ObjC.import('AppKit');
-function run(argv) {
-  const size = 96;
-  const source = $.NSWorkspace.sharedWorkspace.iconForFile(argv[0]);
-  const image = $.NSImage.alloc.initWithSize($.NSMakeSize(size, size));
-  image.lockFocus;
-  source.drawInRectFromRectOperationFraction(
-    $.NSMakeRect(0, 0, size, size),
-    $.NSZeroRect,
-    $.NSCompositingOperationSourceOver,
-    1
-  );
-  image.unlockFocus;
-  const rep = $.NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation);
-  const data = rep.representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $({}));
-  return ObjC.unwrap(data.base64EncodedStringWithOptions(0));
-}`;
-
-function readSystemAppIconNow(appPath) {
-  return new Promise((resolve) => {
-    execFile(
-      '/usr/bin/osascript',
-      ['-l', 'JavaScript', '-e', SYSTEM_ICON_JXA, appPath],
-      { timeout: 4000, maxBuffer: 2 * 1024 * 1024 },
-      (error, stdout) => {
-        const base64 = typeof stdout === 'string' ? stdout.trim() : '';
-        if (error || !base64 || !/^[A-Za-z0-9+/=]+$/.test(base64)) {
-          resolve(null);
-          return;
-        }
-        resolve(`data:image/png;base64,${base64}`);
-      }
-    );
-  });
-}
-
-const SYSTEM_ICON_CONCURRENCY = 2;
-const SYSTEM_ICON_QUEUE_TIMEOUT_MS = 10000;
-let systemIconActive = 0;
-const systemIconQueue = [];
-
-function pumpSystemIconQueue() {
-  while (systemIconActive < SYSTEM_ICON_CONCURRENCY && systemIconQueue.length) {
-    const job = systemIconQueue.shift();
-    if (job.cancelled) continue;
-    systemIconActive++;
-    readSystemAppIconNow(job.appPath)
-      .then(job.finish, () => job.finish(null))
-      .finally(() => {
-        systemIconActive--;
-        pumpSystemIconQueue();
-      });
-  }
-}
-
-function readSystemAppIcon(appPath) {
-  if (process.platform !== 'darwin') return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const job = {
-      appPath,
-      cancelled: false,
-      settled: false,
-      timer: null,
-      finish(value) {
-        if (job.settled) return;
-        job.settled = true;
-        if (job.timer) clearTimeout(job.timer);
-        resolve(value);
-      },
-    };
-    job.timer = setTimeout(() => {
-      job.cancelled = true;
-      job.finish(null);
-    }, SYSTEM_ICON_QUEUE_TIMEOUT_MS);
-    systemIconQueue.push(job);
-    pumpSystemIconQueue();
-  });
-}
-
-async function readWindowAppIcon(appPath) {
-  const systemIcon = await withTimeout(readSystemAppIcon(appPath), 2800, null);
-  return systemIcon || readEmbeddedAppIcon(appPath);
-}
-
-function withTimeout(promise, ms, fallback) {
-  return Promise.race([
-    promise,
-    new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
-  ]);
-}
-
-const FRONTMOST_APP_JXA = `
-ObjC.import('AppKit');
-function run() {
-  const app = $.NSWorkspace.sharedWorkspace.frontmostApplication;
-  if (!app) return '{}';
-  return JSON.stringify({
-    name: ObjC.unwrap(app.localizedName) || '',
-    bundleId: ObjC.unwrap(app.bundleIdentifier) || '',
-    path: app.bundleURL ? (ObjC.unwrap(app.bundleURL.path) || '') : ''
-  });
-}`;
-
-const PASTE_TO_APP_JXA = `
-ObjC.import('AppKit');
-function run(argv) {
-  const bundleId = String(argv[0] || '');
-  if (!bundleId) return 'missing';
-  const apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(bundleId);
-  if (!apps || apps.count === 0) return 'missing';
-  apps.objectAtIndex(0).activateWithOptions($.NSApplicationActivateIgnoringOtherApps);
-  delay(0.18);
-  Application('System Events').keystroke('v', { using: 'command down' });
-  return 'ok';
-}`;
-
-function readFrontmostApp() {
-  if (!PLATFORM_CAPABILITIES.automaticPaste) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    execFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', FRONTMOST_APP_JXA], { timeout: 2200 }, (error, stdout) => {
-      if (error) return resolve(null);
-      try {
-        const value = JSON.parse(String(stdout || '').trim());
-        resolve(value && value.path ? value : null);
-      } catch (parseError) {
-        resolve(null);
-      }
-    });
-  });
-}
-
-async function rememberPasteTarget() {
-  const current = await readFrontmostApp();
-  if (current && !['com.github.Electron', 'com.vibecoding.notch-todo', 'com.dynamicpanel.app'].includes(current.bundleId)) {
-    previousPasteTarget = current;
-  }
-  return previousPasteTarget;
+// 展开面板前记住当前前台应用，收起后才能把内容粘回去（实现在适配层）。
+function rememberPasteTarget() {
+  if (!platformCapabilities.features.automaticPaste) return Promise.resolve(null);
+  return platformAdapter.paste.captureTarget();
 }
 
 ipcMain.handle('mirror:get-image', () => mirrorImageDataUrl());
@@ -4403,66 +3883,6 @@ ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
   return { ...result, projectionJson: applied };
 });
 
-function sodaMusicRunning() {
-  return new Promise((resolve) => {
-    execFile('/usr/bin/pgrep', ['-f', '^/Applications/汽水音乐\\.app/Contents/MacOS/汽水音乐$'], { timeout: 1500 }, (error) => resolve(!error));
-  });
-}
-
-function launchSodaMusic() {
-  return new Promise((resolve) => {
-    const cleanEnvironment = { ...process.env };
-    delete cleanEnvironment.ELECTRON_RUN_AS_NODE;
-    cleanEnvironment.XPC_SERVICE_NAME = '0';
-    execFile(
-      '/usr/bin/open',
-      [SODA_MUSIC_APP],
-      { timeout: 4000, env: cleanEnvironment },
-      (error) => resolve(!error)
-    );
-  });
-}
-
-const SODA_SHORTCUT_JXA = `
-function run(argv) {
-  const keyCode = Number(argv[0]);
-  const usesCommand = String(argv[1] || '') === '1';
-  const dismissOverlays = String(argv[2] || '') === '1';
-  const processes = Application('System Events').applicationProcesses.whose({ bundleIdentifier: 'com.soda.music' })();
-  if (!processes.length) return 'missing';
-  processes[0].frontmost = true;
-  delay(0.35);
-  const systemEvents = Application('System Events');
-  if (!Number.isFinite(keyCode)) return 'invalid';
-  if (dismissOverlays) {
-    systemEvents.keyCode(53);
-    delay(0.15);
-  }
-  if (usesCommand) systemEvents.keyCode(keyCode, { using: 'command down' });
-  else systemEvents.keyCode(keyCode);
-  return 'ok';
-}`;
-
-async function sendSodaShortcut(action) {
-  if (process.platform !== 'darwin') return { ok: false, error: 'unsupported' };
-  if (!systemPreferences.isTrustedAccessibilityClient(true)) {
-    return { ok: false, error: 'accessibility_permission_required' };
-  }
-  const shortcut = sodaShortcutSpec(action);
-  if (!shortcut) return { ok: false, error: 'invalid_action' };
-  try {
-    const result = await runJxa(SODA_SHORTCUT_JXA, [
-      shortcut.keyCode,
-      shortcut.command ? '1' : '0',
-      shortcut.dismissOverlays ? '1' : '0',
-    ]);
-    return result === 'ok' ? { ok: true } : { ok: false, error: 'soda_control_failed' };
-  } catch (error) {
-    console.warn('[music] failed to send Soda Music shortcut', error && error.message || error);
-    return { ok: false, error: 'soda_control_failed' };
-  }
-}
-
 ipcMain.handle('cursor:usage', async (_event, options = {}) => {
   try {
     return await fetchCursorUsage({
@@ -4480,30 +3900,21 @@ ipcMain.handle('cursor:set-token', (_event, token) => writeCursorManualToken(tok
 
 ipcMain.handle('cursor:clear-token', () => writeCursorManualToken(''));
 
+// 汽水音乐只有 Mac 适配层实现（D4）：Windows 上 adapter.music 缺席，一律回 unsupported。
+function musicUnsupported() {
+  return !platformCapabilities.features.musicControl || !platformAdapter.music;
+}
+
 ipcMain.handle('music:status', async () => {
-  const installed = fs.existsSync(SODA_MUSIC_APP);
-  const running = installed ? await sodaMusicRunning() : false;
-  if (!running) sodaMusicPlaying = false;
-  return {
-    installed,
-    running,
-    sessionActive: running,
-    playing: running && sodaMusicPlaying,
-    title: '',
-    artist: '',
-    icon: installed ? await readSystemAppIconNow(SODA_MUSIC_APP) : null,
-  };
+  if (musicUnsupported()) {
+    return { installed: false, running: false, sessionActive: false, playing: false, title: '', artist: '', icon: null };
+  }
+  return platformAdapter.music.status();
 });
 
 ipcMain.handle('music:control', async (event, action) => {
-  if (process.platform !== 'darwin') return { ok: false, error: 'unsupported' };
-  if (!fs.existsSync(SODA_MUSIC_APP)) return { ok: false, error: 'not_installed' };
-  const result = await controlSodaMusic(action, {
-    isRunning: sodaMusicRunning,
-    launch: launchSodaMusic,
-    sendShortcut: sendSodaShortcut,
-  }, sodaMusicPlaying);
-  if (result && result.ok) sodaMusicPlaying = result.playing;
+  if (musicUnsupported()) return { ok: false, error: 'unsupported' };
+  const result = await platformAdapter.music.control(action);
   if (result && result.ok && mainWindow && !mainWindow.isDestroyed() && currentMode === 'expanded') {
     if (!mainWindow.isVisible()) mainWindow.show();
     mainWindow.focus();
@@ -5362,46 +4773,61 @@ function waitForCollapsedPanel(timeoutMs = 950) {
   });
 }
 
-function pasteToPreviousApp(target) {
-  return new Promise((resolve) => {
-    const bundleId = String(target?.bundleId || '');
-    if (!bundleId) return resolve(false);
-    execFile('/usr/bin/osascript', [
-      '-l', 'JavaScript', '-e', PASTE_TO_APP_JXA, bundleId,
-    ], { timeout: 3000 }, (error, stdout) => {
-      resolve(!error && String(stdout || '').trim() === 'ok');
-    });
-  });
-}
-
 ipcMain.handle('clipboard:write', (event, entry) => writeClipboardEntry(entry));
 
 // 点击历史项后先收起灵动岛，再回到打开面板前的应用执行粘贴。
 // 若系统尚未授予辅助功能权限，内容仍保留在系统剪贴板作为可靠降级。
 ipcMain.handle('clipboard:paste', async (event, entry) => {
   if (!await writeClipboardEntry(entry)) return { ok: false, pasted: false };
-  if (!PLATFORM_CAPABILITIES.automaticPaste) return { ok: true, pasted: false };
-  if (process.platform === 'darwin' && !systemPreferences.isTrustedAccessibilityClient(true)) {
+  if (!platformCapabilities.features.automaticPaste) return { ok: true, pasted: false };
+  if (platformAdapter.paste.permissionRequired()) {
     return { ok: true, pasted: false, permissionRequired: true };
   }
-  const target = previousPasteTarget;
+  const target = platformAdapter.paste.rememberedTarget();
   requestRendererCollapse();
   await waitForCollapsedPanel();
-  const pasted = await pasteToPreviousApp(target);
-  return { ok: true, pasted };
+  // Windows 的失败原因要带给渲染层：elevated 得提示"管理员窗口请手动粘贴"，
+  // target_gone / focus_failed 只说"已复制"（P4-1）。
+  const result = await platformAdapter.paste.pasteTo(target);
+  return pasteResultToIpc(result);
 });
 
-function ensureFirstRunAutoLaunch() {
-  // 首次运行时默认开启开机自启；之后尊重用户在托盘菜单的选择
-  if (process.platform !== 'darwin') return;
-  const marker = path.join(app.getPath('userData'), '.first-run-done');
-  if (fs.existsSync(marker)) return;
+// 本应用自己写的数据文件：它们存在就说明这台机器上跑过旧版本。
+// 必须在写入它们之前调用（见 whenReady 里的调用顺序）。
+function hasExistingUserData() {
+  const files = [
+    getJsonSettingsPath(APP_SETTINGS_FILE),
+    getJsonSettingsPath(WORKSPACE_SETTINGS_FILE),
+    getJsonSettingsPath(CREDENTIALS_VAULT_FILE),
+  ];
   try {
-    setAutoLaunch(true);
+    files.push(workspacePath(WORKSPACE_DATA_FILE));
+  } catch (e) {}
+  return files.some((file) => {
+    try {
+      return fs.existsSync(file);
+    } catch (e) {
+      return false;
+    }
+  });
+}
+
+function ensureFirstRunAutoLaunch() {
+  // 全新安装默认开启开机自启（D1）；升级用户只补写标记，保留他们在托盘里的选择（D13）。
+  const marker = path.join(app.getPath('userData'), '.first-run-done');
+  const plan = firstRunAutoLaunchPlan({
+    supported: platformCapabilities.features.firstRunAutoLaunch === true,
+    markerExists: fs.existsSync(marker),
+    hasExistingUserData: hasExistingUserData(),
+  });
+  if (!plan.writeMarker) return plan;
+  try {
+    if (plan.enableAutoLaunch) setAutoLaunch(true);
     fs.writeFileSync(marker, String(Date.now()));
   } catch (e) {
     // ignore
   }
+  return plan;
 }
 
 function watchDisplayChanges() {
@@ -5432,7 +4858,13 @@ app.whenReady().then(() => {
     app.dock.hide();
   }
 
+  // 必须排在第一位（P3-1 / D13）：它靠"本应用的数据文件是否已存在"区分全新安装与升级，
+  // 下面的迁移就会写 app-settings.json，一旦调换顺序，升级用户会被当成全新安装。
   ensureFirstRunAutoLaunch();
+  // 迁移与能力解析都要早于建窗：能力随 additionalArguments 一次性下发，
+  // 迁移清掉的旧位置会决定第一帧胶囊落在哪里。
+  migrateWindowsLayoutSettings();
+  refreshRuntimeCapabilities();
   createWindow();
   createTray();
   watchDisplayChanges();
@@ -5460,6 +4892,7 @@ app.on('before-quit', () => {
 
 app.on('will-quit', () => {
   cancelCollapseWatchdog();
+  platformAdapter.paste.stopTracking();
   clearTodoReminderTimer();
   stopHoverSpaceShortcut();
   clearTaskNotificationTimers();

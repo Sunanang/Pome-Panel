@@ -107,6 +107,37 @@ async function main() {
       '折叠轮廓应由独立背景外壳承担'
     );
 
+    // W0-1：收起窗口只有胶囊大小，面板的彩虹描边若残留就会变成一圈围着胶囊的
+    // 半透明框，在 Windows 上还会挡住下方窗口的点击。启动首帧即为 collapsed。
+    const collapsedGlassLayers = await window.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.querySelector('.panel');
+        return {
+          liquidGlass: document.documentElement.dataset.liquidGlass,
+          before: getComputedStyle(panel, '::before').opacity,
+          after: getComputedStyle(panel, '::after').opacity,
+        };
+      })()
+    `);
+    assert.equal(collapsedGlassLayers.liquidGlass, '1', '液态玻璃是默认外观，必须在该配置下检查');
+    assert.equal(collapsedGlassLayers.after, '0', '收起态不得在胶囊周围残留彩虹描边');
+    assert.equal(collapsedGlassLayers.before, '0', '收起态不得在胶囊周围残留玻璃外壳');
+
+    const expandedGlassOutline = await window.webContents.executeJavaScript(`
+      (async () => {
+        const appSurface = document.getElementById('app');
+        appSurface.classList.remove('collapsed', 'closing', 'opening');
+        appSurface.classList.add('expanded');
+        // 200ms transition-delay + 140ms 过渡。
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        const after = getComputedStyle(document.querySelector('.panel'), '::after').opacity;
+        appSurface.classList.remove('expanded');
+        appSurface.classList.add('collapsed');
+        return after;
+      })()
+    `);
+    assert.equal(expandedGlassOutline, '0.46', '展开态的彩虹描边强度不变');
+
     window.setSize(1240, 616);
     const topbarBlankToggle = await window.webContents.executeJavaScript(`
       (async () => {
@@ -1214,6 +1245,39 @@ async function main() {
     assert.equal(autoLayoutMotionAudit.rapidDuplicateGhosts, false, '连续切换必须先清理上一轮 Auto Layout ghost');
     assert.ok(autoLayoutMotionAudit.rapidMaxTileAnimations <= 2, '连续切换不得叠加过多组件动画');
     assert.equal(autoLayoutMotionAudit.rapidGhostsAfter, 0, '连续切换结束后不得残留 Auto Layout ghost');
+
+    // M0-3：弹层铺满面板、卡片在其中垂直居中，不再被菜单栏高度的留白推下去。
+    window.setSize(1240, 638);
+    const transcriptionOverlayCentering = await window.webContents.executeJavaScript(`
+      (async () => {
+        const appSurface = document.getElementById('app');
+        appSurface.classList.remove('collapsed', 'closing', 'opening');
+        appSurface.classList.add('expanded');
+        const backdrop = document.getElementById('transcription-settings-backdrop');
+        backdrop.hidden = false;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const overlay = backdrop.getBoundingClientRect();
+        const card = backdrop.querySelector('.transcription-settings-card').getBoundingClientRect();
+        const result = {
+          paddingTop: getComputedStyle(backdrop).paddingTop,
+          topGap: card.top - overlay.top,
+          bottomGap: overlay.bottom - card.bottom,
+          contained: card.top >= overlay.top - 1 && card.bottom <= overlay.bottom + 1,
+        };
+        backdrop.hidden = true;
+        return result;
+      })()
+    `);
+    assert.equal(
+      transcriptionOverlayCentering.paddingTop,
+      '0px',
+      '转写设置弹层不得保留菜单栏高度的顶部留白'
+    );
+    assert.ok(
+      Math.abs(transcriptionOverlayCentering.topGap - transcriptionOverlayCentering.bottomGap) <= 1,
+      `转写设置卡片上下留白应相等，当前 ${transcriptionOverlayCentering.topGap} / ${transcriptionOverlayCentering.bottomGap}`
+    );
+    assert.equal(transcriptionOverlayCentering.contained, true, '面板变矮时卡片不得越界');
   } finally {
     if (window.webContents.debugger.isAttached()) window.webContents.debugger.detach();
     window.destroy();

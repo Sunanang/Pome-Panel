@@ -92,7 +92,8 @@
         <div class="shortcut-recorder" id="shortcut-recorder" tabindex="-1" hidden>
           <span>按下新的唤出快捷键</span>
           <kbd id="shortcut-recorder-value">等待输入…</kbd>
-          <small>可直接使用空格；其他按键建议搭配 ⌘ / ⌥ / ⌃ / ⇧</small>
+          <!-- 修饰符名称按平台填充（P2-3），Windows 上是 Ctrl / Alt / Shift / Win -->
+          <small id="shortcut-recorder-hint">可直接使用空格；其他按键建议搭配修饰键</small>
           <button id="shortcut-recorder-cancel" type="button">取消</button>
         </div>
 
@@ -737,6 +738,11 @@
                   <label class="settings-device-row settings-auto-launch-row">
                     <div><span>开机自动启动</span><strong>登录后自动运行 Pome Panel</strong></div>
                     <input id="settings-auto-launch" type="checkbox" aria-label="开机自动启动" />
+                    <i aria-hidden="true"></i>
+                  </label>
+                  <label class="settings-device-row settings-win-native-row" id="settings-win-native-row" hidden>
+                    <div><span>Windows 原生能力 · 实验功能</span><strong>开启后首页显示「当前窗口」，剪贴板可自动粘贴</strong></div>
+                    <input id="settings-win-native" type="checkbox" aria-label="Windows 原生能力" />
                     <i aria-hidden="true"></i>
                   </label>
                   <p class="settings-inline-note" id="settings-inline-note" role="status" aria-live="polite"></p>

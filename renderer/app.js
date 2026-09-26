@@ -785,6 +785,13 @@ notch.addEventListener('pointermove', async (event) => {
   const dy = event.clientY - notchPointerState.startY;
   if (!notchPointerState.dragging) {
     if (Math.hypot(dx, dy) < PANEL_DRAG_THRESHOLD_PX) return;
+    if (layoutMetrics?.dragEnabled === false) {
+      // W0-3：护栏期只取消这次手势。主进程返回 false 是不够的——清掉指针状态后，
+      // 随后的 click 会落进 setMode 分支，拖一下就误展开。
+      notchToggleFromPointer = true;
+      clearNotchPointerState();
+      return;
+    }
     notchPointerState.dragging = true;
     document.body.classList.add('panel-dragging');
     const started = await window.notchAPI.startPanelDrag().catch(() => false);
@@ -1008,9 +1015,6 @@ function applyLayoutMetrics(metrics) {
   if (metrics.stripHeight) {
     document.documentElement.style.setProperty('--notch-h', `${metrics.stripHeight}px`);
   }
-  if (metrics.menuBarHeight) {
-    document.documentElement.style.setProperty('--mb-h', `${metrics.menuBarHeight}px`);
-  }
   const edge = ['left', 'right', 'top', 'bottom'].includes(metrics.dockEdge)
     ? metrics.dockEdge
     : 'top';
@@ -1021,6 +1025,7 @@ function applyLayoutMetrics(metrics) {
   if (root) {
     root.setAttribute('data-dock', edge);
     root.setAttribute('data-dock-align', align);
+    root.setAttribute('data-drag-enabled', metrics.dragEnabled === false ? 'false' : 'true');
   }
   applyIslandClipVars(edge, align);
   if (metrics.collapsedWidth) {
@@ -1229,13 +1234,27 @@ function keyEventToAccelerator(event) {
   if (/^[a-z]$/i.test(key)) key = key.toUpperCase();
   if (!/^(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Space|Tab|Escape|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete|Enter)$/.test(key)) return '';
   const parts = [];
-  if (event.metaKey) parts.push('Command');
+  // metaKey 在 Mac 是 ⌘、在 Windows 是 Win 键，对应的 accelerator 名字不同（P2-3）。
+  if (event.metaKey) parts.push(readPlatformCapabilities().ui?.metaAccelerator || 'Command');
   if (event.ctrlKey) parts.push('Control');
   if (event.altKey) parts.push('Alt');
   if (event.shiftKey) parts.push('Shift');
   parts.push(key);
   return parts.join('+');
 }
+
+// 快捷键提示里的修饰符按平台写：Mac 是 ⌘ / ⌥ / ⌃ / ⇧，Windows 是 Ctrl / Alt / Shift / Win。
+function renderShortcutRecorderHint() {
+  const hint = document.getElementById('shortcut-recorder-hint');
+  if (!hint) return;
+  const modifiers = window.NotchPlatform.modifierHints(readPlatformCapabilities());
+  hint.textContent = `可直接使用空格；其他按键建议搭配 ${modifiers.join(' / ')}`;
+}
+
+const SHORTCUT_ERROR_TEXT = {
+  system_reserved: '该组合被系统占用',
+  occupied: '该快捷键已被占用',
+};
 
 shortcutRecorder?.addEventListener('keydown', async (event) => {
   if (!shortcutRecorderActive) return;
@@ -1254,13 +1273,16 @@ shortcutRecorder?.addEventListener('keydown', async (event) => {
     if (shortcutRecorderValue) shortcutRecorderValue.textContent = '单键仅支持空格';
     return;
   }
-  if (shortcutRecorderValue) shortcutRecorderValue.textContent = accelerator;
+  const display = window.NotchPlatform.formatAccelerator(accelerator, readPlatformCapabilities()) || accelerator;
+  if (shortcutRecorderValue) shortcutRecorderValue.textContent = display;
   const result = await window.notchAPI?.setPanelShortcut?.(accelerator).catch(() => ({ ok: false }));
   if (!result?.ok) {
-    if (shortcutRecorderValue) shortcutRecorderValue.textContent = result?.error === 'occupied' ? '该快捷键已被占用' : '无法使用该快捷键';
+    if (shortcutRecorderValue) {
+      shortcutRecorderValue.textContent = SHORTCUT_ERROR_TEXT[result?.error] || '无法使用该快捷键';
+    }
     return;
   }
-  showStatusToast(`快捷键已设为 ${accelerator}`);
+  showStatusToast(`快捷键已设为 ${display}`);
   setTimeout(closeShortcutRecorder, 420);
 });
 
@@ -1269,6 +1291,7 @@ function openShortcutRecorder() {
   if (!isExpanded) setMode(true);
   shortcutRecorderActive = true;
   shortcutRecorder.hidden = false;
+  renderShortcutRecorderHint();
   shortcutRecorderValue.textContent = '等待输入…';
   requestAnimationFrame(() => shortcutRecorder.focus({ preventScroll: true }));
 }
@@ -2991,8 +3014,21 @@ const HOME_SIZES_KEY = 'notch-home-widget-sizes-v2';
 const HOME_PLACEMENTS_KEY = 'notch-home-placements-v1';
 const HOME_HIDDEN_MODULES_KEY = 'notch-home-hidden-modules-v1';
 const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
-const unavailableHomeModules = window.NotchPlatform.capabilities(window.notchAPI?.platform || 'darwin').unavailableHomeModules;
+// 渲染层只读能力层（P0-1），不再自己判断平台。主进程通过 preload 下发 capabilities；
+// 拿不到时（例如没有 preload 的测试窗口）才用本地能力层按平台名补齐。
+function readPlatformCapabilities() {
+  const exposed = window.notchAPI?.capabilities;
+  if (exposed && Array.isArray(exposed.unavailableHomeModules)) return exposed;
+  return window.NotchPlatform.resolveCapabilities(exposed?.platform || window.notchAPI?.platform || 'darwin');
+}
+const unavailableHomeModules = [...readPlatformCapabilities().unavailableHomeModules];
 const effectiveHomeHidden = (hidden) => window.NotchPlatform.effectiveHiddenModules(hidden, HOME_MODULE_REGISTRY, unavailableHomeModules);
+// 运行期能力降级（Windows 原生模块加载失败 / 用户关闭开关）时重算首页可见模块。
+window.notchAPI?.onCapabilitiesChanged?.((capabilities) => {
+  if (!Array.isArray(capabilities?.unavailableHomeModules)) return;
+  unavailableHomeModules.splice(0, unavailableHomeModules.length, ...capabilities.unavailableHomeModules);
+  document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
+});
 const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'windows', 'recorder', 'mirror', 'note', 'commands'];
 const HOME_SIZE_DEFAULTS = {
   music: 'small',
@@ -4359,6 +4395,21 @@ function stopMirror() {
   mirrorStage?.removeAttribute('aria-busy');
 }
 
+// 被系统挡住时，除了说清楚还要给一条出路：Windows 上没有授权弹窗，
+// 用户必须自己去隐私设置里把「允许应用访问摄像头」打开（P3-2）。
+async function showMediaPermissionToast(kind) {
+  const prompt = await window.notchAPI?.getMediaAccessStatus?.(kind).catch(() => null);
+  if (!prompt) {
+    showStatusToast(kind === 'camera' ? '需要摄像头权限才能打开镜子' : '需要麦克风权限');
+    return;
+  }
+  showStatusToast(prompt.message, prompt.canOpenSettings ? {
+    actionLabel: prompt.actionLabel,
+    duration: 4200,
+    onAction: () => window.notchAPI?.openPrivacySettings?.(prompt.pane),
+  } : { duration: 4200 });
+}
+
 async function startMirror() {
   if (mirrorStarting || mirrorStream || !mirrorVideo) return;
   mirrorStarting = true;
@@ -4395,7 +4446,8 @@ async function startMirror() {
     const denied = error && (
       error.name === 'NotAllowedError' || error.message === 'camera_permission_denied'
     );
-    showStatusToast(denied ? '需要摄像头权限才能打开镜子' : '暂时无法打开摄像头');
+    if (denied) await showMediaPermissionToast('camera');
+    else showStatusToast('暂时无法打开摄像头');
   } finally {
     mirrorStarting = false;
     homeMirror?.classList.remove('camera-starting');
@@ -5018,7 +5070,10 @@ async function copyClipEntry(id) {
       ? '已填入刚才的输入框'
       : result.permissionRequired
         ? '请开启辅助功能权限；内容已复制'
-        : entry.type === 'image' ? '图片已复制，可直接粘贴' : '已复制，可直接粘贴');
+        // Windows：目标以管理员身份运行时 UIPI 会静默吞掉按键，只能请用户手动粘贴（P4-1）。
+        : result.reason === 'elevated'
+          ? '已复制；目标窗口以管理员身份运行，请手动粘贴'
+          : entry.type === 'image' ? '图片已复制，可直接粘贴' : '已复制，可直接粘贴');
   } catch (e) {
     showStatusToast('复制失败，请重试');
     return false;

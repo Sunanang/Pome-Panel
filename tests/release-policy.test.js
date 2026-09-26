@@ -100,6 +100,54 @@ test('macOS packaging declares the Electron 44 minimum and least-privilege runti
   assert.match(entitlements, /com\.apple\.security\.cs\.disable-library-validation/);
 });
 
+// P3-1：卸载后残留的 Run 值会让系统反复尝试拉起已被删掉的 exe。
+test('the NSIS uninstaller clears the auto-launch registry values, but not on upgrade', () => {
+  const installerPath = path.join(projectRoot, 'build', 'installer.nsh');
+  assert.ok(fs.existsSync(installerPath), 'electron-builder 从 buildResources 自动引入 build/installer.nsh');
+  const installer = fs.readFileSync(installerPath, 'utf8');
+  assert.match(installer, /!macro customUnInstall/);
+  // 升级安装时旧版卸载器也会跑，没有 isUpdated 保护就会抹掉用户的自启设置。
+  assert.match(installer, /\$\{ifNot\}\s+\$\{isUpdated\}/);
+  for (const key of [
+    'Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run',
+    'Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\StartupApproved\\\\Run',
+  ]) {
+    assert.match(installer, new RegExp(`DeleteRegValue HKCU "${key}" "${packageConfig.build.appId}"`));
+  }
+  // buildResources 目录下的文件由 electron-builder 自动识别，不该也不需要进 build.files。
+  assert.ok(!packageConfig.build.files.includes('build/installer.nsh'));
+});
+
+test('Windows reads the effective login-item state instead of just the Run key', () => {
+  const mainJs = fs.readFileSync(path.join(projectRoot, 'main.js'), 'utf8');
+  // openAtLogin 在用户于任务管理器里禁用后仍为 true，界面会显示"开"但实际不启动。
+  assert.match(mainJs, /executableWillLaunchAtLogin/);
+  // openAsHidden 已被 Electron 移除，不该再出现在 setLoginItemSettings 里。
+  assert.doesNotMatch(mainJs, /openAsHidden\s*:/);
+  // 首启判定必须先于任何写 app-settings.json 的代码，否则升级用户会被当成全新安装。
+  const whenReady = mainJs.slice(mainJs.indexOf('app.whenReady().then('));
+  assert.ok(
+    whenReady.indexOf('ensureFirstRunAutoLaunch()') < whenReady.indexOf('migrateWindowsLayoutSettings()'),
+    'ensureFirstRunAutoLaunch 必须排在写设置文件之前'
+  );
+});
+
+// P3-4：Windows 用户装完之后要能自己配通知钩子、跨过 SmartScreen、知道哪些事做不到。
+test('the README documents the Windows hooks, SmartScreen and known limits', () => {
+  const readme = fs.readFileSync(readmePath, 'utf8');
+  assert.match(readme, /%USERPROFILE%\\\.codex\\config\.toml/);
+  assert.match(readme, /%USERPROFILE%\\\.claude\\settings\.json/);
+  assert.match(readme, /%LOCALAPPDATA%\\Programs\\Pome Panel/);
+  assert.match(readme, /SmartScreen/);
+  assert.match(readme, /仍要运行/);
+  for (const limit of ['不签名', '虚拟桌面', '汽水音乐', 'arm64', '9px']) {
+    assert.match(readme, new RegExp(limit), `已知限制里缺少「${limit}」`);
+  }
+  // P1 之后 Windows 也能拖到四边，旧的"仍贴在工作区顶部居中"说明必须撤掉。
+  assert.doesNotMatch(readme, /Windows 仍贴在工作区顶部居中/);
+  assert.doesNotMatch(readme, /Windows 的折叠态是工作区顶部居中的 200×38/);
+});
+
 test('website download entry points stay on the latest release', () => {
   const readme = fs.readFileSync(readmePath, 'utf8');
   const websiteDownload = fs.readFileSync(websiteDownloadPath, 'utf8');

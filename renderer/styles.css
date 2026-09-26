@@ -59,7 +59,6 @@
 
   /* ============ 布局结构（与主进程 EXPANDED_CHROME_Y 对应） ============ */
   --topbar-h: 40px; /* 顶栏一行：搜索 + tabs + 收起 */
-  --mb-h: 34px; /* 菜单栏高度兜底值，启动时由 window:metrics 覆写 */
   --note-toolbar-h: 28px;
   --note-tool-size: 26px;
   --note-icon-size: 14px;
@@ -78,10 +77,18 @@
   --s-5: 20px;
   --s-6: 24px;
 
-  /* ============ 字体 ============ */
-  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'SF Pro Display', 'SF Pro Text',
-    'PingFang SC', sans-serif;
-  --font-mono: 'SF Mono', ui-monospace, monospace;
+  /* ============ 字体（P2-1） ============ */
+  /* 栈首固定 -apple-system，Mac 的解析结果与改造前完全一致；Windows 顺着往下落到
+     Segoe UI Variable（Win11）→ Segoe UI（Win10）→ 微软雅黑（中文）。
+     字体名只允许出现在这几个 token 里，组件规则一律用 var()。 */
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable Display',
+    'Segoe UI', 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', sans-serif;
+  --font-text: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text',
+    'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --font: var(--font-text);
+  --font-mono: 'SF Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* 大号数字的字距：SF 紧排在微软雅黑下会粘连，Windows 放松到 -.02em（见文件末尾平台覆盖） */
+  --digits-tracking: -.065em;
   --fs-micro: 9px;
   --fs-caption: 10.5px;
   --fs-small: 11px;
@@ -245,6 +252,10 @@ body {
 /* 收起条可拖动：抓取光标；拖动中禁止选中 */
 #app.collapsed .notch {
   cursor: grab;
+}
+/* W0-3：护栏期（Windows）不能拖动，光标退回普通点击 */
+#app.collapsed[data-drag-enabled="false"] .notch {
+  cursor: pointer;
 }
 body.panel-dragging,
 body.panel-dragging #app.collapsed .notch {
@@ -2182,7 +2193,6 @@ body.panel-dragging #app.collapsed .notch {
   z-index: 20;
   display: grid;
   place-items: center;
-  padding-top: var(--mb-h);
   background: rgba(0, 0, 0, 0.68);
   backdrop-filter: blur(10px);
 }
@@ -2549,6 +2559,22 @@ body.panel-dragging #app.collapsed .notch {
 .window-permission-open:hover { background: var(--surface-2); color: var(--text-1); }
 .window-permission-open:active { transform: scale(.94); }
 
+/* 麦克风被系统挡住时，速记里那行提示后面跟一颗跳转按钮（P3-2）。
+   .home-transcript 是 -webkit-box 行夹断，按钮必须留在行内流里。 */
+.transcript-permission-open {
+  display: inline-block;
+  margin-left: var(--s-1);
+  padding: 1px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  background: var(--surface-1);
+  color: var(--text-2);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+  transition: background var(--d-fast) var(--ease-out);
+}
+.transcript-permission-open:hover { background: var(--surface-2); color: var(--text-1); }
+
 .command-add,
 .group-link-add,
 .link-title-edit,
@@ -2886,6 +2912,15 @@ body.panel-dragging #app.collapsed .notch {
   opacity: 0;
   transition-duration: var(--d-island-shell-fade);
   transition-delay: 0ms;
+}
+
+/* W0-1：收起态窗口只有胶囊大小，面板的彩虹描边与玻璃外壳一律不可见。
+   少了这条护栏，任何更高优先级的主题规则（如液态玻璃）都会把描边画成
+   一圈围着胶囊的半透明框，在 Windows 上还会连带挡住下方窗口的点击。 */
+#app.collapsed .panel::before,
+#app.collapsed .panel::after {
+  opacity: 0;
+  transition: none;
 }
 
 .panel > .topbar,
@@ -4022,19 +4057,19 @@ body.panel-dragging #app.collapsed .notch {
 .settings-feature-grid b { color: var(--text-2); font-size: 11px; font-weight: 600; }
 .settings-feature-grid small { color: var(--text-4); font-size: 8px; }
 .settings-feature-grid input,
-.settings-auto-launch-row input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+:is(.settings-auto-launch-row,.settings-win-native-row) input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .settings-feature-grid i,
-.settings-auto-launch-row > i { position: relative; flex: 0 0 32px; width: 32px; height: 18px; border-radius: var(--r-pill); background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); transition: background var(--d-fast) var(--ease), box-shadow var(--d-fast) var(--ease); }
+:is(.settings-auto-launch-row,.settings-win-native-row) > i { position: relative; flex: 0 0 32px; width: 32px; height: 18px; border-radius: var(--r-pill); background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); transition: background var(--d-fast) var(--ease), box-shadow var(--d-fast) var(--ease); }
 .settings-feature-grid i::after,
-.settings-auto-launch-row > i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: #8c8c91; transition: transform var(--d-fast) var(--ease-spring), background var(--d-fast) var(--ease); }
+:is(.settings-auto-launch-row,.settings-win-native-row) > i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: #8c8c91; transition: transform var(--d-fast) var(--ease-spring), background var(--d-fast) var(--ease); }
 .settings-feature-grid input:checked + i,
-.settings-auto-launch-row input:checked + i { background: rgba(67,140,255,.42); box-shadow: inset 0 0 0 1px rgba(115,166,255,.44), 0 0 16px rgba(67,140,255,.12); }
+:is(.settings-auto-launch-row,.settings-win-native-row) input:checked + i { background: rgba(67,140,255,.42); box-shadow: inset 0 0 0 1px rgba(115,166,255,.44), 0 0 16px rgba(67,140,255,.12); }
 .settings-feature-grid input:checked + i::after,
-.settings-auto-launch-row input:checked + i::after { transform: translateX(14px); background: #f5f7ff; }
+:is(.settings-auto-launch-row,.settings-win-native-row) input:checked + i::after { transform: translateX(14px); background: #f5f7ff; }
 .settings-feature-grid input:focus-visible + i,
-.settings-auto-launch-row input:focus-visible + i { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+:is(.settings-auto-launch-row,.settings-win-native-row) input:focus-visible + i { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .settings-feature-grid input:disabled + i,
-.settings-auto-launch-row input:disabled + i { opacity: .45; }
+:is(.settings-auto-launch-row,.settings-win-native-row) input:disabled + i { opacity: .45; }
 
 .settings-mirror-card { display: grid; grid-template-columns: 154px minmax(0,1fr); align-items: center; gap: 18px; }
 .settings-mirror-card img { width: 154px; height: 154px; border-radius: 16px; object-fit: cover; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 12px 32px rgba(0,0,0,.28); }
@@ -4069,7 +4104,7 @@ body.panel-dragging #app.collapsed .notch {
 .settings-workspace-row > div { flex: 1 1 auto; }
 .settings-workspace-path { max-width: 290px; }
 .settings-device-actions { flex: 0 0 auto; display: flex; gap: 6px; }
-.settings-auto-launch-row { position: relative; cursor: pointer; border-bottom: 0; }
+:is(.settings-auto-launch-row,.settings-win-native-row) { position: relative; cursor: pointer; border-bottom: 0; }
 .settings-inline-note { min-height: 14px; margin-top: auto !important; padding-top: 6px; color: #65d9a1 !important; }
 .settings-inline-note.error { color: #ff746d !important; }
 
@@ -4712,9 +4747,9 @@ body.panel-dragging #app.collapsed .notch {
 }
 .home-pomodoro .pomodoro-dial span {
   color: #fff;
-  font: 650 clamp(28px, 6.2vh, 62px)/.92 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  font: 650 clamp(28px, 6.2vh, 62px)/.92 var(--font-display);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -.06em;
+  letter-spacing: var(--digits-tracking);
 }
 .home-pomodoro .pomodoro-dial input {
   width: 1.42em;
@@ -4724,9 +4759,9 @@ body.panel-dragging #app.collapsed .notch {
   outline: none;
   background: transparent;
   color: #fff;
-  font: 650 clamp(28px, 6.2vh, 62px)/.92 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  font: 650 clamp(28px, 6.2vh, 62px)/.92 var(--font-display);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -.06em;
+  letter-spacing: var(--digits-tracking);
   text-align: center;
   appearance: textfield;
   cursor: ns-resize;
@@ -4998,12 +5033,12 @@ body.panel-dragging #app.collapsed .notch {
 .home-pomodoro .pomodoro-dial span,
 .home-pomodoro .pomodoro-dial input {
   color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(46px, 10.5vh, 72px);
   font-weight: 650;
   line-height: .88;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -.065em;
+  letter-spacing: var(--digits-tracking);
 }
 .home-pomodoro .pomodoro-dial input {
   width: 1.4em;
@@ -5012,7 +5047,7 @@ body.panel-dragging #app.collapsed .notch {
 }
 .pomodoro-caption {
   color: rgba(255,255,255,.42);
-  font: 520 clamp(11px, 2vh, 16px)/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font: 520 clamp(11px, 2vh, 16px)/1 var(--font-text);
   letter-spacing: -.02em;
 }
 .home-pomodoro > .pomodoro-toggle,
@@ -6268,10 +6303,6 @@ html[data-liquid-glass='1'] .panel::before {
   backdrop-filter: blur(28px) saturate(1.45);
 }
 
-html[data-liquid-glass='1'] .panel::after {
-  opacity: 0.22;
-}
-
 html[data-liquid-glass='1'] .notch {
   background: rgba(18, 18, 22, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -6995,4 +7026,61 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   .settings-nas-http-toggle i::after {
     transition: none;
   }
+}
+
+/* ============ Windows 平台覆盖（§2.4） ============ */
+/* 只允许覆盖 token；唯一的组件级例外是滚动条（D14）。 */
+html[data-platform="win32"] {
+  /* 微软雅黑的数字比 SF 宽，SF 的紧排会让番茄钟数字粘连 */
+  --digits-tracking: -.02em;
+  /* P2-5：9px / 10.5px 是按 Retina 调的，微软雅黑在 100%–125% 下会糊成一团，各加半级 */
+  --fs-micro: 10px;
+  --fs-caption: 11px;
+}
+
+/* Windows 的系统滚动条是常驻粗条，没写过样式的列表（链接分组、录音库、笔记库、
+   密钥列表、设置页等）会直接露出来。macOS 的 Chromium 相反：一旦定义
+   ::-webkit-scrollbar 就不再用系统浮层滚动条，改成常驻自绘，所以整组规则
+   只挂在 html[data-platform="win32"] 下，Mac 一行不改。 */
+html[data-platform="win32"] *::-webkit-scrollbar {
+  width: var(--scrollbar-w);
+  height: var(--scrollbar-w);
+}
+
+html[data-platform="win32"] *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html[data-platform="win32"] *::-webkit-scrollbar-thumb {
+  border-radius: var(--r-pill);
+  background: var(--scrollbar-thumb);
+}
+
+html[data-platform="win32"] *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+html[data-platform="win32"] *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 这几处设过标准属性 scrollbar-width/scrollbar-color，Chromium 121+ 会因此
+   忽略上面的 webkit 规则；在 Windows 上还原成 auto，让细轨生效。 */
+html[data-platform="win32"] :is(
+  .window-list,
+  .command-list,
+  .settings-column-primary,
+  .settings-column-secondary
+) {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+/* 笔记工具条本就要求完全无滚动条，scrollbar-width:none 被上面还原后要补回来 */
+html[data-platform="win32"] .note-format-actions {
+  scrollbar-width: none;
+}
+
+html[data-platform="win32"] .note-format-actions::-webkit-scrollbar {
+  display: none;
 }

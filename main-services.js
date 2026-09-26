@@ -175,8 +175,14 @@ function recordingExtension(mimeType) {
   return 'webm';
 }
 
-function normalizeWindowRows(rows) {
+// platform 决定什么算"应用可执行文件"：Mac 是 .app 包，Windows 是 .exe 绝对路径
+// （P4-2）。路径判定必须按目标平台的规则走，否则在 Mac 上跑单测时 C:\… 会被当成相对路径。
+function normalizeWindowRows(rows, platform = 'darwin') {
   if (!Array.isArray(rows)) return [];
+  const windows = platform === 'win32';
+  const isAppPath = (value) => (windows
+    ? path.win32.isAbsolute(value) && /\.exe$/i.test(value)
+    : path.posix.isAbsolute(value) && value.endsWith('.app'));
   return rows
     .map((row, order) => {
       const pid = Math.max(0, Math.round(Number(row && row.pid) || 0));
@@ -185,7 +191,8 @@ function normalizeWindowRows(rows) {
       const appName = String(row && row.appName || '').trim();
       const title = String(row && row.title || '').replace(/\s+/g, ' ').trim();
       const candidatePath = String(row && row.appPath || '').trim();
-      const appPath = path.isAbsolute(candidatePath) && candidatePath.endsWith('.app') ? candidatePath : '';
+      const appPath = isAppPath(candidatePath) ? candidatePath : '';
+      const handle = /^\d+$/.test(String(row && row.handle || '')) ? String(row.handle) : '';
       if (!pid || !appName || !title) return null;
       return {
         id: windowNumber ? `window-${pid}-${windowNumber}` : `window-${pid}-${windowIndex}-${order}`,
@@ -195,6 +202,7 @@ function normalizeWindowRows(rows) {
         appName,
         appPath,
         title: title.slice(0, 240),
+        ...(handle ? { handle } : {}),
       };
     })
     .filter(Boolean)
@@ -202,9 +210,74 @@ function normalizeWindowRows(rows) {
     // 首条就是最靠前的那个。实测微信只开一个窗口却会返回两条同名记录（窗口号不同），
     // 界面上就成了两个「微信」。而聚焦是按标题匹配的，重复条目永远指向同一个窗口，
     // 留着也点不出第二个结果。标题不同的多窗口（如 VS Code 各工作区）不受影响。
-    .filter((item, index, list) => list.findIndex(
-      (other) => other.pid === item.pid && other.title === item.title
-    ) === index);
+    // Windows 反过来：聚焦按 HWND，同标题的两个资源管理器窗口是两个真窗口，
+    // 只能按句柄去重。
+    .filter((item, index, list) => (item.handle
+      ? list.findIndex((other) => other.handle === item.handle) === index
+      : list.findIndex(
+        (other) => !other.handle && other.pid === item.pid && other.title === item.title
+      ) === index));
+}
+
+// ============ Windows 原生能力的纯函数（P4-1） ============
+// D16 杀软关卡尚未跑（Defender / 火绒 / 360 首轮测试未做），所以 0.11.0 默认关闭，
+// 由用户在设置页「实验功能」里手动开启。关卡通过后把这里改成 true 即可。
+const WIN_NATIVE_DEFAULT = false;
+
+// 前台窗口跟踪：只记住"不是自己"的前台窗口。点击胶囊展开时 Windows 会先激活 Pome
+// 自己的窗口，等到 window:set-mode 再问前台就只剩自己了，必须靠收起态跟踪值兜底。
+function updateForegroundTracking(state, sample, selfPid) {
+  const previous = state && typeof state === 'object' ? state : {};
+  const kept = {
+    handle: /^\d+$/.test(String(previous.handle || '')) && previous.handle !== '0'
+      ? String(previous.handle)
+      : null,
+    pid: Math.max(0, Math.round(Number(previous.pid) || 0)),
+  };
+  const handle = /^\d+$/.test(String(sample && sample.handle || '')) && String(sample.handle) !== '0'
+    ? String(sample.handle)
+    : null;
+  const pid = Math.max(0, Math.round(Number(sample && sample.pid) || 0));
+  const self = Math.max(0, Math.round(Number(selfPid) || 0));
+  if (!handle || !pid || pid === self) return kept;
+  return { handle, pid };
+}
+
+// 快捷键路径在 mainWindow.focus() 之前捕获，当前前台就是目标；点击路径前台已是自己，
+// 只能用跟踪值。两者都不可用（刚开机、跟踪没跑过）时返回 null，退化为"已复制"。
+function chooseForegroundPasteTarget(input = {}) {
+  const self = Math.max(0, Math.round(Number(input.selfPid) || 0));
+  const usable = (candidate) => {
+    const handle = /^\d+$/.test(String(candidate && candidate.handle || '')) && String(candidate.handle) !== '0'
+      ? String(candidate.handle)
+      : null;
+    const pid = Math.max(0, Math.round(Number(candidate && candidate.pid) || 0));
+    if (!handle || !pid || pid === self) return null;
+    return { handle, pid };
+  };
+  return usable(input.foreground) || usable(input.tracked) || null;
+}
+
+// UIPI 预检：SendInput 被完整性级别拦下时既不返回错误也不设置 LastError，事后无法判断，
+// 只能在发送前比较。目标级别读不到（令牌打不开）一律按提权处理——宁可提示手动粘贴，
+// 也不静默把按键丢掉。自身级别读不到时按普通用户进程（MEDIUM）比较，避免一次读取失败
+// 就把功能整体废掉。
+const WIN_INTEGRITY_MEDIUM_RID = 0x2000; // SECURITY_MANDATORY_MEDIUM_RID
+
+function integrityPasteDecision(targetRid, selfRid) {
+  const target = Number(targetRid);
+  if (!Number.isFinite(target) || target <= 0) return 'elevated';
+  const self = Number(selfRid);
+  const reference = Number.isFinite(self) && self > 0 ? self : WIN_INTEGRITY_MEDIUM_RID;
+  return target > reference ? 'elevated' : 'allowed';
+}
+
+// adapter.paste.pasteTo 的返回值 → clipboard:paste 的 IPC 形状。写回系统剪贴板已经成功，
+// 所以 ok 恒为 true；粘贴没发生时把原因带给渲染层用于提示。
+function pasteResultToIpc(result) {
+  const reason = String(result || '').trim();
+  if (reason === 'pasted') return { ok: true, pasted: true };
+  return { ok: true, pasted: false, reason: reason || 'unknown' };
 }
 
 function todoReminderState(todo, now = Date.now(), leadMs = 60 * 60 * 1000) {
@@ -440,6 +513,43 @@ function taskNotificationWindowPolicy(state) {
   const active = Boolean(state && state.active);
   const queueLength = Math.max(0, Number(state && state.queueLength) || 0);
   return !active && queueLength === 0 ? 'dispose' : 'retain';
+}
+
+// 统一布局的版本号：Windows 从旧的"固定顶部居中、忽略保存位置"迁移过来时用它做一次性标记。
+const LAYOUT_VERSION = 2;
+
+// readAppSettings 只返回白名单字段，而 writePanelPosition 等路径是 read-modify-write：
+// 没进白名单的键会在下一次写入时被丢掉，于是每次启动都会重复迁移一次。
+function appSettingsLayoutPreferences(stored) {
+  const source = stored && typeof stored === 'object' ? stored : {};
+  const version = source.layoutVersion;
+  return {
+    layoutVersion: Number.isInteger(version) && version > 0 ? version : 0,
+    legacyWinLayout: source.legacyWinLayout === true,
+    // 只认布尔值：没存过时用 WIN_NATIVE_DEFAULT（D16 关卡未过 → false）。
+    winNative: typeof source.winNative === 'boolean' ? source.winNative : WIN_NATIVE_DEFAULT,
+  };
+}
+
+// Windows 老用户可能保存过"被忽略的" panelPosition（W0 护栏期只忽略、不清理）。
+// 接入统一布局后清空一次，避免胶囊直接出现在侧边的半截位置上。
+function windowsLayoutMigration(platform, settings) {
+  const current = settings && typeof settings === 'object' ? settings : {};
+  if (platform !== 'win32') return null;
+  if (appSettingsLayoutPreferences(current).layoutVersion === LAYOUT_VERSION) return null;
+  return { ...current, panelPosition: null, layoutVersion: LAYOUT_VERSION };
+}
+
+// P3-1（D13）：首启标记缺失 ≠ 全新安装。Windows 在 0.10.0 之前从未写过
+// .first-run-done，直接当首次运行会把所有升级用户的自启强行打开，覆盖他们在
+// 托盘里的选择。只要 userData 里已经有本应用自己写的数据文件，就判为升级用户、
+// 只补写标记。不能用"userData 目录是否为空"判断：Chromium 在 whenReady 之前
+// 就会写 Local State 等文件，所以调用点也必须早于任何写入这些文件的代码。
+function firstRunAutoLaunchPlan(input = {}) {
+  if (input.supported !== true) return { enableAutoLaunch: false, writeMarker: false, reason: 'unsupported' };
+  if (input.markerExists === true) return { enableAutoLaunch: false, writeMarker: false, reason: 'already_marked' };
+  if (input.hasExistingUserData === true) return { enableAutoLaunch: false, writeMarker: true, reason: 'upgrade' };
+  return { enableAutoLaunch: true, writeMarker: true, reason: 'fresh_install' };
 }
 
 function reduceClipboardObservation(state, observation, options = {}) {
@@ -863,6 +973,15 @@ module.exports = {
   readClipboardObservation,
   screenRecordingProbePolicy,
   taskNotificationWindowPolicy,
+  LAYOUT_VERSION,
+  appSettingsLayoutPreferences,
+  WIN_NATIVE_DEFAULT,
+  updateForegroundTracking,
+  chooseForegroundPasteTarget,
+  integrityPasteDecision,
+  pasteResultToIpc,
+  windowsLayoutMigration,
+  firstRunAutoLaunchPlan,
   reduceClipboardObservation,
   createForegroundMediaPermissionCoordinator,
   createWorkspacePersistenceGate,

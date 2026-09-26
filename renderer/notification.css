@@ -26,9 +26,9 @@
   --color-success: #30d978;
   --color-focus: rgba(255, 255, 255, 0.22);
 
-  /* 字体 */
+  /* 字体（P2-1）：与主窗口同一条回退链，Windows 落到 Segoe UI Variable → Segoe UI → 微软雅黑 */
   --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
-    'PingFang SC', sans-serif;
+    'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
   --font-size-title: 13.5px;
   --font-size-detail: 11px;
   --font-size-meta: 10.5px;

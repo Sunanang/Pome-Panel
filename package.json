@@ -1,6 +1,6 @@
 {
   "name": "pome-panel",
-  "version": "0.9.13",
+  "version": "0.11.0",
   "description": "Pome Panel - a local desktop workspace for macOS and Windows",
   "main": "main.js",
   "author": "Lando",
@@ -19,7 +19,8 @@
     "build": "electron-builder --mac dmg --publish never",
     "build:win": "electron-builder --win nsis --x64 --publish never",
     "build:zip": "electron-builder --mac zip",
-    "pack": "electron-builder --dir"
+    "pack": "electron-builder --dir",
+    "make-ico": "node scripts/make-ico.js"
   },
   "devDependencies": {
     "electron": "^44.0.0",
@@ -41,6 +42,7 @@
       "main-services.js",
       "cursor-usage.js",
       "platform.js",
+      "platform-adapters/**/*",
       "preload.js",
       "sqliteProbe.js",
       "sync-store.js",
@@ -58,12 +60,17 @@
       "!**/node_modules/.bin",
       "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
       "build/pome-panel-icon.png",
+      "build/pome-panel-icon.ico",
       "build/pome-panel-icon.icns",
       "build/pome-trayTemplate.png",
       "build/pome-trayTemplate@2x.png"
     ],
     "mac": {
       "icon": "build/pome-panel-icon.icns",
+      "files": [
+        "!node_modules/koffi/**",
+        "!node_modules/@koromix/**"
+      ],
       "category": "public.app-category.productivity",
       "minimumSystemVersion": "13.0",
       "target": [
@@ -89,7 +96,7 @@
       }
     },
     "win": {
-      "icon": "build/pome-panel-icon.png",
+      "icon": "build/pome-panel-icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -132,6 +139,7 @@
     }
   },
   "dependencies": {
+    "koffi": "~3.3.0",
     "ws": "^8.21.3"
   }
 }

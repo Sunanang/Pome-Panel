@@ -7,8 +7,54 @@ function subscribe(channel, handler) {
   return () => ipcRenderer.removeListener(channel, handler);
 }
 
+// 能力层下发（P0-1 / §2.3）：主窗口与通知窗口共用本文件，主进程用
+// webPreferences.additionalArguments 传 --pome-caps=<base64 JSON>。
+// 沙箱 preload 不能 require 本地模块，所以这里只解析、不重新计算。
+const CAPABILITIES_ARGUMENT_PREFIX = '--pome-caps=';
+
+function decodeBase64Json(value) {
+  let json;
+  if (typeof Buffer !== 'undefined') {
+    json = Buffer.from(value, 'base64').toString('utf8');
+  } else {
+    const binary = atob(value);
+    json = new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+  }
+  const parsed = JSON.parse(json);
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object') return value;
+  Object.values(value).forEach(deepFreeze);
+  return Object.freeze(value);
+}
+
+function readCapabilities() {
+  const argument = (process.argv || []).find(
+    (item) => typeof item === 'string' && item.startsWith(CAPABILITIES_ARGUMENT_PREFIX)
+  );
+  if (argument) {
+    try {
+      const parsed = decodeBase64Json(argument.slice(CAPABILITIES_ARGUMENT_PREFIX.length));
+      if (parsed && typeof parsed.platform === 'string') return deepFreeze(parsed);
+    } catch (error) {
+      // 解析失败时退到只带平台名的兜底，渲染层自己用 NotchPlatform 补齐。
+    }
+  }
+  return deepFreeze({ platform: process.platform });
+}
+
 contextBridge.exposeInMainWorld('notchAPI', {
+  // platform 保留一个版本给尚未迁移到 capabilities 的调用方。
   platform: process.platform,
+  // additionalArguments 只在创建窗口时生效，运行期的能力变化走 capabilities:changed。
+  capabilities: readCapabilities(),
+  onCapabilitiesChanged: (cb) =>
+    subscribe('capabilities:changed', (event, next) => {
+      if (!next || typeof next !== 'object' || typeof next.platform !== 'string') return;
+      cb(deepFreeze(next));
+    }),
   setMode: (mode) => ipcRenderer.invoke('window:set-mode', mode),
   beginCollapse: () => ipcRenderer.invoke('window:begin-collapse'),
   startPanelDrag: () => ipcRenderer.invoke('window:panel-drag-start'),
@@ -19,6 +65,8 @@ contextBridge.exposeInMainWorld('notchAPI', {
   setTab: (tab) => ipcRenderer.invoke('window:set-tab', tab),
   ensureCamera: () => ipcRenderer.invoke('media:camera'),
   ensureMicrophone: () => ipcRenderer.invoke('media:microphone'),
+  // 只读状态 + 按平台算好的提示文案；ensure* 仍返回布尔，契约不变（P3-2）。
+  getMediaAccessStatus: (mediaType) => ipcRenderer.invoke('media:access-status', mediaType),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
   openPrivacySettings: (pane) => ipcRenderer.invoke('shell:open-privacy-settings', pane),
@@ -57,6 +105,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   getAppSettings: () => ipcRenderer.invoke('settings:get'),
   setFeature: (featureId, enabled) => ipcRenderer.invoke('settings:set-feature', { featureId, enabled }),
   setDefaultTab: (tab) => ipcRenderer.invoke('settings:set-default-tab', tab),
+  setWinNative: (enabled) => ipcRenderer.invoke('settings:set-win-native', enabled === true),
   setAutoLaunch: (enabled) => ipcRenderer.invoke('settings:set-auto-launch', enabled === true),
   setPanelShortcut: (accelerator) => ipcRenderer.invoke('settings:set-shortcut', accelerator),
   onAppSettingsChanged: (cb) => subscribe('settings:changed', (event, settings) => cb(settings)),

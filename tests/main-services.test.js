@@ -7,6 +7,12 @@ const {
   extractFaviconHref,
   recordingExtension,
   normalizeWindowRows,
+  appSettingsLayoutPreferences,
+  WIN_NATIVE_DEFAULT,
+  updateForegroundTracking,
+  chooseForegroundPasteTarget,
+  integrityPasteDecision,
+  pasteResultToIpc,
   todoReminderState,
   todoReminderTimerDelay,
   taskNotificationIdentity,
@@ -31,7 +37,32 @@ const {
   hoverSpacePollingPolicy,
   reduceClipboardObservation,
   createForegroundMediaPermissionCoordinator,
+  firstRunAutoLaunchPlan,
 } = require('../main-services');
+
+// P3-1（D13）：Windows 在 0.10.0 之前从未写过 .first-run-done，
+// 把"标记缺失"直接当首次运行会强行打开所有升级用户的自启。
+test('first-run auto-launch only fires for a genuinely fresh install', () => {
+  assert.deepEqual(
+    firstRunAutoLaunchPlan({ supported: true, markerExists: false, hasExistingUserData: false }),
+    { enableAutoLaunch: true, writeMarker: true, reason: 'fresh_install' }
+  );
+  // 升级用户：补写标记，但不碰他们在托盘里选过的自启状态。
+  assert.deepEqual(
+    firstRunAutoLaunchPlan({ supported: true, markerExists: false, hasExistingUserData: true }),
+    { enableAutoLaunch: false, writeMarker: true, reason: 'upgrade' }
+  );
+  assert.deepEqual(
+    firstRunAutoLaunchPlan({ supported: true, markerExists: true, hasExistingUserData: false }),
+    { enableAutoLaunch: false, writeMarker: false, reason: 'already_marked' }
+  );
+  // 不支持自启的平台连标记都不该写，否则以后支持了就再也不会走首启逻辑。
+  assert.deepEqual(
+    firstRunAutoLaunchPlan({ supported: false, markerExists: false, hasExistingUserData: false }),
+    { enableAutoLaunch: false, writeMarker: false, reason: 'unsupported' }
+  );
+  assert.equal(firstRunAutoLaunchPlan().reason, 'unsupported');
+});
 
 test('media permission prompts temporarily leave the screen-saver window layer', async () => {
   const events = [];
@@ -259,6 +290,92 @@ test('normalizeWindowRows keeps all named CGWindow entries with stable window id
     'window-10-502',
     'window-10-503',
   ]);
+});
+
+// P4-2：Windows 的"应用可执行文件"是 .exe 绝对路径，判定必须按 win32 规则走，
+// 否则在 Mac 上跑单测时 C:\… 会被当成相对路径而被丢掉。
+test('normalizeWindowRows accepts .exe paths and dedupes by HWND on win32', () => {
+  const rows = normalizeWindowRows([
+    { pid: 900, appName: 'Code', title: 'alpha - Visual Studio Code', windowNumber: 131072, handle: '131072', appPath: 'C:\\Program Files\\Microsoft VS Code\\Code.exe' },
+    { pid: 901, appName: 'explorer', title: '下载', windowNumber: 66000, handle: '66000', appPath: 'C:\\Windows\\explorer.exe' },
+    // 同 pid 同标题的两个资源管理器窗口在 Windows 上是两个真窗口（HWND 不同），
+    // 按 HWND 聚焦都点得到，不能像 Mac 那样按标题合并。
+    { pid: 901, appName: 'explorer', title: '下载', windowNumber: 66001, handle: '66001', appPath: 'C:\\Windows\\explorer.exe' },
+    { pid: 901, appName: 'explorer', title: '下载', windowNumber: 66001, handle: '66001', appPath: 'C:\\Windows\\explorer.exe' },
+  ], 'win32');
+  assert.deepEqual(rows.map((row) => row.handle), ['131072', '66000', '66001']);
+  assert.equal(rows[0].appPath, 'C:\\Program Files\\Microsoft VS Code\\Code.exe');
+  assert.equal(rows[0].id, 'window-900-131072');
+
+  // Mac 的规则一行不变：.exe 不是 .app，路径要被丢掉，同 pid 同标题仍然合并。
+  const mac = normalizeWindowRows([
+    { pid: 900, appName: 'Code', title: 'alpha', windowNumber: 1, appPath: 'C:\\Windows\\explorer.exe' },
+  ]);
+  assert.equal(mac[0].appPath, '');
+  assert.equal(mac[0].handle, undefined);
+});
+
+test('foreground tracking only remembers windows that are not our own', () => {
+  const start = { handle: null, pid: 0 };
+  // 收起态跟踪到记事本。
+  const notepad = updateForegroundTracking(start, { handle: '4242', pid: 77 }, 9);
+  assert.deepEqual(notepad, { handle: '4242', pid: 77 });
+  // 点击胶囊后前台变成 Pome 自己：跟踪值必须保持记事本，否则粘贴目标就丢了。
+  assert.deepEqual(updateForegroundTracking(notepad, { handle: '9001', pid: 9 }, 9), notepad);
+  // 桌面切换等场景下 GetForegroundWindow 返回 0：同样保持上一个有效值。
+  assert.deepEqual(updateForegroundTracking(notepad, null, 9), notepad);
+  assert.deepEqual(updateForegroundTracking(notepad, { handle: '0', pid: 77 }, 9), notepad);
+});
+
+test('paste target prefers the live foreground and falls back to the tracked window', () => {
+  // 快捷键路径：捕获发生在 mainWindow.focus() 之前，当前前台就是目标。
+  assert.deepEqual(chooseForegroundPasteTarget({
+    foreground: { handle: '10', pid: 77 },
+    tracked: { handle: '20', pid: 88 },
+    selfPid: 9,
+  }), { handle: '10', pid: 77 });
+  // 点击胶囊路径：前台已是自己，退回跟踪值。
+  assert.deepEqual(chooseForegroundPasteTarget({
+    foreground: { handle: '10', pid: 9 },
+    tracked: { handle: '20', pid: 88 },
+    selfPid: 9,
+  }), { handle: '20', pid: 88 });
+  assert.equal(chooseForegroundPasteTarget({
+    foreground: { handle: '10', pid: 9 },
+    tracked: { handle: null, pid: 0 },
+    selfPid: 9,
+  }), null);
+  assert.equal(chooseForegroundPasteTarget({ selfPid: 9 }), null);
+});
+
+test('integrity pre-check blocks elevated targets and unreadable tokens', () => {
+  const MEDIUM = 0x2000;
+  const HIGH = 0x3000;
+  const LOW = 0x1000;
+  assert.equal(integrityPasteDecision(MEDIUM, MEDIUM), 'allowed');
+  assert.equal(integrityPasteDecision(LOW, MEDIUM), 'allowed');
+  assert.equal(integrityPasteDecision(HIGH, MEDIUM), 'elevated');
+  // 令牌打不开（返回 null）时按提权处理：SendInput 被 UIPI 拦下不会报错，只能预防。
+  assert.equal(integrityPasteDecision(null, MEDIUM), 'elevated');
+  assert.equal(integrityPasteDecision(0, MEDIUM), 'elevated');
+  // 自身级别读不到时按普通用户进程比较，一次读取失败不该把功能整体废掉。
+  assert.equal(integrityPasteDecision(MEDIUM, null), 'allowed');
+  assert.equal(integrityPasteDecision(HIGH, null), 'elevated');
+});
+
+test('pasteResultToIpc keeps the clipboard write successful and reports why paste failed', () => {
+  assert.deepEqual(pasteResultToIpc('pasted'), { ok: true, pasted: true });
+  assert.deepEqual(pasteResultToIpc('elevated'), { ok: true, pasted: false, reason: 'elevated' });
+  assert.deepEqual(pasteResultToIpc('target_gone'), { ok: true, pasted: false, reason: 'target_gone' });
+  assert.deepEqual(pasteResultToIpc('focus_failed'), { ok: true, pasted: false, reason: 'focus_failed' });
+  assert.deepEqual(pasteResultToIpc(undefined), { ok: true, pasted: false, reason: 'unknown' });
+});
+
+test('WIN_NATIVE_DEFAULT stays off until the antivirus gate (D16) passes', () => {
+  assert.equal(WIN_NATIVE_DEFAULT, false);
+  assert.equal(appSettingsLayoutPreferences({}).winNative, WIN_NATIVE_DEFAULT);
+  assert.equal(appSettingsLayoutPreferences({ winNative: true }).winNative, true);
+  assert.equal(appSettingsLayoutPreferences({ winNative: false }).winNative, false);
 });
 
 test('todoReminderState fires once within the final hour and expires after the DDL', () => {

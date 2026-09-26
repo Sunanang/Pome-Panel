@@ -41,7 +41,7 @@
 ## 当前产品约束
 
 - 双平台：macOS 13+ arm64 与 Windows 10/11 x64 共用代码及版本。Windows 使用 `npm run build:win` 生成 NSIS EXE；发布必须两个平台检查通过后汇总至同一 Release。
-- Windows：折叠态为 200 × 38 DIP，贴工作区顶部居中并避开任务栏；隐藏当前窗口和汽水音乐组件，但不修改用户保存的显隐偏好；剪贴板只复制，提醒点击关闭。
+- Windows：折叠态为 200 × 38 DIP，贴工作区顶部居中并避开任务栏；汽水音乐组件永久隐藏（D4）。当前窗口、剪贴板自动粘贴与通知点击聚焦由 koffi 原生绑定实现（`platform-adapters/win32-user32.js`），受设置 `winNative` 控制，`WIN_NATIVE_DEFAULT = false`（D16 杀软关卡未过）：默认关闭时这些组件隐藏、剪贴板只复制，且不修改用户保存的显隐偏好；`POME_DISABLE_WIN_NATIVE=1` 强制不加载。Mac 包必须排除 `koffi` 与 `@koromix`。
 - 便携媒体路径：LocalStorage / workspace.json 中新写入的录音与剪贴板图片使用 `/` 分隔的相对路径，系统加密密钥不保证跨电脑迁移。
 
 - 折叠态：宽 200px，高度等于当前屏幕菜单栏高度，不得超出物理刘海
