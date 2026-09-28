@@ -160,9 +160,7 @@
 
 - 首个稳定版本，建立固定命名的 Apple Silicon DMG 发布流程。
 
-[未发布]: https://github.com/Sunanang/Pome-Panel/compare/v1.1.2...HEAD
-[1.1.2]: https://github.com/Sunanang/Pome-Panel/compare/v1.1.1...v1.1.2
-[1.1.1]: https://github.com/Sunanang/Pome-Panel/compare/v1.1.0...v1.1.1
+[未发布]: https://github.com/Sunanang/Pome-Panel/commits/main
 [1.1.0]: https://github.com/Sunanang/Pome-Panel/compare/v1.0.7...v1.1.0
 [1.0.7]: https://github.com/Sunanang/Pome-Panel/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/Sunanang/Pome-Panel/compare/v1.0.5...v1.0.6
