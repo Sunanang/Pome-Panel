@@ -27,6 +27,7 @@ for (const file of ['notch-focus', 'retained-workspace', 'startup']) {
 for (const file of [
   'main.js',
   'main-services.js',
+  'cursor-usage.js',
   'platform.js',
   'platform-adapters/index.js',
   'platform-adapters/darwin.js',

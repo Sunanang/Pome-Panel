@@ -2,18 +2,21 @@
 
 | 电脑 | 下载文件 | 安装方式 |
 | --- | --- | --- |
-| Mac · Apple Silicon · macOS 13+ | [下载 macOS 安装包（.dmg）](https://github.com/Sunanang/Pome-Panel/releases/download/v1.1.2/Pome-Panel-1.1.2-arm64.dmg) | 打开 DMG，将应用拖入「应用程序」 |
-| Windows 10/11 · Intel / AMD 64 位（x64） | [下载 Windows 安装包（.exe）](https://github.com/Sunanang/Pome-Panel/releases/download/v1.1.2/Pome-Panel-1.1.2-windows-x64-setup.exe) | 双击 EXE，按安装向导完成安装 |
+| Mac · Apple Silicon · macOS 13+ | [下载 macOS 安装包（.dmg）](https://github.com/Sunanang/Pome-Panel/releases/download/v{{VERSION}}/Pome-Panel-{{VERSION}}-arm64.dmg) | 打开 DMG，将应用拖入「应用程序」 |
+| Windows 10/11 · Intel / AMD 64 位（x64） | [下载 Windows 安装包（.exe）](https://github.com/Sunanang/Pome-Panel/releases/download/v{{VERSION}}/Pome-Panel-{{VERSION}}-windows-x64-setup.exe) | 双击 EXE，按安装向导完成安装 |
 
 `.sha256` 是对应文件的完整性校验码，不是安装包。官网提供 macOS 与 Windows 两个下载入口。
 
-## 1.1.2
+## {{VERSION}} · 双端统一
 
-- 修复应用常驻跨天后，新建待办默认截止日期仍停留在昨天或上次添加日期的问题。
-- 日期刷新独立于首页时钟；跨天、唤醒、展开面板和切回待办时自动校准为当天 23:30。
-- 输入、打开日期选择器和回车提交时再次校准默认日期，避免睡眠恢复或定时器尚未运行时保存旧日期。
-- 保留当前待办手动选择的日期，添加完成后重置为当天默认时间；已有待办的截止日期不变。
-- 增加真实 Electron 界面的跨天、跨年、闰日和手选日期回归检查。
+- Windows 布局与 Mac 一致：胶囊可拖到工作区四边吸附，展开方向随停靠边变化，收起回到原位；展开尺寸统一为 1240 × 638，按工作区留 24px 安全边，不压任务栏。
+- Mac 默认收起位置改到菜单栏下方，与拖到顶部后一致；去掉转写设置弹层多余的顶部留白。
+- Windows 收起窗口缩到胶囊大小，修复收起态透明边框挡住下方点击的问题。
+- Windows 界面：字体回退到 Segoe UI Variable / Segoe UI / 微软雅黑，滚动区改为 3px 细轨，小字号提半级；托盘与安装包使用多尺寸 `.ico`。
+- 唤出快捷键按平台显示（Windows 为 Ctrl / Alt / Shift / Win），Win 键组合可录入。
+- 麦克风或摄像头被系统挡住时，提示里可直接打开对应的隐私设置页。
+- Windows 全新安装默认开启开机自启，升级用户保持原状；卸载时清理启动项。
+- Windows 原生能力（实验功能，默认关闭）：在设置页打开后，首页「当前窗口」可列出并切换窗口，剪贴板可自动粘贴回原窗口，完成通知点击可聚焦对应项目窗口。开关关闭时不加载原生模块。
 
 ## 首次安装
 

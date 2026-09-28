@@ -124,6 +124,7 @@ function declareBindings() {
     GetAsyncKeyState: user32.func('int16_t __stdcall GetAsyncKeyState(int key)'),
     SendInput: user32.func('__stdcall', 'SendInput', 'uint32_t', ['uint32_t', koffi.pointer(INPUT), 'int']),
     EnumWindows: user32.func('__stdcall', 'EnumWindows', 'int', [koffi.pointer(EnumWindowsProc), 'intptr']),
+    EnumChildWindows: user32.func('__stdcall', 'EnumChildWindows', 'int', ['void *', koffi.pointer(EnumWindowsProc), 'intptr']),
     OpenProcess: kernel32.func('void * __stdcall OpenProcess(uint32_t access, int inherit, uint32_t pid)'),
     QueryFullProcessImageNameW: kernel32.func('int __stdcall QueryFullProcessImageNameW(void *process, uint32_t flags, _Out_ uint8_t *name, _Inout_ uint32_t *size)'),
     CloseHandle: kernel32.func('int __stdcall CloseHandle(void *handle)'),
@@ -323,6 +324,19 @@ function createWin32Native(options = {}) {
         return handles;
       }, []);
     },
+    enumChildWindows(parent) {
+      const parentHwnd = toHandle(parent);
+      if (!parentHwnd) return [];
+      return guard(() => {
+        const handles = [];
+        api.EnumChildWindows(parentHwnd, (hwnd) => {
+          const handle = toHandle(hwnd);
+          if (handle) handles.push(handle);
+          return 1;
+        }, 0);
+        return handles;
+      }, []);
+    },
     restoreWindow(handle) {
       const hwnd = toHandle(handle);
       if (!hwnd) return false;
@@ -334,8 +348,9 @@ function createWin32Native(options = {}) {
     },
     setForeground,
     // 用户可能还按着展开面板用的修饰键；不放掉的话 Ctrl+V 会变成 Ctrl+Shift+V 之类。
+    // Ctrl 也要先放：否则 sendCtrlV 末尾的 Ctrl↑ 与物理按住的状态错位，后续按键会被当成组合键。
     releaseStuckModifiers() {
-      const stuck = [VK_SHIFT, VK_MENU, VK_LWIN, VK_RWIN].filter((key) => guard(
+      const stuck = [VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN].filter((key) => guard(
         () => (api.GetAsyncKeyState(key) & KEY_DOWN_STATE) !== 0,
         false
       ));

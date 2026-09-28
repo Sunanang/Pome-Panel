@@ -2,9 +2,11 @@ name: Release macOS and Windows
 
 on:
   workflow_dispatch:
+  # 分支推送与 PR 只做双端构建和安装验证；只有推送 v*.*.* 标签才发布（见 release-policy.js）。
   push:
-    branches: [feat/windows-support]
+    branches: [main, 'feat/**']
     tags: ['v*.*.*']
+  pull_request:
 
 permissions:
   contents: write
@@ -109,4 +111,6 @@ jobs:
           cd release-assets
           sha256sum --check *.sha256
           cd ..
-          gh release create "${GITHUB_REF_NAME}" release-assets/*.dmg release-assets/*.exe release-assets/*.sha256 --title "Pome Panel ${GITHUB_REF_NAME}" --notes-file docs/release-notes.md
+          sed "s/{{VERSION}}/${{ steps.release.outputs.version }}/g" docs/release-notes.md > release-notes.rendered.md
+          if grep -q '{{VERSION}}' release-notes.rendered.md; then echo 'release notes placeholder not rendered' >&2; exit 1; fi
+          gh release create "${GITHUB_REF_NAME}" release-assets/*.dmg release-assets/*.exe release-assets/*.sha256 --title "Pome Panel ${GITHUB_REF_NAME}" --notes-file release-notes.rendered.md

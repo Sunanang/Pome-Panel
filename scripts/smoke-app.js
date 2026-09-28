@@ -114,9 +114,9 @@ async function main() {
   assert.equal(await evaluate('document.getElementById("mirror-video").srcObject === null'), true);
   assert.deepEqual(await evaluate('window.NotchHome.getVisibility().visibleIds'), ['pomodoro', 'recorder', 'mirror', 'note', 'commands']);
   assert.equal(await evaluate('window.NotchHome.setModuleVisible("music", true).ok'), false);
-  // P4（D16）：WIN_NATIVE_DEFAULT=false，所以 CI 里原生能力是关的——「当前窗口」不可用，
+  // P4（D16）：WIN_NATIVE_DEFAULT=false，启动时原生能力是关的——「当前窗口」不可用，
   // 错误码取决于是被能力层挡住（unsupported）还是适配层报告原生不可用（native_unavailable）。
-  // CI 不要求 koffi 能在 runner 上真的加载；实机开启设置里的实验开关后才会有窗口列表。
+  // 展开后再通过设置开关真正加载 koffi 验一次，见下方 setWinNative 往返。
   assert.equal(await evaluate('window.notchAPI.capabilities.features.windowSwitcher'), false);
   assert.equal(await evaluate('window.notchAPI.capabilities.features.automaticPaste'), false);
   assert.equal(await evaluate('window.notchAPI.capabilities.features.winNativeSetting'), true);
@@ -149,6 +149,21 @@ async function main() {
   const pasted = await evaluate('window.notchAPI.pasteClipboard({type:"text", text:"Windows smoke copy"})');
   assert.equal(pasted.ok, true);
   assert.equal(pasted.pasted, false);
+  // P4-0：安装版必须真的能加载 koffi 并枚举窗口（开关默认关，这里走用户打开开关的同一条 IPC）。
+  // 验完立即关回，后续断言与 retained 轮仍按默认关的状态检查。
+  const nativeOn = await evaluate('window.notchAPI.setWinNative(true)');
+  assert.equal(nativeOn.ok, true);
+  assert.equal(nativeOn.nativeAvailable, true, `koffi 必须能在安装版中加载：${nativeOn.nativeReason}`);
+  assert.equal(nativeOn.capabilities.features.windowSwitcher, true);
+  assert.equal(nativeOn.capabilities.features.windowFocus, true);
+  assert.equal(nativeOn.capabilities.features.automaticPaste, true);
+  const listed = await evaluate('window.notchAPI.listWindows()');
+  assert.equal(listed.error, null);
+  assert.ok(Array.isArray(listed.items), '原生能力开启后窗口列表必须是数组');
+  const nativeOff = await evaluate('window.notchAPI.setWinNative(false)');
+  assert.equal(nativeOff.ok, true);
+  assert.equal(nativeOff.capabilities.features.windowSwitcher, false);
+  assert.equal(await evaluate('window.notchAPI.listWindows().then(r => r.error)'), 'unsupported');
   assert.equal(await evaluate('window.notchAPI.setAutoLaunch(true).then(r => r.ok)'), true);
   assert.equal(await evaluate('window.notchAPI.getAppSettings().then(r => r.autoLaunch)'), true);
   assert.equal(await evaluate('window.notchAPI.setAutoLaunch(false).then(r => r.ok)'), true);
@@ -212,7 +227,7 @@ async function main() {
   await until(() => child.exitCode !== null, 'normal application exit');
   shutdown.close();
   assert.equal(child.exitCode, 0, 'Application exits cleanly before reinstall/uninstall');
-  fs.writeFileSync(path.join(evidence, retained ? 'retained.json' : 'smoke.json'), JSON.stringify({ ok: true, platform: process.platform, retained, profile, checks: ['real startup', 'eight home modules', 'IPC', 'clipboard copy', 'first-run auto-launch', 'auto-launch', 'shortcuts', 'encrypted credentials', 'fake camera release', 'fake recording release and persistence', 'notifications', 'settings'] }, null, 2));
+  fs.writeFileSync(path.join(evidence, retained ? 'retained.json' : 'smoke.json'), JSON.stringify({ ok: true, platform: process.platform, retained, profile, checks: ['real startup', 'five Windows home modules', 'IPC', 'native koffi load and window list', 'clipboard copy', 'first-run auto-launch', 'auto-launch', 'shortcuts', 'encrypted credentials', 'fake camera release', 'fake recording release and persistence', 'notifications', 'settings'] }, null, 2));
   console.log(`Windows application smoke passed (${retained ? 'retained profile' : 'fresh profile'})`);
 }
 main().catch(async (error) => {

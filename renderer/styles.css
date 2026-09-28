@@ -754,7 +754,7 @@ body.panel-dragging #app.collapsed .notch {
   background: transparent;
   border: none;
   border-radius: var(--r-pill);
-  font-size: 10.5px;
+  font-size: var(--fs-caption);
   font-weight: 500;
   letter-spacing: 0.4px;
   color: var(--text-2);
@@ -1339,14 +1339,14 @@ body.panel-dragging #app.collapsed .notch {
 }
 
 .mirror-label {
-  font-size: 10.5px;
+  font-size: var(--fs-caption);
   font-weight: 500;
   letter-spacing: 0.4px;
   color: var(--text-3);
 }
 
 .mirror-hint {
-  font-size: 10.5px;
+  font-size: var(--fs-caption);
   font-weight: 400;
   letter-spacing: 0.2px;
   color: var(--text-4);
@@ -1469,7 +1469,7 @@ body.panel-dragging #app.collapsed .notch {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   color: var(--text-4);
   pointer-events: none;
 }
@@ -1565,7 +1565,7 @@ body.panel-dragging #app.collapsed .notch {
 }
 
 .count {
-  font-size: 10.5px;
+  font-size: var(--fs-caption);
   font-weight: 500;
   color: var(--text-3);
   background: var(--surface-1);
@@ -2078,7 +2078,7 @@ body.panel-dragging #app.collapsed .notch {
 }
 
 .clip-time {
-  font-size: 10.5px;
+  font-size: var(--fs-caption);
   font-weight: 400;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
@@ -3727,7 +3727,7 @@ body.panel-dragging #app.collapsed .notch {
 .music-copy > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music-kicker { color: rgba(177,255,207,.62); font: 7px/1.2 var(--font-mono); letter-spacing: 1.15px; }
 .music-copy strong { color: var(--text-1); font-size: 14px; font-weight: 640; letter-spacing: -.2px; }
-.music-copy > span:last-child { color: var(--text-3); font-size: 9px; }
+.music-copy > span:last-child { color: var(--text-3); font-size: var(--fs-micro); }
 .music-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .music-controls button {
   width: 25px;
@@ -3831,7 +3831,7 @@ body.panel-dragging #app.collapsed .notch {
 .todo-editor-card header span { color: var(--text-3); font: 10px var(--font-mono); }
 .todo-editor-card header button { width: 28px; height: 28px; border: 0; border-radius: 10px; background: rgba(255,255,255,.055); color: var(--text-2); cursor: pointer; }
 .todo-editor-name { display: flex; flex-direction: column; gap: 6px; margin-bottom: 13px; }
-.todo-editor-name span { color: var(--text-3); font-size: 9px; }
+.todo-editor-name span { color: var(--text-3); font-size: var(--fs-micro); }
 .todo-editor-name input { height: 38px; padding: 0 11px; border: 0; border-radius: 12px; outline: none; background: rgba(255,255,255,.06); color: var(--text-1); font: 12px var(--font); }
 .todo-calendar-week,
 .todo-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
@@ -3846,7 +3846,7 @@ body.panel-dragging #app.collapsed .notch {
 .todo-time-row { justify-content: flex-end; gap: 7px; margin-top: 12px; }
 .todo-time-row > span { margin-right: auto; color: var(--text-3); font-size: 10px; }
 .todo-time-row select { width: 66px; height: 34px; padding: 0 8px; border: 0; border-radius: 11px; outline: none; background: rgba(255,255,255,.06); color: var(--text-1); font: 11px var(--font-mono); }
-#todo-editor-error { min-height: 16px; margin: 8px 0 0; color: #ff817b; font-size: 9px; }
+#todo-editor-error { min-height: 16px; margin: 8px 0 0; color: #ff817b; font-size: var(--fs-micro); }
 .todo-editor-card footer { justify-content: flex-end; gap: 7px; }
 
 /* 录音只保留底部三枚控制按钮。 */
@@ -3974,7 +3974,7 @@ body.panel-dragging #app.collapsed .notch {
 .credentials-library-head > div { display: flex; flex-direction: column; gap: 3px; }
 .credentials-heading strong,
 .credentials-library-head strong { color: var(--text-1); font-size: 18px; font-weight: 620; }
-.secure-chip { padding: 5px 8px; border-radius: 999px; background: rgba(67,209,122,.1); color: #5add8c; font-size: 9px; }
+.secure-chip { padding: 5px 8px; border-radius: 999px; background: rgba(67,209,122,.1); color: #5add8c; font-size: var(--fs-micro); }
 .credentials-form-card label { display: flex; flex-direction: column; gap: 6px; }
 .credentials-form-card label span { color: var(--text-3); font-size: 10px; }
 .credentials-form-card input { width: 100%; height: 38px; padding: 0 11px; border: 0; border-radius: 12px; outline: none; background: rgba(255,255,255,.055); color: var(--text-1); font: 12px var(--font); box-shadow: inset 0 1px 0 rgba(255,255,255,.045); }
@@ -4039,13 +4039,13 @@ body.panel-dragging #app.collapsed .notch {
 .settings-card-heading > div { display: flex; flex-direction: column; gap: 3px; }
 .settings-card-heading strong,
 .settings-mirror-card strong { color: var(--text-1); font-size: 16px; font-weight: 640; }
-.settings-card-heading > small { color: var(--text-4); font-size: 9px; }
-.settings-card p { margin: 0; color: var(--text-4); font-size: 9px; line-height: 1.55; }
+.settings-card-heading > small { color: var(--text-4); font-size: var(--fs-micro); }
+.settings-card p { margin: 0; color: var(--text-4); font-size: var(--fs-micro); line-height: 1.55; }
 
 .settings-status-list { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--s-2); margin: 16px 0 11px; }
 .settings-status-list > div { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 11px; border-radius: 12px; background: rgba(255,255,255,.04); }
 .settings-status-list span { overflow: hidden; color: var(--text-2); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.settings-status-list small { flex: 0 0 auto; color: var(--text-4); font-size: 9px; }
+.settings-status-list small { flex: 0 0 auto; color: var(--text-4); font-size: var(--fs-micro); }
 .settings-status-list small[data-state='saved'] { color: #65d9a1; }
 .settings-status-list small[data-state='warning'] { color: #ffb16d; }
 
@@ -4079,7 +4079,7 @@ body.panel-dragging #app.collapsed .notch {
 .settings-device-card { display: flex; flex-direction: column; overflow: visible; }
 .settings-device-row { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; border-bottom: 1px solid var(--hairline-soft); }
 .settings-device-row > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.settings-device-row span { color: var(--text-3); font-size: 9px; }
+.settings-device-row span { color: var(--text-3); font-size: var(--fs-micro); }
 .settings-device-row strong { overflow: hidden; color: var(--text-2); font-size: 10px; font-weight: 540; text-overflow: ellipsis; white-space: nowrap; }
 .settings-device-row em { color: #8eb2ff; font-style: normal; }
 .settings-device-row button { flex: 0 0 auto; min-height: 28px; padding: 0 10px; border: 0; border-radius: 9px; background: rgba(255,255,255,.06); color: var(--text-3); font: 9px var(--font); cursor: pointer; transition: background var(--d-fast) var(--ease), color var(--d-fast) var(--ease); }
@@ -4537,9 +4537,9 @@ body.panel-dragging #app.collapsed .notch {
   margin: 0 0 5px;
   justify-content: center;
 }
-.todo-date-popover .todo-editor-card header span { font-size: 9px; }
+.todo-date-popover .todo-editor-card header span { font-size: var(--fs-micro); }
 .todo-date-popover .todo-calendar-grid { min-height: 122px; }
-.todo-date-popover .todo-calendar-grid button { height: 19px; border-radius: 7px; font-size: 9px; }
+.todo-date-popover .todo-calendar-grid button { height: 19px; border-radius: 7px; font-size: var(--fs-micro); }
 .todo-date-popover .todo-calendar-week { margin-bottom: 2px; font-size: 8px; }
 .todo-date-popover .todo-time-row { margin-top: 6px; }
 .todo-date-popover .todo-time-row > span { display: none; }
@@ -5376,7 +5376,7 @@ body.panel-dragging #app.collapsed .notch {
 .line-sidebar-list .credential-item.editing:hover { transform: none; }
 .credential-edit-head { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; }
 .credential-edit-head strong { color: var(--text-1); font-size: 13px; }
-.credential-edit-head span { color: var(--text-4); font-size: 9px; }
+.credential-edit-head span { color: var(--text-4); font-size: var(--fs-micro); }
 .credential-item.editing label { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .credential-item.editing label span { color: var(--text-4); font-size: 8px; }
 .credential-item.editing input {
@@ -6760,7 +6760,7 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
 }
 .settings-nas-meta-item span {
   color: var(--text-4);
-  font-size: 9px;
+  font-size: var(--fs-micro);
 }
 .settings-nas-meta-item strong {
   overflow: hidden;
@@ -7057,7 +7057,7 @@ html[data-platform="win32"] *::-webkit-scrollbar-thumb {
 }
 
 html[data-platform="win32"] *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--scrollbar-thumb-hover);
 }
 
 html[data-platform="win32"] *::-webkit-scrollbar-corner {

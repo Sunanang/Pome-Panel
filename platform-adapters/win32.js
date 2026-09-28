@@ -17,6 +17,9 @@ const PRIVACY_SETTINGS_PANES = {
 const FOREGROUND_POLL_MS = 250;
 // SetForegroundWindow 生效不是同步的，发送 Ctrl+V 前留一点时间再复核前台。
 const FOREGROUND_SETTLE_MS = 60;
+// 图标按 exe 路径缓存；常驻数周会见到很多不同程序，按插入顺序淘汰最老的。
+const ICON_CACHE_LIMIT = 128;
+const UWP_FRAME_HOST = /[\\/]ApplicationFrameHost\.exe$/i;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,11 +31,26 @@ function exeDisplayName(appPath) {
   return base.replace(/\.exe$/i, '').trim();
 }
 
+function describeNative(native) {
+  return native && native.available === true
+    ? { available: true }
+    : { available: false, reason: (native && native.reason) || 'not_available' };
+}
+
 function createWin32Adapter(options = {}) {
   const electron = options.electron || {};
   const { app, systemPreferences } = electron;
-  const native = options.native || loadWin32Native({ platform: options.platform });
-  const nativeAvailable = native.available === true;
+  // D16：实验开关没开时绝不 require koffi，默认安装里不出现未签名 .node 的加载行为。
+  // 由 main.js 在开关打开时调用 activateNative()；koffi 无法卸载，关掉开关只靠能力层挡住。
+  let native = options.native || null;
+  let nativeState = native ? describeNative(native) : { available: false, reason: 'not_enabled' };
+  const nativeAvailable = () => nativeState.available === true;
+
+  function activateNative() {
+    if (!native) native = loadWin32Native({ platform: options.platform });
+    nativeState = describeNative(native);
+    return nativeState;
+  }
 
   let foregroundTimer = null;
   let trackedForeground = { handle: null, pid: 0 };
@@ -59,14 +77,27 @@ function createWin32Adapter(options = {}) {
     } catch (error) {
       dataUrl = null;
     }
+    if (iconCache.size >= ICON_CACHE_LIMIT) iconCache.delete(iconCache.keys().next().value);
     iconCache.set(appPath, dataUrl);
     return dataUrl;
+  }
+
+  // UWP 顶层窗口都属于 ApplicationFrameHost.exe，真正的应用进程挂在子窗口上。
+  function resolveHostedUwpApp(handle, framePid) {
+    if (typeof native.enumChildWindows !== 'function') return null;
+    for (const child of native.enumChildWindows(handle)) {
+      const childPid = native.windowProcessId(child);
+      if (!childPid || childPid === framePid) continue;
+      const childPath = native.processImagePath(childPid);
+      if (childPath) return { pid: childPid, appPath: childPath };
+    }
+    return null;
   }
 
   // 过滤条件对齐 Alt+Tab：可见、无 owner、非工具窗口、未被 cloak（其他虚拟桌面 / 挂起的
   // UWP）、标题非空、不是自己。EnumWindows 按 Z 序回调，所以 windowIndex 就是前后顺序。
   async function listWindows() {
-    if (!nativeAvailable) {
+    if (!nativeAvailable()) {
       windowScanCache = new Map();
       return { items: [], error: 'native_unavailable' };
     }
@@ -82,10 +113,22 @@ function createWin32Adapter(options = {}) {
       const pid = native.windowProcessId(handle);
       if (!pid || pid === process.pid) return;
       if (!appPaths.has(pid)) appPaths.set(pid, native.processImagePath(pid));
-      const appPath = appPaths.get(pid);
+      let appPath = appPaths.get(pid);
+      let appName = exeDisplayName(appPath);
+      if (UWP_FRAME_HOST.test(appPath)) {
+        const hosted = resolveHostedUwpApp(handle, pid);
+        if (hosted) {
+          appPath = hosted.appPath;
+          appName = exeDisplayName(hosted.appPath) || appName;
+        } else {
+          // 挂起 / 最小化的 UWP 找不到内容进程：只能退回标题，也不显示宿主的图标。
+          appPath = '';
+          appName = title.trim();
+        }
+      }
       rows.push({
         pid,
-        appName: exeDisplayName(appPath) || `PID ${pid}`,
+        appName: appName || `PID ${pid}`,
         appPath,
         title,
         windowIndex: order,
@@ -107,7 +150,7 @@ function createWin32Adapter(options = {}) {
 
   // 按 HWND 聚焦比 Mac 的按标题匹配可靠：同标题的多个窗口也能分别点到。
   async function focusWindowRow(row) {
-    if (!nativeAvailable || !row) return false;
+    if (!nativeAvailable() || !row) return false;
     const handle = row.handle || row.windowNumber;
     if (!native.isWindow(handle)) return false;
     native.restoreWindow(handle);
@@ -116,9 +159,10 @@ function createWin32Adapter(options = {}) {
 
   return {
     id: 'win32',
-    native: nativeAvailable
-      ? { available: true }
-      : { available: false, reason: native.reason || 'not_available' },
+    get native() {
+      return nativeState;
+    },
+    activateNative,
     windows: {
       list: listWindows,
       focus(windowId) {
@@ -131,7 +175,7 @@ function createWin32Adapter(options = {}) {
     paste: {
       // 由 main.js 在"收起态 + 剪贴板功能开启 + automaticPaste 可用"时启动（P4-1）。
       startTracking() {
-        if (!nativeAvailable || foregroundTimer) return;
+        if (!nativeAvailable() || foregroundTimer) return;
         sampleForeground();
         foregroundTimer = setInterval(sampleForeground, FOREGROUND_POLL_MS);
       },
@@ -141,7 +185,7 @@ function createWin32Adapter(options = {}) {
         foregroundTimer = null;
       },
       async captureTarget() {
-        if (!nativeAvailable) return null;
+        if (!nativeAvailable()) return null;
         const foreground = sampleForeground();
         const chosen = chooseForegroundPasteTarget({
           foreground,
@@ -167,7 +211,7 @@ function createWin32Adapter(options = {}) {
         return false;
       },
       async pasteTo(target) {
-        if (!nativeAvailable) return 'native_unavailable';
+        if (!nativeAvailable()) return 'native_unavailable';
         const handle = target && (target.handle || null);
         if (!handle || !native.isWindow(handle)) return 'target_gone';
         const pid = native.windowProcessId(handle) || Math.round(Number(target.pid) || 0);

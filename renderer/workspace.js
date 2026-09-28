@@ -2753,9 +2753,15 @@
     }
     settingsWinNative.checked = result.winNative === true;
     if (settingsAppSettings) settingsAppSettings.winNative = result.winNative === true;
-    setSettingsNote(result.winNative
-      ? '已开启 Windows 原生能力 · 首页「当前窗口」与自动粘贴可用'
-      : '已关闭 Windows 原生能力');
+    if (!result.winNative) {
+      setSettingsNote('已关闭 Windows 原生能力');
+    } else if (result.nativeAvailable === true) {
+      setSettingsNote('已开启 Windows 原生能力 · 首页「当前窗口」与自动粘贴可用');
+    } else {
+      setSettingsNote(result.nativeReason === 'disabled_by_env'
+        ? '已保存开关，但环境变量 POME_DISABLE_WIN_NATIVE=1 禁止加载原生模块'
+        : '已保存开关，但原生模块加载失败 · 可能被安全软件拦截，当前窗口与自动粘贴仍不可用', true);
+    }
   });
   window.notchAPI?.onAppSettingsChanged?.((settings) => {
     settingsAppSettings = settings;

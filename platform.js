@@ -138,11 +138,21 @@
 
   // globalShortcut.register 失败时不给原因。Windows 把绝大多数 Win 组合留给系统
   // （Win+L 锁屏、Win+D 显示桌面……），这类失败要和"被别的应用占用"分开说。
+  // Alt+Tab / Alt+Esc / Alt+F4 / Ctrl+Esc 等由系统直接处理，同样不是"别的应用占用"。
+  const WINDOWS_SYSTEM_COMBOS = new Set(['Alt+Tab', 'Alt+Escape', 'Alt+F4', 'Control+Escape', 'Alt+Space']);
+
   function shortcutFailureReason(accel, caps) {
     const tokens = String(accel || '').split('+').map((token) => token.trim());
     const reservesMetaKey = usesWordModifiers(caps);
     if (reservesMetaKey && tokens.some((token) => token === 'Super' || token === 'Meta')) {
       return 'system_reserved';
+    }
+    if (reservesMetaKey) {
+      const key = tokens[tokens.length - 1];
+      const modifiers = tokens.slice(0, -1)
+        .filter((token) => token !== 'Shift')
+        .map((token) => (token === 'CommandOrControl' || token === 'Ctrl' ? 'Control' : token));
+      if (modifiers.length === 1 && WINDOWS_SYSTEM_COMBOS.has(`${modifiers[0]}+${key}`)) return 'system_reserved';
     }
     return 'occupied';
   }

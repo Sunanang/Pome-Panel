@@ -1208,7 +1208,15 @@ async function main() {
           minimumTileOpacity,
           realTileHasScale,
         };
-        await new Promise((resolve) => setTimeout(resolve, 900));
+        // 单个动画允许到 1000ms，固定等 900ms 在负载高时会误报；等动画真正结束（最多 2s），
+        // 永不结束的动画仍会超时并在下面被计数。
+        await Promise.race([
+          Promise.all([...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
+            .flatMap((tile) => tile.getAnimations())
+            .map((animation) => animation.finished.catch(() => {}))),
+          new Promise((resolve) => setTimeout(resolve, 2000)),
+        ]);
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const ghostsAfter = document.querySelectorAll('.home-layout-ghost').length;
         const tileAnimationsAfter = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
           .reduce((count, tile) => count + tile.getAnimations().length, 0);

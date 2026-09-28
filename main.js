@@ -417,10 +417,12 @@ function broadcastCapabilities() {
 }
 
 // 运行期重新解析：原生模块加载失败或用户关掉 Windows 原生开关时能力要降级。
-function refreshRuntimeCapabilities() {
+function refreshRuntimeCapabilities(settings = readAppSettings()) {
+  const winNativeEnabled = settings.winNative === true;
+  if (winNativeEnabled && typeof platformAdapter.activateNative === 'function') platformAdapter.activateNative();
   const next = platformPolicy.resolveCapabilities(process.platform, {
     nativeAvailable: platformAdapter.native.available === true,
-    winNativeEnabled: readAppSettings().winNative === true,
+    winNativeEnabled,
   });
   if (JSON.stringify(next) === JSON.stringify(platformCapabilities)) return platformCapabilities;
   platformCapabilities = next;
@@ -1282,8 +1284,20 @@ function writeJsonFile(filePath, value) {
   }
 }
 
+// 展开 / 收起 / 拖动一次要读好几遍设置，同步读盘会卡在主线程上；
+// 应用设置只由本进程经 saveAppSettings 写入，所以按路径缓存、写入时更新即可。
+let appSettingsCache = null;
+
+function readStoredAppSettings() {
+  const file = getJsonSettingsPath(APP_SETTINGS_FILE);
+  if (!appSettingsCache || appSettingsCache.file !== file) {
+    appSettingsCache = { file, stored: readJsonFile(file) };
+  }
+  return structuredClone(appSettingsCache.stored);
+}
+
 function readAppSettings() {
-  const stored = readJsonFile(getJsonSettingsPath(APP_SETTINGS_FILE));
+  const stored = readStoredAppSettings();
   const features = { ...DEFAULT_FEATURES, ...(stored.features || {}), home: true };
   const panelPosition = normalizePanelPosition(stored.panelPosition);
   return {
@@ -1385,7 +1399,10 @@ function publicAppSettings() {
 }
 
 function saveAppSettings(settings) {
-  return writeJsonFile(getJsonSettingsPath(APP_SETTINGS_FILE), settings);
+  const file = getJsonSettingsPath(APP_SETTINGS_FILE);
+  const saved = writeJsonFile(file, settings);
+  appSettingsCache = saved ? { file, stored: JSON.parse(JSON.stringify(settings)) } : null;
+  return saved;
 }
 
 function workspaceRoot() {
@@ -1510,7 +1527,7 @@ function setPanelShortcut(shortcut) {
 
 function applyAppSettings() {
   const settings = readAppSettings();
-  refreshRuntimeCapabilities();
+  refreshRuntimeCapabilities(settings);
   applyFeatureServices(settings.features);
   if (!setPanelShortcut(settings.shortcut)) {
     settings.shortcut = 'Space';
@@ -1773,7 +1790,14 @@ ipcMain.handle('settings:set-win-native', (event, enabled) => {
   const next = { ...readAppSettings(), winNative: enabled };
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
   applyAppSettings();
-  return { ok: true, winNative: readAppSettings().winNative, capabilities: platformCapabilities };
+  // 开关保存成功不代表原生层可用（koffi 加载失败 / POME_DISABLE_WIN_NATIVE=1），界面按实际能力提示。
+  return {
+    ok: true,
+    winNative: readAppSettings().winNative,
+    nativeAvailable: platformAdapter.native.available === true,
+    nativeReason: platformAdapter.native.reason || null,
+    capabilities: platformCapabilities,
+  };
 });
 ipcMain.handle('settings:set-default-tab', (event, defaultTab) => {
   const next = updateDefaultTabPreference(readAppSettings(), defaultTab);

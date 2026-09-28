@@ -89,6 +89,40 @@ test('koffi bindings load and answer on Windows', (t) => {
   assert.ok(rows.length > 0, 'CI runner 上也应有可见窗口');
   assert.equal(typeof native.windowProcessId(rows[0]), 'number');
   assert.equal(typeof native.windowTitle(rows[0]), 'string');
+  assert.ok(Array.isArray(native.enumChildWindows(rows[0])), 'EnumChildWindows 必须回调出句柄数组');
+});
+
+// D16：实验开关没开时不能加载 koffi，否则默认安装也会触发杀软对未签名 .node 的扫描。
+test('Windows adapter defers the native layer until activateNative()', () => {
+  const win32 = loadAdapter('win32', { platform: 'darwin' });
+  assert.deepEqual(win32.native, { available: false, reason: 'not_enabled' });
+  assert.deepEqual(win32.activateNative(), { available: false, reason: 'not_win32' });
+  assert.deepEqual(win32.native, { available: false, reason: 'not_win32' });
+});
+
+test('UWP windows report the hosted app instead of ApplicationFrameHost', async () => {
+  const framePath = 'C:\\Windows\\System32\\ApplicationFrameHost.exe';
+  const native = {
+    available: true,
+    enumWindows: () => [20n, 21n],
+    isWindowVisible: () => true,
+    windowOwner: () => null,
+    isToolWindow: () => false,
+    isCloaked: () => false,
+    windowTitle: (handle) => (handle === 20n ? '计算器' : '设置'),
+    windowProcessId: (handle) => ({ 20: 500, 21: 501, 30: 900 })[Number(handle)] || 0,
+    enumChildWindows: (handle) => (handle === 20n ? [30n] : []),
+    processImagePath: (pid) => (pid === 900
+      ? 'C:\\Program Files\\WindowsApps\\Calculator\\CalculatorApp.exe'
+      : framePath),
+  };
+  const { items } = await loadAdapter('win32', { native }).windows.list();
+  assert.equal(items[0].appName, 'CalculatorApp');
+  assert.match(items[0].appPath, /CalculatorApp\.exe$/);
+  assert.equal(items[0].handle, '20');
+  // 挂起的 UWP 没有内容子窗口：退回标题，不借用宿主进程的名字和图标。
+  assert.equal(items[1].appName, '设置');
+  assert.equal(items[1].appPath, '');
 });
 
 test('POME_DISABLE_WIN_NATIVE=1 forces the native layer off', () => {

@@ -8,7 +8,9 @@
 
 - 产品版本改为 **0.11.0**（双端统一：Windows 原生能力）。
 - Windows 接入原生能力（基于 koffi 3.x，随包的原生模块只含 Windows x64 一份，macOS 安装包完全不带）：首页「当前窗口」可以列出并切换当前桌面上的窗口（按 Z 序、排除工具窗口与其他虚拟桌面上的窗口，图标取自系统），剪贴板可以自动粘贴回刚才的窗口，完成通知点击后聚焦匹配项目名的窗口。
-- **这些原生能力默认关闭**，需要在设置页打开「Windows 原生能力 · 实验功能」。Windows Defender、火绒与 360 的首轮误报测试还没做完，等三者都无告警后才会改成默认开启。排障时也可以用环境变量 `POME_DISABLE_WIN_NATIVE=1` 强制不加载原生模块。
+- **这些原生能力默认关闭**，需要在设置页打开「Windows 原生能力 · 实验功能」。Windows Defender、火绒与 360 的首轮误报测试还没做完，等三者都无告警后才会改成默认开启。开关关闭时完全不加载原生模块；打开后若加载失败（例如被安全软件拦截），设置页会如实提示不可用，不再误报「已可用」。排障时也可以用环境变量 `POME_DISABLE_WIN_NATIVE=1` 强制不加载原生模块。
+- Windows「当前窗口」里的 UWP 应用（计算器、设置等）显示真实应用名与图标，不再统一显示成 ApplicationFrameHost；挂起的 UWP 窗口退回显示标题。
+- Windows 自动粘贴前也会先放掉仍被按住的 Ctrl，避免粘贴后键盘状态错乱。Alt+Tab、Alt+Esc 等系统组合注册失败时提示「被系统占用」，不再说成被其他应用占用。
 - Windows 自动粘贴只在用户点击剪贴条目时发送一次 Ctrl+V：目标窗口以管理员身份运行时（UIPI 会静默吞掉按键）会提前识别，提示「已复制；目标窗口以管理员身份运行，请手动粘贴」；目标窗口已关闭或在等待期间被切走，则退化为「已复制」。不使用全局键盘钩子。
 - Windows 上把最小的两级字号各提半级（9px → 10px、10.5px → 11px），微软雅黑在 100%–125% 缩放下不再糊成一团。macOS 字号一行未改。
 - 以下为 0.10.1 阶段（未单独发布，已并入 0.11.0）的改动：界面与系统小项的双端统一。
@@ -158,7 +160,9 @@
 
 - 首个稳定版本，建立固定命名的 Apple Silicon DMG 发布流程。
 
-[未发布]: https://github.com/Sunanang/Pome-Panel/compare/v1.1.0...HEAD
+[未发布]: https://github.com/Sunanang/Pome-Panel/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/Sunanang/Pome-Panel/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/Sunanang/Pome-Panel/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Sunanang/Pome-Panel/compare/v1.0.7...v1.1.0
 [1.0.7]: https://github.com/Sunanang/Pome-Panel/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/Sunanang/Pome-Panel/compare/v1.0.5...v1.0.6

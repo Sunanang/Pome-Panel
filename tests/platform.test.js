@@ -113,8 +113,13 @@ test('a failed registration tells Win combinations apart from a busy shortcut', 
   const mac = platform.resolveCapabilities('darwin');
   assert.equal(platform.shortcutFailureReason('Super+D', win), 'system_reserved');
   assert.equal(platform.shortcutFailureReason('Control+Shift+K', win), 'occupied');
+  assert.equal(platform.shortcutFailureReason('Alt+Tab', win), 'system_reserved');
+  assert.equal(platform.shortcutFailureReason('Alt+Shift+Tab', win), 'system_reserved');
+  assert.equal(platform.shortcutFailureReason('CommandOrControl+Escape', win), 'system_reserved');
+  assert.equal(platform.shortcutFailureReason('Control+Alt+Tab', win), 'occupied');
   // Mac 上 Super 就是 ⌘，不是系统保留键。
   assert.equal(platform.shortcutFailureReason('Super+D', mac), 'occupied');
+  assert.equal(platform.shortcutFailureReason('Alt+Tab', mac), 'occupied');
 });
 
 // ============ 媒体权限提示（P3-2） ============
