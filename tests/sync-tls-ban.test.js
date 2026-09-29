@@ -22,6 +22,11 @@ const SCAN_FILES = [
   'renderer/workspace.js',
 ];
 
+// sync-tls-trust.js is intentionally outside SCAN_FILES. Its probe sets
+// rejectUnauthorized:false only to read the leaf (CERT_PROBE_ONLY) and must
+// not send secrets. The next test locks that exception; pinned requests keep
+// verification on. Do not add this file to SCAN_FILES.
+
 const FORBIDDEN = [
   /ignore-certificate-errors/i,
   /rejectUnauthorized\s*:\s*false/,
@@ -39,6 +44,22 @@ test('§8.3 static ban: no TLS bypass switches in sync-related sources', () => {
       assert.doesNotMatch(source, pattern, `${rel} must not match ${pattern}`);
     }
   }
+});
+
+test('sync-tls-trust.js may probe with rejectUnauthorized false but pins CA for traffic', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'sync-tls-trust.js'), 'utf8');
+  const probeAt = source.indexOf('CERT_PROBE_ONLY');
+  assert.ok(probeAt > 0, 'probe must be marked CERT_PROBE_ONLY');
+  const probeWindow = source.slice(Math.max(0, probeAt - 200), probeAt + 200);
+  assert.match(probeWindow, /rejectUnauthorized:\s*false/);
+  const flags = source.match(/rejectUnauthorized\s*:\s*false/g) || [];
+  assert.equal(flags.length, 1, 'only the certificate probe may disable verification');
+  assert.match(source, /rejectUnauthorized:\s*true/);
+  assert.match(source, /createPinnedCaAgent/);
+  assert.match(source, /checkServerIdentity/);
+  assert.doesNotMatch(source, /NODE_TLS_REJECT_UNAUTHORIZED/);
+  const agentBody = source.slice(source.indexOf('function createPinnedCaAgent'));
+  assert.doesNotMatch(agentBody, /rejectUnauthorized\s*:\s*false/);
 });
 
 test('certificate errors classified as non-transferable in endpoints module', () => {

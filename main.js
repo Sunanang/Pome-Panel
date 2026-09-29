@@ -118,7 +118,14 @@ const {
   deriveSyncUiState,
   syncUiStateLabel,
   HTTP_INSECURE_CONFIRM_TEXT,
+  CERTIFICATE_TRUST_CONFIRM_TEXT,
 } = require('./packages/sync-protocol/endpoints');
+const {
+  hostPortKeyFromUrl,
+  probePeerCertificate,
+  agentForPinnedTrust,
+  evaluateTrustAcceptance,
+} = require('./sync-tls-trust');
 
 // Keep the historical data directory so upgrading users retain notes, links,
 // recordings and encrypted settings after the public product rename.
@@ -2614,6 +2621,10 @@ function joinSyncApiUrl(baseUrl, apiPath) {
   return `${base}/${suffix}`;
 }
 
+function resolveSyncHttpsAgent(targetUrl) {
+  return agentForPinnedTrust(targetUrl, (hostKey) => syncSettingsStore.getTrustedCert(hostKey));
+}
+
 function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutMs = 8000 } = {}) {
   return new Promise((resolve) => {
     let parsed;
@@ -2625,6 +2636,14 @@ function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutM
     }
     const lib = parsed.protocol === 'https:' ? require('https') : require('http');
     const payload = body == null ? null : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
+    const agent = parsed.protocol === 'https:' ? resolveSyncHttpsAgent(targetUrl) : undefined;
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      if (agent && typeof agent.destroy === 'function') agent.destroy();
+      resolve(result);
+    };
     const req = lib.request(
       {
         protocol: parsed.protocol,
@@ -2632,6 +2651,7 @@ function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutM
         port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
         path: `${parsed.pathname}${parsed.search}`,
         method,
+        agent: agent || undefined,
         headers: {
           Accept: 'application/json',
           ...(payload
@@ -2653,27 +2673,28 @@ function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutM
           try {
             json = text ? JSON.parse(text) : null;
           } catch (error) {
-            resolve({ ok: false, error: 'invalid_json', status: res.statusCode });
+            finish({ ok: false, error: 'invalid_json', status: res.statusCode });
             return;
           }
-          resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, body: json });
+          finish({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, body: json });
         });
       },
     );
     req.on('timeout', () => {
+      const described = describeTransportFailure('timeout');
+      finish(described || { ok: false, error: 'timeout', transferable: true });
       req.destroy();
-      resolve({ ok: false, error: 'timeout', transferable: true });
     });
     req.on('error', (error) => {
       const message = (error && error.message) || 'network_error';
       const code = (error && error.code) || message;
       const described = describeTransportFailure({ code, message });
       if (described) {
-        resolve({ ...described, code });
+        finish({ ...described, code });
         return;
       }
       const classified = classifyTransportError({ code, message });
-      resolve({
+      finish({
         ok: false,
         error: message,
         message,
@@ -2687,6 +2708,73 @@ function fetchSyncJson(targetUrl, { method = 'GET', headers = {}, body, timeoutM
     if (payload) req.write(payload);
     req.end();
   });
+}
+
+async function certificateTrustPrompt(baseUrl) {
+  if (!hostPortKeyFromUrl(baseUrl)) {
+    return {
+      ok: false,
+      error: 'certificate_error',
+      message: '证书错误',
+      certificateError: true,
+      needsTrustConfirm: false,
+      uiState: 'certificate_error',
+      transferable: false,
+    };
+  }
+  let parsed;
+  try {
+    parsed = new URL(String(baseUrl));
+  } catch {
+    return {
+      ok: false,
+      error: 'certificate_error',
+      message: '证书错误',
+      certificateError: true,
+      needsTrustConfirm: false,
+      uiState: 'certificate_error',
+      transferable: false,
+    };
+  }
+  const probed = await probePeerCertificate({
+    hostname: parsed.hostname,
+    port: parsed.port || 443,
+  });
+  if (!probed.ok) {
+    return {
+      ok: false,
+      error: 'certificate_error',
+      message: '证书错误，且未能读取对端证书，未要求信任',
+      certificateError: true,
+      needsTrustConfirm: false,
+      uiState: 'certificate_error',
+      transferable: false,
+    };
+  }
+  const trusted = syncSettingsStore.getTrustedCert(probed.hostKey);
+  const changed = Boolean(
+    trusted
+    && trusted.fingerprint256
+    && String(trusted.fingerprint256).toUpperCase() !== String(probed.fingerprint256).toUpperCase(),
+  );
+  return {
+    ok: false,
+    error: changed ? 'certificate_fingerprint_mismatch' : 'certificate_error',
+    message: changed
+      ? '这台 NAS 的证书已更换。请核对新指纹后重新确认，之前的信任不会自动沿用。'
+      : '证书不受信任。请核对指纹后确认，仅信任此主机和端口的这一张证书。',
+    certificateError: true,
+    needsTrustConfirm: true,
+    confirmText: CERTIFICATE_TRUST_CONFIRM_TEXT,
+    fingerprint256: probed.fingerprint256,
+    subjectCN: probed.subjectCN || '',
+    issuerCN: probed.issuerCN || '',
+    validFrom: probed.validFrom || null,
+    validTo: probed.validTo || null,
+    hostKey: probed.hostKey,
+    uiState: 'certificate_error',
+    transferable: false,
+  };
 }
 
 function buildNasSyncDashboard() {
@@ -2850,8 +2938,15 @@ async function withEndpointFailover(runFn) {
       });
       return {
         ok: false,
-        error: 'certificate_error',
+        error: result.error === 'certificate_fingerprint_mismatch'
+          ? 'certificate_fingerprint_mismatch'
+          : 'certificate_error',
+        message: result.message || '证书错误',
         certificateError: true,
+        needsTrustConfirm: result.needsTrustConfirm !== false,
+        fingerprint256: result.fingerprint256 || null,
+        hostKey: result.hostKey || null,
+        confirmText: result.confirmText || null,
         transferable: false,
         uiState: 'certificate_error',
         endpointId: endpoint.endpointId,
@@ -2991,6 +3086,44 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
     return { ok: false, error: 'secure_storage_unavailable', refusedPlaintext: true, needsReauth: true };
   }
 
+  // User confirmed the leaf shown in the pairing dialog. Re-read it and pin
+  // only when the fingerprint still matches. The probe carries no secrets.
+  if (payload.trustCertificateAccepted === true && hostPortKeyFromUrl(baseUrl)) {
+    let parsedClaim;
+    try {
+      parsedClaim = new URL(baseUrl);
+    } catch {
+      return { ok: false, error: 'invalid_base_url' };
+    }
+    const probed = await probePeerCertificate({
+      hostname: parsedClaim.hostname,
+      port: parsedClaim.port || 443,
+    });
+    const decision = evaluateTrustAcceptance({
+      probed,
+      confirmedFingerprint: payload.certificateFingerprint,
+    });
+    if (!decision.ok) {
+      return {
+        ok: false,
+        error: decision.error,
+        message: decision.message,
+        certificateError: true,
+        needsTrustConfirm: decision.needsTrustConfirm === true,
+        confirmText: decision.needsTrustConfirm === true ? CERTIFICATE_TRUST_CONFIRM_TEXT : null,
+        fingerprint256: decision.fingerprint256 || null,
+        subjectCN: decision.subjectCN || null,
+        issuerCN: decision.issuerCN || null,
+        validFrom: decision.validFrom || null,
+        validTo: decision.validTo || null,
+        hostKey: decision.hostKey || null,
+        uiState: 'certificate_error',
+      };
+    }
+    const trusted = syncSettingsStore.trustCertificate(decision.hostKey, decision.cert);
+    if (!trusted.ok) return { ok: false, error: trusted.error || 'trust_save_failed' };
+  }
+
   const insecureBound = Boolean(policy.insecureBound);
   const claimUrl = joinSyncApiUrl(baseUrl, 'api/v1/pair/claim');
   const response = await fetchSyncJson(claimUrl, {
@@ -3008,6 +3141,10 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
       error: response.error,
       message: response.message || response.error,
     });
+    if (described && described.error === 'certificate_error') {
+      const prompt = await certificateTrustPrompt(baseUrl);
+      return { ...described, ...prompt, status: response.status, code: response.code || null };
+    }
     if (described) {
       return { ...described, status: response.status, code: response.code || null };
     }
@@ -3290,8 +3427,12 @@ async function fetchBoundSyncJson(apiPath, { method = 'GET', body, timeoutMs = 8
     return {
       ok: false,
       error: (response.body && response.body.error) || response.error || 'request_failed',
+      message: response.message || null,
       status: response.status,
       body: response.body,
+      certificateError: response.certificateError === true,
+      needsTrustConfirm: response.needsTrustConfirm === true,
+      code: response.code || null,
     };
   }
   return { ok: true, body: response.body, status: response.status };

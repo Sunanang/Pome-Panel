@@ -7,6 +7,23 @@
 (function initNasSyncPair(global) {
   const PAIR_CODE_RE = /^\d{6}$/;
   const HTTPS_ON_HTTP_MESSAGE = '该地址说的是 HTTP，不是 HTTPS。请把 Base URL 改为 http://…';
+  const CONNECTION_TIMEOUT_MESSAGE = '连接超时。请逐项检查：① 若 NAS 同步端口是明文 HTTP，请使用 http:// 而不是 https://；② 端口是 Pome Panel Sync 页面上的「设备同步端口」，且 frp 映射到该端口；③ 本机能够访问这台 NAS（优先试局域网 IP）。';
+  const CERTIFICATE_TRUST_CONFIRM_TEXT = '该地址使用自签或不受信证书。确认后只信任这一张证书对应的主机和端口，不会全局关闭证书校验。证书更换后需要重新确认。';
+
+  function formatCertificateTrustBody(details = {}) {
+    const lines = [
+      details.confirmText || CERTIFICATE_TRUST_CONFIRM_TEXT,
+      '',
+      `主机：${details.hostKey || '（未知）'}`,
+      `指纹：${details.fingerprint256 || '（未能读取）'}`,
+    ];
+    if (details.subjectCN) lines.push(`主题：${details.subjectCN}`);
+    if (details.issuerCN) lines.push(`颁发者：${details.issuerCN}`);
+    if (details.validFrom || details.validTo) {
+      lines.push(`有效期：${details.validFrom || '—'} — ${details.validTo || '—'}`);
+    }
+    return lines.join('\n');
+  }
 
   function isHttpsOnHttpText(value) {
     const raw = String(value || '').toLowerCase();
@@ -102,6 +119,20 @@
           cancelLabel: '取消',
         };
         return next;
+      case 'open_cert_trust_confirm':
+        next.dialog = {
+          id: 'pair-cert-trust-confirm',
+          controlId: 'pair.certificate-trust',
+          role: 'dialog',
+          title: '信任此 NAS 证书？',
+          body: formatCertificateTrustBody(action),
+          confirmLabel: '仅信任此证书',
+          cancelLabel: '取消',
+          fingerprint256: action.fingerprint256 || null,
+          hostKey: action.hostKey || null,
+        };
+        next.needsTrustConfirm = true;
+        return next;
       case 'close_dialog':
         next.dialog = null;
         next.submitting = false;
@@ -168,6 +199,8 @@
     api,
     httpConfirmAccepted = false,
     allowInsecureHttp = false,
+    trustCertificateAccepted = false,
+    certificateFingerprint = null,
     deviceName,
   }) {
     const validated = validatePairCode(code);
@@ -196,6 +229,8 @@
       baseUrl,
       httpConfirmAccepted: Boolean(httpConfirmAccepted),
       allowInsecureHttp: allowInsecureHttp || policy.insecureBound,
+      trustCertificateAccepted: Boolean(trustCertificateAccepted),
+      certificateFingerprint: certificateFingerprint || undefined,
       deviceName,
     });
 
@@ -219,7 +254,10 @@
         code_not_found: '配对码无效',
         code_consumed: '配对码已使用',
         code_expired: '配对码已过期',
-        certificate_error: '证书错误',
+        certificate_error: '证书不受信任。请核对指纹后确认，仅信任此主机和端口的这一张证书。',
+        certificate_fingerprint_mismatch: '证书指纹已变化，请重新核对后再信任',
+        certificate_fingerprint_required: '缺少要信任的证书指纹',
+        timeout: CONNECTION_TIMEOUT_MESSAGE,
         remote_closed: '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。',
         connection_refused: '连不上同步端口。请确认飞牛应用正在运行，并且 FRP 或局域网指向当前的设备同步端口。',
         schema_incompatible: result.message
@@ -230,12 +268,20 @@
               : '协议不兼容：请升级桌面端或 NAS 应用后再同步'),
       };
       const needsTrustConfirm = shouldOpenCertificateTrustDialog(result);
+      const incoming = result.message && /[\u4e00-\u9fff]/.test(result.message) ? result.message : '';
       return {
         ok: false,
         error: result.error,
-        message: messages[result.error] || result.message || result.error || '配对失败',
+        message: incoming || messages[result.error] || result.message || result.error || '配对失败',
         needsTrustConfirm,
         certificateError: result.certificateError === true || result.error === 'certificate_error',
+        confirmText: result.confirmText || (needsTrustConfirm ? CERTIFICATE_TRUST_CONFIRM_TEXT : null),
+        fingerprint256: result.fingerprint256 || null,
+        subjectCN: result.subjectCN || null,
+        issuerCN: result.issuerCN || null,
+        validFrom: result.validFrom || null,
+        validTo: result.validTo || null,
+        hostKey: result.hostKey || null,
         dialog: null,
         refusedPlaintext: result.refusedPlaintext,
         upgradeTarget: result.upgradeTarget,
@@ -247,6 +293,9 @@
 
   const api = {
     HTTPS_ON_HTTP_MESSAGE,
+    CONNECTION_TIMEOUT_MESSAGE,
+    CERTIFICATE_TRUST_CONFIRM_TEXT,
+    formatCertificateTrustBody,
     normalizePairCode,
     validatePairCode,
     isHttpsOnHttpFailure,

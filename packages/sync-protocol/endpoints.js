@@ -34,6 +34,13 @@ const REMOTE_CLOSED_MESSAGE =
 const CONNECTION_REFUSED_MESSAGE =
   '连不上同步端口。请确认飞牛应用正在运行，并且 FRP 或局域网指向当前的设备同步端口。';
 
+/** Connect timed out. Tell the user which address/port to check; do not offer cert trust. */
+const CONNECTION_TIMEOUT_MESSAGE =
+  '连接超时。请逐项检查：① 若 NAS 同步端口是明文 HTTP，请使用 http:// 而不是 https://；② 端口是 Pome Panel Sync 页面上的「设备同步端口」，且 frp 映射到该端口；③ 本机能够访问这台 NAS（优先试局域网 IP）。';
+
+const CERTIFICATE_TRUST_CONFIRM_TEXT =
+  '该地址使用自签或不受信证书。确认后只信任这一张证书对应的主机和端口，不会全局关闭证书校验。证书更换后需要重新确认。';
+
 const HTTP_INSECURE_WARNING_TEXT = '不安全连接：当前有启用的明文 HTTP endpoint';
 
 const DEVICE_PORT_GUIDANCE_TEXT =
@@ -291,7 +298,13 @@ function classifyTransportError(errorOrStatus) {
     };
   }
   if (/etimedout|timeout|esockettimedout/.test(raw)) {
-    return { kind: 'timeout', transferable: true };
+    return {
+      kind: 'timeout',
+      transferable: true,
+      userMessage: CONNECTION_TIMEOUT_MESSAGE,
+      needsTrustConfirm: false,
+      certificateError: false,
+    };
   }
   if (
     /socket hang up|econnreset|empty reply from server|und_err_socket|remote_closed/.test(raw)
@@ -374,6 +387,17 @@ function describeTransportFailure(errorOrStatus) {
       error: classified.kind,
       message: classified.userMessage,
       transferable: classified.transferable === true,
+      certificateError: false,
+      needsTrustConfirm: false,
+      uiState: null,
+    };
+  }
+  if (classified.kind === 'timeout') {
+    return {
+      ok: false,
+      error: 'timeout',
+      message: classified.userMessage || CONNECTION_TIMEOUT_MESSAGE,
+      transferable: true,
       certificateError: false,
       needsTrustConfirm: false,
       uiState: null,
@@ -560,6 +584,8 @@ module.exports = {
   HTTPS_ON_HTTP_MESSAGE,
   REMOTE_CLOSED_MESSAGE,
   CONNECTION_REFUSED_MESSAGE,
+  CONNECTION_TIMEOUT_MESSAGE,
+  CERTIFICATE_TRUST_CONFIRM_TEXT,
   HTTP_INSECURE_WARNING_TEXT,
   DEVICE_PORT_GUIDANCE_TEXT,
   APP_PATH_SEGMENT,

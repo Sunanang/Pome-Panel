@@ -50,6 +50,7 @@
       "todos-sync.js",
       "workspace-sync.js",
       "sync-settings.js",
+      "sync-tls-trust.js",
       "packages/sync-protocol/**/*",
       "renderer/**/*",
       "scripts/codex-notify.js",

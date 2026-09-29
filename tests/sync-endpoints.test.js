@@ -112,6 +112,28 @@ test('hang up and refused connections use stable transport codes', () => {
   assert.equal(classifyTransportError('connect ECONNREFUSED 127.0.0.1:1').kind, 'connection_refused');
 });
 
+test('timeout tells the user to check scheme, device port, and reachability', () => {
+  const { describeTransportFailure, CONNECTION_TIMEOUT_MESSAGE, shouldRequestCertificateTrust } = require('../packages/sync-protocol/endpoints');
+  for (const sample of ['ETIMEDOUT', 'timeout', 'connect ETIMEDOUT 192.168.1.8:39100', { code: 'ETIMEDOUT', message: 'socket timeout' }]) {
+    const classified = classifyTransportError(sample);
+    assert.equal(classified.kind, 'timeout');
+    assert.equal(classified.transferable, true);
+    assert.equal(classified.needsTrustConfirm, false);
+    const described = describeTransportFailure(sample);
+    assert.equal(described.error, 'timeout');
+    assert.equal(described.message, CONNECTION_TIMEOUT_MESSAGE);
+    assert.equal(described.certificateError, false);
+    assert.equal(described.needsTrustConfirm, false);
+    assert.equal(shouldRequestCertificateTrust(sample), false);
+    assert.equal(shouldFailover(sample), true);
+  }
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /http:\/\//);
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /https:\/\//);
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /设备同步端口/);
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /frp/);
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /局域网/);
+});
+
 test('failover: DNS/timeout/502 transfer; 401 and certificate do not', () => {
   assert.equal(shouldFailover('ENOTFOUND'), true);
   assert.equal(shouldFailover('timeout'), true);

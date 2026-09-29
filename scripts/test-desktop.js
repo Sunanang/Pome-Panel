@@ -40,6 +40,7 @@ for (const file of [
   'todos-sync.js',
   'workspace-sync.js',
   'sync-settings.js',
+  'sync-tls-trust.js',
   'packages/sync-protocol/index.js',
   'packages/sync-protocol/schema.js',
   'packages/sync-protocol/collections.js',

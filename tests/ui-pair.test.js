@@ -214,10 +214,96 @@ test('workspace wires Enter submit and notchAPI pair IPC (no electron require)',
   const failureBranch = workspaceJs.slice(workspaceJs.indexOf('if (!result.ok)'));
   const failureHead = failureBranch.slice(0, failureBranch.indexOf('applyNasPairUi({ type: \'success\''));
   assert.match(failureHead, /shouldOpenCertificateTrustDialog/);
-  assert.doesNotMatch(failureHead, /openNasDialog/);
+  assert.match(failureHead, /askTrust && trustCertificateAccepted !== true/);
+  assert.match(failureHead, /open_cert_trust_confirm/);
+  assert.match(failureHead, /openNasDialog\(nasPairUi\.dialog\)/);
+  assert.match(failureHead, /certificateFingerprint: result\.fingerprint256/);
   assert.match(workspaceJs, /result\.error === 'https_on_http'/);
   assert.doesNotMatch(workspaceJs, /require\(['"]electron['"]\)/);
   const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
   assert.match(preload, /syncPairClaim/);
   assert.match(preload, /syncGetStatus/);
+});
+
+test('pair timeout copy and certificate trust dialog keep the confirmed fingerprint', async () => {
+  const {
+    CONNECTION_TIMEOUT_MESSAGE,
+    CERTIFICATE_TRUST_CONFIRM_TEXT,
+  } = require('../packages/sync-protocol/endpoints');
+  assert.equal(pairUi.CONNECTION_TIMEOUT_MESSAGE, CONNECTION_TIMEOUT_MESSAGE);
+  assert.equal(pairUi.CERTIFICATE_TRUST_CONFIRM_TEXT, CERTIFICATE_TRUST_CONFIRM_TEXT);
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /http:\/\//);
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /https:\/\//);
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /设备同步端口/);
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /局域网/);
+
+  const calls = [];
+  const timeout = await pairUi.runPairSubmit({
+    code: '111222',
+    baseUrl: 'https://nas.example:8443',
+    api: {
+      syncPairHttpPolicy: async () => ({ ok: true, requiresExtraConfirm: false }),
+      syncPairClaim: async (payload) => {
+        calls.push(payload);
+        return { ok: false, error: 'timeout' };
+      },
+    },
+  });
+  assert.equal(timeout.error, 'timeout');
+  assert.equal(timeout.message, CONNECTION_TIMEOUT_MESSAGE);
+  assert.equal(timeout.needsTrustConfirm, false);
+  assert.equal(pairUi.shouldOpenCertificateTrustDialog(timeout), false);
+
+  const cert = await pairUi.runPairSubmit({
+    code: '111222',
+    baseUrl: 'https://nas.example:8443',
+    api: {
+      syncPairHttpPolicy: async () => ({ ok: true, requiresExtraConfirm: false }),
+      syncPairClaim: async () => ({
+        ok: false,
+        error: 'certificate_error',
+        message: '证书不受信任。请核对指纹后确认，仅信任此主机和端口的这一张证书。',
+        certificateError: true,
+        needsTrustConfirm: true,
+        fingerprint256: 'AB:CD',
+        subjectCN: 'fnos',
+        hostKey: 'nas.example:8443',
+        confirmText: CERTIFICATE_TRUST_CONFIRM_TEXT,
+      }),
+    },
+  });
+  assert.equal(cert.needsTrustConfirm, true);
+  assert.equal(cert.fingerprint256, 'AB:CD');
+  assert.equal(pairUi.shouldOpenCertificateTrustDialog(cert), true);
+  const state = pairUi.reducePairUi(pairUi.initialPairUiState(), {
+    type: 'open_cert_trust_confirm',
+    confirmText: cert.confirmText,
+    fingerprint256: cert.fingerprint256,
+    subjectCN: cert.subjectCN,
+    hostKey: cert.hostKey,
+  });
+  assert.equal(state.dialog.id, 'pair-cert-trust-confirm');
+  assert.equal(state.dialog.role, 'dialog');
+  assert.equal(state.dialog.controlId, 'pair.certificate-trust');
+  assert.match(state.dialog.body, /AB:CD/);
+  assert.match(state.dialog.body, /nas\.example:8443/);
+  assert.match(state.dialog.body, /fnos/);
+  assert.match(state.dialog.body, /不会全局关闭证书校验/);
+
+  const ok = await pairUi.runPairSubmit({
+    code: '111222',
+    baseUrl: 'https://nas.example:8443',
+    trustCertificateAccepted: true,
+    certificateFingerprint: 'AB:CD',
+    api: {
+      syncPairHttpPolicy: async () => ({ ok: true, requiresExtraConfirm: false }),
+      syncPairClaim: async (payload) => {
+        calls.push(payload);
+        return { ok: true, status: { bound: true } };
+      },
+    },
+  });
+  assert.equal(ok.ok, true);
+  assert.equal(calls[calls.length - 1].trustCertificateAccepted, true);
+  assert.equal(calls[calls.length - 1].certificateFingerprint, 'AB:CD');
 });
