@@ -15,6 +15,7 @@ const {
   shouldShowInsecureHttpWarning,
   DEVICE_PORT_GUIDANCE_TEXT,
 } = require('./packages/sync-protocol/endpoints');
+const { isHostPortKey } = require('./sync-tls-trust');
 
 const SYNC_SETTINGS_FILE = 'sync-settings.json';
 
@@ -29,6 +30,67 @@ function defaultSettings() {
     lastError: null,
     lastUiState: 'unbound',
     httpAudit: [],
+    trustedCerts: {},
+  };
+}
+
+/**
+ * Root keys written to sync-settings.json. Anything else is dropped.
+ * trustedCerts must stay in this set or a confirmed NAS pin is silently lost.
+ */
+const PERSISTED_SETTING_KEYS = Object.freeze([
+  'version',
+  'endpoints',
+  'currentEndpointId',
+  'gatewayBearerBlocked',
+  'lastSyncAt',
+  'lastSuccessAt',
+  'lastError',
+  'lastUiState',
+  'httpAudit',
+  'trustedCerts',
+]);
+
+const MAX_TRUSTED_PEM_LENGTH = 16 * 1024;
+
+function sanitizeTrustedCerts(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [hostKey, value] of Object.entries(raw)) {
+    const key = String(hostKey || '').trim().toLowerCase();
+    if (!isHostPortKey(key) || !value || typeof value !== 'object') continue;
+    const pem = typeof value.pem === 'string' ? value.pem.trim() : '';
+    const fingerprint256 = typeof value.fingerprint256 === 'string' ? value.fingerprint256.trim() : '';
+    if (!pem || pem.length > MAX_TRUSTED_PEM_LENGTH || !fingerprint256) continue;
+    if (!pem.startsWith('-----BEGIN CERTIFICATE-----') || !pem.includes('-----END CERTIFICATE-----')) {
+      continue;
+    }
+    out[key] = {
+      pem,
+      fingerprint256,
+      subjectCN: typeof value.subjectCN === 'string' ? value.subjectCN : '',
+      issuerCN: typeof value.issuerCN === 'string' ? value.issuerCN : '',
+      validFrom: value.validFrom || null,
+      validTo: value.validTo || null,
+      trustedAt: Number(value.trustedAt) || null,
+    };
+  }
+  return out;
+}
+
+function persistedSettings(input) {
+  const src = input && typeof input === 'object' ? input : {};
+  return {
+    version: Number.isInteger(src.version) ? src.version : 1,
+    endpoints: dedupeEndpointsByCanonical(Array.isArray(src.endpoints) ? src.endpoints : []),
+    currentEndpointId: src.currentEndpointId || null,
+    gatewayBearerBlocked: src.gatewayBearerBlocked === true,
+    lastSyncAt: src.lastSyncAt != null ? src.lastSyncAt : null,
+    lastSuccessAt: src.lastSuccessAt != null ? src.lastSuccessAt : null,
+    lastError: Object.prototype.hasOwnProperty.call(src, 'lastError') ? src.lastError : null,
+    lastUiState: src.lastUiState || 'unbound',
+    httpAudit: Array.isArray(src.httpAudit) ? src.httpAudit.slice(-50) : [],
+    trustedCerts: sanitizeTrustedCerts(src.trustedCerts),
   };
 }
 
@@ -57,13 +119,7 @@ function createSyncSettingsStore(options = {}) {
     try {
       const raw = fsMod.readFileSync(filePath, 'utf8');
       const parsed = JSON.parse(raw);
-      const settings = {
-        ...defaultSettings(),
-        ...(parsed && typeof parsed === 'object' ? parsed : {}),
-        endpoints: Array.isArray(parsed && parsed.endpoints) ? parsed.endpoints : [],
-        httpAudit: Array.isArray(parsed && parsed.httpAudit) ? parsed.httpAudit : [],
-      };
-      settings.endpoints = dedupeEndpointsByCanonical(settings.endpoints);
+      const settings = persistedSettings(parsed);
       return { ok: true, settings, path: filePath };
     } catch {
       return { ok: false, error: 'read_failed', settings: defaultSettings(), path: filePath };
@@ -73,12 +129,7 @@ function createSyncSettingsStore(options = {}) {
   function write(settings) {
     const filePath = settingsPath();
     fsMod.mkdirSync(pathMod.dirname(filePath), { recursive: true });
-    const payload = {
-      ...defaultSettings(),
-      ...settings,
-      endpoints: dedupeEndpointsByCanonical(settings.endpoints || []),
-      httpAudit: Array.isArray(settings.httpAudit) ? settings.httpAudit.slice(-50) : [],
-    };
+    const payload = persistedSettings(settings);
     const tmp = `${filePath}.tmp`;
     fsMod.writeFileSync(tmp, `${JSON.stringify(payload, null, 2)}\n`, { encoding: 'utf8', mode });
     fsMod.renameSync(tmp, filePath);
@@ -314,6 +365,36 @@ function createSyncSettingsStore(options = {}) {
     return { ok: true, endpoint: next.endpoints[idx], view: getPublicView() };
   }
 
+  function getTrustedCert(hostKey) {
+    const key = String(hostKey || '').trim().toLowerCase();
+    if (!isHostPortKey(key)) return null;
+    const { settings } = read();
+    const row = settings.trustedCerts && settings.trustedCerts[key];
+    if (!row || !row.pem) return null;
+    return { ...row, hostKey: key };
+  }
+
+  function trustCertificate(hostKey, cert = {}) {
+    const key = String(hostKey || '').trim().toLowerCase();
+    if (!isHostPortKey(key)) return { ok: false, error: 'invalid_host' };
+    const { settings } = read();
+    const trustedCerts = sanitizeTrustedCerts({
+      ...(settings.trustedCerts || {}),
+      [key]: {
+        pem: cert.pem,
+        fingerprint256: cert.fingerprint256,
+        subjectCN: cert.subjectCN || '',
+        issuerCN: cert.issuerCN || '',
+        validFrom: cert.validFrom || null,
+        validTo: cert.validTo || null,
+        trustedAt: Date.now(),
+      },
+    });
+    if (!trustedCerts[key]) return { ok: false, error: 'invalid_certificate' };
+    write({ ...settings, trustedCerts });
+    return { ok: true, hostKey: key, view: getPublicView() };
+  }
+
   /**
    * Ensure pairing baseUrl exists as an endpoint (gateway kind by default).
    */
@@ -355,11 +436,14 @@ function createSyncSettingsStore(options = {}) {
     recordSyncMeta,
     updateEndpointHealth,
     ensureEndpointFromPairing,
+    getTrustedCert,
+    trustCertificate,
   };
 }
 
 module.exports = {
   SYNC_SETTINGS_FILE,
+  PERSISTED_SETTING_KEYS,
   createSyncSettingsStore,
   defaultSettings,
 };

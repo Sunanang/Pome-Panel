@@ -94,6 +94,16 @@ test('retry not_bound is Chinese and is not shown as a raw code', () => {
     settingsUi.humanizeSyncError({ error: 'UND_ERR_SOCKET' }, '配对失败'),
     /UND_ERR_SOCKET/,
   );
+  const timedOut = settingsUi.humanizeSyncError({ error: 'timeout', message: 'timeout' }, '配对失败');
+  assert.match(timedOut, /http:\/\//);
+  assert.match(timedOut, /https:\/\//);
+  assert.match(timedOut, /设备同步端口/);
+  assert.match(timedOut, /局域网/);
+  assert.doesNotMatch(timedOut, /^timeout$/);
+  assert.match(
+    settingsUi.humanizeSyncError({ error: 'certificate_fingerprint_mismatch' }, '配对失败'),
+    /重新核对指纹/,
+  );
   const retryBlock = workspaceJs.slice(
     workspaceJs.indexOf('settingsNasSyncRetry.addEventListener'),
   );

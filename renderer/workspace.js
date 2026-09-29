@@ -2166,7 +2166,11 @@
     }
   }
 
-  async function submitNasPair({ httpConfirmAccepted = false } = {}) {
+  async function submitNasPair({
+    httpConfirmAccepted = false,
+    trustCertificateAccepted = false,
+    certificateFingerprint = null,
+  } = {}) {
     if (!window.NasSyncPair || !window.notchAPI || typeof window.notchAPI.syncPairClaim !== 'function') return;
     const code = settingsNasPairCode?.value || '';
     const baseUrl = settingsNasSyncBaseUrl?.value || '';
@@ -2195,10 +2199,41 @@
       api: window.notchAPI,
       httpConfirmAccepted,
       allowInsecureHttp: Boolean(policy && policy.insecureBound),
+      trustCertificateAccepted,
+      certificateFingerprint,
     });
     applyNasPairUi({ type: 'submit_end' });
     if (!result.ok) {
       const askTrust = window.NasSyncPair.shouldOpenCertificateTrustDialog(result) === true;
+      if (askTrust && trustCertificateAccepted !== true) {
+        applyNasPairUi({
+          type: 'open_cert_trust_confirm',
+          confirmText: result.confirmText,
+          fingerprint256: result.fingerprint256,
+          subjectCN: result.subjectCN,
+          issuerCN: result.issuerCN,
+          validFrom: result.validFrom,
+          validTo: result.validTo,
+          hostKey: result.hostKey,
+        });
+        const decision = await openNasDialog(nasPairUi.dialog);
+        if (!decision.confirmed) {
+          applyNasPairUi({ type: 'close_dialog' });
+          applyNasPairUi({
+            type: 'failure',
+            message: '已取消信任证书',
+            needsTrustConfirm: false,
+          });
+          setNasSyncHint('已取消信任证书', 'warning');
+          return;
+        }
+        closeNasDialog(true);
+        return submitNasPair({
+          httpConfirmAccepted,
+          trustCertificateAccepted: true,
+          certificateFingerprint: result.fingerprint256,
+        });
+      }
       applyNasPairUi({
         type: 'failure',
         error: result.error,

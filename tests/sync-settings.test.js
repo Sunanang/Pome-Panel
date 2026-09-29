@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createSyncSettingsStore } = require('../sync-settings');
+const { createSyncSettingsStore, PERSISTED_SETTING_KEYS } = require('../sync-settings');
 
 function tempStore() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pome-sync-settings-'));
@@ -82,6 +82,55 @@ test('gatewayBearerBlocked exposes device-port guidance; both kinds coexist', ()
   assert.match(view.devicePortGuidance, /设备同步端口/);
   assert.equal(view.endpoints.some((e) => e.kind === 'gateway'), true);
   assert.equal(view.endpoints.some((e) => e.kind === 'device-port'), true);
+});
+
+test('trusted certs persist per host:port and unknown settings keys are dropped', () => {
+  const { dir, store } = tempStore();
+  const pem = '-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----\n';
+  const other = '-----BEGIN CERTIFICATE-----\nREVG\n-----END CERTIFICATE-----\n';
+  assert.equal(store.trustCertificate('not a key', { pem, fingerprint256: 'AA' }).error, 'invalid_host');
+  assert.equal(
+    store.trustCertificate('nas.local:443', { pem: 'nope', fingerprint256: 'AA' }).error,
+    'invalid_certificate',
+  );
+  const saved = store.trustCertificate('NAS.Local:443', {
+    pem,
+    fingerprint256: 'AA:BB',
+    subjectCN: 'fnos',
+  });
+  assert.equal(saved.ok, true);
+  assert.equal(saved.hostKey, 'nas.local:443');
+  store.trustCertificate('nas.local:8443', { pem: other, fingerprint256: 'CC:DD' });
+  assert.equal(store.getTrustedCert('nas.local:443').fingerprint256, 'AA:BB');
+  assert.equal(store.getTrustedCert('nas.local:443').subjectCN, 'fnos');
+  assert.equal(store.getTrustedCert('nas.local:8443').fingerprint256, 'CC:DD');
+  assert.equal(store.getTrustedCert('other.local:443'), null);
+  assert.equal(JSON.stringify(saved.view).includes('BEGIN CERTIFICATE'), false);
+
+  const file = path.join(dir, 'sync-settings.json');
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  raw.droppedSecret = 'nope';
+  raw.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  fs.writeFileSync(file, JSON.stringify(raw));
+  store.recordSyncMeta({ lastUiState: 'synced' });
+  const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(onDisk.droppedSecret, undefined);
+  assert.equal(onDisk.NODE_TLS_REJECT_UNAUTHORIZED, undefined);
+  assert.equal(onDisk.trustedCerts['nas.local:443'].fingerprint256, 'AA:BB');
+  assert.equal(onDisk.trustedCerts['nas.local:8443'].fingerprint256, 'CC:DD');
+  assert.deepEqual(Object.keys(onDisk).sort(), [...PERSISTED_SETTING_KEYS].sort());
+
+  const reloaded = createSyncSettingsStore({
+    getUserDataPath: () => dir,
+    fs,
+    path,
+  });
+  assert.equal(reloaded.trustCertificate('nas.local:443', {
+    pem: other,
+    fingerprint256: 'EE:FF',
+  }).ok, true);
+  assert.equal(reloaded.getTrustedCert('nas.local:443').fingerprint256, 'EE:FF');
+  assert.equal(reloaded.getTrustedCert('nas.local:8443').fingerprint256, 'CC:DD');
 });
 
 test('ensureEndpointFromPairing upserts current', () => {
