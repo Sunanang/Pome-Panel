@@ -10,7 +10,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createApp } = require('./createApp');
 const { createMemoryStore } = require('./store');
-const { listenPersistedDevicePort } = require('./devicePort');
+const {
+  chooseDeviceBindHost,
+  listenPersistedDevicePort,
+} = require('./devicePort');
 const { wrapWithGatewayPrefix, stripGatewayPrefix, DEFAULT_GATEWAY_PREFIX } = require('./gatewayHttp');
 
 function readOrCreateServerId(filePath) {
@@ -40,6 +43,9 @@ async function main() {
   const configuredPortFile = process.env.FNOS_DEVICE_PORT_FILE;
   const devicePortFile = (configuredPortFile && String(configuredPortFile).trim())
     || path.join(dataDir, 'device-port');
+  const configuredBindFile = process.env.FNOS_DEVICE_BIND_FILE;
+  const deviceBindFile = (configuredBindFile && String(configuredBindFile).trim())
+    || path.join(dataDir, 'device-bind');
   const enableDevicePort = process.env.FNOS_ENABLE_DEVICE_PORT !== '0';
   const wwwRoot = path.join(__dirname, '..', 'www');
   const uiRoot = path.join(__dirname, '..', 'ui');
@@ -49,6 +55,8 @@ async function main() {
 
   const store = createMemoryStore({ serverId: readOrCreateServerId(serverIdFile) });
   store.devicePortFile = devicePortFile;
+  store.deviceBindFile = deviceBindFile;
+  store.deviceBindEnv = process.env.FNOS_DEVICE_BIND;
   store.devicePortEnabled = enableDevicePort;
 
   const gatewayBase = createApp({ listenMode: 'gateway', store });
@@ -66,10 +74,15 @@ async function main() {
 
   if (enableDevicePort) {
     const device = createApp({ listenMode: 'device-port', store });
+    const bind = chooseDeviceBindHost({
+      envValue: process.env.FNOS_DEVICE_BIND,
+      bindFile: deviceBindFile,
+    });
     const info = await listenPersistedDevicePort(device, {
       envValue: devicePortEnv,
       portFile: devicePortFile,
-      host: '127.0.0.1',
+      bindFile: deviceBindFile,
+      host: bind.host,
     });
     store.deviceListenPort = info.port;
     store.deviceListenHost = info.host;
@@ -77,10 +90,14 @@ async function main() {
       event: 'device_port_listen',
       host: info.host,
       port: info.port,
+      lanEnabled: info.lanEnabled === true,
+      frpTarget: info.frpTarget || null,
       reused: info.reused,
       fellBack: info.fellBack,
       source: info.source,
+      bindSource: bind.source,
       portFile: devicePortFile,
+      bindFile: deviceBindFile,
       note: 'port not hardcoded; clients must use full URL; never trust X-Trim-*',
     }));
   }

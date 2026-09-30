@@ -4,7 +4,7 @@
     "listenUnix": true,
     "listenTcp": true,
     "tcpPortFixed": true,
-    "note": "设备同步端口由安装向导 wizard_port 写入，启动时固定绑定；禁止在代码里写死 5001"
+    "note": "设备同步端口由安装向导 wizard_port 写入，启动时固定绑定；wizard_lan 控制 127.0.0.1 或 0.0.0.0；禁止在代码里写死 5001"
   },
   "filesystem": {
     "dataDir": true,

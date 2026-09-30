@@ -1,6 +1,6 @@
 #!/bin/bash
-# Persist the install/config/upgrade wizard port.
-# The value is whatever the user typed. This script does not invent a port.
+# Persist the install/config/upgrade wizard port and optional LAN bind.
+# The values are whatever the user typed. This script does not invent a port.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -38,6 +38,43 @@ if [[ -z "$PORT" ]]; then
   fail "请填写设备同步端口"
 fi
 
+# wizard_lan: localhost (default) | lan. Also accepts 0/1, true/false, bind addresses.
+resolve_bind() {
+  local raw
+  raw="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$raw" in
+    ''|localhost|loopback|127.0.0.1|::1|0|false|no)
+      printf '%s\n' '127.0.0.1'
+      ;;
+    lan|all|0.0.0.0|::|1|true|yes)
+      printf '%s\n' '0.0.0.0'
+      ;;
+    *)
+      printf '%s\n' '127.0.0.1'
+      ;;
+  esac
+}
+
+BIND=""
+for candidate in \
+  "${wizard_lan:-}" \
+  "${WIZARD_LAN:-}" \
+  "${Wizard_lan:-}" \
+  "${TRIM_WIZARD_LAN:-}" \
+  "${FNOS_DEVICE_BIND:-}"
+do
+  if [[ -n "${candidate}" ]]; then
+    BIND="$(resolve_bind "$candidate")"
+    break
+  fi
+done
+# Config form may omit the radio; keep an existing bind file, else loopback.
+KEEP_EXISTING_BIND=0
+if [[ -z "$BIND" ]]; then
+  KEEP_EXISTING_BIND=1
+  BIND="127.0.0.1"
+fi
+
 write_port() {
   local file="$1"
   mkdir -p "$(dirname "$file")"
@@ -45,8 +82,25 @@ write_port() {
   chmod 600 "$file" || true
 }
 
+write_bind() {
+  local file="$1"
+  mkdir -p "$(dirname "$file")"
+  printf '%s\n' "$BIND" >"$file"
+  chmod 600 "$file" || true
+}
+
+maybe_write_bind() {
+  local file="$1"
+  if [[ "$KEEP_EXISTING_BIND" -eq 1 && -f "$file" ]]; then
+    return 0
+  fi
+  write_bind "$file"
+}
+
 if [[ -n "${TRIM_PKGETC:-}" ]]; then
-  write_port "$TRIM_PKGETC/device-port"
+  DATA_ETC="$TRIM_PKGETC"
+  write_port "$DATA_ETC/device-port"
+  maybe_write_bind "$DATA_ETC/device-bind"
 fi
 if [[ -n "${FNOS_DATA_DIR:-}" ]]; then
   DATA_DIR="$FNOS_DATA_DIR"
@@ -56,7 +110,9 @@ else
   DATA_DIR="$ROOT/data"
 fi
 write_port "$DATA_DIR/device-port"
+maybe_write_bind "$DATA_DIR/device-bind"
 if [[ -n "${TRIM_PKGVAR:-}" && "$TRIM_PKGVAR" != "$DATA_DIR" ]]; then
   write_port "$TRIM_PKGVAR/device-port"
+  maybe_write_bind "$TRIM_PKGVAR/device-bind"
 fi
-echo "saved device port $PORT"
+echo "saved device port $PORT bind $BIND"

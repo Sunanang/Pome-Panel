@@ -82,11 +82,18 @@
     const n = Number(port);
     const enabled = !state || state.enabled !== false;
     if (enabled && Number.isInteger(n) && n >= 1 && n <= 65535) {
-      const bindHost = !host || host === '0.0.0.0' || host === '::' ? '127.0.0.1' : String(host);
+      const lanEnabled = state && state.lanEnabled === true
+        || host === '0.0.0.0'
+        || host === '::';
+      const frpTarget = (state && state.frpTarget)
+        || `127.0.0.1:${n}`;
+      const lanHint = lanEnabled
+        ? `已开启局域网监听（${host || '0.0.0.0'}）。同一 Wi‑Fi 下 Mac 同步地址可用 http://NAS内网IP:${n}。`
+        : '当前仅监听本机；同一 Wi‑Fi 下请改应用设置为「局域网」并重启，或继续走 FRP。';
       return {
         value: String(n),
-        hint: `这是安装时填写的固定端口。FRP 本地目标填 ${bindHost}:${n}；公网端口可自定（例如 34931）；Mac 同步地址用 http://公网IP:公网端口。不要填成 NAS:34931，除非安装时填的就是 34931。`,
-        copyText: `${bindHost}:${n}`,
+        hint: `这是安装时填写的固定端口。${lanHint}FRP 本地目标填 ${frpTarget}；公网端口可自定（例如 34931）；经 FRP 时 Mac 用 http://公网IP:公网端口。不要填成 NAS:34931，除非安装时填的就是 34931。`,
+        copyText: frpTarget,
         available: true,
       };
     }
@@ -402,12 +409,15 @@
         const copy = applyDevicePortCopy(body.port, body.host, {
           enabled: body.enabled,
           source: body.source,
+          lanEnabled: body.lanEnabled === true,
+          frpTarget: body.frpTarget || null,
         });
         return {
           ok: copy.available,
           port: copy.available ? Number(body.port) : null,
           host: copy.available ? (body.host || '127.0.0.1') : null,
           enabled: body.enabled !== false,
+          lanEnabled: body.lanEnabled === true,
           target: copy.copyText || null,
         };
       } catch {

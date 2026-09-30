@@ -13,10 +13,12 @@ const { createApp } = require('../fnos/app/server/createApp');
 const { createMemoryStore } = require('../fnos/app/server/store');
 const { dispatch } = require('../fnos/app/server/testHarness');
 const {
+  chooseDeviceBindHost,
   chooseDevicePort,
   describeDeviceListenPort,
   listenPersistedDevicePort,
   parseRequestedDevicePort,
+  resolveDeviceBindHost,
 } = require('../fnos/app/server/devicePort');
 const pairUi = require('../fnos/app/ui/pair.js');
 
@@ -36,6 +38,43 @@ function close(server) {
     server.close((err) => (err ? reject(err) : resolve()));
   });
 }
+
+
+test('device bind host resolves lan vs loopback', () => {
+  assert.equal(resolveDeviceBindHost(undefined), '127.0.0.1');
+  assert.equal(resolveDeviceBindHost('localhost'), '127.0.0.1');
+  assert.equal(resolveDeviceBindHost('lan'), '0.0.0.0');
+  assert.equal(resolveDeviceBindHost('0.0.0.0'), '0.0.0.0');
+  assert.equal(chooseDeviceBindHost({}).host, '127.0.0.1');
+  assert.equal(chooseDeviceBindHost({ envValue: 'lan' }).source, 'env');
+});
+
+test('lan bind listens on 0.0.0.0 and keeps FRP loopback target', async () => {
+  const dir = tmpDir('fnos-port-lan-');
+  const portFile = path.join(dir, 'device-port');
+  const bindFile = path.join(dir, 'device-bind');
+  const holder = http.createServer();
+  const reserved = await listen(holder);
+  await close(holder);
+  const app = createApp({ listenMode: 'device-port' });
+  const info = await listenPersistedDevicePort(app, {
+    envValue: String(reserved.port),
+    portFile,
+    bindFile,
+    host: 'lan',
+  });
+  assert.equal(info.host, '0.0.0.0');
+  assert.equal(info.lanEnabled, true);
+  assert.equal(info.frpTarget, `127.0.0.1:${info.port}`);
+  assert.equal(fs.readFileSync(bindFile, 'utf8').trim(), '0.0.0.0');
+  await new Promise((resolve, reject) => {
+    const socket = net.connect(info.port, '127.0.0.1');
+    socket.once('connect', () => { socket.end(); resolve(); });
+    socket.once('error', reject);
+  });
+  await app.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
 
 test('parseRequestedDevicePort treats empty and 0 as ephemeral', () => {
   assert.equal(parseRequestedDevicePort(undefined), null);
@@ -170,6 +209,13 @@ test('GET /api/v1/device-port reports the live bind, then the saved file', async
   fromFile.devicePortFile = portFile;
   assert.equal(describeDeviceListenPort(fromFile).source, 'file');
   assert.equal(describeDeviceListenPort(fromFile).target, '127.0.0.1:41234');
+  assert.equal(describeDeviceListenPort(fromFile).lanEnabled, false);
+  const bindFile = path.join(dir, 'device-bind');
+  fs.writeFileSync(bindFile, '0.0.0.0\n');
+  fromFile.deviceBindFile = bindFile;
+  assert.equal(describeDeviceListenPort(fromFile).host, '0.0.0.0');
+  assert.equal(describeDeviceListenPort(fromFile).lanEnabled, true);
+  assert.equal(describeDeviceListenPort(fromFile).frpTarget, '127.0.0.1:41234');
 
   const store = createMemoryStore({ serverId: 'srv-port' });
   store.devicePortEnabled = true;
@@ -204,19 +250,20 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.13');
+  assert.equal(manifestJson.version, '0.9.14');
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'pome-panel');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
   assert.equal(manifestJson.appPath.includes('.'), false);
   assert.equal(manifestJson.devicePort.field, 'wizard_port');
+  assert.equal(manifestJson.devicePort.bindField, 'wizard_lan');
   assert.doesNotMatch(JSON.stringify(manifestJson), /Sunanang|Pome Panel Sync/);
 
   const official = fs.readFileSync(path.join(root, 'manifest'), 'utf8');
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.13$/m);
+  assert.match(official, /^version=0\.9\.14$/m);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=pome-panel\.main$/m);
@@ -228,6 +275,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.ok(changelog && changelog.includes('TRIM_APPDEST/server'));
   assert.ok(changelog && changelog.includes('sync-protocol'));
   assert.ok(changelog && changelog.includes('卸载'));
+  assert.ok(changelog && changelog.includes('局域网'));
   assert.equal(changelog.includes('#'), false);
 
   const portPattern = /^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/;
@@ -246,11 +294,17 @@ test('install wizard and package identity use a user-chosen port', () => {
     assert.equal(range.min, 1);
     assert.equal(range.max, 65535);
     assert.equal(field.rules.some((rule) => rule.pattern === portPattern.source), true);
+    const lan = steps.flatMap((step) => step.items).find((item) => item.field === 'wizard_lan');
+    assert.ok(lan, rel);
+    assert.equal(lan.type, 'radio');
+    assert.equal(lan.initValue, 'localhost');
+    assert.deepEqual(lan.options.map((option) => option.value), ['localhost', 'lan']);
   }
   const configSteps = JSON.parse(fs.readFileSync(path.join(root, 'wizard/config'), 'utf8'));
   const configTips = configSteps.flatMap((step) => step.items).find((item) => item.type === 'tips');
   assert.match(configTips.helpText, /没填端口时应用也能启用/);
   assert.match(configTips.helpText, /重启/);
+  assert.match(configTips.helpText, /局域网/);
   const uiConfig = JSON.parse(fs.readFileSync(path.join(root, 'app/ui/config'), 'utf8'));
   const launch = uiConfig['.url']['pome-panel.main'];
   assert.equal(launch.title, 'Pome Panel');
@@ -296,6 +350,7 @@ test('devices tab shows the current local port for FRP', async () => {
   assert.match(html, /class="tile settings-card device-port-card"/);
   assert.match(html, /本机同步端口/);
   assert.match(html, /127\.0\.0\.1:此端口/);
+  assert.match(html, /局域网/);
   assert.match(html, /http:\/\/公网IP:公网端口/);
   assert.match(html, /不要填成 NAS:34931/);
   assert.match(css, /\.devices-page > \.device-port-card/);
@@ -307,6 +362,10 @@ test('devices tab shows the current local port for FRP', async () => {
   assert.match(shown.hint, /安装时填写的固定端口/);
   assert.match(shown.hint, /FRP 本地目标填 127\.0\.0\.1:41234/);
   assert.match(shown.hint, /http:\/\/公网IP:公网端口/);
+  const lanShown = pairUi.formatDevicePortCopy(41234, '0.0.0.0', { enabled: true, lanEnabled: true, frpTarget: '127.0.0.1:41234' });
+  assert.equal(lanShown.copyText, '127.0.0.1:41234');
+  assert.match(lanShown.hint, /已开启局域网监听/);
+  assert.match(lanShown.hint, /NAS内网IP:41234/);
   assert.equal(pairUi.formatDevicePortCopy(null, null, { enabled: false }).value, '未开启');
   assert.match(pairUi.formatDevicePortCopy(null, null, { enabled: false }).hint, /安装向导/);
   assert.equal(pairUi.formatDevicePortCopy(null).value, '未配置');
@@ -588,6 +647,49 @@ test('server keeps the gateway up when no device port is configured', async () =
   }
 });
 
+test('server binds 0.0.0.0 when device-bind requests lan', async () => {
+  const dir = tmpDir('fnos-gateway-lan-');
+  const holder = http.createServer();
+  const addr = await listen(holder);
+  await close(holder);
+  const portFile = path.join(dir, 'device-port');
+  const bindFile = path.join(dir, 'device-bind');
+  fs.writeFileSync(portFile, `${addr.port}\n`);
+  fs.writeFileSync(bindFile, '0.0.0.0\n');
+  const socketPath = path.join(dir, 'app.sock');
+  const child = spawn(process.execPath, [path.join(__dirname, '..', 'fnos/app/server/index.js')], {
+    env: {
+      ...process.env,
+      FNOS_SOCKET_PATH: socketPath,
+      FNOS_DATA_DIR: dir,
+      FNOS_DEVICE_PORT: '',
+      FNOS_DEVICE_PORT_FILE: portFile,
+      FNOS_DEVICE_BIND_FILE: bindFile,
+      FNOS_ENABLE_DEVICE_PORT: '1',
+      FNOS_SERVER_ID_FILE: path.join(dir, 'server-id'),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let out = '';
+  child.stdout.on('data', (chunk) => { out += chunk; });
+  child.stderr.on('data', (chunk) => { out += chunk; });
+  const started = Date.now();
+  try {
+    while (!out.includes('device_port_listen') || !fs.existsSync(socketPath)) {
+      if (child.exitCode != null) throw new Error(`exited ${child.exitCode}\n${out}`);
+      if (Date.now() - started > 4000) throw new Error(`timeout\n${out}`);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    assert.match(out, /"host":"0\.0\.0\.0"/);
+    assert.match(out, /"lanEnabled":true/);
+    assert.equal(child.exitCode, null);
+  } finally {
+    if (child.exitCode == null) child.kill('SIGTERM');
+    await new Promise((resolve) => child.once('exit', resolve));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('server binds the saved device port once it is configured', async () => {
   const dir = tmpDir('fnos-gateway-port-');
   const holder = http.createServer();
@@ -802,6 +904,8 @@ test('install callback saves wizard_port and rejects an empty value', async (t) 
   });
   assert.equal(fs.readFileSync(path.join(etc, 'device-port'), 'utf8').trim(), '41234');
   assert.equal(fs.readFileSync(path.join(data, 'device-port'), 'utf8').trim(), '41234');
+  assert.equal(fs.readFileSync(path.join(etc, 'device-bind'), 'utf8').trim(), '127.0.0.1');
+  assert.equal(fs.readFileSync(path.join(data, 'device-bind'), 'utf8').trim(), '127.0.0.1');
   const rejected = await new Promise((resolve) => {
     execFile('bash', [script], {
       env: { ...process.env, wizard_port: '', TRIM_PKGETC: etc, FNOS_DATA_DIR: data },
@@ -809,6 +913,20 @@ test('install callback saves wizard_port and rejects an empty value', async (t) 
   });
   assert.ok(rejected);
   assert.match(`${rejected.stdout || ''}\n${rejected.stderr || ''}\n${rejected.message || ''}`, /请填写设备同步端口/);
+
+
+  await new Promise((resolve, reject) => {
+    execFile('bash', [script], {
+      env: {
+        ...process.env,
+        wizard_port: '45875',
+        wizard_lan: 'lan',
+        TRIM_PKGETC: etc,
+        FNOS_DATA_DIR: data,
+      },
+    }, (err, stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve(stdout)));
+  });
+  assert.equal(fs.readFileSync(path.join(data, 'device-bind'), 'utf8').trim(), '0.0.0.0');
 
   const varDir = path.join(dir, 'var');
   await new Promise((resolve, reject) => {

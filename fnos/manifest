@@ -1,7 +1,7 @@
 appname=pome-panel
-version=0.9.13
+version=0.9.14
 display_name=Pome Panel
-desc=在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/pome-panel。没配端口时网关仍会启动；配好后固定监听 127.0.0.1。
+desc=在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/pome-panel。没配端口时网关仍会启动；配好后默认监听 127.0.0.1，可选局域网 0.0.0.0。
 source=thirdparty
 platform=all
 maintainer=Lando
@@ -12,4 +12,4 @@ desktop_uidir=ui
 desktop_applaunchname=pome-panel.main
 ctl_stop=true
 checkport=false
-changelog=0.9.13：桌面图标改为正式 Pome Panel 图标，去掉占位黑块。应用 ID 仍是 pome-panel，网关路径为 /app/pome-panel。启动入口仍是 TRIM_APPDEST/server。同步协议仍在 target/packages/sync-protocol。卸载仍可保留或删除数据。
+changelog=0.9.14：设备同步端口可选局域网监听（0.0.0.0）。默认仍为 127.0.0.1 配合 FRP。应用设置新增监听范围。启动入口仍是 TRIM_APPDEST/server。同步协议仍在 target/packages/sync-protocol。卸载仍可保留或删除数据。

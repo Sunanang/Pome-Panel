@@ -117,6 +117,8 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
           port: reported.port,
           host: reported.host,
           target: reported.target,
+          frpTarget: reported.frpTarget,
+          lanEnabled: reported.lanEnabled === true,
           source: reported.source,
         });
         return;

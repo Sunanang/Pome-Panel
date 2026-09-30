@@ -34,6 +34,7 @@ PID_FILE="${FNOS_PID_FILE:-$RUNTIME_DIR/server.pid}"
 # Stable data-dir file so an FPK upgrade that resets runtime/ keeps the FRP local port.
 # FNOS_DEVICE_PORT_FILE still overrides. Legacy runtime/device-port.txt is copied once.
 DEVICE_PORT_FILE="${FNOS_DEVICE_PORT_FILE:-$DATA_DIR/device-port}"
+DEVICE_BIND_FILE="${FNOS_DEVICE_BIND_FILE:-$DATA_DIR/device-bind}"
 LEGACY_DEVICE_PORT_FILE="$RUNTIME_DIR/device-port.txt"
 if [[ ! -f "$DEVICE_PORT_FILE" && -f "$LEGACY_DEVICE_PORT_FILE" && "$DEVICE_PORT_FILE" != "$LEGACY_DEVICE_PORT_FILE" ]]; then
   cp "$LEGACY_DEVICE_PORT_FILE" "$DEVICE_PORT_FILE"
@@ -54,6 +55,15 @@ else
   unset FNOS_DEVICE_PORT
 fi
 export FNOS_DEVICE_PORT_FILE="$DEVICE_PORT_FILE"
+export FNOS_DEVICE_BIND_FILE="$DEVICE_BIND_FILE"
+# Prefer an explicit env bind; otherwise let Node read the saved device-bind file.
+if [[ -n "${FNOS_DEVICE_BIND:-}" ]]; then
+  export FNOS_DEVICE_BIND
+elif [[ -f "$DEVICE_BIND_FILE" ]]; then
+  export FNOS_DEVICE_BIND="$(tr -d '[:space:]' <"$DEVICE_BIND_FILE")"
+else
+  unset FNOS_DEVICE_BIND
+fi
 export FNOS_SERVER_ID_FILE="${FNOS_SERVER_ID_FILE:-$DATA_DIR/server-id}"
 
 export PATH="/var/apps/nodejs_v24/target/bin:/var/apps/nodejs_v22/target/bin:${PATH:-/usr/local/bin:/usr/bin}"
