@@ -7,7 +7,7 @@
 (function initNasSyncPair(global) {
   const PAIR_CODE_RE = /^\d{6}$/;
   const HTTPS_ON_HTTP_MESSAGE = '该地址说的是 HTTP，不是 HTTPS。请把 Base URL 改为 http://…';
-  const CONNECTION_TIMEOUT_MESSAGE = '连接超时。请逐项检查：① 若 NAS 同步端口是明文 HTTP，请使用 http:// 而不是 https://；② 端口是 Pome Panel Sync 页面上的「设备同步端口」，且 frp 映射到该端口；③ 本机能够访问这台 NAS（优先试局域网 IP）。';
+  const CONNECTION_TIMEOUT_MESSAGE = '连接超时。请逐项检查：① 若 NAS 同步端口是明文 HTTP，请使用 http:// 而不是 https://；② 端口是 Pome Panel Sync 页面上的「设备同步端口」，且端口转发或 frp 等映射到该端口；③ 本机能够访问这台 NAS（优先试局域网 IP）。';
   const CERTIFICATE_TRUST_CONFIRM_TEXT = '该地址使用自签或不受信证书。确认后只信任这一张证书对应的主机和端口，不会全局关闭证书校验。证书更换后需要重新确认。';
 
   function formatCertificateTrustBody(details = {}) {

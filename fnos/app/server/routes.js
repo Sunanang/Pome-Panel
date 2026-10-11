@@ -502,7 +502,8 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
           return;
         }
         const cursor = url.searchParams.get('cursor');
-        sendJson(res, 200, store.pull(id.uid, { cursor }));
+        const collection = url.searchParams.get('collection') || undefined;
+        sendJson(res, 200, store.pull(id.uid, { cursor, collection }));
         return;
       }
 

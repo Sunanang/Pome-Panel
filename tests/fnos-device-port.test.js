@@ -299,12 +299,27 @@ test('install wizard and package identity use a user-chosen port', () => {
     assert.equal(lan.type, 'radio');
     assert.equal(lan.initValue, 'localhost');
     assert.deepEqual(lan.options.map((option) => option.value), ['localhost', 'lan']);
+    // 用户必须在填端口的同一页看懂：内网 IP / 外网 IP 两种同步，以及安全提示。
+    assert.match(lan.options[0].label, /仅本机/, rel);
+    assert.match(lan.options[0].label, /127\.0\.0\.1/, rel);
+    assert.match(lan.options[1].label, /局域网/, rel);
+    assert.match(lan.options[1].label, /内网 IP/, rel);
+    const tips = steps.flatMap((step) => step.items).find((item) => item.type === 'tips');
+    assert.match(tips.helpText, /内网 IP 同步/, rel);
+    assert.match(tips.helpText, /外网 IP 同步/, rel);
+    assert.match(tips.helpText, /安全提示/, rel);
+    assert.match(tips.helpText, /仅本机/, rel);
+    assert.match(tips.helpText, /局域网/, rel);
   }
   const configSteps = JSON.parse(fs.readFileSync(path.join(root, 'wizard/config'), 'utf8'));
   const configTips = configSteps.flatMap((step) => step.items).find((item) => item.type === 'tips');
   assert.match(configTips.helpText, /没填端口时应用也能启用/);
   assert.match(configTips.helpText, /重启/);
   assert.match(configTips.helpText, /局域网/);
+  const upgradeSteps = JSON.parse(fs.readFileSync(path.join(root, 'wizard/upgrade'), 'utf8'));
+  const upgradeTips = upgradeSteps.flatMap((step) => step.items).find((item) => item.type === 'tips');
+  assert.match(upgradeTips.helpText, /没保存成功/);
+  assert.match(upgradeTips.helpText, /应用也会先启用/);
   const uiConfig = JSON.parse(fs.readFileSync(path.join(root, 'app/ui/config'), 'utf8'));
   const launch = uiConfig['.url']['pome-panel.main'];
   assert.equal(launch.title, 'Pome Panel');
@@ -340,6 +355,9 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(uninstallTips, /仅卸载可保留现有文件以便重装/);
   const wizardHtml = fs.readFileSync(path.join(root, 'wizard/index.html'), 'utf8');
   assert.match(wizardHtml, /Pome Panel/);
+  assert.match(wizardHtml, /内网 IP 同步/);
+  assert.match(wizardHtml, /外网 IP 同步/);
+  assert.match(wizardHtml, /安全提示/);
   assert.doesNotMatch(wizardHtml, /Pome Panel Sync|Sunanang/);
 });
 
@@ -349,10 +367,12 @@ test('devices tab shows the current local port for FRP', async () => {
   assert.match(html, /id="device-port-value"/);
   assert.match(html, /class="tile settings-card device-port-card"/);
   assert.match(html, /本机同步端口/);
-  assert.match(html, /127\.0\.0\.1:此端口/);
+  assert.match(html, /同步地址/);
+  assert.match(html, /映射后的外网地址/);
   assert.match(html, /局域网/);
-  assert.match(html, /http:\/\/公网IP:公网端口/);
   assert.match(html, /不要填成 NAS:34931/);
+  assert.doesNotMatch(html, /FRP 本地目标/);
+  assert.doesNotMatch(html, /经 FRP/);
   assert.match(css, /\.devices-page > \.device-port-card/);
   assert.doesNotMatch(html.replace(/<script[\s\S]*?<\/script>/gi, ''), /\/api\/v1\//);
 
@@ -360,8 +380,12 @@ test('devices tab shows the current local port for FRP', async () => {
   assert.equal(shown.value, '41234');
   assert.equal(shown.copyText, '127.0.0.1:41234');
   assert.match(shown.hint, /安装时填写的固定端口/);
-  assert.match(shown.hint, /FRP 本地目标填 127\.0\.0\.1:41234/);
-  assert.match(shown.hint, /http:\/\/公网IP:公网端口/);
+  assert.match(shown.hint, /只有 NAS 本机能访问/);
+  assert.match(shown.hint, /端口转发/);
+  assert.match(shown.hint, /不要填成 NAS:34931/);
+  assert.match(shown.hint, /明文 HTTP/);
+  assert.doesNotMatch(shown.hint, /FRP 本地目标/);
+  assert.doesNotMatch(shown.hint, /公网IP:公网端口/);
   const lanShown = pairUi.formatDevicePortCopy(41234, '0.0.0.0', { enabled: true, lanEnabled: true, frpTarget: '127.0.0.1:41234' });
   assert.equal(lanShown.copyText, '127.0.0.1:41234');
   assert.match(lanShown.hint, /已开启局域网监听/);
@@ -415,7 +439,8 @@ test('devices tab shows the current local port for FRP', async () => {
   assert.equal(loaded.port, 41234);
   assert.equal(valueEl.textContent, '41234');
   assert.equal(copyEl.hidden, false);
-  assert.match(hintEl.textContent, /127\.0\.0\.1:41234/);
+  assert.match(hintEl.textContent, /只有 NAS 本机能访问/);
+  assert.match(hintEl.textContent, /端口转发/);
   assert.match(hintEl.textContent, /不要填成 NAS:34931/);
   const copiedResult = await controller.copyDevicePort();
   assert.equal(copiedResult.ok, true);

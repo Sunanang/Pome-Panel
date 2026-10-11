@@ -235,6 +235,7 @@ test('pair timeout copy and certificate trust dialog keep the confirmed fingerpr
   assert.match(CONNECTION_TIMEOUT_MESSAGE, /http:\/\//);
   assert.match(CONNECTION_TIMEOUT_MESSAGE, /https:\/\//);
   assert.match(CONNECTION_TIMEOUT_MESSAGE, /设备同步端口/);
+  assert.match(CONNECTION_TIMEOUT_MESSAGE, /端口转发或 frp 等映射/);
   assert.match(CONNECTION_TIMEOUT_MESSAGE, /局域网/);
 
   const calls = [];

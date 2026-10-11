@@ -11,6 +11,9 @@ const {
   buildWorkspaceEntities,
   projectWorkspaceEntities,
   planWorkspaceSync,
+  selectWorkspaceChanges,
+  dedupeWorkspaceSnapshot,
+  hashesForEntities,
   AUDIO_CHUNK_RAW,
 } = require('../workspace-sync');
 
@@ -154,6 +157,34 @@ test('missing account key does not emit plaintext secrets', () => {
   assert.equal(built.entities.some((entity) => entity.collection === 'notes'), true);
 });
 
+test('a Cursor-only configuration syncs in a sealed AI payload, including explicit clearing', () => {
+  const key = accountKey();
+  const token = 'fixture-cursor-nas-token';
+  assert.equal(countWorkspaceContent({ aiSettings: { cursorToken: token } }).total, 1);
+  for (const value of [token, '']) {
+    const built = buildWorkspaceEntities({ aiSettings: { cursorToken: value } }, { accountKey: key });
+    assert.equal(built.entities.length, 1);
+    assert.equal(built.entities[0].entityId, 'ai:settings');
+    assert.equal(built.entities[0].payload.sealed, true);
+    assert.equal(JSON.stringify(built.entities).includes(token), false);
+    const projected = projectWorkspaceEntities(built.entities, { accountKey: key });
+    assert.equal(projected.aiApplied, true);
+    assert.equal(projected.snapshot.aiSettings.cursorToken, value);
+    const wrongKey = projectWorkspaceEntities(built.entities, { accountKey: accountKey() });
+    assert.equal(wrongKey.aiApplied, false);
+  }
+  const blocked = buildWorkspaceEntities({ aiSettings: { cursorToken: token } }, { accountKey: null });
+  assert.equal(blocked.entities.length, 0);
+  assert.equal(JSON.stringify(blocked).includes(token), false);
+});
+
+test('legacy AI payloads keep Cursor Token absent instead of requesting a clear', () => {
+  const key = accountKey();
+  const built = buildWorkspaceEntities({ aiSettings: { apiKey: 'legacy-asr-key' } }, { accountKey: key });
+  const projected = projectWorkspaceEntities(built.entities, { accountKey: key });
+  assert.equal(Object.hasOwn(projected.snapshot.aiSettings, 'cursorToken'), false);
+});
+
 test('local delete becomes a delete mutation', () => {
   const key = accountKey();
   const built = buildWorkspaceEntities(sampleSnapshot(), { accountKey: key });
@@ -199,4 +230,156 @@ test('NAS stores sealed secrets and a paired device can read them', () => {
   assert.equal(projected.snapshot.secrets[0].password, SECRET);
   const notesPull = store.pull('uid-workspace', { collection: 'notes' });
   assert.equal(notesPull.changes.length, 0);
+});
+
+function pushCommands(store, uid, deviceId, commands) {
+  const built = buildWorkspaceEntities({ commands }, {});
+  store.applyPush(uid, built.entities.map((entity, index) => ({
+    collection: entity.collection,
+    entityId: entity.entityId,
+    op: 'upsert',
+    payload: entity.payload,
+    clientMutationId: `${deviceId}-${index}`,
+    deviceId,
+  })), { deviceId });
+  return built.entities;
+}
+
+test('local-authority migration on another device removes old commands instead of duplicating', () => {
+  const store = createMemoryStore({ serverId: 'srv-dup' });
+  const uid = 'uid-dup';
+  const deviceA = pushCommands(store, uid, 'mac', [{ id: 'a1', text: 'npm start', createdAt: 1 }]);
+  const cursor = String(store.syncState(uid).serverRev);
+
+  const started = store.startMigration(uid);
+  const fromB = buildWorkspaceEntities({
+    commands: [
+      { id: 'b1', text: 'npm start', createdAt: 5 },
+      { id: 'b2', text: 'git status', createdAt: 6 },
+    ],
+  }, {}).entities;
+  const committed = store.commitMigration(uid, {
+    migrationId: started.migrationId,
+    expectedServerRev: store.syncState(uid).serverRev,
+    authority: 'local',
+    entities: fromB,
+    deviceId: 'win',
+  });
+  assert.equal(committed.ok, true);
+
+  const pulled = store.pull(uid, { cursor, collection: 'commands' });
+  const deleted = pulled.changes.find((change) => change.entityId === 'command:a1');
+  assert.equal(deleted.op, 'delete');
+  assert.equal(deleted.collection, 'commands');
+
+  const plan = planWorkspaceSync({
+    index: hashesForEntities(deviceA),
+    localEntities: deviceA,
+    remoteChanges: selectWorkspaceChanges(pulled.changes, 'commands'),
+  });
+  const projected = projectWorkspaceEntities(plan.mergedEntities);
+  assert.deepEqual(projected.snapshot.commands.map((row) => row.text).sort(), ['git status', 'npm start']);
+});
+
+test('pull honours legacy todos-tagged workspace deletes and drops superseded upserts', () => {
+  const store = createMemoryStore({ serverId: 'srv-legacy' });
+  const uid = 'uid-legacy';
+  pushCommands(store, uid, 'mac', [{ id: 'a1', text: 'npm start', createdAt: 1 }]);
+  const b = store.bucket(uid);
+  b.serverRev += 1;
+  b.live.delete('command:a1');
+  b.changeLog.push({ serverRev: b.serverRev, entityId: 'command:a1', collection: 'todos', op: 'delete' });
+
+  const full = store.pull(uid, { cursor: '', collection: 'commands' });
+  assert.deepEqual(full.changes.map((change) => [change.entityId, change.op]), [['command:a1', 'delete']]);
+  assert.equal(full.nextCursor, String(b.serverRev));
+  assert.equal(store.pull(uid, { cursor: '', collection: 'todos' }).changes.length, 0);
+});
+
+test('selectWorkspaceChanges tolerates an old NAS that ignores the collection filter', () => {
+  const changes = [
+    { entityId: 'command:a1', collection: 'todos', op: 'delete', serverRev: 3 },
+    { entityId: 'command:b1', collection: 'commands', op: 'upsert', serverRev: 4, payload: { id: 'b1', text: 'x' } },
+    { entityId: 'command:gone', collection: 'commands', op: 'upsert', serverRev: 2 },
+    { entityId: 'link:g1', collection: 'links', op: 'upsert', serverRev: 5, payload: { id: 'g1' } },
+    { entityId: 'todo-1', collection: 'todos', op: 'delete', serverRev: 6 },
+  ];
+  const selected = selectWorkspaceChanges(changes, 'commands');
+  assert.deepEqual(selected.map((change) => change.entityId), ['command:a1', 'command:b1']);
+  assert.equal(selected[0].collection, 'commands');
+  assert.deepEqual(selectWorkspaceChanges(changes, 'links').map((change) => change.entityId), ['link:g1']);
+});
+
+test('payload-less upserts never resurrect ghost rows', () => {
+  const plan = planWorkspaceSync({
+    index: {},
+    localEntities: [],
+    remoteChanges: [{ entityId: 'link:ghost', collection: 'links', op: 'upsert' }],
+  });
+  assert.equal(plan.mergedEntities.length, 0);
+  assert.equal(plan.nextIndex['link:ghost'], undefined);
+});
+
+test('content duplicates collapse to the same survivor on every device', () => {
+  const rows = [
+    { id: 'b1', text: 'npm start', createdAt: 5 },
+    { id: 'a1', text: 'npm start', createdAt: 1 },
+    { id: 'c1', text: 'git status', createdAt: 2 },
+  ];
+  const forward = dedupeWorkspaceSnapshot({ commands: rows }).commands;
+  const reverse = dedupeWorkspaceSnapshot({ commands: rows.slice().reverse() }).commands;
+  assert.deepEqual(forward.map((row) => row.id).sort(), ['a1', 'c1']);
+  assert.deepEqual(reverse.map((row) => row.id).sort(), ['a1', 'c1']);
+
+  const snapshot = dedupeWorkspaceSnapshot({
+    notes: {
+      home: '',
+      activeId: 'n2',
+      archive: [
+        { id: 'n1', title: 't', content: 'body', createdAt: 1 },
+        { id: 'n2', title: 't', content: 'body', createdAt: 2 },
+      ],
+    },
+    links: [
+      { id: 'g2', name: '资料', createdAt: 0, links: [{ id: 'l2', url: 'https://a.com' }] },
+      { id: 'g1', name: '资料', createdAt: 0, links: [{ id: 'l1', url: 'https://a.com' }, { id: 'l3', url: 'https://a.com' }] },
+      { id: 'g3', name: '', links: [] },
+    ],
+    clipboard: {
+      history: [
+        { id: 'c-old', type: 'text', text: 'hi', timestamp: 1 },
+        { id: 'c-new', type: 'text', text: 'hi', timestamp: 9 },
+        { id: 'img', type: 'image', text: '', timestamp: 3 },
+      ],
+      favorites: ['c-old'],
+    },
+    secrets: [
+      { id: 's2', service: 'gh', account: 'me', password: 'p', createdAt: 2 },
+      { id: 's1', service: 'gh', account: 'me', password: 'p', createdAt: 1 },
+    ],
+  });
+  assert.deepEqual(snapshot.notes.archive.map((row) => row.id), ['n1']);
+  assert.equal(snapshot.notes.activeId, 'n1');
+  assert.deepEqual(snapshot.links.map((group) => group.id), ['g1', 'g3']);
+  assert.equal(snapshot.links[0].links.length, 1);
+  assert.deepEqual(snapshot.clipboard.history.map((row) => row.id), ['c-new', 'img']);
+  assert.deepEqual(snapshot.clipboard.favorites, ['c-new']);
+  assert.deepEqual(snapshot.secrets.map((row) => row.id), ['s1']);
+});
+
+test('a device already showing duplicates heals NAS by deleting the loser', () => {
+  const local = [
+    { id: 'a1', text: 'npm start', createdAt: 1 },
+    { id: 'b1', text: 'npm start', createdAt: 5 },
+  ];
+  const withDup = [
+    ...buildWorkspaceEntities({ commands: [local[0]] }, {}).entities,
+    ...buildWorkspaceEntities({ commands: [local[1]] }, {}).entities,
+  ];
+  const plan = planWorkspaceSync({
+    index: hashesForEntities(withDup),
+    localEntities: buildWorkspaceEntities({ commands: local }, {}).entities,
+    remoteChanges: [],
+  });
+  assert.deepEqual(plan.toPush.map((entity) => [entity.entityId, entity.op]), [['command:b1', 'delete']]);
 });

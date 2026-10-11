@@ -89,10 +89,10 @@
         || `127.0.0.1:${n}`;
       const lanHint = lanEnabled
         ? `已开启局域网监听（${host || '0.0.0.0'}）。同一 Wi‑Fi 下 Mac 同步地址可用 http://NAS内网IP:${n}。`
-        : '当前仅监听本机；同一 Wi‑Fi 下请改应用设置为「局域网」并重启，或继续走 FRP。';
+        : '当前仅监听本机，只有 NAS 本机能访问该端口。要在同一局域网用内网 IP 同步，请在应用设置把监听范围改为「局域网」并重启；要在外网使用，请通过端口转发、FRP、反向代理或 VPN 等方式转发到本机该端口，并注意做好访问保护。';
       return {
         value: String(n),
-        hint: `这是安装时填写的固定端口。${lanHint}FRP 本地目标填 ${frpTarget}；公网端口可自定（例如 34931）；经 FRP 时 Mac 用 http://公网IP:公网端口。不要填成 NAS:34931，除非安装时填的就是 34931。`,
+        hint: `这是安装时填写的固定端口。${lanHint}内网 IP 用 http://NAS内网IP:${n}；外网通过端口转发、DDNS、FRP、反向代理或 VPN 转发到该端口。不要填成 NAS:34931，除非安装时填的就是 34931。同步端口默认是明文 HTTP，直接暴露到公网有被扫描和访问的风险。`,
         copyText: frpTarget,
         available: true,
       };

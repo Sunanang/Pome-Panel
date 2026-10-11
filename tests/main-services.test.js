@@ -35,6 +35,9 @@ const {
   selectTranscriptionSettings,
   createWorkspacePersistenceGate,
   hoverSpacePollingPolicy,
+  shouldCollapseOnWindowBlur,
+  mainPanelActivationPlan,
+  shouldCollapseOnActiveSpaceChange,
   reduceClipboardObservation,
   createForegroundMediaPermissionCoordinator,
   firstRunAutoLaunchPlan,
@@ -201,6 +204,34 @@ test('Hover + Space polls only while the collapsed strip is visible', () => {
   assert.equal(hoverSpacePollingPolicy({ shortcut: 'Space', visible: true, mode: 'expanded' }).enabled, false);
   assert.equal(hoverSpacePollingPolicy({ shortcut: 'Space', visible: false, mode: 'collapsed' }).enabled, false);
   assert.equal(hoverSpacePollingPolicy({ shortcut: 'Command+Shift+P', visible: true, mode: 'collapsed' }).enabled, false);
+});
+
+test('blur collapse only runs while expanded and not in a deferred interaction', () => {
+  assert.equal(shouldCollapseOnWindowBlur({ mode: 'expanded' }), true);
+  assert.equal(shouldCollapseOnWindowBlur({ mode: 'collapsed' }), false);
+  assert.equal(shouldCollapseOnWindowBlur({ mode: 'expanded', typingFocusActive: true }), false);
+  assert.equal(shouldCollapseOnWindowBlur({ mode: 'expanded', mediaPermissionRequests: 1 }), false);
+  assert.equal(shouldCollapseOnWindowBlur({ mode: 'expanded', transientSystemInteractionRequests: 2 }), false);
+});
+
+test('panel activation steals app focus on macOS so blur-to-collapse can fire', () => {
+  assert.deepEqual(mainPanelActivationPlan('darwin'), {
+    showIfHidden: true,
+    focusWindow: true,
+    stealAppFocus: true,
+  });
+  assert.deepEqual(mainPanelActivationPlan('win32'), {
+    showIfHidden: true,
+    focusWindow: true,
+    stealAppFocus: false,
+  });
+});
+
+test('active Space change collapses only on macOS expanded panels', () => {
+  assert.equal(shouldCollapseOnActiveSpaceChange({ platform: 'darwin', mode: 'expanded' }), true);
+  assert.equal(shouldCollapseOnActiveSpaceChange({ platform: 'darwin', mode: 'collapsed' }), false);
+  assert.equal(shouldCollapseOnActiveSpaceChange({ platform: 'darwin', mode: 'expanded', typingFocusActive: true }), false);
+  assert.equal(shouldCollapseOnActiveSpaceChange({ platform: 'win32', mode: 'expanded' }), false);
 });
 
 test('isPrivateAddress blocks loopback, private, link-local and unique-local ranges', () => {

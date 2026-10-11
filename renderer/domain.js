@@ -680,7 +680,7 @@
     return sizes;
   }
 
-  function packHomeWidgetLayout(order, sizes, columns = 12, rows = 4, requireFull = true) {
+  function packHomeWidgetLayout(order, sizes, columns = 12, rows = 4, requireFull = true, options = {}) {
     const ids = Array.isArray(order) ? order.filter((id) => Object.prototype.hasOwnProperty.call(sizes || {}, id)) : [];
     if (!ids.length || columns < 1 || rows < 1) return null;
     const dimensions = {
@@ -691,6 +691,18 @@
     };
     const occupied = Array.from({ length: rows }, () => Array(columns).fill(false));
     const placements = {};
+    const fixed = new Set(options.fixedIds || []);
+    const preferred = options.preferredPlacements || {};
+    const footprints = Object.fromEntries(ids.map((id) => {
+      const { width, height } = options.footprints?.[id] || dimensions[sizes[id]] || dimensions.small;
+      return [id, { width, height }];
+    }));
+    if (ids.some((id) => ![footprints[id].width, footprints[id].height].every(Number.isInteger)
+      || footprints[id].width < 1 || footprints[id].height < 1
+      || footprints[id].width > columns || footprints[id].height > rows)) return null;
+    const area = ids.reduce((sum, id) => sum + footprints[id].width * footprints[id].height, 0);
+    if (area > columns * rows || requireFull && area !== columns * rows) return null;
+    const failed = new Set();
 
     function fits(column, row, width, height) {
       if (column + width > columns || row + height > rows) return false;
@@ -708,26 +720,91 @@
       }
     }
 
+    // In a full grid, every odd free run needs an odd-sized remaining rectangle.
+    // Prune impossible anchored swaps before exploring many equivalent packings.
+    function parityFits(index) {
+      if (!requireFull) return true;
+      const remaining = ids.slice(index).map((id) => footprints[id]);
+      const oddWidths = remaining.reduce((sum, item) => sum + (item.width % 2 ? item.height : 0), 0);
+      const oddHeights = remaining.reduce((sum, item) => sum + (item.height % 2 ? item.width : 0), 0);
+      const oddRuns = (lines) => lines.reduce((sum, line) => {
+        let run = 0;
+        for (const cell of [...line, true]) {
+          if (!cell) run += 1;
+          else { sum += run % 2; run = 0; }
+        }
+        return sum;
+      }, 0);
+      return oddRuns(occupied) <= oddWidths
+        && oddRuns(Array.from({ length: columns }, (_, column) => occupied.map((line) => line[column]))) <= oddHeights;
+    }
+
     function place(index) {
       if (index >= ids.length) {
         return !requireFull || occupied.every((row) => row.every(Boolean));
       }
+      if (!parityFits(index)) return false;
       const id = ids[index];
-      const dimension = dimensions[sizes[id]] || dimensions.small;
+      const dimension = footprints[id];
+      const key = `${index}:${occupied.map((line) => line.map(Number).join('')).join('/')}`;
+      if (failed.has(key)) return false;
+      const candidates = [];
+      if (preferred[id]) candidates.push({ column: preferred[id].column, row: preferred[id].row });
       for (let row = 0; row <= rows - dimension.height; row += 1) {
         for (let column = 0; column <= columns - dimension.width; column += 1) {
-          if (!fits(column, row, dimension.width, dimension.height)) continue;
-          mark(column, row, dimension.width, dimension.height, true);
-          placements[id] = { column, row, ...dimension };
-          if (place(index + 1)) return true;
-          delete placements[id];
-          mark(column, row, dimension.width, dimension.height, false);
+          if (!fixed.has(id) && (column !== preferred[id]?.column || row !== preferred[id]?.row)) candidates.push({ column, row });
         }
       }
+      // Try the requested origin first, then move displaced cards forward before wrapping.
+      if (preferred[id] && !fixed.has(id)) {
+        const origin = preferred[id].row * columns + preferred[id].column;
+        const rest = candidates.splice(1);
+        candidates.push(...rest.filter((item) => item.row * columns + item.column >= origin),
+          ...rest.filter((item) => item.row * columns + item.column < origin));
+      }
+      for (const { column, row } of candidates) {
+        if (!Number.isInteger(column) || !Number.isInteger(row) || column < 0 || row < 0 || !fits(column, row, dimension.width, dimension.height)) continue;
+        mark(column, row, dimension.width, dimension.height, true);
+        placements[id] = { column, row, ...dimension };
+        if (place(index + 1)) return true;
+        delete placements[id];
+        mark(column, row, dimension.width, dimension.height, false);
+      }
+      failed.add(key);
       return false;
     }
 
     return place(0) ? placements : null;
+  }
+
+  function swapHomeWidgetPlacements(layout, sourceId, targetId, { order = [], columns = 12, rows = 4 } = {}) {
+    const original = layout?.placements;
+    const ids = Object.keys(original || {});
+    if (sourceId === targetId || !original?.[sourceId] || !original?.[targetId]
+      || !validateHomeWidgetLayout({ placements: original, allowGaps: true }, ids, columns, rows)) return null;
+    const area = ids.reduce((sum, id) => sum + original[id].width * original[id].height, 0);
+    if (area > columns * rows) return null;
+    const next = Object.fromEntries(ids.map((id) => [id, { ...original[id] }]));
+    for (const [id, other] of [[sourceId, targetId], [targetId, sourceId]]) {
+      next[id].column = Math.min(original[other].column, columns - original[id].width);
+      next[id].row = Math.min(original[other].row, rows - original[id].height);
+    }
+    let placements = next;
+    if (!validateHomeWidgetLayout({ placements, allowGaps: true }, ids, columns, rows)) {
+      const packingOrder = [...new Set([sourceId, targetId, ...order, ...ids])].filter((id) => ids.includes(id));
+      const sizes = Object.fromEntries(ids.map((id) => [id, sizeNameFromPlacement(original[id]) || 'medium']));
+      const options = { preferredPlacements: next, footprints: original, fixedIds: [sourceId, targetId] };
+      placements = packHomeWidgetLayout(packingOrder, sizes, columns, rows, area === columns * rows, options)
+        || packHomeWidgetLayout(packingOrder, sizes, columns, rows, area === columns * rows, { ...options, fixedIds: [sourceId] });
+      if (!placements) return null;
+    }
+    // Gap filling may grow other cards, but the exchanged pair is always frozen.
+    const filled = fillHomeLayoutGaps(placements, { columns, rows, frozenIds: [sourceId, targetId] });
+    const result = {
+      ...layout, allowGaps: filled.gapCount > 0, placements: filled.placements,
+      variants: Object.fromEntries(ids.map((id) => [id, layoutVariantForPlacement(filled.placements[id])])),
+    };
+    return validateHomeWidgetLayout(result, ids, columns, rows) ? result : null;
   }
 
   const HOME_GAPLESS_TEMPLATES = {
@@ -802,6 +879,190 @@
     return 'tall';
   }
 
+  const HOME_SIZE_FOOTPRINTS = [
+    { name: 'mini', width: 2, height: 1 },
+    { name: 'small', width: 2, height: 2 },
+    { name: 'medium', width: 4, height: 2 },
+    { name: 'large', width: 4, height: 4 },
+  ];
+
+  function sizeNameFromPlacement(placement) {
+    const width = Number(placement?.width);
+    const height = Number(placement?.height);
+    const match = HOME_SIZE_FOOTPRINTS.find((item) => item.width === width && item.height === height);
+    return match ? match.name : null;
+  }
+
+  function compareGapFillScores(left, right) {
+    for (let index = 0; index < left.length; index += 1) {
+      if (left[index] !== right[index]) return left[index] - right[index];
+    }
+    return 0;
+  }
+
+  // Grow modules into empty cells without moving them. Prefer modules that were just
+  // shrunk, then the neighbor above / to the left of a hole. Footprints stay in the
+  // four allowed sizes so size controls and packing stay consistent.
+  function fillHomeLayoutGaps(placements, options = {}) {
+    const columns = Number.isInteger(options.columns) ? options.columns : 12;
+    const rows = Number.isInteger(options.rows) ? options.rows : 4;
+    const preferredIds = Array.isArray(options.preferredIds)
+      ? options.preferredIds.map(String)
+      : [];
+    const frozenIds = new Set(
+      Array.isArray(options.frozenIds) ? options.frozenIds.map(String) : []
+    );
+    if (!placements || typeof placements !== 'object' || columns < 1 || rows < 1) {
+      return { placements: null, sizes: {}, changed: false, gapCount: 0 };
+    }
+    const next = {};
+    Object.entries(placements).forEach(([id, item]) => {
+      const column = Number(item?.column);
+      const row = Number(item?.row);
+      const width = Number(item?.width);
+      const height = Number(item?.height);
+      if (![column, row, width, height].every(Number.isInteger)) return;
+      if (width < 1 || height < 1) return;
+      if (column < 0 || row < 0 || column + width > columns || row + height > rows) return;
+      next[id] = { column, row, width, height };
+    });
+    if (!Object.keys(next).length) {
+      return { placements: null, sizes: {}, changed: false, gapCount: 0 };
+    }
+
+    function buildGrid() {
+      const grid = Array.from({ length: rows }, () => Array(columns).fill(null));
+      Object.entries(next).forEach(([id, item]) => {
+        for (let y = item.row; y < item.row + item.height; y += 1) {
+          for (let x = item.column; x < item.column + item.width; x += 1) {
+            grid[y][x] = id;
+          }
+        }
+      });
+      return grid;
+    }
+
+    function emptyCells(grid) {
+      const cells = [];
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < columns; column += 1) {
+          if (grid[row][column] == null) cells.push({ column, row });
+        }
+      }
+      return cells;
+    }
+
+    function coversCurrent(id, column, row, width, height) {
+      const current = next[id];
+      return column <= current.column
+        && row <= current.row
+        && column + width >= current.column + current.width
+        && row + height >= current.row + current.height;
+    }
+
+    function canGrow(grid, id, column, row, width, height) {
+      if (column < 0 || row < 0 || column + width > columns || row + height > rows) return false;
+      if (!coversCurrent(id, column, row, width, height)) return false;
+      let gainsEmpty = false;
+      for (let y = row; y < row + height; y += 1) {
+        for (let x = column; x < column + width; x += 1) {
+          const owner = grid[y][x];
+          if (owner != null && owner !== id) return false;
+          if (owner == null) gainsEmpty = true;
+        }
+      }
+      return gainsEmpty;
+    }
+
+    function neighborFlags(id, holes) {
+      const item = next[id];
+      let above = false;
+      let left = false;
+      holes.forEach((hole) => {
+        if (item.row + item.height === hole.row
+          && hole.column >= item.column
+          && hole.column < item.column + item.width) {
+          above = true;
+        }
+        if (item.column + item.width === hole.column
+          && hole.row >= item.row
+          && hole.row < item.row + item.height) {
+          left = true;
+        }
+      });
+      return { above, left };
+    }
+
+    let changed = false;
+    for (let step = 0; step < columns * rows; step += 1) {
+      const grid = buildGrid();
+      const holes = emptyCells(grid);
+      if (!holes.length) break;
+      let best = null;
+      let bestScore = null;
+      Object.keys(next).forEach((id) => {
+        if (frozenIds.has(id)) return;
+        const current = next[id];
+        const currentArea = current.width * current.height;
+        const preferredIndex = preferredIds.indexOf(id);
+        const flags = neighborFlags(id, holes);
+        HOME_SIZE_FOOTPRINTS.forEach((size) => {
+          if (size.width * size.height <= currentArea) return;
+          const minColumn = current.column + current.width - size.width;
+          const maxColumn = current.column;
+          const minRow = current.row + current.height - size.height;
+          const maxRow = current.row;
+          for (let column = minColumn; column <= maxColumn; column += 1) {
+            for (let row = minRow; row <= maxRow; row += 1) {
+              if (!canGrow(grid, id, column, row, size.width, size.height)) continue;
+              const score = [
+                preferredIndex === -1 ? 1 : 0,
+                preferredIndex === -1 ? 99 : preferredIndex,
+                flags.above ? 0 : 1,
+                flags.left ? 0 : 1,
+                current.row,
+                current.column,
+                -(size.width * size.height),
+                row,
+                column,
+              ];
+              if (!bestScore || compareGapFillScores(score, bestScore) < 0) {
+                best = {
+                  id,
+                  column,
+                  row,
+                  width: size.width,
+                  height: size.height,
+                  size: size.name,
+                };
+                bestScore = score;
+              }
+            }
+          }
+        });
+      });
+      if (!best) break;
+      next[best.id] = {
+        column: best.column,
+        row: best.row,
+        width: best.width,
+        height: best.height,
+      };
+      changed = true;
+    }
+
+    const sizes = {};
+    Object.entries(next).forEach(([id, item]) => {
+      sizes[id] = sizeNameFromPlacement(item) || 'medium';
+    });
+    return {
+      placements: next,
+      sizes,
+      changed,
+      gapCount: emptyCells(buildGrid()).length,
+    };
+  }
+
   function validateHomeWidgetLayout(layout, visibleIds, columns = 12, rows = 4) {
     if (!layout || !layout.placements || columns < 1 || rows < 1) return false;
     const expected = [...new Set(Array.isArray(visibleIds) ? visibleIds.map(String) : [])].sort();
@@ -827,6 +1088,97 @@
       : cells.every((count) => count === 1);
   }
 
+  const HOME_WIDGET_DIMENSIONS = {
+    mini: { width: 2, height: 1 },
+    small: { width: 2, height: 2 },
+    medium: { width: 4, height: 2 },
+    large: { width: 4, height: 4 },
+  };
+
+  function introduceHomeModule(input) {
+    const source = input && typeof input === 'object' ? input : {};
+    const moduleId = String(source.moduleId || '');
+    const registry = Array.isArray(source.registry) ? source.registry.map(String) : [];
+    const defaultSize = ['mini', 'small', 'medium', 'large'].includes(source.defaultSize) ? source.defaultSize : 'medium';
+    const columns = Number.isInteger(source.columns) ? source.columns : 12;
+    const rows = Number.isInteger(source.rows) ? source.rows : 4;
+    const area = { mini: 2, small: 4, medium: 8, large: 16 };
+    const order = [];
+    (Array.isArray(source.order) ? source.order : []).forEach((id) => {
+      const key = String(id);
+      if (registry.includes(key) && !order.includes(key)) order.push(key);
+    });
+    registry.forEach((id) => {
+      if (!order.includes(id)) order.push(id);
+    });
+    const sizes = {};
+    registry.forEach((id) => {
+      const current = source.sizes && source.sizes[id];
+      sizes[id] = ['mini', 'small', 'medium', 'large'].includes(current)
+        ? current
+        : id === moduleId
+          ? defaultSize
+          : (source.defaults && source.defaults[id]) || 'medium';
+    });
+    const hiddenIds = Array.isArray(source.hiddenIds)
+      ? source.hiddenIds.map(String).filter((id) => registry.includes(id))
+      : [];
+    const placements = source.placements && typeof source.placements === 'object'
+      ? Object.fromEntries(Object.entries(source.placements).map(([id, item]) => [id, { ...item }]))
+      : null;
+
+    function hideIntroduced() {
+      if (moduleId && !hiddenIds.includes(moduleId)) hiddenIds.push(moduleId);
+    }
+
+    if (placements && moduleId && !hiddenIds.includes(moduleId) && !placements[moduleId]) {
+      const dimension = HOME_WIDGET_DIMENSIONS[sizes[moduleId]] || HOME_WIDGET_DIMENSIONS.medium;
+      const occupied = Array.from({ length: rows }, () => Array(columns).fill(false));
+      let lastCell = -1;
+      Object.values(placements).forEach((item) => {
+        if (!item) return;
+        const column = Number(item.column);
+        const row = Number(item.row);
+        const width = Number(item.width);
+        const height = Number(item.height);
+        if (![column, row, width, height].every(Number.isInteger)) return;
+        for (let y = row; y < row + height && y < rows; y += 1) {
+          for (let x = column; x < column + width && x < columns; x += 1) {
+            if (y < 0 || x < 0) continue;
+            occupied[y][x] = true;
+            lastCell = Math.max(lastCell, y * columns + x);
+          }
+        }
+      });
+      let slot = null;
+      for (let row = 0; row <= rows - dimension.height; row += 1) {
+        for (let column = 0; column <= columns - dimension.width; column += 1) {
+          if (row * columns + column <= lastCell) continue;
+          let fits = true;
+          for (let y = row; y < row + dimension.height && fits; y += 1) {
+            for (let x = column; x < column + dimension.width; x += 1) {
+              if (occupied[y][x]) fits = false;
+            }
+          }
+          if (fits) slot = { column, row, width: dimension.width, height: dimension.height };
+        }
+      }
+      if (slot) placements[moduleId] = slot;
+      else hideIntroduced();
+    } else if (!placements && moduleId && !hiddenIds.includes(moduleId)) {
+      const visible = order.filter((id) => !hiddenIds.includes(id));
+      const total = visible.reduce((sum, id) => sum + (area[sizes[id]] || 0), 0);
+      if (total > columns * rows) hideIntroduced();
+    }
+
+    return {
+      order,
+      sizes,
+      placements,
+      hiddenIds: registry.filter((id) => hiddenIds.includes(id)),
+    };
+  }
+
   function resolveHomeWidgetLayout(order, sizes, hiddenIds, columns = 12, rows = 4) {
     if (columns !== 12 || rows !== 4 || !sizes || typeof sizes !== 'object') return null;
     const ids = Array.isArray(order)
@@ -838,19 +1190,21 @@
     if (!visibleOrder.length) return null;
 
     // User-authored layouts preserve each card's selected footprint. Empty cells are
-    // valid and preferable to silently stretching or reshuffling unrelated modules.
-    const allowGaps = true;
+    // valid when the chosen sizes cannot cover the grid; when they can, pack gapless.
+    const area = { mini: 2, small: 4, medium: 8, large: 16 };
     const visibleSizes = Object.fromEntries(visibleOrder.map((id) => [id, sizes[id] || 'medium']));
+    const totalArea = visibleOrder.reduce((sum, id) => sum + (area[visibleSizes[id]] || 0), 0);
+    const requireFull = totalArea >= columns * rows;
     const placements = packHomeWidgetLayout(
       visibleOrder,
       visibleSizes,
       columns,
       rows,
-      !allowGaps
+      requireFull
     );
     if (!placements) return null;
     const result = {
-      allowGaps,
+      allowGaps: !requireFull,
       visibleOrder: [...visibleOrder],
       placements: Object.fromEntries(Object.entries(placements).map(([id, item]) => [id, { ...item }])),
       variants: Object.fromEntries(Object.entries(placements).map(([id, item]) => (
@@ -955,8 +1309,12 @@
     normalizeTodoCategoryNames,
     normalizeHomeWidgetSizes,
     packHomeWidgetLayout,
+    swapHomeWidgetPlacements,
     normalizeHiddenHomeModules,
     updateHomeModuleVisibility,
+    introduceHomeModule,
+    fillHomeLayoutGaps,
+    sizeNameFromPlacement,
     resolveHomeWidgetLayout,
     validateHomeWidgetLayout,
     layoutVariantForPlacement,

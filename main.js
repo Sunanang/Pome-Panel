@@ -24,7 +24,11 @@ const zlib = require('zlib');
 const crypto = require('crypto');
 const platformPolicy = require('./platform');
 const { loadAdapter } = require('./platform-adapters');
-const { fetchCursorUsage } = require('./cursor-usage');
+const { fetchCursorUsage, readAuthToken: readCursorAuthToken } = require('./cursor-usage');
+const { readCodexUsage } = require('./codex-usage');
+const { readLocalCodexToken } = require('./codex-auth');
+const { createCodexUsageService } = require('./codex-usage-remote');
+const codexUsageService = createCodexUsageService({ readLocal: readCodexUsage });
 // 能力层 v2（P0-1）：启动时按平台 + 运行时（原生模块是否可用、用户开关）解析一次，
 // 通过 additionalArguments 下发给渲染层；运行期变化走 capabilities:changed。
 // 这里的初值不读设置：模块加载早于 app.whenReady，不能碰 screen / 设置文件。
@@ -58,6 +62,9 @@ const {
   selectTranscriptionSettings,
   createWorkspacePersistenceGate,
   hoverSpacePollingPolicy,
+  shouldCollapseOnWindowBlur,
+  mainPanelActivationPlan,
+  shouldCollapseOnActiveSpaceChange,
   reduceClipboardObservation,
   normalizeDefaultTabPreference,
   updateDefaultTabPreference,
@@ -103,6 +110,7 @@ const {
   hashesForEntities,
   mutationFromEntity,
   splitMutationBatches,
+  selectWorkspaceChanges,
   WORKSPACE_COLLECTIONS,
 } = require('./workspace-sync');
 const {
@@ -380,10 +388,8 @@ if (!gotTheLock) {
 } else {
   app.on('second-instance', () => {
     if (mainWindow) {
-      hideWhenCollapsed = false;
       repositionWindow(getTargetDisplay());
-      if (!mainWindow.isVisible()) mainWindow.show();
-      mainWindow.focus();
+      activateMainWindow();
     }
   });
 }
@@ -564,6 +570,23 @@ function requestRendererCollapse() {
   if (!mainWindow || currentMode !== 'expanded') return;
   beginNativeCollapse();
   mainWindow.webContents.send('window:request-collapse');
+}
+
+/**
+ * 把面板抢到前台。仅 show/focus 窗口在 macOS（dock 隐藏）上经常抢不到激活态，
+ * blur 也就永远不会来——表现为点外部 / 切桌面无法自动收起。
+ * Electron 隔离测试自己驱动焦点；此处再 steal 会打乱顶栏点击收起等断言。
+ */
+function activateMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (process.env.TODO_TEST_USER_DATA) return;
+  const plan = mainPanelActivationPlan(process.platform);
+  hideWhenCollapsed = false;
+  if (plan.showIfHidden && !mainWindow.isVisible()) mainWindow.show();
+  if (plan.stealAppFocus) {
+    try { app.focus({ steal: true }); } catch (error) {}
+  }
+  if (plan.focusWindow) mainWindow.focus();
 }
 
 function hideWindowAfterCollapse() {
@@ -1153,6 +1176,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // A startup test can sit under the already-running panel. Keep its
+      // hidden renderer scheduled so workspace recovery still finishes.
+      backgroundThrottling: !process.env.TODO_TEST_USER_DATA,
       additionalArguments: [capabilitiesArgument()],
     },
   });
@@ -1177,12 +1203,13 @@ function createWindow() {
 
   // 失焦时让渲染层走完整退场动画，再由渲染层请求缩小原生窗口。
   mainWindow.on('blur', () => {
-    if (
-      mediaPermissionRequests > 0 ||
-      transientSystemInteractionRequests > 0 ||
-      typingFocusActive
-    ) {
-      cameraBlurDeferred = true;
+    if (!shouldCollapseOnWindowBlur({
+      mode: currentMode,
+      mediaPermissionRequests,
+      transientSystemInteractionRequests,
+      typingFocusActive,
+    })) {
+      if (currentMode === 'expanded') cameraBlurDeferred = true;
       return;
     }
     requestRendererCollapse();
@@ -1198,7 +1225,7 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     applyMode('collapsed');
-    mainWindow.show();
+    if (!process.env.TODO_TEST_USER_DATA) mainWindow.show();
   });
 
   mainWindow.on('closed', () => {
@@ -1222,9 +1249,8 @@ function toggleVisibility() {
   if (mainWindow.isVisible()) {
     hideWindowAfterCollapse();
   } else {
-    hideWhenCollapsed = false;
     repositionWindow(getTargetDisplay()); // 显示前先回到鼠标所在屏顶部
-    mainWindow.show();
+    activateMainWindow();
     refreshTrayMenu();
   }
 }
@@ -1245,6 +1271,8 @@ function isAutoLaunchEnabled() {
 }
 
 function setAutoLaunch(enabled) {
+  // Isolated Electron tests must not register this binary as a login item.
+  if (process.env.TODO_TEST_USER_DATA) return false;
   if (!platformCapabilities.features.autoLaunch) return false;
   try {
     // openAsHidden 已被 Electron 移除，不再传。
@@ -1315,6 +1343,7 @@ function readAppSettings() {
     // 白名单必须带上布局键：writePanelPosition 是 read-modify-write，漏一个就会被丢掉。
     ...appSettingsLayoutPreferences(stored),
     encryptedCursorToken: typeof stored.encryptedCursorToken === 'string' ? stored.encryptedCursorToken : '',
+    encryptedCodexToken: typeof stored.encryptedCodexToken === 'string' ? stored.encryptedCodexToken : '',
   };
 }
 
@@ -1401,7 +1430,7 @@ function syncDockMetrics() {
 
 function publicAppSettings() {
   const settings = readAppSettings();
-  const { encryptedCursorToken, ...publicSettings } = settings;
+  const { encryptedCursorToken, encryptedCodexToken, ...publicSettings } = settings;
   return { ...publicSettings, autoLaunch: isAutoLaunchEnabled() };
 }
 
@@ -1517,9 +1546,7 @@ function setPanelShortcut(shortcut) {
   try {
     registered = globalShortcut.register(shortcut, () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
-      hideWhenCollapsed = false;
-      if (!mainWindow.isVisible()) mainWindow.show();
-      mainWindow.focus();
+      activateMainWindow();
       mainWindow.webContents.send('shortcut:toggle-panel');
     });
   } catch (error) {}
@@ -1547,9 +1574,8 @@ function applyAppSettings() {
 function openRendererPanel(channel) {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow();
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  hideWhenCollapsed = false;
   repositionWindow(getTargetDisplay());
-  mainWindow.show();
+  activateMainWindow();
   const send = () => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel);
   };
@@ -1598,10 +1624,8 @@ async function chooseMirrorImage() {
 
 function showMainPanelFromTray() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  hideWhenCollapsed = false;
-  if (!mainWindow.isVisible()) mainWindow.show();
   repositionWindow(getTargetDisplay());
-  mainWindow.show();
+  activateMainWindow();
   if (currentMode !== 'expanded') {
     mainWindow.webContents.send('shortcut:toggle-panel');
   }
@@ -1662,9 +1686,8 @@ function createTray() {
   tray.on('click', () => {
     if (!mainWindow) return;
     if (!mainWindow.isVisible()) {
-      hideWhenCollapsed = false;
       repositionWindow(getTargetDisplay());
-      mainWindow.show();
+      activateMainWindow();
       refreshTrayMenu();
     }
   });
@@ -1674,6 +1697,9 @@ function createTray() {
 ipcMain.handle('window:set-mode', async (event, mode) => {
   if (mode === 'expanded') await rememberPasteTarget();
   applyMode(mode === 'expanded' ? 'expanded' : 'collapsed');
+  // 展开后必须真正成为前台应用，否则 alwaysOnTop 看得见却没有 blur，点外部无法收起。
+  // captureTarget 会忽略自身 bundle，故激活放在 remember 之后是安全的。
+  if (mode === 'expanded') activateMainWindow();
 });
 
 ipcMain.handle('window:begin-collapse', () => {
@@ -3509,6 +3535,8 @@ function assembleWorkspaceSnapshot(rendererSnapshot) {
     ? snap.recordings
     : parseJsonArray(readWorkspaceBagValue('notch-recordings'));
   const storedAi = readStoredTranscriptionSettings();
+  const cursorSettings = readAppSettings();
+  const cursorToken = decryptStoredSecret(cursorSettings.encryptedCursorToken).trim();
   return {
     notes: {
       home: typeof notes.home === 'string' ? notes.home : (readWorkspaceBagValue('notch-home-note') || ''),
@@ -3543,11 +3571,13 @@ function assembleWorkspaceSnapshot(rendererSnapshot) {
     aiSettings: {
       apiKey: decryptStoredSecret(storedAi.encryptedApiKey),
       llmApiKey: decryptStoredSecret(storedAi.encryptedLlmApiKey),
+      // An unreadable system-encrypted token must not clear another device's token.
+      ...(cursorToken || !cursorSettings.encryptedCursorToken ? { cursorToken } : {}),
       workspaceId: String(storedAi.workspaceId || ''),
       region: String(storedAi.region || ''),
       llmBaseUrl: String(storedAi.llmBaseUrl || ''),
       llmModel: String(storedAi.llmModel || ''),
-      hasStoredSecret: Boolean(storedAi.encryptedApiKey || storedAi.encryptedLlmApiKey),
+      hasStoredSecret: Boolean(storedAi.encryptedApiKey || storedAi.encryptedLlmApiKey || cursorSettings.encryptedCursorToken),
     },
     secrets: readCredentialsVault(),
   };
@@ -3564,6 +3594,8 @@ function writeSyncedBytes(directory, fileName, base64) {
 }
 
 function writeSyncedAiSettings(plain) {
+  // Older peers omit this field; only an explicit empty string clears it.
+  if (typeof plain.cursorToken === 'string') writeCursorManualToken(plain.cursorToken);
   const previous = readStoredTranscriptionSettings();
   const next = { ...previous };
   if (plain.apiKey) {
@@ -3718,16 +3750,29 @@ async function pullWorkspaceChanges(ctx) {
         pull: normalized,
       });
       if (!applied.ok) return { ok: false, error: applied.reason || 'apply_failed' };
-      for (const change of normalized.changes) {
-        if (!change) continue;
-        if (change.collection && change.collection !== collection) continue;
-        remoteChanges.push({ ...change, collection: change.collection || collection });
-      }
+      remoteChanges.push(...selectWorkspaceChanges(normalized.changes, collection));
       if (!normalized.hasMore) break;
       cursor = normalized.nextCursor;
     }
   }
   return { ok: true, remoteChanges };
+}
+
+/**
+ * After a migration the local workspace equals NAS at `serverRev`. Cursors left
+ * over from an earlier pairing may point past a restarted NAS change log, which
+ * would silently skip every later change.
+ */
+function seedWorkspacePullCursors(store, accountId, serverRev) {
+  const rev = Number(serverRev);
+  if (!store || !Number.isInteger(rev) || rev < 0) return;
+  for (const collection of WORKSPACE_COLLECTIONS) {
+    store.applyPullPage({
+      accountId,
+      collection,
+      pull: { changes: [], nextCursor: String(rev), hasMore: false, serverRev: rev },
+    });
+  }
 }
 
 async function runBoundWorkspaceSyncCycle() {
@@ -3977,6 +4022,10 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
     return result;
   }
 
+  if (!result.skipped) {
+    seedWorkspacePullCursors(store, accountId, result.serverRev);
+  }
+
   let workspaceProjection = null;
   if (result.skipped) {
     writeWorkspaceIndex(readWorkspaceIndex());
@@ -4049,17 +4098,52 @@ ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
 });
 
 ipcMain.handle('cursor:usage', async (_event, options = {}) => {
+  const manualToken = readCursorManualToken();
+  const detected = readCursorAuthToken().ok === true;
+  const configured = Boolean(readAppSettings().encryptedCursorToken);
   try {
-    return await fetchCursorUsage({
-      force: options && options.force === true,
-      manualToken: readCursorManualToken(),
-    });
-  } catch (error) {
-    return { ok: false, error: 'cursor_usage_failed', detail: String(error && error.message || error), fetchedAt: new Date().toISOString() };
+    const data = await fetchCursorUsage({ force: options && options.force === true, manualToken });
+    return { ...data, detected, configured };
+  } catch {
+    return { ok: false, error: 'cursor_usage_failed', detected, configured, fetchedAt: new Date().toISOString() };
   }
 });
 
+ipcMain.handle('codex:usage', async (_event, options = {}) => {
+  let result;
+  do {
+    result = await codexUsageService.getUsage({
+      manualToken: decryptStoredSecret(readAppSettings().encryptedCodexToken).trim(),
+      configured: codexTokenStatus().configured,
+      force: options?.force === true,
+    });
+  } while (result.superseded); // A save/clear cancels old requests; never return the previous token's state.
+  return result;
+});
+ipcMain.handle('codex:token-status', () => codexTokenStatus());
+ipcMain.handle('codex:read-local-token', async (event) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
+    || event.senderFrame !== mainWindow.webContents.mainFrame) {
+    return { ok: false, error: 'forbidden' };
+  }
+  const result = await readLocalCodexToken();
+  return result.ok ? { ok: true, token: result.token } : { ok: false, error: result.error };
+});
+ipcMain.handle('codex:set-token', (_event, token) => writeCodexManualToken(token));
+ipcMain.handle('codex:clear-token', () => writeCodexManualToken(''));
+
 ipcMain.handle('cursor:token-status', () => cursorTokenStatus());
+
+ipcMain.handle('cursor:read-local-token', (event) => {
+  // Return a local credential only to the main panel, never the notification window.
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
+    || event.senderFrame !== mainWindow.webContents.mainFrame) {
+    return { ok: false, error: 'forbidden' };
+  }
+  const result = readCursorAuthToken();
+  // Keep database paths, account metadata and raw errors out of this response.
+  return result.ok ? { ok: true, token: result.token } : { ok: false, error: result.error };
+});
 
 ipcMain.handle('cursor:set-token', (_event, token) => writeCursorManualToken(token));
 
@@ -4081,8 +4165,7 @@ ipcMain.handle('music:control', async (event, action) => {
   if (musicUnsupported()) return { ok: false, error: 'unsupported' };
   const result = await platformAdapter.music.control(action);
   if (result && result.ok && mainWindow && !mainWindow.isDestroyed() && currentMode === 'expanded') {
-    if (!mainWindow.isVisible()) mainWindow.show();
-    mainWindow.focus();
+    activateMainWindow();
   }
   return result;
 });
@@ -4164,6 +4247,9 @@ function writeCursorManualToken(token) {
   }
   const next = readAppSettings();
   const trimmed = String(token || '').trim();
+  if (readCursorManualToken() === trimmed && (trimmed || !next.encryptedCursorToken)) {
+    return cursorTokenStatus();
+  }
   if (!trimmed) {
     next.encryptedCursorToken = '';
   } else {
@@ -4172,7 +4258,31 @@ function writeCursorManualToken(token) {
     next.encryptedCursorToken = encrypted;
   }
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
-  return { ...cursorTokenStatus() };
+  const status = cursorTokenStatus();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cursor:token-changed', status);
+  return status;
+}
+
+function codexTokenStatus() {
+  const configured = Boolean(readAppSettings().encryptedCodexToken);
+  const invalid = configured && codexUsageService.tokenState().manualTokenInvalid;
+  return { ok: true, configured, manualTokenInvalid: invalid, secureStorage: safeStorage.isEncryptionAvailable(),
+    label: invalid ? 'Token 失效' : configured ? '已配置手动 Token' : '未配置手动 Token',
+    state: invalid ? 'error' : configured ? 'saved' : 'empty' };
+}
+
+function writeCodexManualToken(token) {
+  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
+  const next = readAppSettings();
+  const trimmed = String(token || '').trim();
+  const encrypted = trimmed ? encryptStoredSecret(trimmed) : '';
+  if (trimmed && !encrypted) return { ok: false, error: 'encrypt_failed' };
+  next.encryptedCodexToken = encrypted;
+  if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  codexUsageService.reset();
+  const status = codexTokenStatus();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('codex:token-changed', status);
+  return status;
 }
 
 function resolveLlmConfig() {
@@ -4800,9 +4910,7 @@ function setHoverSpaceShortcut(enabled) {
         return;
       }
       await rememberPasteTarget();
-      hideWhenCollapsed = false;
-      if (!mainWindow.isVisible()) mainWindow.show();
-      mainWindow.focus();
+      activateMainWindow();
       mainWindow.webContents.send('shortcut:toggle-panel');
     });
     spaceShortcutRegistered = ok && globalShortcut.isRegistered('Space');
@@ -5017,6 +5125,24 @@ function watchDisplayChanges() {
   screen.on('display-metrics-changed', reposition);
 }
 
+// macOS：面板 visibleOnAllWorkspaces 时切桌面常常不触发 blur，单独订阅 Space 变化收起。
+function watchActiveSpaceChanges() {
+  if (process.platform !== 'darwin') return;
+  if (process.env.TODO_TEST_USER_DATA) return;
+  try {
+    systemPreferences.subscribeNotification('NSWorkspaceActiveSpaceDidChangeNotification', () => {
+      if (!shouldCollapseOnActiveSpaceChange({
+        platform: process.platform,
+        mode: currentMode,
+        mediaPermissionRequests,
+        transientSystemInteractionRequests,
+        typingFocusActive,
+      })) return;
+      requestRendererCollapse();
+    });
+  } catch (error) {}
+}
+
 app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.dynamicpanel.app');
   if (process.platform === 'darwin' && app.dock) {
@@ -5031,13 +5157,16 @@ app.whenReady().then(() => {
   migrateWindowsLayoutSettings();
   refreshRuntimeCapabilities();
   createWindow();
-  createTray();
+  if (!process.env.TODO_TEST_USER_DATA) {
+    createTray();
+    startTaskNotificationServer();
+    void promptForMissingPermissions();
+  }
   watchDisplayChanges();
+  watchActiveSpaceChanges();
   ensureClipImagesDir();
   ensureRecordingsDir();
   applyAppSettings();
-  startTaskNotificationServer();
-  void promptForMissingPermissions();
   scheduleTodosSyncCycle();
 
   app.on('activate', () => {

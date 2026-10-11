@@ -106,17 +106,6 @@
             <div class="home-bento" id="home-bento" aria-label="首页模块布局">
               <!-- 本地汽水音乐控制 -->
               <section class="tile home-music" id="home-music" data-home-module="music" data-widget-size="medium" aria-label="汽水音乐播放器">
-                <div class="module-liquid-fx" aria-hidden="true">
-                  <img class="module-liquid-layer" src="assets/generated/music-bg-medium.png" alt="" draggable="false" data-liquid-src="assets/generated/music-bg-medium.png" />
-                  <canvas class="module-water-canvas" id="music-water-canvas"></canvas>
-                  <svg class="module-filter-defs" width="0" height="0" aria-hidden="true">
-                    <filter id="music-liquid-filter" x="-15%" y="-15%" width="130%" height="130%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.022" numOctaves="2" seed="31" result="noise" />
-                      <feDisplacementMap id="music-displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="B" />
-                    </filter>
-                  </svg>
-                </div>
-
                 <canvas class="module-effect-canvas" id="music-color-bends" aria-hidden="true"></canvas>
                 <div class="music-copy">
                   <strong id="music-title">汽水音乐</strong>
@@ -130,15 +119,7 @@
 
               <section class="tile home-pomodoro" id="home-pomodoro" data-home-module="pomodoro" data-widget-size="mini" aria-label="番茄钟">
                 <div class="pomodoro-fx" aria-hidden="true">
-                  <img class="pomodoro-bg-photo" src="assets/pomodoro-bg.png" alt="" draggable="false" />
-                  <img class="pomodoro-bg-photo pomodoro-liquid-layer" src="assets/pomodoro-bg.png" alt="" draggable="false" />
-                  <canvas class="pomodoro-water-canvas" id="pomodoro-water-canvas"></canvas>
-                  <svg class="pomodoro-filter-defs" width="0" height="0">
-                    <filter id="pomodoro-liquid-filter" x="-15%" y="-15%" width="130%" height="130%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.022" numOctaves="2" seed="11" result="noise" />
-                      <feDisplacementMap id="pomodoro-displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="B" />
-                    </filter>
-                  </svg>
+                  <img class="pomodoro-bg-photo" src="assets/pomodoro-bg-medium.webp" alt="" draggable="false" />
                 </div>
                 <button class="pomodoro-toggle" id="pomodoro-toggle" type="button" aria-label="开始番茄钟">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5z" /></svg>
@@ -160,54 +141,40 @@
                 </button>
               </section>
 
-              <section class="tile home-cursor" id="home-cursor" data-home-module="cursor" data-widget-size="small" aria-label="Cursor 用量">
-                <div class="module-liquid-fx" aria-hidden="true">
-                  <img class="module-liquid-layer" src="assets/cursor-usage-bg.png" alt="" draggable="false" data-liquid-src="assets/cursor-usage-bg.png" />
-                  <canvas class="module-water-canvas" id="cursor-water-canvas"></canvas>
-                  <svg class="module-filter-defs" width="0" height="0" aria-hidden="true">
-                    <filter id="cursor-liquid-filter" x="-15%" y="-15%" width="130%" height="130%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.022" numOctaves="2" seed="13" result="noise" />
-                      <feDisplacementMap id="cursor-displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="B" />
-                    </filter>
-                  </svg>
-                </div>
-
+              <section class="tile home-cursor" id="home-cursor" data-home-module="cursor" data-widget-size="small" aria-label="AI 剩余额度">
                 <div class="cursor-usage-head">
-                  <span class="tile-label">Cursor 用量</span>
-                  <button class="cursor-usage-refresh" id="cursor-usage-refresh" type="button" aria-label="刷新 Cursor 用量" title="刷新">
+                  <span class="tile-label" id="ai-usage-title">AI 剩余额度</span>
+                  <button class="cursor-usage-refresh" id="cursor-usage-refresh" type="button" aria-label="刷新 AI 剩余额度" title="刷新剩余额度">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>
                   </button>
                 </div>
-                <div class="cursor-usage-rows" id="cursor-usage-rows">
-                  <div class="cursor-usage-row" data-pool="auto">
-                    <div class="cursor-usage-meta"><span>Auto</span><strong id="cursor-usage-auto-pct">--%</strong></div>
-                    <div class="cursor-usage-track" aria-hidden="true"><i id="cursor-usage-auto-fill"></i></div>
-                  </div>
-                  <div class="cursor-usage-row" data-pool="other">
-                    <div class="cursor-usage-meta"><span>Other</span><strong id="cursor-usage-other-pct">--%</strong></div>
-                    <div class="cursor-usage-track" aria-hidden="true"><i id="cursor-usage-other-fill"></i></div>
-                  </div>
-                  <div class="cursor-usage-row" data-pool="grok">
-                    <div class="cursor-usage-meta"><span>Grok Bot</span><strong id="cursor-usage-grok-pct">--%</strong></div>
-                    <div class="cursor-usage-track" aria-hidden="true"><i id="cursor-usage-grok-fill"></i></div>
-                  </div>
+                <div class="ai-usage-tabs" id="ai-usage-tabs" role="tablist" aria-label="AI 剩余额度来源" hidden>
+                  <button type="button" role="tab" data-ai-tab="cursor" id="ai-tab-cursor" aria-controls="ai-provider-cursor">Cursor<i aria-hidden="true"></i></button>
+                  <button type="button" role="tab" data-ai-tab="codex" id="ai-tab-codex" aria-controls="ai-provider-codex">Codex<i aria-hidden="true"></i></button>
                 </div>
-                <p class="cursor-usage-footnote" id="cursor-usage-footnote">读取本机 Cursor 登录态…</p>
+                <div class="ai-usage-providers">
+                <section class="ai-usage-provider" id="ai-provider-cursor" aria-label="Cursor 剩余额度">
+                <div class="ai-usage-source"><b>Cursor</b><span id="ai-cursor-source"></span></div>
+                <div class="cursor-usage-rows" id="cursor-usage-rows"></div>
+                <p class="cursor-usage-footnote" id="cursor-usage-footnote">正在检测 AI 用量…</p>
+                </section>
+                <section class="ai-usage-provider" id="ai-provider-codex" aria-label="Codex 剩余额度" hidden>
+                  <div class="ai-usage-source"><b>Codex</b><span id="ai-codex-source"></span></div>
+                  <div class="cursor-usage-rows" id="codex-usage-rows"></div>
+                  <p class="cursor-usage-footnote" id="codex-usage-footnote"></p>
+                  <small class="ai-mini-reset" id="codex-usage-mini-reset" hidden></small>
+                  <dl class="ai-codex-details" id="ai-codex-details"></dl>
+                </section>
+                </div>
+                <div class="ai-usage-empty" id="ai-usage-empty" hidden>
+                  <strong class="ai-empty-title"></strong><p class="ai-empty-body"></p>
+                  <div class="ai-empty-bars"><div><span>Cursor</span><i></i><small>未检测到</small></div><div><span>Codex</span><i></i><small>未检测到</small></div></div>
+                  <button class="workspace-button compact ai-open-settings" type="button">去设置 ›</button>
+                </div>
               </section>
 
               <!-- 快速录音与实时转写 -->
               <section class="tile home-recorder" id="home-recorder" data-home-module="recorder" data-widget-size="medium">
-                <div class="module-liquid-fx" aria-hidden="true">
-                  <img class="module-liquid-layer" src="assets/recorder-bg.png" alt="" draggable="false" data-liquid-src="assets/recorder-bg.png" />
-                  <canvas class="module-water-canvas" id="recorder-water-canvas"></canvas>
-                  <svg class="module-filter-defs" width="0" height="0" aria-hidden="true">
-                    <filter id="recorder-liquid-filter" x="-15%" y="-15%" width="130%" height="130%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.022" numOctaves="2" seed="17" result="noise" />
-                      <feDisplacementMap id="recorder-displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="B" />
-                    </filter>
-                  </svg>
-                </div>
-
                 <div class="recorder-head">
                   <span class="recording-state-dot" id="home-recording-dot"></span>
                   <span class="tile-label" id="home-recording-state">快速录音</span>
@@ -229,17 +196,6 @@
 
               <!-- 当前打开的窗口 -->
               <section class="tile home-windows" data-home-module="windows" data-widget-size="large">
-                <div class="module-liquid-fx" aria-hidden="true">
-                  <img class="module-liquid-layer" src="assets/current-window-bg.png" alt="" draggable="false" data-liquid-src="assets/current-window-bg.png" />
-                  <canvas class="module-water-canvas" id="windows-water-canvas"></canvas>
-                  <svg class="module-filter-defs" width="0" height="0" aria-hidden="true">
-                    <filter id="windows-liquid-filter" x="-15%" y="-15%" width="130%" height="130%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.022" numOctaves="2" seed="19" result="noise" />
-                      <feDisplacementMap id="windows-displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="B" />
-                    </filter>
-                  </svg>
-                </div>
-
                 <div class="tile-head">
                   <span class="tile-label">当前窗口</span>
                   <button class="windows-hidden" id="windows-hidden" type="button" hidden title="恢复已隐藏窗口"></button>
@@ -258,33 +214,13 @@
               <section class="tile home-mirror" data-home-module="mirror" data-widget-size="medium">
                 <button class="mirror-stage" id="mirror-stage" type="button" aria-label="打开实时镜子" aria-pressed="false">
                   <img class="mirror-photo" src="assets/mirror-portrait.jpg" alt="" draggable="false" />
-                  <img class="mirror-photo mirror-liquid-layer" src="assets/mirror-portrait.jpg" alt="" draggable="false" />
                   <video class="mirror-video" id="mirror-video" muted playsinline aria-hidden="true"></video>
-                  <canvas class="mirror-water-canvas" id="mirror-water-canvas" aria-hidden="true"></canvas>
                   <span class="mirror-pixel-reveal" id="mirror-pixel-reveal" aria-hidden="true"></span>
-                  <span class="mirror-ripple" aria-hidden="true"></span>
-                  <svg class="mirror-filter-defs" width="0" height="0" aria-hidden="true">
-                    <filter id="mirror-liquid-filter" x="-15%" y="-15%" width="130%" height="130%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.022" numOctaves="2" seed="7" result="noise" />
-                      <feDisplacementMap id="mirror-displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="B" />
-                    </filter>
-                  </svg>
                 </button>
               </section>
 
               <!-- 速记 -->
               <section class="tile home-note" data-home-module="note" data-widget-size="large">
-                <div class="module-liquid-fx" aria-hidden="true">
-                  <img class="module-liquid-layer" src="assets/note-bg.png" alt="" draggable="false" data-liquid-src="assets/note-bg.png" />
-                  <canvas class="module-water-canvas" id="note-water-canvas"></canvas>
-                  <svg class="module-filter-defs" width="0" height="0" aria-hidden="true">
-                    <filter id="note-liquid-filter" x="-15%" y="-15%" width="130%" height="130%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.022" numOctaves="2" seed="23" result="noise" />
-                      <feDisplacementMap id="note-displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="B" />
-                    </filter>
-                  </svg>
-                </div>
-
                 <div class="note-toolbar" role="toolbar" aria-label="随笔记操作">
                   <div class="note-mode-switch" role="group" aria-label="预览或编辑">
                     <button class="note-mode" type="button" data-note-mode="preview" aria-pressed="false">预览</button>
@@ -316,23 +252,15 @@
 
               <!-- 常用指令 -->
               <section class="tile home-commands" data-home-module="commands" data-widget-size="medium">
-                <div class="module-liquid-fx" aria-hidden="true">
-                  <img class="module-liquid-layer" src="assets/commands-bg.png" alt="" draggable="false" data-liquid-src="assets/commands-bg.png" />
-                  <canvas class="module-water-canvas" id="commands-water-canvas"></canvas>
-                  <svg class="module-filter-defs" width="0" height="0" aria-hidden="true">
-                    <filter id="commands-liquid-filter" x="-15%" y="-15%" width="130%" height="130%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.022" numOctaves="2" seed="29" result="noise" />
-                      <feDisplacementMap id="commands-displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="B" />
-                    </filter>
-                  </svg>
-                </div>
-
                 <div class="tile-head">
                   <span class="tile-label">常用指令</span>
                   <button class="bulk-delete" id="command-bulk-delete" type="button" hidden>删除</button>
                 </div>
                 <input class="command-add" id="command-add" type="text" placeholder="输入指令，回车保存…" maxlength="500" autocomplete="off" spellcheck="false" />
                 <div class="command-list" id="command-list"></div>
+              </section>
+
+              <section class="tile home-sun" id="home-sun" data-home-module="sun" data-widget-size="medium" aria-label="日出日落">
               </section>
 
             </div>
@@ -537,18 +465,41 @@
                   <p>密钥由系统安全存储加密，仅在你主动查看或复制时解密。</p>
                 </section>
 
-                <section class="tile settings-card settings-cursor-token-card">
+                <section class="tile settings-card settings-ai-usage-card" id="settings-ai-usage-card" aria-labelledby="settings-ai-usage-heading">
+                  <div class="settings-card-heading settings-ai-heading">
+                    <div><span class="tile-label">Cursor / Codex</span><strong id="settings-ai-usage-heading">AI 剩余额度</strong></div>
+                  </div>
+                <section class="settings-ai-provider settings-cursor-token-card" id="settings-cursor-token-card">
                   <div class="settings-card-heading">
                     <div><span class="tile-label">Cursor</span><strong>用量 Token</strong></div>
                     <small id="settings-cursor-token-status" data-state="empty">未配置 · 使用本机登录</small>
                   </div>
-                  <p>可选。填写后优先用手动 Token 拉用量；失效时自动回退本机 Cursor 登录态，并在首页提示。</p>
+                  <p>可选。可从本机 Cursor 获取，保存后优先用于查询用量，并随 NAS 加密同步；失效时回退本机登录态。</p>
                   <div class="settings-cursor-token-row">
                     <input id="settings-cursor-token" type="password" placeholder="粘贴 Cursor access token" autocomplete="off" spellcheck="false" aria-label="Cursor access token" />
+                    <button class="workspace-button compact" id="settings-cursor-token-fetch" type="button">获取本机 Token</button>
                     <button class="workspace-button compact" id="settings-cursor-token-save" type="button">保存</button>
                     <button class="workspace-button compact" id="settings-cursor-token-clear" type="button">清除</button>
                   </div>
-                  <p class="settings-cursor-token-hint" id="settings-cursor-token-hint"></p>
+                  <p class="settings-cursor-token-hint" id="settings-cursor-token-hint" role="status" aria-live="polite"></p>
+                </section>
+                <section class="settings-ai-provider settings-codex-token-card" id="settings-codex-token-card">
+                  <div class="settings-card-heading">
+                    <div><span class="tile-label">Codex</span><strong>用量来源与 Token</strong></div>
+                    <small id="settings-codex-token-status">未配置手动 Token</small>
+                  </div>
+                  <p id="settings-codex-local-status">未检测到本机 Codex</p>
+                  <p id="settings-codex-percent"></p>
+                  <p id="settings-codex-token-guide" hidden role="status">Codex Token 已失效。本机有 Codex：点「获取本机 Token」，或先在 Codex 里重新登录再获取。本机没有 Codex：在装了 Codex 的电脑上获取后粘贴过来，再点保存。</p>
+                  <p>保存 access token 后联网查询实时额度，联网失败时回退本机记录。Token 由系统安全存储加密保存在本机。</p>
+                  <div class="settings-cursor-token-row">
+                    <input id="settings-codex-token" type="password" placeholder="粘贴 Codex access token" autocomplete="off" spellcheck="false" aria-label="Codex Token" />
+                    <button class="workspace-button compact" id="settings-codex-token-fetch" type="button">获取本机 Token</button>
+                    <button class="workspace-button compact" id="settings-codex-token-save" type="button">保存</button>
+                    <button class="workspace-button compact" id="settings-codex-token-clear" type="button">清除</button>
+                  </div>
+                  <p class="settings-cursor-token-hint" id="settings-codex-token-hint" role="status" aria-live="polite"></p>
+                </section>
                 </section>
 
                 <section class="tile settings-card settings-nas-endpoints" id="settings-nas-endpoints" aria-labelledby="settings-nas-endpoint-title">
@@ -682,17 +633,19 @@
                   <div class="settings-home-module-grid" id="settings-home-module-list">
                     <label><span><b>音乐</b><small>播放状态与控制</small></span><input type="checkbox" data-settings-home-module="music" aria-label="显示音乐" /><i aria-hidden="true"></i></label>
                     <label><span><b>番茄钟</b><small>专注计时</small></span><input type="checkbox" data-settings-home-module="pomodoro" aria-label="显示番茄钟" /><i aria-hidden="true"></i></label>
-                    <label><span><b>Cursor 用量</b><small>Auto / Other / Grok Bot</small></span><input type="checkbox" data-settings-home-module="cursor" aria-label="显示 Cursor 用量" /><i aria-hidden="true"></i></label>
+                    <label><span><b>AI 剩余额度</b><small>Cursor / Codex</small></span><input type="checkbox" data-settings-home-module="cursor" aria-label="显示 AI 剩余额度" /><i aria-hidden="true"></i></label>
                     <label><span><b>快速录音</b><small data-home-module-setting-note="recorder">录音与转写</small></span><input type="checkbox" data-settings-home-module="recorder" aria-label="显示快速录音" /><i aria-hidden="true"></i></label>
                     <label><span><b>当前窗口</b><small>窗口快速切换</small></span><input type="checkbox" data-settings-home-module="windows" aria-label="显示当前窗口" /><i aria-hidden="true"></i></label>
                     <label><span><b>镜子</b><small>相机与封面</small></span><input type="checkbox" data-settings-home-module="mirror" aria-label="显示镜子" /><i aria-hidden="true"></i></label>
                     <label><span><b>随笔记</b><small>首页快速记录</small></span><input type="checkbox" data-settings-home-module="note" aria-label="显示随笔记" /><i aria-hidden="true"></i></label>
                     <label><span><b>常用指令</b><small>提示词快捷入口</small></span><input type="checkbox" data-settings-home-module="commands" aria-label="显示常用指令" /><i aria-hidden="true"></i></label>
+                    <label><span><b>日出日落</b><small>天亮、黄金时刻与日落</small></span><input type="checkbox" data-settings-home-module="sun" aria-label="显示日出日落" /><i aria-hidden="true"></i></label>
                   </div>
                 </section>
               </div>
 
               <div class="settings-column settings-column-secondary">
+
                 <section class="tile settings-card settings-mirror-card">
                   <img id="settings-mirror-preview" src="assets/mirror-portrait.jpg" alt="当前首页镜子配图" draggable="false" />
                   <div>
@@ -837,13 +790,19 @@
       <button type="button" role="menuitem" data-home-ctx-size="large">大</button>
     </div>
     <script src="../platform.js"></script>
+    <script src="vendor/suncalc/suncalc.js"></script>
+    <script src="cities.js"></script>
     <script src="domain.js"></script>
+    <script src="sun.js"></script>
     <script src="effects.js"></script>
     <script src="nas-sync-pair.js"></script>
     <script src="nas-sync-migration.js"></script>
     <script src="nas-sync-settings.js"></script>
 
+    <script src="ai-usage-domain.js"></script>
     <script src="app.js"></script>
+    <script src="ai-usage.js"></script>
+    <script src="sun-widget.js"></script>
     <script src="workspace.js"></script>
     <script src="icon-motion.js"></script>
   </body>

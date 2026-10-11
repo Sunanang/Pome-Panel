@@ -2897,123 +2897,12 @@ if (notePreview) {
 }
 
 
-// ============ 首页 · Cursor 用量 ============
-const cursorUsageRefresh = document.getElementById('cursor-usage-refresh');
-const cursorUsageFootnote = document.getElementById('cursor-usage-footnote');
-let cursorUsageTimer = null;
-let cursorUsageInFlight = false;
-
-function formatCursorPercent(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return '--%';
-  return `${n >= 10 ? n.toFixed(0) : n.toFixed(1)}%`;
-}
-
-function formatCursorDate(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-}
-
-function cursorUsageLevel(percent) {
-  const n = Number(percent);
-  if (!Number.isFinite(n)) return 'ok';
-  if (n >= 95) return 'critical';
-  if (n >= 80) return 'warn';
-  return 'ok';
-}
-
-function paintCursorUsagePool(pool, percent) {
-  const row = document.querySelector(`.cursor-usage-row[data-pool="${pool}"]`);
-  const pctEl = document.getElementById(`cursor-usage-${pool === 'grok' ? 'grok' : pool}-pct`);
-  const fillEl = document.getElementById(`cursor-usage-${pool === 'grok' ? 'grok' : pool}-fill`);
-  const n = Number(percent);
-  if (pctEl) pctEl.textContent = formatCursorPercent(n);
-  if (fillEl) fillEl.style.width = Number.isFinite(n) ? `${Math.max(0, Math.min(100, n))}%` : '0%';
-  if (row) row.dataset.level = cursorUsageLevel(n);
-}
-
-async function refreshCursorUsage({ force = false } = {}) {
-  if (!window.notchAPI || typeof window.notchAPI.getCursorUsage !== 'function') {
-    if (cursorUsageFootnote) cursorUsageFootnote.textContent = '当前环境不支持读取 Cursor 用量';
-    return;
-  }
-  if (cursorUsageInFlight) return;
-  cursorUsageInFlight = true;
-  cursorUsageRefresh?.classList.add('is-loading');
-  try {
-    const data = await window.notchAPI.getCursorUsage({ force });
-    if (!data || data.ok !== true) {
-      paintCursorUsagePool('auto', null);
-      paintCursorUsagePool('other', null);
-      paintCursorUsagePool('grok', null);
-      let reason = '暂时读不到用量，点刷新重试';
-      if (data && data.error === 'cursor_manual_token_invalid') {
-        reason = '手动 Token 已失效，且本机登录态也不可用';
-      } else if (data && data.error === 'cursor_db_missing') {
-        reason = data.manualTokenInvalid
-          ? '手动 Token 已失效，且未找到本机 Cursor 登录数据'
-          : '未找到本机 Cursor 登录数据';
-      } else if (data && data.error === 'cursor_token_missing') {
-        reason = data.manualTokenInvalid
-          ? '手动 Token 已失效，请先在 Cursor 里登录账号'
-          : '请先在 Cursor 里登录账号';
-      } else if (data && data.manualTokenInvalid) {
-        reason = '手动 Token 已失效，本机回退也失败';
-      }
-      if (cursorUsageFootnote) cursorUsageFootnote.textContent = reason;
-      return;
-    }
-    paintCursorUsagePool('auto', data.auto && data.auto.percent);
-    paintCursorUsagePool('other', data.other && data.other.percent);
-    paintCursorUsagePool('grok', data.grokBot && data.grokBot.percent);
-    const cycleEnd = formatCursorDate(data.billing && data.billing.cycleEnd);
-    const grokReset = formatCursorDate(data.grokBot && data.grokBot.resetAt);
-    const bits = [];
-    if (data.manualTokenInvalid) bits.push('手动 Token 已失效，已改用本机');
-    else if (data.warning) bits.push(data.warning);
-    else if (data.authSource === 'manual') bits.push('手动 Token');
-    if (cycleEnd) bits.push(`账期至 ${cycleEnd}`);
-    if (grokReset) bits.push(`Grok 周重置 ${grokReset}`);
-    if (data.cached) bits.push('缓存');
-    if (cursorUsageFootnote) cursorUsageFootnote.textContent = bits.join(' · ') || '已更新';
-  } catch (error) {
-    if (cursorUsageFootnote) cursorUsageFootnote.textContent = '读取失败，点刷新重试';
-  } finally {
-    cursorUsageInFlight = false;
-    cursorUsageRefresh?.classList.remove('is-loading');
-  }
-}
-
-function startCursorUsagePolling() {
-  refreshCursorUsage({ force: false });
-  if (cursorUsageTimer) clearInterval(cursorUsageTimer);
-  cursorUsageTimer = setInterval(() => refreshCursorUsage({ force: false }), 5 * 60 * 1000);
-}
-
-cursorUsageRefresh?.addEventListener('click', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  refreshCursorUsage({ force: true });
-});
-
-if (document.getElementById('home-cursor')) {
-  startCursorUsagePolling();
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') refreshCursorUsage({ force: false });
-  });
-  document.addEventListener('notch:cursor-token-changed', () => {
-    refreshCursorUsage({ force: true });
-  });
-}
-
 // ============ 首页 · 自适应 Bento 布局（长按换位 + 迷你/小/中/大组件） ============
 const HOME_ORDER_KEY = 'notch-home-order-v3';
 const HOME_SIZES_KEY = 'notch-home-widget-sizes-v2';
 const HOME_PLACEMENTS_KEY = 'notch-home-placements-v1';
 const HOME_HIDDEN_MODULES_KEY = 'notch-home-hidden-modules-v1';
-const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands', 'sun'];
 // 渲染层只读能力层（P0-1），不再自己判断平台。主进程通过 preload 下发 capabilities；
 // 拿不到时（例如没有 preload 的测试窗口）才用本地能力层按平台名补齐。
 function readPlatformCapabilities() {
@@ -3029,7 +2918,7 @@ window.notchAPI?.onCapabilitiesChanged?.((capabilities) => {
   unavailableHomeModules.splice(0, unavailableHomeModules.length, ...capabilities.unavailableHomeModules);
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
 });
-const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'windows', 'recorder', 'mirror', 'note', 'commands'];
+const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'windows', 'recorder', 'mirror', 'note', 'commands', 'sun'];
 const HOME_SIZE_DEFAULTS = {
   music: 'small',
   windows: 'large',
@@ -3039,6 +2928,7 @@ const HOME_SIZE_DEFAULTS = {
   commands: 'mini',
   pomodoro: 'mini',
   cursor: 'small',
+  sun: 'medium',
 };
 const HOME_SIZE_LABELS = { mini: '迷你', small: '小', medium: '中', large: '大' };
 const homeBento = document.getElementById('home-bento');
@@ -3216,7 +3106,41 @@ function saveHiddenHomeModules() {
 
 if (loadedHomeVisibility.needsRepair) saveHiddenHomeModules();
 
-function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSizes, { forcePack = false } = {}) {
+function sealResolvedHomeLayout(layout, visibleIds, {
+  preferredIds = [],
+  frozenIds = [],
+} = {}) {
+  if (!layout?.placements) return { layout: null, changed: false };
+  const filled = window.NotchDomain.fillHomeLayoutGaps(layout.placements, {
+    preferredIds,
+    frozenIds,
+  });
+  if (!filled.placements) return { layout: null, changed: false };
+  const sealed = {
+    allowGaps: filled.gapCount > 0,
+    placements: filled.placements,
+    variants: Object.fromEntries(visibleIds.map((id) => (
+      [id, window.NotchDomain.layoutVariantForPlacement(filled.placements[id])]
+    ))),
+  };
+  if (!window.NotchDomain.validateHomeWidgetLayout(sealed, visibleIds, 12, 4)) {
+    return { layout: null, changed: false };
+  }
+  if (filled.changed) {
+    visibleIds.forEach((id) => {
+      if (filled.sizes[id]) homeSizes[id] = filled.sizes[id];
+    });
+  }
+  return { layout: sealed, changed: filled.changed };
+}
+
+function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSizes, {
+  forcePack = false,
+  preferredIds = [],
+  frozenIds = [],
+  sealGaps = false,
+  persistSeal = false,
+} = {}) {
   hiddenIds = effectiveHomeHidden(hiddenIds);
   const visibleIds = HOME_MODULE_REGISTRY.filter((id) => !hiddenIds.includes(id));
 
@@ -3233,24 +3157,43 @@ function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSi
         visibleIds.map((id) => [id, window.NotchDomain.layoutVariantForPlacement(candidate.placements[id])])
       );
       if (window.NotchDomain.validateHomeWidgetLayout(candidate, visibleIds, 12, 4)) {
-        homeWorkingLayout = candidate;
-        return candidate;
+        const sealed = sealGaps
+          ? sealResolvedHomeLayout(candidate, visibleIds, { preferredIds, frozenIds })
+          : { layout: candidate, changed: false };
+        const resolved = sealed.layout || candidate;
+        homeWorkingLayout = cloneHomeLayout(resolved);
+        if (persistSeal && sealed.changed) saveHomeLayout();
+        return resolved;
       }
     }
   }
 
   const layout = window.NotchDomain.resolveHomeWidgetLayout(order, sizes, hiddenIds, 12, 4);
   if (window.NotchDomain.validateHomeWidgetLayout(layout, visibleIds, 12, 4)) {
-    homeWorkingLayout = cloneHomeLayout(layout);
-    return layout;
+    const sealed = sealGaps
+      ? sealResolvedHomeLayout(layout, visibleIds, { preferredIds, frozenIds })
+      : { layout, changed: false };
+    const resolved = sealed.layout || layout;
+    homeWorkingLayout = cloneHomeLayout(resolved);
+    if (persistSeal && sealed.changed) saveHomeLayout();
+    return resolved;
   }
   return null;
 }
 
 function cancelHomeLayoutMotion() {
   homeLayoutMotionGeneration += 1;
-  homeLayoutMotionAnimations.forEach((animation) => animation.cancel());
+  homeLayoutMotionAnimations.forEach((animation) => {
+    try { animation.cancel(); } catch (error) {}
+  });
   homeLayoutMotionAnimations = [];
+  // 清掉卡片上残留的 CSS transition（如 ::after 光晕），避免重排结束后 getAnimations() 仍非 0。
+  homeTiles.forEach((tile) => {
+    if (!tile || tile.hidden) return;
+    tile.getAnimations().forEach((animation) => {
+      try { animation.cancel(); } catch (error) {}
+    });
+  });
   homeBento?.classList.remove('layout-motion-active');
 }
 
@@ -3329,6 +3272,14 @@ function animateCommittedHomeLayout(reason, beforeState) {
     .then(() => {
       if (generation !== homeLayoutMotionGeneration) return;
       homeLayoutMotionAnimations = [];
+      homeTiles.forEach((tile) => {
+        if (!tile || tile.hidden) return;
+        tile.getAnimations().forEach((animation) => {
+          try { animation.finish(); } catch (error) {
+            try { animation.cancel(); } catch (cancelError) {}
+          }
+        });
+      });
       homeBento.classList.remove('layout-motion-active');
     });
 }
@@ -3370,6 +3321,7 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
       tile.style.removeProperty('grid-column');
       tile.style.removeProperty('grid-row');
     }
+    if (moduleId === 'pomodoro') syncPomodoroBgSrc(tile);
     tile.querySelectorAll('[data-widget-size-value]').forEach((sizeButton) => {
       const requestedSize = sizeButton.dataset.widgetSizeValue;
       const selected = size === requestedSize;
@@ -3402,9 +3354,36 @@ if (!HOME_ORDER_DEFAULTS.every((id) => homeOrder.includes(id))
   || homeOrder.length !== HOME_ORDER_DEFAULTS.length) {
   homeOrder = loadHomeOrder();
 }
+const introducedSunLayout = window.NotchDomain.introduceHomeModule({
+  order: homeOrder,
+  sizes: homeSizes,
+  defaults: HOME_SIZE_DEFAULTS,
+  placements: homeWorkingLayout?.placements || null,
+  hiddenIds: hiddenHomeModules,
+  moduleId: 'sun',
+  defaultSize: HOME_SIZE_DEFAULTS.sun,
+  registry: HOME_MODULE_REGISTRY,
+});
+const sunHiddenChanged = JSON.stringify(hiddenHomeModules) !== JSON.stringify(introducedSunLayout.hiddenIds);
+homeOrder = introducedSunLayout.order;
+homeSizes = introducedSunLayout.sizes;
+hiddenHomeModules = introducedSunLayout.hiddenIds;
+if (introducedSunLayout.placements) {
+  homeWorkingLayout = {
+    allowGaps: true,
+    placements: introducedSunLayout.placements,
+    variants: Object.fromEntries(Object.entries(introducedSunLayout.placements).map(([id, item]) => (
+      [id, window.NotchDomain.layoutVariantForPlacement(item)]
+    ))),
+  };
+}
 saveHomeLayout();
+if (sunHiddenChanged) saveHiddenHomeModules();
 
-let initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules);
+let initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
+  sealGaps: true,
+  persistSeal: true,
+});
 if (!initialHomeLayout) {
   // Repair once without entering safe mode: keep visibility prefs, reset packable sizes.
   homeOrder = [...HOME_ORDER_DEFAULTS];
@@ -3414,7 +3393,10 @@ if (!initialHomeLayout) {
     ''
   );
   saveHomeLayout();
-  initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules);
+  initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
+    sealGaps: true,
+    persistSeal: true,
+  });
 }
 if (!initialHomeLayout) {
   initialHomeLayout = resolveValidatedHomeLayout([], HOME_ORDER_DEFAULTS, HOME_SIZE_DEFAULTS);
@@ -3463,11 +3445,48 @@ function setHomeModuleVisible(moduleId, visible) {
     return { ok: false, changed: false, error: 'recording_active', hiddenIds: current, persisted: homeVisibilityPersisted };
   }
   const previousWorking = cloneHomeLayout(homeWorkingLayout);
+  const previousSizes = { ...homeSizes };
+  const areaOf = { mini: 2, small: 4, medium: 8, large: 16 };
   homeWorkingLayout = null;
-  const layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, homeSizes, { forcePack: true });
+  let preferredIds = [];
+  let layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, homeSizes, {
+    forcePack: true,
+    sealGaps: true,
+  });
+  let fittedSizes = false;
+  if (!layout && visible === true) {
+    const visibleIds = HOME_MODULE_REGISTRY.filter((id) => !next.hiddenIds.includes(id));
+    const visibleDefaults = Object.fromEntries(visibleIds.map((id) => [id, HOME_SIZE_DEFAULTS[id] || 'medium']));
+    const visibleSizes = Object.fromEntries(visibleIds.map((id) => (
+      [id, previousSizes[id] || HOME_SIZE_DEFAULTS[id] || 'medium']
+    )));
+    const fittedVisible = window.NotchDomain.normalizeHomeWidgetSizes(
+      visibleSizes,
+      visibleDefaults,
+      moduleId,
+      48
+    );
+    preferredIds = visibleIds.filter((id) => (
+      id !== moduleId && (areaOf[fittedVisible[id]] || 0) < (areaOf[visibleSizes[id]] || 0)
+    ));
+    const fitted = { ...previousSizes, ...fittedVisible };
+    homeWorkingLayout = null;
+    homeSizes = fitted;
+    layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, fitted, {
+      forcePack: true,
+      preferredIds,
+      sealGaps: true,
+    });
+    if (layout) {
+      fittedSizes = JSON.stringify(homeSizes) !== JSON.stringify(previousSizes);
+    } else {
+      homeSizes = previousSizes;
+    }
+  }
   const currentLayout = previousWorking
-    || resolveValidatedHomeLayout(current, homeOrder, homeSizes, { forcePack: true });
+    || resolveValidatedHomeLayout(current, homeOrder, previousSizes, { forcePack: true });
   if (!layout || !currentLayout) {
+    homeSizes = previousSizes;
     homeWorkingLayout = previousWorking;
     return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
   }
@@ -3480,10 +3499,13 @@ function setHomeModuleVisible(moduleId, visible) {
     applyHomeLayout(layout, { reason: 'visibility' });
   } catch (error) {
     hiddenHomeModules = current;
+    homeSizes = previousSizes;
+    homeWorkingLayout = previousWorking;
     try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch (rollbackError) {}
     return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
   }
   const persisted = saveHiddenHomeModules();
+  if (fittedSizes || JSON.stringify(homeSizes) !== JSON.stringify(previousSizes)) saveHomeLayout();
   const detail = visibilitySnapshot();
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail }));
   return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
@@ -3651,40 +3673,32 @@ if (homeBento) {
     return true;
   };
 
-  // 只交换两个模块的格子，绝不重新打包，避免第 3 个模块被挤动
+  // Exchange origins while preserving both footprints; only collisions require packing.
   const commitSwap = (sourceId, targetId, { fromDrag = false } = {}) => {
     if (!sourceId || !targetId || sourceId === targetId) return false;
-    const current = resolveValidatedHomeLayout(hiddenHomeModules);
+    const current = cloneHomeLayout(homeWorkingLayout);
     if (!current?.placements?.[sourceId] || !current?.placements?.[targetId]) return false;
 
-    const next = cloneHomeLayout(current);
-    const sourcePlacement = next.placements[sourceId];
-    const targetPlacement = next.placements[targetId];
-    next.placements[sourceId] = { ...targetPlacement };
-    next.placements[targetId] = { ...sourcePlacement };
-    next.variants[sourceId] = window.NotchDomain.layoutVariantForPlacement(next.placements[sourceId]);
-    next.variants[targetId] = window.NotchDomain.layoutVariantForPlacement(next.placements[targetId]);
+    const next = window.NotchDomain.swapHomeWidgetPlacements(current, sourceId, targetId, { order: homeOrder });
+    if (!next) return false;
 
     const visibleIds = HOME_MODULE_REGISTRY.filter(
       (id) => !effectiveHomeHidden(hiddenHomeModules).includes(id)
     );
     if (!window.NotchDomain.validateHomeWidgetLayout(next, visibleIds, 12, 4)) return false;
 
-    const previousSizes = { ...homeSizes };
-    homeSizes = {
-      ...homeSizes,
-      [sourceId]: sizeFromPlacement(next.placements[sourceId]),
-      [targetId]: sizeFromPlacement(next.placements[targetId]),
-    };
+    // The gap filler can resize siblings only; exchanged cards keep their saved sizes.
+    visibleIds.forEach((id) => {
+      if (id === sourceId || id === targetId) return;
+      const before = current.placements[id]; const after = next.placements[id];
+      if (before.width !== after.width || before.height !== after.height) homeSizes[id] = sizeFromPlacement(after);
+    });
     const nextOrder = swappedOrderFrom(homeOrder, sourceId, targetId);
     if (nextOrder) homeOrder = nextOrder;
     homeWorkingLayout = next;
     // 拖动预览已完成让位：松手只落格，不再播一次互换动画
     applyHomeLayout(next, { reason: fromDrag ? 'drag-commit' : 'reorder' });
     if (!homeLayoutEditing) saveHomeLayout();
-    else {
-      void previousSizes;
-    }
     return true;
   };
 
@@ -3707,6 +3721,7 @@ if (homeBento) {
   };
 
   const clearDisplacePreview = () => {
+    homeBento.querySelector('.home-swap-placeholder')?.remove();
     homeTiles.forEach((tile) => {
       tile.classList.remove('layout-displacing');
       tile.style.removeProperty('--home-displace-x');
@@ -3714,7 +3729,7 @@ if (homeBento) {
     });
   };
 
-  // 拖动中不改 grid：只用 transform 把目标模块挪到被拖模块的原位，避免全场重排乱跑
+  // Preview the same placement plan used on drop, using translations without resizing.
   const previewDisplaceTarget = (sourceId, targetId) => {
     if (!dragState?.originRects) return;
     clearDisplacePreview();
@@ -3722,15 +3737,34 @@ if (homeBento) {
     dragState.previewTargetId = targetId || null;
     dragState.target = null;
     if (!targetId) return;
-    const sourceRect = dragState.originRects.get(sourceId);
-    const targetRect = dragState.originRects.get(targetId);
+    const original = dragState.originLayout;
+    const preview = window.NotchDomain.swapHomeWidgetPlacements(original, sourceId, targetId, { order: dragState.originOrder });
+    if (!preview) return;
     const targetTile = homeBento.querySelector(`[data-home-module="${targetId}"]`);
-    if (!sourceRect || !targetRect || !targetTile) return;
-    const dx = sourceRect.left - targetRect.left;
-    const dy = sourceRect.top - targetRect.top;
-    targetTile.style.setProperty('--home-displace-x', `${dx}px`);
-    targetTile.style.setProperty('--home-displace-y', `${dy}px`);
-    targetTile.classList.add('layout-displacing', 'layout-drop-target');
+    if (!targetTile) return;
+    const bounds = homeBento.getBoundingClientRect();
+    const style = getComputedStyle(homeBento);
+    const columnGap = parseFloat(style.columnGap) * bounds.width / homeBento.offsetWidth;
+    const rowGap = parseFloat(style.rowGap) * bounds.height / homeBento.offsetHeight;
+    const pitchX = (bounds.width + columnGap) / 12;
+    const pitchY = (bounds.height + rowGap) / 4;
+    homeTiles.forEach((item) => {
+      const id = item.dataset.homeModule;
+      if (id === sourceId || !original.placements[id] || !preview.placements[id]) return;
+      const dx = (preview.placements[id].column - original.placements[id].column) * pitchX;
+      const dy = (preview.placements[id].row - original.placements[id].row) * pitchY;
+      if (!dx && !dy) return;
+      item.style.setProperty('--home-displace-x', `${dx}px`);
+      item.style.setProperty('--home-displace-y', `${dy}px`);
+      item.classList.add('layout-displacing');
+    });
+    const placeholder = document.createElement('div');
+    const destination = preview.placements[sourceId];
+    placeholder.className = 'home-swap-placeholder';
+    placeholder.setAttribute('aria-hidden', 'true');
+    placeholder.style.gridColumn = `${destination.column + 1} / span ${destination.width}`;
+    placeholder.style.gridRow = `${destination.row + 1} / span ${destination.height}`;
+    homeBento.append(placeholder);
     dragState.target = targetTile;
   };
 
@@ -3777,7 +3811,11 @@ if (homeBento) {
       [moduleId]: requested,
     }, HOME_SIZE_DEFAULTS, moduleId);
     homeWorkingLayout = null;
-    const layout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, { forcePack: true });
+    const layout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
+      forcePack: true,
+      sealGaps: true,
+      frozenIds: [moduleId],
+    });
     if (!layout) {
       homeSizes = previousSizes;
       homeWorkingLayout = previousLayout;
@@ -3897,7 +3935,7 @@ if (homeBento) {
 
     if (cancelled || !finalTargetId) return;
     if (swapped) showStatusToast('已互换位置');
-    else showStatusToast('无法互换，请换一个位置试试');
+    else showStatusToast('空间不够，无法交换');
   };
 
   homeBento.addEventListener('pointerdown', (event) => {
@@ -3926,6 +3964,7 @@ if (homeBento) {
         startY,
         originOrder: [...homeOrder],
         originRects: captureOriginRects(),
+        originLayout: cloneHomeLayout(homeWorkingLayout),
         previewTargetId: null,
       };
       pendingLongPress = null;
@@ -3962,6 +4001,7 @@ if (homeBento) {
           startY: pendingLongPress.startY,
           originOrder: [...homeOrder],
           originRects: captureOriginRects(),
+          originLayout: cloneHomeLayout(homeWorkingLayout),
           previewTargetId: null,
         };
         pendingLongPress = null;
@@ -4040,233 +4080,29 @@ function bindDockSurface(surface, selector, maxScale = 1.14) {
 });
 
 
-// ============ 首页模块通用水波折射（镜子 / 番茄钟除外） ============
-function bindLiquidWaterFx(root, { displacement, canvas }) {
-  if (!root || !displacement || !canvas) return;
-  let liquidFrame = null;
-  let liquidScale = 0;
-  let lastPoint = null;
-  let waterFrame = null;
-  let lastTrailAt = 0;
-  let waterRipples = [];
-
-  function resizeWaterCanvas() {
-    const bounds = root.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const width = Math.max(1, Math.round(bounds.width * dpr));
-    const height = Math.max(1, Math.round(bounds.height * dpr));
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-    return { bounds, dpr };
-  }
-
-  function animateWater(now) {
-    const metrics = resizeWaterCanvas();
-    const context = canvas.getContext('2d');
-    if (!metrics || !context) {
-      waterFrame = null;
-      return;
-    }
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    waterRipples = waterRipples.filter((ripple) => now - ripple.startedAt < 1250);
-    context.save();
-    context.scale(metrics.dpr, metrics.dpr);
-    context.globalCompositeOperation = 'screen';
-    waterRipples.forEach((ripple) => {
-      const progress = Math.min(1, (now - ripple.startedAt) / 1250);
-      const eased = 1 - (1 - progress) ** 3;
-      for (let ring = 0; ring < 3; ring++) {
-        const radius = 6 + eased * (34 + ripple.speed * 1.8) + ring * 7;
-        context.beginPath();
-        context.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
-        context.strokeStyle = `rgba(190, 222, 255, ${Math.max(0, (1 - progress) * (0.17 - ring * 0.035))})`;
-        context.lineWidth = Math.max(0.65, 1.55 - progress);
-        context.stroke();
-      }
-    });
-    context.restore();
-    if (waterRipples.length) waterFrame = requestAnimationFrame(animateWater);
-    else waterFrame = null;
-  }
-
-  function addWaterRipple(x, y, speed) {
-    waterRipples.push({ x, y, speed: Math.min(18, speed), startedAt: performance.now() });
-    if (waterRipples.length > 18) waterRipples.shift();
-    if (!waterFrame) waterFrame = requestAnimationFrame(animateWater);
-  }
-
-  function animateLiquid() {
-    liquidScale += (0 - liquidScale) * 0.035;
-    displacement.setAttribute('scale', liquidScale.toFixed(2));
-    if (liquidScale > 0.35) liquidFrame = requestAnimationFrame(animateLiquid);
-    else liquidFrame = null;
-  }
-
-  root.addEventListener('pointerenter', () => {
-    root.classList.add('liquid-active');
-  });
-  root.addEventListener('pointermove', (event) => {
-    const bounds = root.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-    const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
-    const speed = lastPoint
-      ? Math.hypot(event.clientX - lastPoint.x, event.clientY - lastPoint.y)
-      : 0;
-    lastPoint = { x: event.clientX, y: event.clientY };
-    root.style.setProperty('--liquid-x', `${(x * 100).toFixed(2)}%`);
-    root.style.setProperty('--liquid-y', `${(y * 100).toFixed(2)}%`);
-    root.style.setProperty('--liquid-shift-x', `${((0.5 - x) * 10).toFixed(2)}px`);
-    root.style.setProperty('--liquid-shift-y', `${((0.5 - y) * 10).toFixed(2)}px`);
-    liquidScale = Math.min(38, Math.max(liquidScale, 14 + speed * 0.85));
-    if (event.timeStamp - lastTrailAt > 42 && speed > 1.5) {
-      lastTrailAt = event.timeStamp;
-      addWaterRipple(event.clientX - bounds.left, event.clientY - bounds.top, speed);
-    }
-    if (!liquidFrame) liquidFrame = requestAnimationFrame(animateLiquid);
-  });
-  root.addEventListener('pointerleave', () => {
-    lastPoint = null;
-    root.classList.remove('liquid-active');
-  });
-}
-
-const moduleLiquidTargets = [
-  ['#home-music', 'music-displacement', 'music-water-canvas'],
-  ['#home-cursor', 'cursor-displacement', 'cursor-water-canvas'],
-  ['#home-recorder', 'recorder-displacement', 'recorder-water-canvas'],
-  ['.home-windows', 'windows-displacement', 'windows-water-canvas'],
-  ['.home-note', 'note-displacement', 'note-water-canvas'],
-  ['.home-commands', 'commands-displacement', 'commands-water-canvas'],
-];
-
-moduleLiquidTargets.forEach(([sel, dispId, canvasId]) => {
-  const root = document.querySelector(sel);
-  bindLiquidWaterFx(root, {
-    displacement: document.getElementById(dispId),
-    canvas: document.getElementById(canvasId),
-  });
-});
-
-(function syncMusicLiquidSrc() {
-  const music = document.getElementById('home-music');
-  const layer = music?.querySelector('.module-liquid-layer');
-  if (!music || !layer) return;
-  const map = {
-    mini: 'assets/generated/music-bg-mini.png',
-    small: 'assets/generated/music-bg-small.png',
-    medium: 'assets/generated/music-bg-medium.png',
-    large: 'assets/generated/music-bg-large.png',
+function syncPomodoroBgSrc(tile) {
+  const root = tile || document.getElementById('home-pomodoro');
+  if (!root) return;
+  const photos = root.querySelectorAll('img.pomodoro-bg-photo');
+  if (!photos.length) return;
+  const variant = root.dataset.layoutVariant || '';
+  const sizeByVariant = {
+    mini: 'mini',
+    compact: 'small',
+    wide: 'medium',
+    tall: 'large',
+    full: 'medium',
   };
-  const apply = () => {
-    const size = music.getAttribute('data-widget-size') || 'medium';
-    const next = map[size] || map.medium;
-    if (layer.getAttribute('src') !== next) layer.setAttribute('src', next);
-  };
-  apply();
-  new MutationObserver(apply).observe(music, { attributes: true, attributeFilter: ['data-widget-size'] });
-})();
-
-
-// ============ 首页 · 番茄钟（与镜子同款局部水波折射） ============
-const pomodoroDisplacement = document.getElementById('pomodoro-displacement');
-const pomodoroWaterCanvas = document.getElementById('pomodoro-water-canvas');
-let pomodoroLiquidFrame = null;
-let pomodoroLiquidScale = 0;
-let pomodoroLastPoint = null;
-let pomodoroWaterFrame = null;
-let pomodoroLastTrailAt = 0;
-let pomodoroWaterRipples = [];
-
-function resizePomodoroWaterCanvas() {
-  if (!pomodoroWaterCanvas || !homePomodoro) return null;
-  const bounds = homePomodoro.getBoundingClientRect();
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const width = Math.max(1, Math.round(bounds.width * dpr));
-  const height = Math.max(1, Math.round(bounds.height * dpr));
-  if (pomodoroWaterCanvas.width !== width || pomodoroWaterCanvas.height !== height) {
-    pomodoroWaterCanvas.width = width;
-    pomodoroWaterCanvas.height = height;
-  }
-  return { bounds, dpr };
-}
-
-function animatePomodoroWater(now) {
-  const metrics = resizePomodoroWaterCanvas();
-  const context = pomodoroWaterCanvas?.getContext('2d');
-  if (!metrics || !context) {
-    pomodoroWaterFrame = null;
-    return;
-  }
-  context.clearRect(0, 0, pomodoroWaterCanvas.width, pomodoroWaterCanvas.height);
-  pomodoroWaterRipples = pomodoroWaterRipples.filter((ripple) => now - ripple.startedAt < 1250);
-  context.save();
-  context.scale(metrics.dpr, metrics.dpr);
-  context.globalCompositeOperation = 'screen';
-  pomodoroWaterRipples.forEach((ripple) => {
-    const progress = Math.min(1, (now - ripple.startedAt) / 1250);
-    const eased = 1 - (1 - progress) ** 3;
-    for (let ring = 0; ring < 3; ring++) {
-      const radius = 6 + eased * (34 + ripple.speed * 1.8) + ring * 7;
-      context.beginPath();
-      context.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
-      context.strokeStyle = `rgba(190, 222, 255, ${Math.max(0, (1 - progress) * (0.17 - ring * 0.035))})`;
-      context.lineWidth = Math.max(0.65, 1.55 - progress);
-      context.stroke();
-    }
-  });
-  context.restore();
-  if (pomodoroWaterRipples.length) pomodoroWaterFrame = requestAnimationFrame(animatePomodoroWater);
-  else pomodoroWaterFrame = null;
-}
-
-function addPomodoroWaterRipple(x, y, speed) {
-  pomodoroWaterRipples.push({ x, y, speed: Math.min(18, speed), startedAt: performance.now() });
-  if (pomodoroWaterRipples.length > 18) pomodoroWaterRipples.shift();
-  if (!pomodoroWaterFrame) pomodoroWaterFrame = requestAnimationFrame(animatePomodoroWater);
-}
-
-function animatePomodoroLiquid() {
-  pomodoroLiquidScale += (0 - pomodoroLiquidScale) * 0.035;
-  pomodoroDisplacement?.setAttribute('scale', pomodoroLiquidScale.toFixed(2));
-  if (pomodoroLiquidScale > 0.35) {
-    pomodoroLiquidFrame = requestAnimationFrame(animatePomodoroLiquid);
-  } else {
-    pomodoroLiquidFrame = null;
-  }
-}
-
-if (homePomodoro) {
-  homePomodoro.addEventListener('pointerenter', () => {
-    homePomodoro.classList.add('liquid-active');
-  });
-  homePomodoro.addEventListener('pointermove', (event) => {
-    const bounds = homePomodoro.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-    const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
-    const speed = pomodoroLastPoint
-      ? Math.hypot(event.clientX - pomodoroLastPoint.x, event.clientY - pomodoroLastPoint.y)
-      : 0;
-    pomodoroLastPoint = { x: event.clientX, y: event.clientY };
-    homePomodoro.style.setProperty('--liquid-x', `${(x * 100).toFixed(2)}%`);
-    homePomodoro.style.setProperty('--liquid-y', `${(y * 100).toFixed(2)}%`);
-    homePomodoro.style.setProperty('--liquid-shift-x', `${((0.5 - x) * 10).toFixed(2)}px`);
-    homePomodoro.style.setProperty('--liquid-shift-y', `${((0.5 - y) * 10).toFixed(2)}px`);
-    pomodoroLiquidScale = Math.min(38, Math.max(pomodoroLiquidScale, 14 + speed * 0.85));
-    if (event.timeStamp - pomodoroLastTrailAt > 42 && speed > 1.5) {
-      pomodoroLastTrailAt = event.timeStamp;
-      addPomodoroWaterRipple(event.clientX - bounds.left, event.clientY - bounds.top, speed);
-    }
-    if (!pomodoroLiquidFrame) pomodoroLiquidFrame = requestAnimationFrame(animatePomodoroLiquid);
-  });
-  homePomodoro.addEventListener('pointerleave', () => {
-    pomodoroLastPoint = null;
-    homePomodoro.classList.remove('liquid-active');
+  const size = sizeByVariant[variant] || 'medium';
+  const next = `assets/pomodoro-bg-${size}.webp`;
+  const position = variant === 'full' ? '100% 50%' : 'center';
+  photos.forEach((img) => {
+    if (img.getAttribute('src') !== next) img.setAttribute('src', next);
+    img.style.objectPosition = position;
   });
 }
 
-// ============ 首页 · 人像镜面（局部水波折射） ============
+// ============ 首页 · 人像镜面 ============
 const homeMirror = document.querySelector('.home-mirror');
 const mirrorStage = document.getElementById('mirror-stage');
 const mirrorPhotos = Array.from(document.querySelectorAll('.mirror-photo'));
@@ -4283,15 +4119,7 @@ if (window.notchAPI && typeof window.notchAPI.onMirrorImageChanged === 'function
   window.notchAPI.onMirrorImageChanged(applyMirrorCover);
 }
 const mirrorVideo = document.getElementById('mirror-video');
-const mirrorDisplacement = document.getElementById('mirror-displacement');
-const mirrorWaterCanvas = document.getElementById('mirror-water-canvas');
 const mirrorPixelReveal = document.getElementById('mirror-pixel-reveal');
-let mirrorLiquidFrame = null;
-let mirrorLiquidScale = 0;
-let mirrorLastPoint = null;
-let mirrorWaterFrame = null;
-let mirrorLastTrailAt = 0;
-let mirrorWaterRipples = [];
 let mirrorStream = null;
 let mirrorStarting = false;
 let mirrorZoom = 1;
@@ -4315,54 +4143,6 @@ function replayMirrorPixelReveal() {
   setTimeout(() => mirrorPixelReveal.classList.remove('revealing'), 1120);
 }
 
-function resizeMirrorWaterCanvas() {
-  if (!mirrorWaterCanvas || !mirrorStage) return null;
-  const bounds = mirrorStage.getBoundingClientRect();
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const width = Math.max(1, Math.round(bounds.width * dpr));
-  const height = Math.max(1, Math.round(bounds.height * dpr));
-  if (mirrorWaterCanvas.width !== width || mirrorWaterCanvas.height !== height) {
-    mirrorWaterCanvas.width = width;
-    mirrorWaterCanvas.height = height;
-  }
-  return { bounds, dpr };
-}
-
-function animateMirrorWater(now) {
-  const metrics = resizeMirrorWaterCanvas();
-  const context = mirrorWaterCanvas?.getContext('2d');
-  if (!metrics || !context) {
-    mirrorWaterFrame = null;
-    return;
-  }
-  context.clearRect(0, 0, mirrorWaterCanvas.width, mirrorWaterCanvas.height);
-  mirrorWaterRipples = mirrorWaterRipples.filter((ripple) => now - ripple.startedAt < 1250);
-  context.save();
-  context.scale(metrics.dpr, metrics.dpr);
-  context.globalCompositeOperation = 'screen';
-  mirrorWaterRipples.forEach((ripple) => {
-    const progress = Math.min(1, (now - ripple.startedAt) / 1250);
-    const eased = 1 - (1 - progress) ** 3;
-    for (let ring = 0; ring < 3; ring++) {
-      const radius = 6 + eased * (34 + ripple.speed * 1.8) + ring * 7;
-      context.beginPath();
-      context.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
-      context.strokeStyle = `rgba(190, 222, 255, ${Math.max(0, (1 - progress) * (0.17 - ring * 0.035))})`;
-      context.lineWidth = Math.max(0.65, 1.55 - progress);
-      context.stroke();
-    }
-  });
-  context.restore();
-  if (mirrorWaterRipples.length) mirrorWaterFrame = requestAnimationFrame(animateMirrorWater);
-  else mirrorWaterFrame = null;
-}
-
-function addMirrorWaterRipple(x, y, speed) {
-  mirrorWaterRipples.push({ x, y, speed: Math.min(18, speed), startedAt: performance.now() });
-  if (mirrorWaterRipples.length > 18) mirrorWaterRipples.shift();
-  if (!mirrorWaterFrame) mirrorWaterFrame = requestAnimationFrame(animateMirrorWater);
-}
-
 function setMirrorZoom(value) {
   mirrorZoom = value;
   mirrorStage?.style.setProperty('--mirror-zoom', String(mirrorZoom));
@@ -4379,17 +4159,7 @@ function stopMirror() {
   }
   mirrorStarting = false;
   setMirrorZoom(1);
-  if (mirrorLiquidFrame) cancelAnimationFrame(mirrorLiquidFrame);
-  mirrorLiquidFrame = null;
-  mirrorLiquidScale = 0;
-  mirrorLastPoint = null;
-  mirrorWaterRipples = [];
-  if (mirrorWaterFrame) cancelAnimationFrame(mirrorWaterFrame);
-  mirrorWaterFrame = null;
-  const waterContext = mirrorWaterCanvas?.getContext('2d');
-  waterContext?.clearRect(0, 0, mirrorWaterCanvas.width, mirrorWaterCanvas.height);
-  mirrorDisplacement?.setAttribute('scale', '0');
-  homeMirror?.classList.remove('live', 'camera-starting', 'liquid-active', 'ripple-active');
+  homeMirror?.classList.remove('live', 'camera-starting');
   mirrorStage?.setAttribute('aria-label', '打开实时镜子');
   mirrorStage?.setAttribute('aria-pressed', 'false');
   mirrorStage?.removeAttribute('aria-busy');
@@ -4437,7 +4207,6 @@ async function startMirror() {
     mirrorVideo.srcObject = stream;
     await mirrorVideo.play();
     setMirrorZoom(1);
-    homeMirror?.classList.remove('liquid-active');
     homeMirror?.classList.add('live');
     mirrorStage?.setAttribute('aria-label', '关闭实时镜子');
     mirrorStage?.setAttribute('aria-pressed', 'true');
@@ -4455,45 +4224,7 @@ async function startMirror() {
   }
 }
 
-function animateMirrorLiquid() {
-  // 慢衰减保留轨迹长尾，Canvas 同时绘制传播中的同心波。
-  mirrorLiquidScale += (0 - mirrorLiquidScale) * 0.035;
-  mirrorDisplacement?.setAttribute('scale', mirrorLiquidScale.toFixed(2));
-  if (mirrorLiquidScale > 0.35) {
-    mirrorLiquidFrame = requestAnimationFrame(animateMirrorLiquid);
-  } else {
-    mirrorLiquidFrame = null;
-  }
-}
-
 if (mirrorStage) {
-  mirrorStage.addEventListener('pointerenter', () => {
-    if (!mirrorStream) homeMirror?.classList.add('liquid-active');
-  });
-  mirrorStage.addEventListener('pointermove', (event) => {
-    if (mirrorStream) return;
-    const bounds = mirrorStage.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-    const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
-    const speed = mirrorLastPoint
-      ? Math.hypot(event.clientX - mirrorLastPoint.x, event.clientY - mirrorLastPoint.y)
-      : 0;
-    mirrorLastPoint = { x: event.clientX, y: event.clientY };
-    mirrorStage.style.setProperty('--liquid-x', `${(x * 100).toFixed(2)}%`);
-    mirrorStage.style.setProperty('--liquid-y', `${(y * 100).toFixed(2)}%`);
-    mirrorStage.style.setProperty('--liquid-shift-x', `${((0.5 - x) * 10).toFixed(2)}px`);
-    mirrorStage.style.setProperty('--liquid-shift-y', `${((0.5 - y) * 10).toFixed(2)}px`);
-    mirrorLiquidScale = Math.min(38, Math.max(mirrorLiquidScale, 14 + speed * 0.85));
-    if (event.timeStamp - mirrorLastTrailAt > 42 && speed > 1.5) {
-      mirrorLastTrailAt = event.timeStamp;
-      addMirrorWaterRipple(event.clientX - bounds.left, event.clientY - bounds.top, speed);
-    }
-    if (!mirrorLiquidFrame) mirrorLiquidFrame = requestAnimationFrame(animateMirrorLiquid);
-  });
-  mirrorStage.addEventListener('pointerleave', () => {
-    mirrorLastPoint = null;
-    homeMirror?.classList.remove('liquid-active');
-  });
   mirrorStage.addEventListener('wheel', (event) => {
     if (!window.NotchDomain.shouldHandleMirrorPinch({
       live: Boolean(mirrorStream),
@@ -4509,10 +4240,6 @@ if (mirrorStage) {
       stopMirror();
       return;
     }
-    homeMirror?.classList.remove('ripple-active');
-    void mirrorStage.offsetWidth;
-    homeMirror?.classList.add('ripple-active');
-    setTimeout(() => homeMirror?.classList.remove('ripple-active'), 720);
     await startMirror();
   });
 }

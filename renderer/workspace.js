@@ -149,8 +149,9 @@
       event.preventDefault();
       const command = Domain.createCommand(commandInput.value, uid('command'), Date.now());
       if (!command) return;
-      commands.unshift(command);
       commandInput.value = '';
+      if (commands.some((item) => item.text === command.text)) return;
+      commands.unshift(command);
       persistCommands();
       renderCommands();
     });
@@ -728,6 +729,7 @@
   const settingsCursorToken = document.getElementById('settings-cursor-token');
   const settingsCursorTokenStatus = document.getElementById('settings-cursor-token-status');
   const settingsCursorTokenSave = document.getElementById('settings-cursor-token-save');
+  const settingsCursorTokenFetch = document.getElementById('settings-cursor-token-fetch');
   const settingsCursorTokenClear = document.getElementById('settings-cursor-token-clear');
   const settingsCursorTokenHint = document.getElementById('settings-cursor-token-hint');
   let settingsCursorTokenMeta = { configured: false, state: 'empty', label: '未配置 · 使用本机登录' };
@@ -1067,14 +1069,104 @@
     }
   }
 
+  function renderCodexSettings(data, status) {
+    const D = window.NotchAiUsageDomain;
+    const local = document.getElementById('settings-codex-local-status');
+    const percent = document.getElementById('settings-codex-percent');
+    const meta = document.getElementById('settings-codex-token-status');
+    const guide = document.getElementById('settings-codex-token-guide');
+    const invalid = data?.manualTokenInvalid ?? status?.manualTokenInvalid;
+    if (status && meta) { meta.textContent = status.label; meta.dataset.state = status.state; }
+    if (invalid !== undefined) {
+      guide.hidden = !invalid;
+      if (invalid) { meta.textContent = 'Token 失效'; meta.dataset.state = 'error'; }
+      else if (data) {
+        meta.textContent = data.configured ? '已配置手动 Token' : '未配置手动 Token';
+        meta.dataset.state = data.configured ? 'saved' : 'empty';
+      }
+    }
+    if (!data || !D || !local) return;
+    const updated = data.updatedAt && new Date(data.updatedAt);
+    const today = updated && updated.toDateString() === new Date().toDateString();
+    const recent = updated ? `${today ? '今天' : updated.toLocaleDateString('zh-CN')} ${D.clock(data.updatedAt)}` : '暂无用量记录';
+    const remote = data.authSource === 'manual';
+    local.textContent = remote ? ['手动 Token', D.planLabel(data.plan), `更新于 ${D.clock(data.updatedAt)}`].filter(Boolean).join(' · ')
+      : data.detected ? ['本机 Codex', D.planLabel(data.plan), `最近一次使用 ${recent}`].filter(Boolean).join(' · ') : '未检测到本机 Codex';
+    percent.textContent = data.updatedAt ? `5 小时 ${D.formatPercent(D.remaining(data.primary?.percent))} · 每周 ${D.formatPercent(D.remaining(data.secondary?.percent))}${D.expired(data.primary) || D.expired(data.secondary) ? ' · 重置时间已过，实际应更低' : ''}` : '';
+    if (data.remoteError && !invalid) percent.textContent += `${percent.textContent ? ' · ' : ''}暂时无法联网查询`;
+    else if (!data.ok && data.error && !invalid) percent.textContent = '暂时无法读取本机记录，点首页刷新重试';
+  }
+  document.addEventListener('notch:ai-usage-updated', (event) => renderCodexSettings(event.detail?.codex));
+  window.notchAPI?.onCodexTokenChanged?.((status) => {
+    renderCodexSettings(null, status);
+    document.dispatchEvent(new CustomEvent('notch:codex-token-changed', { detail: status }));
+  });
+  function setCodexTokenBusy(busy) {
+    ['settings-codex-token', 'settings-codex-token-fetch', 'settings-codex-token-save', 'settings-codex-token-clear']
+      .forEach((id) => { const control = document.getElementById(id); if (control) control.disabled = busy; });
+  }
+  document.getElementById('settings-codex-token-fetch')?.addEventListener('click', async () => {
+    if (!window.notchAPI?.readLocalCodexToken) return;
+    const input = document.getElementById('settings-codex-token');
+    const button = document.getElementById('settings-codex-token-fetch');
+    const hint = document.getElementById('settings-codex-token-hint');
+    hint.className = 'settings-cursor-token-hint';
+    hint.textContent = '正在读取本机 Codex 登录态…';
+    button.textContent = '获取中…';
+    setCodexTokenBusy(true);
+    try {
+      const result = await window.notchAPI.readLocalCodexToken();
+      if (!result?.ok || !result.token) {
+        const messages = {
+          codex_auth_missing: '未找到可读取的本机 Codex 登录凭证，请登录后重试，或手动填写 Token。',
+          codex_token_missing: '本机 Codex 登录凭证中没有可用 Token，请重新登录后重试。',
+          codex_auth_read_failed: '暂时无法读取 Codex 登录凭证，请稍后重试，或手动填写 Token。',
+        };
+        hint.textContent = messages[result?.error] || '获取失败，请重试或手动填写 Token。';
+        hint.classList.add('error');
+        return;
+      }
+      input.value = result.token;
+      hint.textContent = '已填入本机 access token，点击保存后查询实时额度。';
+      hint.classList.add('success');
+    } catch {
+      hint.textContent = '获取失败，请重试或手动填写 Token。';
+      hint.classList.add('error');
+    } finally {
+      setCodexTokenBusy(false);
+      button.textContent = '获取本机 Token';
+    }
+  });
+  for (const action of ['save', 'clear']) {
+    document.getElementById(`settings-codex-token-${action}`)?.addEventListener('click', async () => {
+      const input = document.getElementById('settings-codex-token');
+      const hint = document.getElementById('settings-codex-token-hint');
+      hint.className = 'settings-cursor-token-hint';
+      if (action === 'save' && !input.value.trim()) { hint.textContent = '请先填写 Token，或点清除移除已保存的 Token。'; return; }
+      setCodexTokenBusy(true);
+      try {
+        const result = action === 'save' ? await window.notchAPI.setCodexToken(input.value) : await window.notchAPI.clearCodexToken();
+        if (!result?.ok) throw new Error(result?.error);
+        input.value = ''; renderCodexSettings(null, result);
+        hint.textContent = action === 'save' ? '已安全保存，正在查询实时额度。' : '已清除手动 Token。';
+        hint.classList.add('success');
+      } catch (error) {
+        hint.textContent = error.message === 'secure_storage_unavailable' ? '当前系统安全存储不可用，无法保存 Token。' : '操作失败，请重试。';
+        hint.classList.add('error');
+      } finally { setCodexTokenBusy(false); }
+    });
+  }
+
   async function refreshSettingsPanel() {
     if (!window.notchAPI) return;
-    const [appSettings, workspace, config, mirrorImage, cursorToken] = await Promise.all([
+    const [appSettings, workspace, config, mirrorImage, cursorToken, codexUsage, codexToken] = await Promise.all([
       window.notchAPI.getAppSettings?.().catch(() => null),
       window.notchAPI.getWorkspace?.().catch(() => null),
       window.notchAPI.getTranscriptionConfig?.().catch(() => null),
       window.notchAPI.getMirrorImage?.().catch(() => null),
       window.notchAPI.getCursorTokenStatus?.().catch(() => null),
+      window.notchAPI.getCodexUsage?.().catch(() => null),
+      window.notchAPI.getCodexTokenStatus?.().catch(() => null),
     ]);
     if (appSettings) settingsAppSettings = appSettings;
     if (workspace) settingsWorkspace = workspace;
@@ -1084,6 +1176,7 @@
       updateRecordingUi();
     }
     if (cursorToken) settingsCursorTokenMeta = cursorToken;
+    renderCodexSettings(codexUsage, codexToken);
     applySettingsMirrorCover(mirrorImage);
     renderSettingsPanel();
   }
@@ -2251,14 +2344,51 @@
     openNasSyncOptions();
   }
 
+  function setCursorTokenBusy(busy) {
+    [settingsCursorTokenFetch, settingsCursorTokenSave, settingsCursorTokenClear, settingsCursorToken]
+      .forEach((control) => { if (control) control.disabled = busy; });
+  }
+
+  window.notchAPI?.onCursorTokenChanged?.((status) => {
+    settingsCursorTokenMeta = status;
+    renderSettingsPanel();
+    document.dispatchEvent(new CustomEvent('notch:cursor-token-changed'));
+  });
+
+  if (settingsCursorTokenFetch) settingsCursorTokenFetch.addEventListener('click', async () => {
+    if (!window.notchAPI?.readLocalCursorToken || !settingsCursorToken) return;
+    setCursorTokenBusy(true);
+    settingsCursorTokenFetch.textContent = '获取中…';
+    setCursorTokenHint('正在读取本机 Cursor 登录态…');
+    try {
+      const result = await window.notchAPI.readLocalCursorToken();
+      if (!result?.ok || !result.token) {
+        const messages = {
+          cursor_db_missing: '未找到本机 Cursor 数据，请先安装 Cursor 并登录。',
+          cursor_token_missing: '本机 Cursor 尚未登录，请登录后重试。',
+          cursor_db_read_failed: '暂时无法读取 Cursor 登录态，请稍后重试，或手动粘贴 Token。',
+        };
+        setCursorTokenHint(messages[result?.error] || '获取失败，请重试或手动粘贴 Token。', 'error');
+        return;
+      }
+      settingsCursorToken.value = result.token;
+      setCursorTokenHint('已填入本机 Token，点击保存后生效；已配对 NAS 时会加密同步。', 'success');
+    } catch (error) {
+      setCursorTokenHint('获取失败，请重试或手动粘贴 Token。', 'error');
+    } finally {
+      setCursorTokenBusy(false);
+      settingsCursorTokenFetch.textContent = '获取本机 Token';
+    }
+  });
+
   if (settingsCursorTokenSave) settingsCursorTokenSave.addEventListener('click', async () => {
     if (!window.notchAPI || typeof window.notchAPI.setCursorToken !== 'function') return;
     const token = settingsCursorToken?.value || '';
     if (!String(token).trim()) {
-      setCursorTokenHint('请先粘贴 Token，或点清除移除已保存的 Token。', 'error');
+      setCursorTokenHint('请先获取或粘贴 Token，或点清除移除已保存的 Token。', 'error');
       return;
     }
-    settingsCursorTokenSave.disabled = true;
+    setCursorTokenBusy(true);
     setCursorTokenHint('正在安全保存…');
     let result;
     try {
@@ -2266,7 +2396,7 @@
     } catch (error) {
       result = { ok: false, error: 'save_failed' };
     }
-    settingsCursorTokenSave.disabled = false;
+    setCursorTokenBusy(false);
     if (!result || !result.ok) {
       setCursorTokenHint(
         result && result.error === 'secure_storage_unavailable'
@@ -2279,20 +2409,19 @@
     settingsCursorTokenMeta = result;
     if (settingsCursorToken) settingsCursorToken.value = '';
     renderSettingsPanel();
-    setCursorTokenHint('已保存。之后优先用手动 Token；失效会自动回退本机并提示。', 'success');
-    document.dispatchEvent(new CustomEvent('notch:cursor-token-changed'));
+    setCursorTokenHint('已安全保存，已配对 NAS 时会加密同步；失效后自动回退本机登录态。', 'success');
   });
 
   if (settingsCursorTokenClear) settingsCursorTokenClear.addEventListener('click', async () => {
     if (!window.notchAPI || typeof window.notchAPI.clearCursorToken !== 'function') return;
-    settingsCursorTokenClear.disabled = true;
+    setCursorTokenBusy(true);
     let result;
     try {
       result = await window.notchAPI.clearCursorToken();
     } catch (error) {
       result = { ok: false };
     }
-    settingsCursorTokenClear.disabled = false;
+    setCursorTokenBusy(false);
     if (!result || !result.ok) {
       setCursorTokenHint('清除失败，请重试。', 'error');
       return;
@@ -2300,8 +2429,7 @@
     settingsCursorTokenMeta = result;
     if (settingsCursorToken) settingsCursorToken.value = '';
     renderSettingsPanel();
-    setCursorTokenHint('已清除手动 Token，将只使用本机 Cursor 登录态。', 'success');
-    document.dispatchEvent(new CustomEvent('notch:cursor-token-changed'));
+    setCursorTokenHint('已清除保存的 Token，将使用本机登录态；清除操作也会随 NAS 同步。', 'success');
   });
 
   if (settingsNasPairCode) {

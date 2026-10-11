@@ -23,6 +23,7 @@ const {
   normalizeTodoCategoryNames,
   normalizeHomeWidgetSizes,
   packHomeWidgetLayout,
+  swapHomeWidgetPlacements,
   normalizeHiddenHomeModules,
   updateHomeModuleVisibility,
   resolveHomeWidgetLayout,
@@ -783,6 +784,85 @@ test('layout variants reflect actual rectangles instead of saved preferences', (
   assert.equal(layoutVariantForPlacement({ width: 6, height: 2 }), 'wide');
   assert.equal(layoutVariantForPlacement({ width: 4, height: 4 }), 'tall');
   assert.equal(layoutVariantForPlacement({ width: 12, height: 4 }), 'full');
+});
+
+test('same-sized homepage cards exchange origins without changing any footprint', () => {
+  const placements = {
+    a: { column: 0, row: 0, width: 4, height: 4 },
+    b: { column: 4, row: 0, width: 4, height: 4 },
+    c: { column: 8, row: 0, width: 4, height: 4 },
+  };
+  const before = structuredClone(placements);
+  const next = swapHomeWidgetPlacements({ placements }, 'a', 'b');
+  assertExactHomeCover(next, Object.keys(placements));
+  assert.deepEqual(next.placements, { a: placements.b, b: placements.a, c: placements.c });
+  assert.deepEqual(placements, before);
+});
+
+test('different-sized swaps preserve all footprints and pack displaced cards without holes, horizontally and vertically', () => {
+  const fixtures = [
+    { a: { column: 0, row: 0, width: 4, height: 2 }, b: { column: 4, row: 0, width: 2, height: 2 },
+      c: { column: 6, row: 0, width: 2, height: 2 }, d: { column: 8, row: 0, width: 4, height: 2 },
+      e: { column: 0, row: 2, width: 4, height: 2 }, f: { column: 4, row: 2, width: 4, height: 2 },
+      g: { column: 8, row: 2, width: 4, height: 2 } },
+    { a: { column: 0, row: 0, width: 4, height: 2 }, b: { column: 0, row: 2, width: 2, height: 2 },
+      c: { column: 2, row: 2, width: 2, height: 2 }, d: { column: 4, row: 0, width: 4, height: 4 },
+      e: { column: 8, row: 0, width: 4, height: 4 } },
+  ];
+  for (const placements of fixtures) {
+    const before = structuredClone(placements);
+    const next = swapHomeWidgetPlacements({ placements }, 'a', 'b', { order: Object.keys(placements) });
+    assertExactHomeCover(next, Object.keys(placements));
+    for (const id of Object.keys(placements)) {
+      assert.equal(next.placements[id].width, placements[id].width, id);
+      assert.equal(next.placements[id].height, placements[id].height, id);
+    }
+    assert.equal(next.placements.a.column, placements.b.column); assert.equal(next.placements.a.row, placements.b.row);
+    assert.equal(next.placements.b.column, placements.a.column); assert.equal(next.placements.b.row, placements.a.row);
+    assert.deepEqual(placements, before);
+  }
+});
+
+test('larger dragged card is clamped up and left at grid boundaries without shrinking', () => {
+  const placements = {
+    a: { column: 0, row: 0, width: 4, height: 4 }, b: { column: 10, row: 2, width: 2, height: 2 },
+    c: { column: 8, row: 2, width: 2, height: 2 }, d: { column: 8, row: 0, width: 4, height: 2 },
+    e: { column: 4, row: 0, width: 4, height: 4 },
+  };
+  const next = swapHomeWidgetPlacements({ placements }, 'a', 'b');
+  assertExactHomeCover(next, Object.keys(placements));
+  assert.deepEqual(next.placements.a, { column: 8, row: 0, width: 4, height: 4 });
+  assert.deepEqual(next.placements.b, { column: 0, row: 0, width: 2, height: 2 });
+});
+
+test('swap gap filling freezes both exchanged cards and grows only other cards', () => {
+  const placements = { a: { column: 0, row: 0, width: 2, height: 1 },
+    b: { column: 2, row: 0, width: 2, height: 1 }, c: { column: 4, row: 0, width: 2, height: 1 } };
+  const next = swapHomeWidgetPlacements({ placements, allowGaps: true }, 'a', 'b');
+  assertSafeHomeLayout(next, Object.keys(placements));
+  assert.deepEqual(next.placements.a, placements.b); assert.deepEqual(next.placements.b, placements.a);
+  assert.ok(next.placements.c.width * next.placements.c.height > 2);
+});
+
+test('an over-capacity swap returns failure without changing layout or sizes', () => {
+  const layout = { placements: {
+    a: { column: 0, row: 0, width: 4, height: 4 }, b: { column: 4, row: 0, width: 4, height: 4 },
+    c: { column: 8, row: 0, width: 4, height: 4 }, d: { column: 0, row: 0, width: 2, height: 1 },
+  } };
+  const before = structuredClone(layout);
+  assert.equal(swapHomeWidgetPlacements(layout, 'a', 'b'), null);
+  assert.deepEqual(layout, before);
+});
+
+test('an anchored swap that cannot be tiled fails without resizing cards or mutating inputs', () => {
+  const sizes = { music: 'small', pomodoro: 'mini', cursor: 'small', windows: 'large',
+    recorder: 'small', mirror: 'medium', note: 'medium', commands: 'mini' };
+  const layout = resolveHomeWidgetLayout(Object.keys(sizes), sizes, []);
+  const before = structuredClone(layout);
+  // A 4x2 card at the mini card's row 1 leaves more one-cell-high strips than
+  // the two mini cards can cover. Keeping its requested origin is impossible.
+  assert.equal(swapHomeWidgetPlacements(layout, 'mirror', 'commands'), null);
+  assert.deepEqual(layout, before);
 });
 
 test('home layout validation rejects every incomplete or unsafe shape', () => {

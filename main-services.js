@@ -614,6 +614,42 @@ function hoverSpacePollingPolicy({ shortcut, visible, mode } = {}) {
   };
 }
 
+/**
+ * 失焦收起守卫：展开态才收；媒体授权 / 系统文件框 / 输入框打字时延后。
+ */
+function shouldCollapseOnWindowBlur({
+  mode,
+  mediaPermissionRequests = 0,
+  transientSystemInteractionRequests = 0,
+  typingFocusActive = false,
+} = {}) {
+  if (mode !== 'expanded') return false;
+  if (Number(mediaPermissionRequests) > 0) return false;
+  if (Number(transientSystemInteractionRequests) > 0) return false;
+  if (typingFocusActive) return false;
+  return true;
+}
+
+/**
+ * 快捷键 / 托盘唤出后必须真正抢到前台，否则 alwaysOnTop 面板看得见却没有焦点，
+ * 点外部或切桌面不会触发 BrowserWindow blur，只能再按快捷键隐藏。
+ * macOS 在 dock 隐藏时尤其需要 app.focus({ steal: true })。
+ */
+function mainPanelActivationPlan(platform = process.platform) {
+  return {
+    showIfHidden: true,
+    focusWindow: true,
+    stealAppFocus: platform === 'darwin',
+  };
+}
+
+/** macOS 切桌面（Mission Control Space）时，全工作区可见的面板往往不发 blur，需单独收起。 */
+function shouldCollapseOnActiveSpaceChange(options = {}) {
+  const platform = options.platform || process.platform;
+  if (platform !== 'darwin') return false;
+  return shouldCollapseOnWindowBlur(options);
+}
+
 const CONFIGURABLE_FEATURES = new Set(['todo', 'notes', 'links', 'recordings', 'credentials', 'clip']);
 const DEFAULT_PANEL_TABS = new Set(['home', 'todo', 'notes', 'links', 'recordings', 'credentials', 'clip', 'settings']);
 
@@ -986,6 +1022,9 @@ module.exports = {
   createForegroundMediaPermissionCoordinator,
   createWorkspacePersistenceGate,
   hoverSpacePollingPolicy,
+  shouldCollapseOnWindowBlur,
+  mainPanelActivationPlan,
+  shouldCollapseOnActiveSpaceChange,
   updateFeaturePreference,
   normalizeDefaultTabPreference,
   updateDefaultTabPreference,

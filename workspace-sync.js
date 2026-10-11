@@ -60,7 +60,7 @@ function countWorkspaceContent(snapshot, { todoLive = 0 } = {}) {
   const recordings = asArray(source.recordings).filter((row) => row && row.isDraft !== true);
   const ai = source.aiSettings && typeof source.aiSettings === 'object' ? source.aiSettings : null;
   const aiCount = ai && (
-    ai.apiKey || ai.llmApiKey || ai.workspaceId || ai.region || ai.llmBaseUrl || ai.llmModel || ai.hasStoredSecret
+    ai.apiKey || ai.llmApiKey || ai.cursorToken || ai.workspaceId || ai.region || ai.llmBaseUrl || ai.llmModel || ai.hasStoredSecret
   ) ? 1 : 0;
   const secrets = asArray(source.secrets).filter((row) => row && (row.password || row.service));
   const counts = {
@@ -101,6 +101,145 @@ function collectionForEntityId(entityId) {
   if (id.startsWith('secret:')) return COLLECTIONS.SECRETS;
   if (id === 'ai:settings') return COLLECTIONS.AI_SETTINGS;
   return null;
+}
+
+/**
+ * Keep the pulled changes that belong to `collection`. Ownership follows the
+ * entity prefix because older NAS builds tagged migration deletes as `todos`
+ * and ignored the collection filter. Upserts without a payload are superseded
+ * rows; merging them would resurrect empty ghosts.
+ */
+function selectWorkspaceChanges(changes, collection) {
+  const selected = [];
+  for (const change of asArray(changes)) {
+    if (!change || !change.entityId) continue;
+    const owner = collectionForEntityId(change.entityId) || change.collection || collection;
+    if (owner !== collection) continue;
+    if (change.op === 'delete') {
+      selected.push({ ...change, collection: owner });
+      continue;
+    }
+    if (!change.payload || typeof change.payload !== 'object') continue;
+    selected.push({ ...change, collection: owner });
+  }
+  return selected;
+}
+
+function preferEarlier(left, right) {
+  const leftAt = Number(left.createdAt) || Number.MAX_SAFE_INTEGER;
+  const rightAt = Number(right.createdAt) || Number.MAX_SAFE_INTEGER;
+  if (leftAt !== rightAt) return leftAt < rightAt ? left : right;
+  return String(left.id) <= String(right.id) ? left : right;
+}
+
+function preferNewerClip(left, right) {
+  const leftAt = Number(left.timestamp) || 0;
+  const rightAt = Number(right.timestamp) || 0;
+  if (leftAt !== rightAt) return leftAt > rightAt ? left : right;
+  return String(left.id) <= String(right.id) ? left : right;
+}
+
+/**
+ * Collapse rows with identical content but different ids (created on several
+ * devices, or left behind by a union merge). The survivor must be the same on
+ * every device, otherwise each device would delete the other's copy.
+ * Returns the dropped ids so references (favorites, active note) can follow.
+ */
+function dedupeRows(rows, keyOf, prefer) {
+  const winners = new Map();
+  const order = [];
+  for (const row of rows) {
+    const key = row ? keyOf(row) : null;
+    if (key == null) {
+      order.push({ row });
+      continue;
+    }
+    if (!winners.has(key)) {
+      winners.set(key, row);
+      order.push({ key });
+      continue;
+    }
+    winners.set(key, prefer(winners.get(key), row));
+  }
+  const kept = order.map((slot) => (slot.key == null ? slot.row : winners.get(slot.key)));
+  const keptIds = new Set(kept.map((row) => row && row.id));
+  const remap = new Map();
+  for (const row of rows) {
+    if (!row || keptIds.has(row.id)) continue;
+    const key = keyOf(row);
+    if (key != null) remap.set(String(row.id), String(winners.get(key).id));
+  }
+  return { rows: kept, remap };
+}
+
+function dedupeWorkspaceSnapshot(snapshot) {
+  const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  const next = { ...source };
+
+  if (Array.isArray(source.commands)) {
+    next.commands = dedupeRows(source.commands, (row) => {
+      const text = String(row.text || '').trim();
+      return text ? text : null;
+    }, preferEarlier).rows;
+  }
+
+  if (source.notes && typeof source.notes === 'object' && Array.isArray(source.notes.archive)) {
+    const result = dedupeRows(source.notes.archive, (row) => {
+      const content = String(row.content || '');
+      if (!content.trim()) return null;
+      return `${String(row.title || '')}\u0000${content}`;
+    }, preferEarlier);
+    const activeId = String(source.notes.activeId || '');
+    next.notes = {
+      ...source.notes,
+      archive: result.rows,
+      activeId: result.remap.get(activeId) || activeId,
+    };
+  }
+
+  if (Array.isArray(source.links)) {
+    const groups = source.links.map((group) => {
+      if (!group || !Array.isArray(group.links)) return group;
+      const seen = new Set();
+      const links = group.links.filter((link) => {
+        const url = String((link && link.url) || '');
+        if (!url) return true;
+        if (seen.has(url)) return false;
+        seen.add(url);
+        return true;
+      });
+      return links.length === group.links.length ? group : { ...group, links };
+    });
+    next.links = dedupeRows(groups, (group) => {
+      const urls = asArray(group.links).map((link) => String((link && link.url) || '')).sort();
+      if (!String(group.name || '').trim() && !urls.length) return null;
+      return `${String(group.name || '')}\u0000${urls.join('\u0001')}`;
+    }, preferEarlier).rows;
+  }
+
+  const clipboard = source.clipboard && typeof source.clipboard === 'object' ? source.clipboard : null;
+  if (clipboard && Array.isArray(clipboard.history)) {
+    const result = dedupeRows(clipboard.history, (row) => {
+      if (row.type === 'image') return null;
+      const text = row.text == null ? '' : String(row.text);
+      return text ? `${row.type === 'url' ? 'url' : 'text'}\u0000${text}` : null;
+    }, preferNewerClip);
+    const favorites = [];
+    for (const id of asArray(clipboard.favorites)) {
+      const mapped = result.remap.get(String(id)) || String(id);
+      if (!favorites.includes(mapped)) favorites.push(mapped);
+    }
+    next.clipboard = { ...clipboard, history: result.rows, favorites };
+  }
+
+  if (Array.isArray(source.secrets)) {
+    next.secrets = dedupeRows(source.secrets, (row) => {
+      if (!row.password) return null;
+      return `${String(row.service || '')}\u0000${String(row.account || '')}\u0000${String(row.password)}`;
+    }, preferEarlier).rows;
+  }
+
+  return next;
 }
 
 function pushEntity(entities, collection, entityId, payload) {
@@ -183,7 +322,7 @@ function appendRecordingEntities(entities, warnings, recording) {
  * API keys and vault passwords are sealed. Other fields stay structured JSON.
  */
 function buildWorkspaceEntities(snapshot, { accountKey = null } = {}) {
-  const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  const source = dedupeWorkspaceSnapshot(snapshot);
   const entities = [];
   const warnings = [];
   const notes = source.notes && typeof source.notes === 'object' ? source.notes : {};
@@ -276,10 +415,11 @@ function buildWorkspaceEntities(snapshot, { accountKey = null } = {}) {
   }
 
   const ai = source.aiSettings && typeof source.aiSettings === 'object' ? source.aiSettings : null;
-  if (ai && (ai.apiKey || ai.llmApiKey || ai.workspaceId || ai.region || ai.llmBaseUrl || ai.llmModel)) {
+  if (ai && (ai.apiKey || ai.llmApiKey || typeof ai.cursorToken === 'string' || ai.workspaceId || ai.region || ai.llmBaseUrl || ai.llmModel)) {
     sealOrSkip(entities, warnings, COLLECTIONS.AI_SETTINGS, 'ai:settings', {
       apiKey: String(ai.apiKey || ''),
       llmApiKey: String(ai.llmApiKey || ''),
+      ...(typeof ai.cursorToken === 'string' ? { cursorToken: ai.cursorToken } : {}),
       workspaceId: String(ai.workspaceId || ''),
       region: String(ai.region || ''),
       llmBaseUrl: String(ai.llmBaseUrl || ''),
@@ -336,6 +476,7 @@ function planWorkspaceSync({ index, localEntities, remoteChanges } = {}) {
 
   for (const change of remoteChanges || []) {
     if (!change || !change.entityId) continue;
+    if (change.op !== 'delete' && (!change.payload || typeof change.payload !== 'object')) continue;
     remoteIds.add(change.entityId);
     if (change.op === 'delete') {
       merged.delete(change.entityId);
@@ -346,7 +487,7 @@ function planWorkspaceSync({ index, localEntities, remoteChanges } = {}) {
       entityId: change.entityId,
       collection: change.collection || collectionForEntityId(change.entityId),
       op: 'upsert',
-      payload: change.payload || {},
+      payload: change.payload,
     };
     merged.set(change.entityId, entity);
     hashes[change.entityId] = entityHash(entity);
@@ -521,7 +662,7 @@ function projectWorkspaceEntities(entities, { accountKey = null } = {}) {
     return String(left.id).localeCompare(String(right.id));
   });
   if (snapshot.secrets.length) secretsApplied = true;
-  return { snapshot, warnings, secretsApplied, aiApplied };
+  return { snapshot: dedupeWorkspaceSnapshot(snapshot), warnings, secretsApplied, aiApplied };
 }
 
 function hashesForEntities(entities) {
@@ -576,6 +717,8 @@ module.exports = {
   countWorkspaceContent,
   workspaceHasContent,
   collectionForEntityId,
+  selectWorkspaceChanges,
+  dedupeWorkspaceSnapshot,
   buildWorkspaceEntities,
   partitionEntities,
   planWorkspaceSync,

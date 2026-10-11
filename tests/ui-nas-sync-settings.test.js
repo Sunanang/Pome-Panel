@@ -98,6 +98,7 @@ test('retry not_bound is Chinese and is not shown as a raw code', () => {
   assert.match(timedOut, /http:\/\//);
   assert.match(timedOut, /https:\/\//);
   assert.match(timedOut, /设备同步端口/);
+  assert.match(timedOut, /端口转发或 frp 等映射/);
   assert.match(timedOut, /局域网/);
   assert.doesNotMatch(timedOut, /^timeout$/);
   assert.match(

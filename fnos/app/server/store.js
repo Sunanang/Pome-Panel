@@ -15,6 +15,28 @@ const {
 } = require('./pairing');
 const { createCsrfStore } = require('./csrf');
 
+const WORKSPACE_ENTITY_PREFIXES = [
+  ['note:', 'notes'],
+  ['link:', 'links'],
+  ['command:', 'commands'],
+  ['clip:', 'clipboardHistory'],
+  ['recording-blob:', 'recordings'],
+  ['recording:', 'recordings'],
+  ['secret:', 'secrets'],
+  ['ai:', 'aiSettings'],
+];
+
+/** Earlier builds tagged migration deletes of workspace rows as `todos`; the entity prefix wins. */
+function changeCollection(change) {
+  const id = String((change && change.entityId) || '');
+  const tagged = change && change.collection ? String(change.collection) : 'todos';
+  if (tagged !== 'todos') return tagged;
+  for (const [prefix, collection] of WORKSPACE_ENTITY_PREFIXES) {
+    if (id.startsWith(prefix)) return collection;
+  }
+  return 'todos';
+}
+
 function createMemoryStore(options = {}) {
   const serverId = options.serverId || crypto.randomUUID();
   const nowFn = typeof options.now === 'function' ? options.now : () => Date.now();
@@ -286,14 +308,14 @@ function createMemoryStore(options = {}) {
     if (row.authority === 'local' && Array.isArray(entities)) {
       // Snapshot current NAS live into change-log as deletes, then upsert local entities.
       const ts = nowFn();
-      for (const entityId of [...b.live.keys()]) {
+      for (const [entityId, prev] of [...b.live.entries()]) {
         b.serverRev += 1;
         b.live.delete(entityId);
         b.tombstones.set(entityId, { entityId, serverRev: b.serverRev, deletedAt: ts });
         b.changeLog.push({
           serverRev: b.serverRev,
           entityId,
-          collection: 'todos',
+          collection: changeCollection({ entityId, collection: prev && prev.collection }),
           op: 'delete',
           clientMutationId: `mig-del-${migrationId}-${entityId}`,
           deviceId: deviceId || 'migration',
@@ -373,19 +395,23 @@ function createMemoryStore(options = {}) {
     const matched = b.changeLog.filter((c) => {
       if (c.serverRev <= after) return false;
       if (!collection) return true;
-      return (c.collection || 'todos') === collection;
+      return changeCollection(c) === collection;
     });
-    const changes = matched
-      .slice(0, 500)
-      .map((c) => {
-        if (c.op === 'delete') {
-          return { ...c, tombstone: true };
-        }
-        const ent = b.live.get(c.entityId);
-        return { ...c, payload: ent ? ent.payload : undefined };
-      });
-    const nextCursor = changes.length ? String(changes[changes.length - 1].serverRev) : String(after);
-    const hasMore = matched.length > changes.length;
+    const page = matched.slice(0, 500);
+    const changes = [];
+    for (const c of page) {
+      const resolved = { ...c, collection: changeCollection(c) };
+      if (c.op === 'delete') {
+        changes.push({ ...resolved, tombstone: true });
+        continue;
+      }
+      const ent = b.live.get(c.entityId);
+      // A later delete supersedes this upsert; an empty payload would resurrect a ghost row.
+      if (!ent) continue;
+      changes.push({ ...resolved, payload: ent.payload });
+    }
+    const nextCursor = page.length ? String(page[page.length - 1].serverRev) : String(after);
+    const hasMore = matched.length > page.length;
     return {
       changes,
       nextCursor,

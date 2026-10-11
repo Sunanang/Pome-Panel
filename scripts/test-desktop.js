@@ -18,7 +18,7 @@ run(process.execPath, ['--test', ...fs.readdirSync(path.join(root, 'tests')).fil
 env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-test.log');
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
-for (const file of ['notch-focus', 'retained-workspace', 'startup']) {
+for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   run(require('electron'), [`tests/${file}.electron.js`]);
@@ -28,6 +28,11 @@ for (const file of [
   'main.js',
   'main-services.js',
   'cursor-usage.js',
+  'codex-usage.js',
+  'codex-usage-remote.js',
+  'codex-auth.js',
+  'renderer/ai-usage-domain.js',
+  'renderer/ai-usage.js',
   'platform.js',
   'platform-adapters/index.js',
   'platform-adapters/darwin.js',
@@ -50,6 +55,10 @@ for (const file of [
   'packages/sync-protocol/migration.js',
   'packages/sync-protocol/endpoints.js',
   'renderer/domain.js',
+  'renderer/vendor/suncalc/suncalc.js',
+  'renderer/cities.js',
+  'renderer/sun.js',
+  'renderer/sun-widget.js',
   'renderer/effects.js',
   'renderer/app.js',
   'renderer/workspace.js',

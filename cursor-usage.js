@@ -56,6 +56,7 @@ function isAuthFailure(error) {
 async function postConnect(pathname, token, body = {}) {
   const response = await fetch(`${API_BASE}${pathname}`, {
     method: 'POST',
+    signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',

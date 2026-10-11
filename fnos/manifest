@@ -12,4 +12,4 @@ desktop_uidir=ui
 desktop_applaunchname=pome-panel.main
 ctl_stop=true
 checkport=false
-changelog=0.9.14：设备同步端口可选局域网监听（0.0.0.0）。默认仍为 127.0.0.1 配合 FRP。应用设置新增监听范围。启动入口仍是 TRIM_APPDEST/server。同步协议仍在 target/packages/sync-protocol。卸载仍可保留或删除数据。
+changelog=0.9.14：设备同步端口可选局域网监听（0.0.0.0）。默认仅监听 127.0.0.1（仅本机）。应用设置新增监听范围。启动入口仍是 TRIM_APPDEST/server。同步协议仍在 target/packages/sync-protocol。卸载仍可保留或删除数据。
