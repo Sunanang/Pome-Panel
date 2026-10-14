@@ -10,16 +10,13 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'styles.css')
 const workspaceJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'workspace.js'), 'utf8');
 const settingsUi = require('../renderer/nas-sync-settings.js');
 
-test('A.2 endpoint editor controls exist (S3)', () => {
-  assert.match(html, /data-control-id="endpoint\.add"/);
+test('backup address is a single optional input inside advanced, with no endpoint list', () => {
+  assert.match(html, /id="settings-nas-advanced"/);
+  assert.match(html, /aria-label="备用外网地址"/);
   assert.match(html, /data-control-id="endpoint\.baseUrl"/);
-  assert.match(html, /data-control-id="endpoint\.kind-device-port"/);
-  assert.match(html, /class="[^"]*workspace-button[^"]*"[^>]*id="settings-nas-endpoint-add"|id="settings-nas-endpoint-add"[^>]*workspace-button/);
-  assert.match(html, /option value="device-port"/);
-  assert.match(css, /\.settings-nas-endpoint-list/);
-  assert.match(css, /var\(--r-tile/);
-  assert.match(css, /var\(--r-input/);
-  assert.doesNotMatch(css, /\.settings-nas-endpoint[^{]*\{[^}]*\b(?:Inter|Roboto|Arial)\b/);
+  assert.match(html, /id="settings-nas-endpoint-add"/);
+  assert.doesNotMatch(html, /settings-nas-endpoint-list|添加 endpoint|option value="device-port"/);
+  assert.match(css, /\.settings-nas-disclosure/);
 });
 
 test('endpoint.baseUrl validation: empty / illegal / legal', () => {
@@ -48,25 +45,12 @@ test('endpoint.add success / failure via mocked API', async () => {
   assert.equal(bad.error, 'empty');
 });
 
-test('workspace wires edit/delete/enable/reorder/test-connection', () => {
-  assert.match(workspaceJs, /data-nas-test/);
-  assert.match(workspaceJs, /data-nas-delete/);
-  assert.match(workspaceJs, /data-nas-enable/);
-  assert.match(workspaceJs, /data-nas-reorder/);
-  assert.match(workspaceJs, /syncTestEndpoint/);
+test('backup save preserves endpoint update/delete and HTTP policy APIs, removes list controls', () => {
+  assert.match(workspaceJs, /syncUpdateEndpoint/);
   assert.match(workspaceJs, /syncDeleteEndpoint/);
-  assert.match(workspaceJs, /syncReorderEndpoint/);
-  assert.match(workspaceJs, /disabled_by_policy/);
-  assert.match(workspaceJs, /endpoint\.test-connection/);
+  assert.match(workspaceJs, /runToggleHttp/);
+  assert.doesNotMatch(workspaceJs, /data-nas-test|data-nas-reorder|data-nas-enable/);
   assert.doesNotMatch(workspaceJs, /require\(['"]electron['"]\)/);
-});
-
-test('device-port shares same list UI — no second skin (S6)', () => {
-  assert.match(workspaceJs, /kindLabel/);
-  assert.match(workspaceJs, /device-port/);
-  assert.match(html, /settings-nas-endpoint-list/);
-  // Single list container; no alternate device-port-only card
-  assert.doesNotMatch(html, /settings-nas-device-port-card/);
 });
 
 test('A.2 endpoint.delete confirm/cancel dialog dimensions (S3)', () => {
@@ -103,37 +87,18 @@ test('A.2 endpoint.test-connection success / failure via mocked API', async () =
   assert.equal(missing.error, 'api_unavailable');
 });
 
-test('A.2 endpoint.enable / HTTP toggle disable paths wired', async () => {
-  assert.match(workspaceJs, /data-nas-enable/);
-  assert.match(workspaceJs, /syncUpdateEndpoint/);
-  const toggled = await settingsUi.runToggleHttp({
-    endpointId: 'e1',
-    enable: true,
-    httpConfirmAccepted: true,
-    api: {
-      syncUpdateEndpoint: async (payload) => {
-        assert.equal(payload.allowInsecureHttp, true);
-        assert.equal(payload.httpConfirmAccepted, true);
-        return { ok: true };
-      },
-    },
-  });
-  assert.equal(toggled.ok, true);
+test('HTTP toggle disable and explicit confirmation paths remain wired in the merged card', () => {
+  assert.match(workspaceJs, /data-nas-http-toggle/);
+  assert.match(workspaceJs, /buildHttpConfirmDialog/);
+  assert.match(workspaceJs, /httpConfirmAccepted: enable/);
+  assert.match(workspaceJs, /target.checked = false/);
 });
 
-test('endpoint test result stays off the pair card hint', () => {
-  assert.match(html, /id="settings-nas-endpoint-hint"/);
-  assert.match(html, /id="settings-nas-status-hint"/);
+test('backup address feedback remains separate from pair feedback inside the same card', () => {
   assert.match(html, /id="settings-nas-sync-hint"/);
-  const pairCard = html.match(/settings-nas-pair-card[\s\S]*?<\/section>/)?.[0] || '';
-  assert.match(pairCard, /id="settings-nas-sync-hint"/);
-  assert.doesNotMatch(pairCard, /id="settings-nas-endpoint-hint"/);
-  assert.doesNotMatch(pairCard, /连接成功/);
-  const testBranch = workspaceJs.slice(workspaceJs.indexOf("const testBtn = target.closest('[data-nas-test]')"));
-  const testHead = testBranch.slice(0, testBranch.indexOf('if (delBtn)'));
-  assert.match(testHead, /setNasEndpointHint\('连接成功', 'success'\)/);
-  assert.doesNotMatch(testHead, /setNasSyncHint\(/);
-  assert.match(workspaceJs, /function setNasSyncHint/);
-  assert.match(workspaceJs, /settings-nas-sync-hint/);
-  assert.match(workspaceJs, /settings-nas-endpoint-hint/);
+  assert.match(html, /id="settings-nas-endpoint-hint"/);
+  const start = workspaceJs.indexOf('async function addNasEndpoint()');
+  const save = workspaceJs.slice(start, workspaceJs.indexOf('if (settingsNasEndpointAdd)', start));
+  assert.match(save, /setNasEndpointHint/);
+  assert.doesNotMatch(save, /setNasSyncHint/);
 });

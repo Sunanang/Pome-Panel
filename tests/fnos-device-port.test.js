@@ -250,7 +250,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
-  assert.equal(manifestJson.version, '0.9.14');
+  assert.equal(manifestJson.version, require('../package.json').version);
   assert.equal(manifestJson.distributor, 'Lando');
   assert.equal(manifestJson.id, 'pome-panel');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
@@ -263,7 +263,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
-  assert.match(official, /^version=0\.9\.14$/m);
+  assert.equal(official.split('\n').find(line => line.startsWith('version=')), `version=${require('../package.json').version}`);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
   assert.match(official, /^desktop_applaunchname=pome-panel\.main$/m);
@@ -505,7 +505,8 @@ test('start.sh does not force an ephemeral port over the saved file', async (t) 
   fs.writeFileSync(path.join(runtime, 'device-port.txt'), '41234\n');
   const fake = path.join(dir, 'fake-node.sh');
   fs.writeFileSync(fake, `#!/bin/sh
-printf 'PORT=%s\\nFILE=%s\\n' "\${FNOS_DEVICE_PORT-unset}" "\${FNOS_DEVICE_PORT_FILE-unset}" > "\${FNOS_DATA_DIR}/probe.txt"
+printf 'PORT=%s\\nFILE=%s\\n' "\${FNOS_DEVICE_PORT-unset}" "\${FNOS_DEVICE_PORT_FILE-unset}" > "\${FNOS_DATA_DIR}/probe.tmp"
+mv "\${FNOS_DATA_DIR}/probe.tmp" "\${FNOS_DATA_DIR}/probe.txt"
 exit 0
 `, { mode: 0o755 });
 
@@ -551,7 +552,8 @@ test('start.sh launches the gateway when no port was configured', async (t) => {
   fs.mkdirSync(runtime, { recursive: true });
   const fake = path.join(dir, 'fake-node.sh');
   fs.writeFileSync(fake, `#!/bin/sh
-printf 'ENABLE=%s\\nPORT=%s\\nPATH=%s\\n' "\${FNOS_ENABLE_DEVICE_PORT-unset}" "\${FNOS_DEVICE_PORT-unset}" "$PATH" > "\${FNOS_DATA_DIR}/probe.txt"
+printf 'ENABLE=%s\\nPORT=%s\\nPATH=%s\\n' "\${FNOS_ENABLE_DEVICE_PORT-unset}" "\${FNOS_DEVICE_PORT-unset}" "$PATH" > "\${FNOS_DATA_DIR}/probe.tmp"
+mv "\${FNOS_DATA_DIR}/probe.tmp" "\${FNOS_DATA_DIR}/probe.txt"
 exit 0
 `, { mode: 0o755 });
   const stdout = await new Promise((resolve, reject) => {
@@ -600,7 +602,8 @@ test('start.sh does not turn a configured port back on when TCP was explicitly d
   fs.mkdirSync(runtime, { recursive: true });
   const fake = path.join(dir, 'fake-node.sh');
   fs.writeFileSync(fake, `#!/bin/sh
-printf 'ENABLE=%s\\nPORT=%s\\n' "\${FNOS_ENABLE_DEVICE_PORT-unset}" "\${FNOS_DEVICE_PORT-unset}" > "\${FNOS_DATA_DIR}/probe.txt"
+printf 'ENABLE=%s\\nPORT=%s\\n' "\${FNOS_ENABLE_DEVICE_PORT-unset}" "\${FNOS_DEVICE_PORT-unset}" > "\${FNOS_DATA_DIR}/probe.tmp"
+mv "\${FNOS_DATA_DIR}/probe.tmp" "\${FNOS_DATA_DIR}/probe.txt"
 exit 0
 `, { mode: 0o755 });
   await new Promise((resolve, reject) => {
@@ -780,7 +783,8 @@ test('start.sh uses the app socket and keeps a configured device port', async (t
   fs.mkdirSync(runtime, { recursive: true });
   const fake = path.join(dir, 'fake-node.sh');
   fs.writeFileSync(fake, `#!/bin/sh
-printf 'PORT=%s\\nSOCK=%s\\nENTRY=%s\\n' "\${FNOS_DEVICE_PORT-unset}" "\${FNOS_SOCKET_PATH-unset}" "$1" > "\${FNOS_DATA_DIR}/probe.txt"
+printf 'PORT=%s\\nSOCK=%s\\nENTRY=%s\\n' "\${FNOS_DEVICE_PORT-unset}" "\${FNOS_SOCKET_PATH-unset}" "$1" > "\${FNOS_DATA_DIR}/probe.tmp"
+mv "\${FNOS_DATA_DIR}/probe.tmp" "\${FNOS_DATA_DIR}/probe.txt"
 exit 0
 `, { mode: 0o755 });
   const stdout = await new Promise((resolve, reject) => {
@@ -875,7 +879,8 @@ test('start.sh writes pid under TRIM_PKGVAR instead of the install tree', async 
   fs.mkdirSync(pkgvar, { recursive: true });
   const fake = path.join(dir, 'fake-node.sh');
   fs.writeFileSync(fake, `#!/bin/sh
-printf 'FILE=%s\\nSOCK=%s\\n' "\${FNOS_DEVICE_PORT_FILE-unset}" "\${FNOS_SOCKET_PATH-unset}" > "\${FNOS_DATA_DIR}/probe.txt"
+printf 'FILE=%s\\nSOCK=%s\\n' "\${FNOS_DEVICE_PORT_FILE-unset}" "\${FNOS_SOCKET_PATH-unset}" > "\${FNOS_DATA_DIR}/probe.tmp"
+mv "\${FNOS_DATA_DIR}/probe.tmp" "\${FNOS_DATA_DIR}/probe.txt"
 exit 0
 `, { mode: 0o755 });
   const stdout = await new Promise((resolve, reject) => {

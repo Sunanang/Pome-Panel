@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 
 const NOTCH_HOST = '127.0.0.1';
-const NOTCH_PORT = 43821;
+const NOTCH_PORT = Number(process.env.POME_NOTIFY_PORT) || 43821;
 const REQUEST_TIMEOUT_MS = 900;
 const STDIN_TIMEOUT_MS = 1500;
 // 只回读记录文件尾部，避免长会话把整份 JSONL 读进内存。
@@ -56,16 +56,16 @@ function textFromContent(content) {
 
 // 从 JSONL 尾部往前找最后一条主线助手文本消息。
 function lastAssistantMessage(transcriptPath) {
-  if (typeof transcriptPath !== 'string' || !transcriptPath.trim()) return '';
+  if (typeof transcriptPath !== 'string' || !transcriptPath.trim()) return null;
   let handle;
   try {
     handle = fs.openSync(transcriptPath, 'r');
   } catch (error) {
-    return '';
+    return null;
   }
   try {
     const size = fs.fstatSync(handle).size;
-    if (!size) return '';
+    if (!size) return null;
     const length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
     const buffer = Buffer.allocUnsafe(length);
     fs.readSync(handle, buffer, 0, length, size - length);
@@ -85,11 +85,12 @@ function lastAssistantMessage(transcriptPath) {
       // 子代理记录写在同一份文件里，isSidechain 标记它们不属于主线。
       if (entry.isSidechain === true || entry.isMeta === true) continue;
       const text = textFromContent(entry.message && entry.message.content);
-      if (text) return text;
+      // A tool-only assistant message ends a real turn too.
+      return { text, eventId: entry.uuid || entry.message?.id || '', completedAt: entry.timestamp || entry.message?.timestamp || '' };
     }
-    return '';
+    return null;
   } catch (error) {
-    return '';
+    return null;
   } finally {
     try { fs.closeSync(handle); } catch (error) {}
   }
@@ -143,20 +144,27 @@ async function main() {
   // 子代理结束不该弹提醒，主进程也会再过滤一次。
   if (payload.agent_id) return;
 
-  let title = '';
-  for (let attempt = 0; attempt < TRANSCRIPT_RETRIES; attempt += 1) {
-    title = lastAssistantMessage(payload.transcript_path);
-    if (title) break;
+  let completion = null;
+  for (let attempt = 0; !payload._pome_test && attempt < TRANSCRIPT_RETRIES; attempt += 1) {
+    completion = lastAssistantMessage(payload.transcript_path);
+    if (completion) break;
     // 记录文件是异步落盘的，钩子可能跑在最后一条消息写入之前。
     await sleep(TRANSCRIPT_RETRY_DELAY_MS);
   }
 
   await post({
     source: 'claude',
+    sender_pid: process.pid,
     session_id: typeof payload.session_id === 'string' ? payload.session_id : '',
     cwd: typeof payload.cwd === 'string' ? payload.cwd : '',
-    last_assistant_message: title,
+    event_id: payload.event_id || payload.turn_id || completion?.eventId || '',
+    completed_at: payload.completed_at || completion?.completedAt || Date.now(),
+    turn_id: payload.turn_id || '',
+    last_assistant_message: payload.last_assistant_message || completion?.text || '',
+    _pome_test: payload._pome_test === true,
+    _pome_test_token: payload._pome_test_token,
   });
 }
 
-main().then(exitQuietly, exitQuietly);
+if (require.main === module) main().then(exitQuietly, exitQuietly);
+module.exports = { lastAssistantMessage };

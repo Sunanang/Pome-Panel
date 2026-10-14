@@ -16,6 +16,7 @@ const {
   todoReminderState,
   todoReminderTimerDelay,
   taskNotificationIdentity,
+  normalizeTaskNotificationWindow,
   normalizeCredentialInput,
   parseSmartLinkMetadata,
   parseSmartMaterialMetadata,
@@ -42,6 +43,14 @@ const {
   createForegroundMediaPermissionCoordinator,
   firstRunAutoLaunchPlan,
 } = require('../main-services');
+
+test('task notification window metadata keeps complete cwd and source app without inventing a bundle ID', () => {
+  assert.deepEqual(normalizeTaskNotificationWindow({ cwd: '/Users/test/AI_Companion' }, 'codex'),
+    { app: 'ChatGPT', bundleId: null, cwd: '/Users/test/AI_Companion' });
+  assert.deepEqual(normalizeTaskNotificationWindow({ window: { app: 'Ghostty', bundleId: 'actual.terminal', cwd: '/tmp/work' } }, 'claude'),
+    { app: 'Ghostty', bundleId: 'actual.terminal', cwd: '/tmp/work' });
+  assert.equal(normalizeTaskNotificationWindow({ cwd: 'C:\\Projects\\AICompanion' }, 'cursor').cwd, 'C:\\Projects\\AICompanion');
+});
 
 // P3-1（D13）：Windows 在 0.10.0 之前从未写过 .first-run-done，
 // 把"标记缺失"直接当首次运行会强行打开所有升级用户的自启。
@@ -444,7 +453,7 @@ test('task notification identifies the repository and concrete finished work', (
   assert.deepEqual(taskNotificationIdentity({
     project: 'CourseKit',
     task_title: '生成课程大纲',
-  }, 'gpt'), {
+  }, 'cursor'), {
     project: 'CourseKit',
     title: '生成课程大纲',
   });

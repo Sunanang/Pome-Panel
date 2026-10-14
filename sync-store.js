@@ -307,7 +307,7 @@ function createSyncStore(db, meta = {}) {
     listPendingOutbox: db.prepare(`
       SELECT * FROM outbox
       WHERE account_id = ? AND collection = ? AND status = ?
-      ORDER BY created_at ASC, client_mutation_id ASC
+      ORDER BY created_at ASC, rowid ASC
     `),
     markOutboxAcked: db.prepare(`
       UPDATE outbox SET status = ?
@@ -355,8 +355,11 @@ function createSyncStore(db, meta = {}) {
     `),
   };
 
+  let transactionDepth = 0;
   function runInTransaction(work) {
+    if (transactionDepth) return work();
     db.exec('BEGIN IMMEDIATE');
+    transactionDepth += 1;
     try {
       const result = work();
       db.exec('COMMIT');
@@ -368,6 +371,8 @@ function createSyncStore(db, meta = {}) {
         // ignore rollback errors when no transaction is open
       }
       throw error;
+    } finally {
+      transactionDepth -= 1;
     }
   }
 

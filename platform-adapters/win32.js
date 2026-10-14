@@ -7,6 +7,7 @@
 
 const { normalizeWindowRows, updateForegroundTracking, chooseForegroundPasteTarget, integrityPasteDecision } = require('../main-services');
 const { loadWin32Native } = require('./win32-user32');
+const { createTaskApps } = require('./task-apps');
 
 const PRIVACY_SETTINGS_PANES = {
   microphone: 'ms-settings:privacy-microphone',
@@ -159,6 +160,7 @@ function createWin32Adapter(options = {}) {
 
   return {
     id: 'win32',
+    taskApps: createTaskApps('win32', options.taskApps),
     get native() {
       return nativeState;
     },

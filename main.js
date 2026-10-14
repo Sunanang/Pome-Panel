@@ -19,9 +19,22 @@ const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const dns = require('dns');
+const { validatePublicHttpUrl, fetchPublicHttp, readLimitedBody } = require('./public-http');
 const zlib = require('zlib');
 const crypto = require('crypto');
+const { createTaskInbox, completionEventId, rebuildTaskInbox } = require('./taskInbox');
+const { createAiSourceHooks } = require('./aiSourceHooks');
+let aiSourceHooks;
+function getAiSourceHooks() {
+  if (!aiSourceHooks) aiSourceHooks = createAiSourceHooks({
+    homeDir: process.env.POME_HOOK_TEST_HOME || (process.env.TODO_TEST_USER_DATA ? path.join(app.getPath('userData'), 'hook-home') : require('node:os').homedir()),
+  });
+  return aiSourceHooks;
+}
+const sourceTestTokens = new Map();
+const backup = require('./workspaceBackup');
+const { createSyncRecovery } = require('./syncRecovery');
+function recoveryStore() { return createSyncRecovery(path.join(app.getPath('userData'), 'sync-recovery.json')); }
 const platformPolicy = require('./platform');
 const { loadAdapter } = require('./platform-adapters');
 const { fetchCursorUsage, readAuthToken: readCursorAuthToken } = require('./cursor-usage');
@@ -37,12 +50,12 @@ let platformCapabilities = platformPolicy.resolveCapabilities(process.platform, 
   winNativeEnabled: false,
 });
 const {
-  isPrivateAddress,
   extractPageTitle,
   recordingExtension,
   todoReminderState,
   todoReminderTimerDelay,
   taskNotificationIdentity,
+  normalizeTaskNotificationWindow,
   normalizeCredentialInput,
   parseSmartLinkMetadata,
   extractFaviconHref,
@@ -53,6 +66,7 @@ const {
   installLocalWebContentsGuards,
   runOwnedOpenDialog,
   readClipboardObservation,
+  createSensitiveClipboardGuard,
   taskNotificationWindowPolicy,
   appSettingsLayoutPreferences,
   pasteResultToIpc,
@@ -104,14 +118,18 @@ const {
 const {
   countWorkspaceContent,
   buildWorkspaceEntities,
+  entityHash,
   partitionEntities,
   planWorkspaceSync,
+  collectionForEntityId,
   projectWorkspaceEntities,
   hashesForEntities,
   mutationFromEntity,
   splitMutationBatches,
-  selectWorkspaceChanges,
   WORKSPACE_COLLECTIONS,
+  pullWorkspacePages,
+  commitWorkspacePullPages,
+  workspaceProjectionToStorage,
 } = require('./workspace-sync');
 const {
   createSyncSettingsStore,
@@ -302,7 +320,9 @@ const WORKSPACE_SETTINGS_FILE = 'workspace-settings.json';
 const WORKSPACE_DATA_FILE = 'workspace.json';
 const MIRROR_IMAGE_FILE = 'mirror-cover.jpg';
 const SYNC_CREDENTIALS_FILE_NAME = 'sync-credentials.json';
-const workspacePersistenceGate = createWorkspacePersistenceGate();
+let workspacePersistenceGate = createWorkspacePersistenceGate();
+const sensitiveClipboardGuard = createSensitiveClipboardGuard();
+let workspaceSwitching = false;
 const TRANSCRIPTION_MODEL = 'qwen3-asr-flash-realtime';
 const TRANSCRIPTION_SAMPLE_RATE = 16000;
 const TRANSCRIPTION_FINISH_TIMEOUT_MS = 7000;
@@ -322,7 +342,7 @@ const TASK_NOTIFICATION_BODY_LIMIT = 64 * 1024;
 const TASK_NOTIFICATION_HOST = '127.0.0.1';
 const TASK_NOTIFICATION_PORT = 43821;
 // /notify/<source> 的来源白名单：只放行已知 Agent，其余一律 404。
-const TASK_NOTIFICATION_SOURCES = new Set(['codex', 'gpt', 'claude']);
+const TASK_NOTIFICATION_SOURCES = new Set(['codex', 'claude', 'cursor']);
 const TODO_REMINDER_LEAD_MS = 60 * 60 * 1000;
 
 let mainWindow = null;
@@ -365,7 +385,27 @@ let taskNotificationRemainingMs = TASK_NOTIFICATION_VISIBLE_MS;
 let taskNotificationPaused = false;
 const taskNotificationQueue = [];
 const recentTaskNotifications = new Map();
-const taskCompletionHistory = [];
+let taskInboxStore = null;
+let taskInboxFailure = null;
+function reportTaskInboxFailure(error) {
+  taskInboxStore = null;
+  taskInboxFailure = { recoverable: error?.code === 'storage_corrupt', filePath: path.join(app.getPath('userData'), 'task-inbox.json'), error: error?.code || 'inbox_save_failed', message: 'AI 完成收件箱无法保存或读取，通知接收已暂停。原文件已保留，请打开收件箱查看并重试。' };
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('tasks:inbox-error', taskInboxFailure);
+}
+function reportTaskEventFailure(message) {
+  console.warn(`AI 完成事件无法处理：${message}`);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('tasks:inbox-error', {
+    error: 'event_rejected', recoverable: false, message: `完成事件无法处理：${message}`,
+  });
+}
+function taskInboxState(options) {
+  try { const state = getTaskInbox().list(options || {}); taskInboxFailure = null; return { ok: true, ...state }; }
+  catch (error) { reportTaskInboxFailure(error); return { ok: false, ...taskInboxFailure }; }
+}
+function getTaskInbox() {
+  if (!taskInboxStore) taskInboxStore = createTaskInbox({ filePath: path.join(app.getPath('userData'), 'task-inbox.json') });
+  return taskInboxStore;
+}
 let todoReminderTimer = null;
 let scheduledTodoReminders = [];
 
@@ -677,19 +717,19 @@ function normalizeTaskNotification(payload, source) {
     160
   );
 
-  const completedAtValue = Number(
-    pickTaskNotificationValue(payload, ['completed_at', 'completed-at', 'completedAt'])
-  );
+  const rawCompletedAt = pickTaskNotificationValue(payload, ['completed_at', 'completed-at', 'completedAt']);
+  const completedAtValue = /^\d+(\.\d+)?$/.test(rawCompletedAt) ? Number(rawCompletedAt) : Date.parse(rawCompletedAt);
   const completedAt = Number.isFinite(completedAtValue) && completedAtValue > 0
     ? completedAtValue
     : Date.now();
 
   return {
-    eventId: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    eventId: completionEventId({ ...payload, source, taskId, completedAt: Number.isFinite(completedAtValue) && completedAtValue > 0 ? completedAt : undefined }, completedAt),
     source,
     taskId,
     title: identity.title,
     project: identity.project,
+    window: normalizeTaskNotificationWindow(payload, source),
     completedAt,
   };
 }
@@ -718,6 +758,20 @@ function sendTaskNotificationQueueCount() {
 
 function enqueueTaskNotification(notification) {
   if (!notification) return 'ignored';
+  if (notification.source !== 'todo' && !notification.eventId) return 'identity_required';
+  if (notification.source !== 'todo') {
+    try {
+      const accepted = getTaskInbox().accept(notification);
+      if (!accepted.ok) return accepted.error === 'completion_identity_required' ? 'identity_required' : 'save_failed';
+      if (accepted.duplicate) return 'duplicate';
+      notification = { ...notification, inboxId: accepted.record.id };
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('task-completion:new', accepted.record);
+    } catch (error) {
+      reportTaskInboxFailure(error);
+      console.warn('AI 完成事件保存失败，未显示成功通知。');
+      return 'save_failed';
+    }
+  }
   const now = Date.now();
   for (const [key, seenAt] of recentTaskNotifications) {
     if (now - seenAt > TASK_NOTIFICATION_DEDUPE_MS) recentTaskNotifications.delete(key);
@@ -726,16 +780,8 @@ function enqueueTaskNotification(notification) {
   const identity = notification.taskId || `${notification.title}:${notification.project}`;
   const dedupeKey = `${notification.source}:${identity}`;
   const lastSeenAt = recentTaskNotifications.get(dedupeKey);
-  if (lastSeenAt && now - lastSeenAt <= TASK_NOTIFICATION_DEDUPE_MS) return 'duplicate';
+  if (notification.source === 'todo' && lastSeenAt && now - lastSeenAt <= TASK_NOTIFICATION_DEDUPE_MS) return 'duplicate';
   recentTaskNotifications.set(dedupeKey, now);
-
-  if (notification.source !== 'todo') {
-    taskCompletionHistory.unshift(notification);
-    if (taskCompletionHistory.length > 20) taskCompletionHistory.length = 20;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('task-completion:new', notification);
-    }
-  }
 
   if (taskNotificationQueue.length < TASK_NOTIFICATION_MAX_QUEUE) {
     taskNotificationQueue.push(notification);
@@ -1072,8 +1118,9 @@ function startTaskNotificationServer() {
       }
       if (!bodyTooLarge) chunks.push(chunk);
     });
-    request.on('end', () => {
+    request.on('end', async () => {
       if (bodyTooLarge) {
+        reportTaskEventFailure('事件超过接收大小上限，请检查来源钩子。');
         sendTaskNotificationResponse(response, 413, { ok: false, error: 'body_too_large' });
         return;
       }
@@ -1082,15 +1129,36 @@ function startTaskNotificationServer() {
         const rawBody = Buffer.concat(chunks).toString('utf8').trim();
         payload = rawBody ? JSON.parse(rawBody) : {};
       } catch (error) {
+        reportTaskEventFailure('事件不是有效 JSON，请检查来源钩子。');
         sendTaskNotificationResponse(response, 400, { ok: false, error: 'invalid_json' });
         return;
       }
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        reportTaskEventFailure('事件内容格式无效，请检查来源钩子。');
         sendTaskNotificationResponse(response, 400, { ok: false, error: 'invalid_payload' });
         return;
       }
-      const result = enqueueTaskNotification(normalizeTaskNotification(payload, source));
-      sendTaskNotificationResponse(response, 202, { ok: true, result });
+      if (payload._pome_test === true) {
+        const test = sourceTestTokens.get(payload._pome_test_token);
+        if (!test || test.source !== source || test.expires < Date.now()) {
+          sendTaskNotificationResponse(response, 400, { ok: false, error: 'invalid_test_token' }); return;
+        }
+        test.delivered = true;
+        sendTaskNotificationResponse(response, 202, { ok: true, result: 'test_delivered' }); return;
+      }
+      const notification = normalizeTaskNotification(payload, source);
+      if (notification && platformAdapter.windows.resolveTaskApp) {
+        try {
+          const target = await platformAdapter.windows.resolveTaskApp(source, {
+            // Resolve the actual running bundle, not a remembered bundle ID.
+            window: payload.window, senderPid: payload.sender_pid,
+          });
+          if (target) notification.window = { ...notification.window, app: target.appName, bundleId: target.bundleId || null };
+        } catch { /* Identity lookup must never prevent legacy event delivery. */ }
+      }
+      const result = enqueueTaskNotification(notification);
+      sendTaskNotificationResponse(response, result === 'save_failed' ? 503 : result === 'identity_required' ? 422 : 202,
+        { ok: !['save_failed', 'identity_required'].includes(result), result, ...(result === 'save_failed' ? { error: 'inbox_save_failed' } : result === 'identity_required' ? { error: 'completion_identity_required', message: '请提供 event_id、turn_id 或 completed_at；重试必须沿用同一身份。' } : {}) });
     });
     request.on('error', () => {
       if (!response.headersSent) sendTaskNotificationResponse(response, 400, { ok: false });
@@ -1112,7 +1180,8 @@ function startTaskNotificationServer() {
     refreshTrayMenu();
     console.warn(`Task notification server unavailable: ${error.message}`);
   });
-  server.listen(TASK_NOTIFICATION_PORT, TASK_NOTIFICATION_HOST);
+  server.listen(process.env.TODO_TEST_USER_DATA && process.env.POME_TEST_NOTIFICATIONS === '1' ? 0 : TASK_NOTIFICATION_PORT, TASK_NOTIFICATION_HOST);
+  server.once('listening', () => app.emit('pome-test-notification-port', server.address().port));
 }
 
 function stopTaskNotificationServer() {
@@ -1479,7 +1548,7 @@ function copyWorkspaceAssets(sourceRoot, targetRoot) {
       if (!fs.existsSync(source) || !fs.lstatSync(source).isDirectory()) continue;
       fs.mkdirSync(target, { recursive: true });
       fs.cpSync(source, target, { recursive: true, force: false, errorOnExist: false });
-    } catch (error) {}
+    } catch (error) { throw new Error('workspace_assets_copy_failed', { cause: error }); }
   }
   for (const filename of [WORKSPACE_DATA_FILE, MIRROR_IMAGE_FILE]) {
     const source = path.join(sourceRoot, filename);
@@ -1488,11 +1557,12 @@ function copyWorkspaceAssets(sourceRoot, targetRoot) {
       if (fs.existsSync(source) && fs.lstatSync(source).isFile() && !fs.existsSync(target)) {
         fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
       }
-    } catch (error) {}
+    } catch (error) { throw new Error('workspace_assets_copy_failed', { cause: error }); }
   }
 }
 
 async function chooseWorkspaceFolder() {
+  if (workspaceSwitching) return false;
   const result = await showOwnedOpenDialog({
     title: '选择 Pome Panel 数据文件夹',
     properties: ['openDirectory', 'createDirectory'],
@@ -1500,14 +1570,41 @@ async function chooseWorkspaceFolder() {
   const selected = !result.canceled && result.filePaths && result.filePaths[0];
   if (!selected) return false;
   const previousRoot = workspaceRoot();
-  copyWorkspaceAssets(previousRoot, selected);
-  if (!writeJsonFile(getJsonSettingsPath(WORKSPACE_SETTINGS_FILE), { path: selected })) return false;
-  for (const directory of [RECORDINGS_DIR_NAME, CLIP_IMAGES_DIR_NAME]) {
-    try { fs.mkdirSync(path.join(selected, directory), { recursive: true }); } catch (error) {}
+  if (path.resolve(selected) === path.resolve(previousRoot)) return true;
+  const existingFile = path.join(selected, WORKSPACE_DATA_FILE);
+  const existing = fs.existsSync(existingFile);
+  if (existing) {
+    try {
+      const saved = JSON.parse(fs.readFileSync(existingFile, 'utf8'));
+      if (!saved.localStorage || typeof saved.localStorage !== 'object' || Array.isArray(saved.localStorage)) throw new Error('invalid_workspace');
+    } catch {
+      dialog.showErrorBox('无法打开数据文件夹', '现有 workspace.json 无法读取，原文件已保留。');
+      return false;
+    }
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'question', message: '打开已有数据文件夹？',
+      detail: '将载入该文件夹的数据。当前数据会保存在原文件夹中。',
+      buttons: ['打开已有数据', '取消'], defaultId: 0, cancelId: 1,
+    });
+    if (response !== 0) return false;
   }
-  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('workspace:changed', { path: selected });
-  refreshTrayMenu();
-  return true;
+  workspaceSwitching = true;
+  try {
+    if (boundTodosSyncTask) await boundTodosSyncTask;
+    const storage = await mainWindow.webContents.executeJavaScript('collectLocalStorageSnapshot()');
+    if (!persistWorkspaceStorage(storage, previousRoot)) return false;
+    if (!existing) copyWorkspaceAssets(previousRoot, selected);
+    for (const directory of [RECORDINGS_DIR_NAME, CLIP_IMAGES_DIR_NAME]) {
+      fs.mkdirSync(path.join(selected, directory), { recursive: true });
+    }
+    if (!writeJsonFile(getJsonSettingsPath(WORKSPACE_SETTINGS_FILE), { path: selected })) return false;
+    mainWindow.webContents.send('workspace:changed', { path: selected });
+    refreshTrayMenu();
+    return true;
+  } catch (error) {
+    dialog.showErrorBox('无法切换数据文件夹', '保存或迁移数据失败，当前数据文件夹保持不变。');
+    return false;
+  } finally { workspaceSwitching = false; }
 }
 
 function applyFeatureServices(features) {
@@ -1694,6 +1791,8 @@ function createTray() {
   refreshTrayMenu();
 }
 
+ipcMain.handle('window:begin-open', (event) => { requireWorkspaceOwner(event); return require('./panelTiming').begin(); });
+ipcMain.handle('window:open-interactive', (event, id) => { requireWorkspaceOwner(event); return require('./panelTiming').finish(id); });
 ipcMain.handle('window:set-mode', async (event, mode) => {
   if (mode === 'expanded') await rememberPasteTarget();
   applyMode(mode === 'expanded' ? 'expanded' : 'collapsed');
@@ -1887,12 +1986,12 @@ function normalizePortableStorage(storage) {
   return portable;
 }
 
-ipcMain.handle('workspace:save-data', (event, storage) => {
+function persistWorkspaceStorage(storage, root = workspaceRoot()) {
   if (!storage || typeof storage !== 'object' || Array.isArray(storage)) return false;
   const portableStorage = normalizePortableStorage(storage);
   const serialized = JSON.stringify(portableStorage);
-  if (Buffer.byteLength(serialized) > 8 * 1024 * 1024) return false;
-  const destination = workspacePath(WORKSPACE_DATA_FILE);
+  if (Buffer.byteLength(serialized) > 32 * 1024 * 1024) return false;
+  const destination = path.join(root, WORKSPACE_DATA_FILE);
   if (!workspacePersistenceGate.shouldWrite(portableStorage, destination)) return true;
   const written = writeJsonFile(destination, {
     version: 1,
@@ -1901,7 +2000,91 @@ ipcMain.handle('workspace:save-data', (event, storage) => {
   });
   if (written) workspacePersistenceGate.markWritten(portableStorage, destination);
   return written;
+}
+
+ipcMain.handle('workspace:save-data', (event, storage, expectedRoot) => {
+  if (workspaceSwitching || (expectedRoot && path.resolve(expectedRoot) !== path.resolve(workspaceRoot()))) return false;
+  return persistWorkspaceStorage(storage);
 });
+const backupPreviews = new Map();
+function requireWorkspaceOwner(event) {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) throw new Error('workspace_owner_required');
+}
+async function liveBackupStorage() {
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('工作区不可用');
+  const storage = await mainWindow.webContents.executeJavaScript('window.prepareWorkspaceBackupSnapshot()');
+  if (!persistWorkspaceStorage(storage)) throw new Error('无法保存当前资料');
+  return storage;
+}
+async function backupFingerprint(storage, root) {
+  const normalized = backup.normalizeStorage(storage);
+  const hashes = [];
+  for (const relative of backup.mediaReferences(normalized)) {
+    const file = backup.assertLocalMedia(root, relative);
+    const digest = crypto.createHash('sha256');
+    for await (const bytes of fs.createReadStream(file)) digest.update(bytes);
+    hashes.push([relative, digest.digest('hex')]);
+  }
+  return backup.sha(JSON.stringify({ root: path.resolve(root), storage: normalized, media: hashes }));
+}
+async function exportLocalBackup(event) {
+  requireWorkspaceOwner(event);
+  try {
+    const save = await dialog.showSaveDialog(mainWindow, { title: '导出本机资料备份', defaultPath: `Pome-${new Date().toISOString().slice(0, 10)}.pome-backup.zip`, filters: [{ name: 'Pome 资料备份', extensions: ['zip'] }] });
+    if (save.canceled) return { ok: false, error: 'cancelled' };
+    const storage = await liveBackupStorage();
+    const result = await backup.exportWorkspaceBackup({ root: workspaceRoot(), storage, destination: save.filePath, appVersion: app.getVersion() });
+    return { ok: true, path: result.path, manifest: result.manifest };
+  } catch (error) { return { ok: false, error: error.code || 'backup_failed', message: error.message }; }
+}
+ipcMain.handle('workspace:confirm', async (event, payload) => { requireWorkspaceOwner(event); const result = await dialog.showMessageBox(mainWindow, { type: 'warning', title: String(payload.title || '确认'), message: String(payload.message || ''), detail: String(payload.detail || ''), buttons: ['取消', '确认'], defaultId: 0, cancelId: 0 }); return result.response === 1; });
+ipcMain.handle('backup:export', exportLocalBackup);
+ipcMain.handle('backup:preview', async (event) => {
+  requireWorkspaceOwner(event);
+  let inspected;
+  try {
+    const picked = await dialog.showOpenDialog(mainWindow, { title: '选择 Pome 资料备份', properties: ['openFile'], filters: [{ name: 'Pome 资料备份', extensions: ['zip'] }] });
+    if (picked.canceled) return { ok: false, error: 'cancelled' };
+    inspected = await backup.inspectWorkspaceBackup(picked.filePaths[0]);
+    const root = workspaceRoot(), storage = await liveBackupStorage();
+    const id = crypto.randomUUID();
+    for (const old of backupPreviews.values()) old.inspected.dispose();
+    backupPreviews.clear();
+    backupPreviews.set(id, { inspected, root, fingerprint: await backupFingerprint(storage, root), expiresAt: Date.now() + 300000, binding: JSON.stringify(syncCredentialsStore.getStatus()) });
+    return { ok: true, previewId: id, manifest: inspected.manifest, currentCounts: backup.collectionCounts(backup.normalizeStorage(storage)), paired: syncCredentialsStore.getStatus().bound, exclusions: backup.EXCLUSIONS };
+  } catch (error) { inspected?.dispose(); return { ok: false, error: error.code || 'backup_invalid', message: error.message }; }
+});
+ipcMain.handle('backup:restore', async (event, id) => {
+  requireWorkspaceOwner(event);
+  const preview = backupPreviews.get(id);
+  if (!preview) return { ok: false, error: 'preview_expired', message: '恢复预览已过期，请重新选择并确认备份。' };
+  let locked = false;
+  try {
+    const storage = await liveBackupStorage();
+    if (Date.now() > preview.expiresAt || workspaceRoot() !== preview.root || JSON.stringify(syncCredentialsStore.getStatus()) !== preview.binding
+      || await backupFingerprint(storage, preview.root) !== preview.fingerprint) throw Object.assign(new Error('资料或配对已变化，恢复预览已过期，请重新预览并确认。'), { code: 'preview_expired' });
+    workspaceSwitching = true; locked = true;
+    await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = true');
+    const status = syncCredentialsStore.getStatus();
+    if (status.bound) recoveryStore().pause({ uid: status.uid, serverId: status.serverId, root: preview.root, operationId: crypto.randomUUID(), reason: 'workspace_restore' });
+    if (boundTodosSyncTask) await boundTodosSyncTask;
+    // Any in-flight sync that settled after the preview invalidates confirmation.
+    const latest = await liveBackupStorage();
+    if (await backupFingerprint(latest, preview.root) !== preview.fingerprint) throw Object.assign(new Error('同步完成后资料发生变化，请重新确认恢复预览。'), { code: 'preview_expired' });
+    const snapshots = path.join(app.getPath('userData'), 'workspace-snapshots');
+    fs.mkdirSync(snapshots, { recursive: true, mode: 0o700 });
+    const snapshotPath = path.join(snapshots, `before-restore-${Date.now()}-${crypto.randomUUID()}.pome-backup.zip`);
+    await backup.exportWorkspaceBackup({ root: preview.root, storage: latest, destination: snapshotPath, appVersion: app.getVersion() });
+    backup.applyWorkspaceRestore({ root: preview.root, inspected: preview.inspected, currentStorage: latest });
+    preview.inspected.dispose(); backupPreviews.delete(id);
+    workspacePersistenceGate = createWorkspacePersistenceGate();
+    mainWindow.webContents.send('workspace:changed', { path: preview.root });
+    broadcastSyncStatus();
+    return { ok: true, snapshotPath, paused: status.bound };
+  } catch (error) { return { ok: false, error: error.code || 'restore_failed', message: error.message }; }
+  finally { if (locked) { workspaceSwitching = false; await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = false').catch(() => {}); } }
+});
+
 ipcMain.handle('workspace:open', () => shell.openPath(workspaceRoot()));
 ipcMain.handle('workspace:choose', () => chooseWorkspaceFolder());
 
@@ -1960,7 +2143,50 @@ ipcMain.handle('media:access-status', (event, mediaType) => {
   return { type, status, ...platformPolicy.mediaAccessPrompt(type, status, platformCapabilities) };
 });
 
-ipcMain.handle('tasks:recent', () => taskCompletionHistory);
+ipcMain.handle('tasks:recent', () => getTaskInbox().list().items);
+ipcMain.handle('tasks:inbox', (event, options) => { requireWorkspaceOwner(event); return taskInboxState(options); });
+ipcMain.handle('tasks:sources', async (event) => { requireWorkspaceOwner(event); return { ok: true, sources: await getAiSourceHooks().list() }; });
+ipcMain.handle('tasks:sources-preview', async (event, source, action) => {
+  requireWorkspaceOwner(event);
+  try { return { ok: true, preview: await getAiSourceHooks().preview(source, action) }; }
+  catch (error) { return { ok: false, message: error.message }; }
+});
+ipcMain.handle('tasks:sources-apply', async (event, token) => { requireWorkspaceOwner(event); return getAiSourceHooks().apply(token); });
+ipcMain.handle('tasks:sources-test', async (event, source) => {
+  requireWorkspaceOwner(event);
+  const token = crypto.randomUUID(), test = { source, expires: Date.now() + 10000, delivered: false };
+  sourceTestTokens.set(token, test);
+  try {
+    await getAiSourceHooks().runTest(source, { token, port: notificationServer?.address()?.port || TASK_NOTIFICATION_PORT });
+    return test.delivered ? { ok: true, message: '测试通知已送达' } : { ok: false, message: '未收到测试通知，请检查来源配置与本机监听服务。' };
+  } catch (error) { return { ok: false, message: error.message }; }
+  finally { sourceTestTokens.delete(token); }
+});
+ipcMain.handle('tasks:rebuild', async (event) => {
+  requireWorkspaceOwner(event);
+  const failed = taskInboxState();
+  if (failed.ok || !failed.recoverable) return { ok: false, error: 'rebuild_not_available' };
+  const filePath = path.join(app.getPath('userData'), 'task-inbox.json');
+  const expectedDigest = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  const backupPath = `${filePath}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomUUID()}`;
+  const choice = await dialog.showMessageBox(mainWindow, { type: 'warning', title: '重建 AI 完成收件箱', buttons: ['取消', '备份损坏文件并重建'], defaultId: 0, cancelId: 0,
+    message: '原有完成记录、已读状态和去重信息可能无法恢复。', detail: `原文件：${filePath}\n备份路径：${backupPath}\n确认后创建空收件箱并恢复通知接收。` });
+  if (choice.response !== 1) return { ok: false, canceled: true };
+  try {
+    const result = rebuildTaskInbox({ filePath, confirmed: true, expectedDigest, backupPath });
+    if (!result.ok) return result;
+    taskInboxStore = null; taskInboxFailure = null;
+    getTaskInbox();
+    return result;
+  } catch (error) { reportTaskInboxFailure(error); return { ok: false, ...taskInboxFailure, backupPath: error.backupPath }; }
+});
+ipcMain.handle('tasks:read', (event, id) => { requireWorkspaceOwner(event); return getTaskInbox().markRead(String(id || '')); });
+ipcMain.handle('tasks:open-source', async (event, id) => {
+  requireWorkspaceOwner(event);
+  const record = getTaskInbox().get(String(id || ''));
+  if (!record) return { ok: false, message: '记录不存在。' };
+  return platformAdapter.taskApps.open(record);
+});
 
 // 快捷链接：URL 走外部浏览器（仅 http/https），本地路径走系统打开（仅绝对路径）
 ipcMain.handle('shell:openExternal', (event, url) => {
@@ -1991,42 +2217,8 @@ async function promptForMissingPermissions() {
   await platformAdapter.permissions.selfCheck();
 }
 
-async function validatePublicHttpUrl(value) {
-  let url;
-  try {
-    url = new URL(value);
-  } catch (error) {
-    return null;
-  }
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
-  const hostname = url.hostname.toLowerCase();
-  if (!hostname || hostname === 'localhost' || hostname.endsWith('.local')) return null;
-  let addresses;
-  try {
-    addresses = await dns.promises.lookup(hostname, { all: true, verbatim: true });
-  } catch (error) {
-    return null;
-  }
-  if (!addresses.length || addresses.some((item) => isPrivateAddress(item.address))) return null;
-  return url;
-}
-
 async function readResponseText(response) {
-  if (!response.body) return '';
-  const reader = response.body.getReader();
-  const chunks = [];
-  let size = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > LINK_FETCH_MAX_BYTES) {
-      await reader.cancel();
-      break;
-    }
-    chunks.push(Buffer.from(value));
-  }
-  return Buffer.concat(chunks).toString('utf8');
+  return (await readLimitedBody(response, LINK_FETCH_MAX_BYTES)).toString('utf8');
 }
 
 async function fetchFaviconDataUrl(pageUrl, html) {
@@ -2041,10 +2233,13 @@ async function fetchFaviconDataUrl(pageUrl, html) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3500);
   try {
-    const response = await fetch(candidate, { signal: controller.signal, redirect: 'error' });
+    const response = await fetchPublicHttp(candidate, { signal: controller.signal, redirect: 'error' });
     const type = String(response.headers.get('content-type') || '').split(';', 1)[0].toLowerCase();
-    if (!response.ok || !type.startsWith('image/')) return '';
-    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!response.ok || !type.startsWith('image/')) {
+      await response.body?.cancel();
+      return '';
+    }
+    const bytes = await readLimitedBody(response, 160 * 1024);
     if (!bytes.length || bytes.length > 160 * 1024) return '';
     return `data:${type};base64,${bytes.toString('base64')}`;
   } catch (error) {
@@ -2065,7 +2260,7 @@ async function enrichLinkMetadata(url, title) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), LINK_FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(safeEndpoint, {
+    const response = await fetchPublicHttp(safeEndpoint, {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -2108,7 +2303,7 @@ async function inspectLink(rawUrl) {
     const timeout = setTimeout(() => controller.abort(), LINK_FETCH_TIMEOUT_MS);
     let response;
     try {
-      response = await fetch(current, {
+      response = await fetchPublicHttp(current, {
         redirect: 'manual',
         signal: controller.signal,
         headers: {
@@ -2129,34 +2324,40 @@ async function inspectLink(rawUrl) {
         warning: error && error.name === 'AbortError' ? 'timeout' : 'fetch_failed',
       };
     }
-    clearTimeout(timeout);
-
-    if ([301, 302, 303, 307, 308].includes(response.status)) {
-      const location = response.headers.get('location');
-      if (!location || redirectCount >= LINK_FETCH_MAX_REDIRECTS) {
-        return { ok: false, error: 'too_many_redirects' };
+    try {
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get('location');
+        await response.body?.cancel();
+        if (!location || redirectCount >= LINK_FETCH_MAX_REDIRECTS) {
+          return { ok: false, error: 'too_many_redirects' };
+        }
+        current = await validatePublicHttpUrl(new URL(location, current).toString());
+        if (!current) return { ok: false, error: 'unsafe_redirect' };
+        continue;
       }
-      current = await validatePublicHttpUrl(new URL(location, current).toString());
-      if (!current) return { ok: false, error: 'unsafe_redirect' };
-      continue;
-    }
 
-    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-    const fallback = current.hostname.replace(/^www\./, '');
-    if (!response.ok || (!contentType.includes('text/html') && !contentType.includes('xhtml'))) {
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      const fallback = current.hostname.replace(/^www\./, '');
+      if (!response.ok || (!contentType.includes('text/html') && !contentType.includes('xhtml'))) {
+        await response.body?.cancel();
+        const [smart, icon] = await Promise.all([
+          enrichLinkMetadata(current.toString(), fallback),
+          fetchFaviconDataUrl(current.toString(), ''),
+        ]);
+        return { ok: true, url: current.toString(), title: smart.title || '未命名', category: smart.category, icon };
+      }
+      const html = await readResponseText(response);
+      const pageTitle = extractPageTitle(html, fallback);
       const [smart, icon] = await Promise.all([
-        enrichLinkMetadata(current.toString(), fallback),
-        fetchFaviconDataUrl(current.toString(), ''),
+        enrichLinkMetadata(current.toString(), pageTitle),
+        fetchFaviconDataUrl(current.toString(), html),
       ]);
-      return { ok: true, url: current.toString(), title: smart.title || '未命名', category: smart.category, icon };
-    }
-    const html = await readResponseText(response);
-    const pageTitle = extractPageTitle(html, fallback);
-    const [smart, icon] = await Promise.all([
-      enrichLinkMetadata(current.toString(), pageTitle),
-      fetchFaviconDataUrl(current.toString(), html),
-    ]);
-    return { ok: true, url: current.toString(), title: smart.title, category: smart.category, icon };
+      return { ok: true, url: current.toString(), title: smart.title, category: smart.category, icon };
+    } catch (error) {
+      await response.body?.cancel().catch(() => {});
+      return { ok: true, url: current.toString(), title: '未命名', category: '', icon: '',
+        warning: controller.signal.aborted ? 'timeout' : 'fetch_failed' };
+    } finally { clearTimeout(timeout); }
   }
   return { ok: false, error: 'too_many_redirects' };
 }
@@ -2177,7 +2378,7 @@ ipcMain.handle('smart:organize-material', async (event, payload) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 9000);
   try {
-    const response = await fetch(safeEndpoint, {
+    const response = await fetchPublicHttp(safeEndpoint, {
       method: 'POST',
       signal: controller.signal,
       headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
@@ -2221,31 +2422,13 @@ ipcMain.handle('windows:focus', async (event, windowId) => {
   return platformAdapter.windows.focus(windowId);
 });
 
-function taskWindowMatchScore(notification, target) {
-  const project = String(notification && notification.project || '').trim().toLocaleLowerCase();
-  const title = String(target && target.title || '').trim().toLocaleLowerCase();
-  const appName = String(target && target.appName || '').trim().toLocaleLowerCase();
-  if (!project || !title) return 0;
-  if (title === project) return 100;
-  if (title.startsWith(`${project} `) || title.startsWith(`${project} —`) || title.startsWith(`${project} -`)) return 90;
-  if (title.includes(project)) return 75;
-  if (project.includes(appName) && appName) return 25;
-  return 0;
-}
-
 async function activateActiveTaskNotification(eventId = null) {
   const notification = activeTaskNotification;
   if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return false;
   if (!platformCapabilities.features.windowFocus) return false;
-  const result = await platformAdapter.windows.list();
-  const target = (result.items || [])
-    .map((item) => ({ item, score: taskWindowMatchScore(notification, item) }))
-    .filter((candidate) => candidate.score > 0)
-    .sort((a, b) => b.score - a.score)[0]?.item;
-  if (!target) return false;
-  const focused = await platformAdapter.windows.focusRow(target);
-  if (focused) beginTaskNotificationDismiss();
-  return focused;
+  const result = await platformAdapter.taskApps.open(notification);
+  if (result.ok) beginTaskNotificationDismiss();
+  return result.ok;
 }
 
 ipcMain.handle('task-notification:activate', async (event, eventId) => {
@@ -2348,7 +2531,17 @@ ipcMain.handle('credentials:copy', async (event, payload) => {
   const item = readCredentialsVault().find((row) => row.id === id);
   if (!item) return false;
   const value = item[field];
-  await clipboard.writeText(value);
+  if (field === 'password') {
+    sensitiveClipboardGuard.protect(value);
+    const format = process.platform === 'darwin' ? 'org.nspasteboard.ConcealedType'
+      : 'ExcludeClipboardContentFromMonitorProcessing';
+    await clipboard.write([new ClipboardItem({
+      'text/plain': new Blob([value], { type: 'text/plain' }),
+      [`electron application/osclipboard;format="${format}"`]: new Blob([Buffer.from([1])]),
+    })]);
+  } else {
+    await clipboard.writeText(value);
+  }
   if (field === 'password') {
     setTimeout(() => {
       void clipboard.readText()
@@ -2438,7 +2631,7 @@ function setSyncSchemaRuntimeFromEvaluation(evaluation) {
 }
 
 function buildSyncPublicStatus() {
-  const base = syncCredentialsStore.getStatus();
+  const base = { ...syncCredentialsStore.getStatus(), recovery: recoveryStore().read() };
   if (!syncSchemaRuntime || !syncSchemaRuntime.incompatible) {
     return {
       ...base,
@@ -2523,10 +2716,11 @@ function createTodosSyncTransport(record) {
   const token = record.deviceToken;
   const fallbackBaseUrl = record.baseUrl;
   return {
-    async pullPage({ cursor, collection } = {}) {
+    async pullPage({ cursor, collection, full = false } = {}) {
       const params = new URLSearchParams();
       if (cursor != null && cursor !== '') params.set('cursor', String(cursor));
       params.set('collection', collection || 'todos');
+      if (full) params.set('full', '1');
       const query = `?${params.toString()}`;
       return withEndpointFailover(async (endpoint) => {
         const response = await fetchSyncJson(
@@ -2586,7 +2780,25 @@ function createTodosSyncTransport(record) {
   };
 }
 
-async function runBoundTodosSyncCycle({ broadcast = true } = {}) {
+function contentResults() {
+  return require('./atomicStorage').readJsonStrict(path.join(app.getPath('userData'), 'content-sync-results.json'), {});
+}
+function saveContentResult(names, message, ok) {
+  const results = contentResults();
+  for (const name of names) results[name] = { message, ok, at: Date.now() };
+  require('./atomicStorage').writeJsonAtomic(path.join(app.getPath('userData'), 'content-sync-results.json'), results);
+}
+let boundTodosSyncTask = null;
+function runBoundTodosSyncCycle(options = {}) {
+  if (workspaceSwitching) return Promise.resolve({ ok: false, error: 'workspace_switching' });
+  if (recoveryStore().read().paused) return Promise.resolve({ ok: false, error: 'sync_paused_after_restore', message: '恢复后同步已暂停，请确认覆盖影响范围。' });
+  if (!boundTodosSyncTask) {
+    boundTodosSyncTask = performBoundTodosSyncCycle(options).finally(() => { boundTodosSyncTask = null; });
+  }
+  return boundTodosSyncTask;
+}
+
+async function performBoundTodosSyncCycle({ broadcast = true } = {}) {
   const ctx = readBoundSyncContext();
   if (!ctx.ok) {
     return { ok: false, error: ctx.error };
@@ -2601,6 +2813,7 @@ async function runBoundTodosSyncCycle({ broadcast = true } = {}) {
       maxSupported: MAX_SUPPORTED_SCHEMA_VERSION,
     },
   });
+  saveContentResult(['待办'], result.ok ? '上次同步已确认' : '待同步：'+(result.error || '失败'), result.ok);
   if (result.error === SCHEMA_UI_STATE_INCOMPATIBLE || result.stopPull || result.stopPush) {
     setSyncSchemaRuntimeFromEvaluation(result);
     broadcastSyncStatus();
@@ -2621,8 +2834,15 @@ async function runBoundTodosSyncCycle({ broadcast = true } = {}) {
   }
   if (result.ok) {
     try {
-      await runBoundWorkspaceSyncCycle();
+      const workspaceResult = await runBoundWorkspaceSyncCycle();
+      const names = ['笔记','链接','常用指令','剪贴板','录音元数据','AI 配置','密钥'];
+      saveContentResult(names, workspaceResult.skipped ? '尚未完成首次资料同步' : workspaceResult.ok ? '上次同步已确认' : '待同步：'+workspaceResult.error, workspaceResult.ok && !workspaceResult.skipped);
+      const labels = { notes: '笔记', links: '链接', commands: '常用指令', clipboardHistory: '剪贴板', recordings: '录音音频', aiSettings: 'AI 配置', secrets: '密钥' };
+      if (workspaceResult.partial) for (const [collection, label] of Object.entries(labels)) { if (!workspaceResult.pendingCollections.includes(collection)) saveContentResult([label], '上次同步已确认', true); }
+      for (const warning of workspaceResult.warnings || []) { const collection = require('./workspace-sync').collectionForEntityId(warning.entityId); if (labels[collection]) saveContentResult([labels[collection]], '部分资料未传输：'+warning.reason, false); }
+      if (!workspaceResult.ok || workspaceResult.skipped) saveContentResult(['录音音频'], '尚未确认全部音频传输', false);
     } catch (error) {
+      saveContentResult(['笔记','链接','常用指令','剪贴板','录音元数据','录音音频','AI 配置','密钥'], '资料同步失败，待重试', false);
       // 工作区同步失败时待办结果仍然有效，下一轮再试。
     }
   }
@@ -2805,6 +3025,7 @@ async function certificateTrustPrompt(baseUrl) {
 
 function buildNasSyncDashboard() {
   const credStatus = syncCredentialsStore.getStatus();
+  const recovery = recoveryStore().read();
   const view = syncSettingsStore.getPublicView();
   let outboxCount = 0;
   let accountId = null;
@@ -2838,7 +3059,7 @@ function buildNasSyncDashboard() {
     needsReauth: credStatus.needsReauth,
     migrating,
     migrationFailed,
-    syncing: false,
+    syncing: Boolean(boundTodosSyncTask),
     outboxCount,
     offline: Boolean(view.lastError) && !schemaIncompatible,
     lastSuccessAt: view.lastSuccessAt,
@@ -2851,6 +3072,8 @@ function buildNasSyncDashboard() {
   return {
     ok: true,
     credentials: publicStatus,
+    recovery,
+    contentResults: credStatus.bound ? contentResults() : Object.fromEntries(['待办','笔记','链接','常用指令','剪贴板','录音元数据','录音音频','AI 配置','密钥'].map((name) => [name, { message: '仅本机 · 未配对 NAS' }])),
     settings: view,
     outboxCount,
     accountId,
@@ -3042,44 +3265,110 @@ ipcMain.handle('sync:test-endpoint', async (event, payload = {}) => {
   return result;
 });
 
+const recoveryPreviews = new Map();
+const RECOVERY_SCOPE = ['todos', 'notes', 'links', 'commands', 'clipboardHistory', 'recordings'];
+function recoveryHash(value) { return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
+async function recoveryEntities(storage) {
+  const snapshot = assembleWorkspaceSnapshot(await readRendererWorkspaceSnapshot());
+  snapshot.aiSettings = null; snapshot.secrets = [];
+  const entities = buildWorkspaceEntities(snapshot).entities.filter((e) => RECOVERY_SCOPE.includes(e.collection));
+  const todos = JSON.parse(storage['notch-todo-data'] || '{}');
+  for (const priority of ['P0','P1','P2','P3']) for (const row of todos[priority] || []) entities.push({ collection: 'todos', entityId: row.id, payload: { ...row, categoryId: priority } });
+  const categories = JSON.parse(storage['notch-todo-category-names-v1'] || '{}');
+  for (const priority of ['P0','P1','P2','P3']) if (typeof categories[priority] === 'string') entities.push({ collection: 'todos', entityId: `category:${priority}`, payload: { name: categories[priority] } });
+  return entities.map(({ collection, entityId, payload }) => ({ collection, entityId, payload }));
+}
+async function recoveryRequest(action, body) {
+  const result = await fetchBoundSyncJson(`api/v1/recovery/${action}`, body ? { method: 'POST', body, timeoutMs: 60000 } : {});
+  if (!result.ok) throw Object.assign(new Error(result.body?.error || result.error || 'NAS 请求失败'), { code: result.body?.error || result.error });
+  return result.body;
+}
+ipcMain.handle('recovery:preview', async (event) => {
+  requireWorkspaceOwner(event);
+  try {
+    const ctx = readBoundSyncContext();
+    if (!ctx.ok) throw new Error('请先配对 NAS');
+    const paused = recoveryStore().read();
+    if (!paused.paused) throw new Error('同步未暂停');
+    if (paused.uid !== ctx.record.uid || paused.serverId !== ctx.record.serverId || paused.root !== workspaceRoot()) throw new Error('恢复时的工作区或账号已变化，请重新恢复备份');
+    const remote = await recoveryRequest('state');
+    if (remote.version !== 1 || JSON.stringify(remote.scope) !== JSON.stringify(RECOVERY_SCOPE) || !Array.isArray(remote.entities)) throw new Error('NAS 不支持可验证、可回退的快照，禁止覆盖');
+    const storage = await liveBackupStorage(), entities = await recoveryEntities(storage);
+    const local = new Map(entities.map((e) => [e.entityId, e]));
+    if (entities.some((e) => e.collection === 'recordings' && e.payload.audioOmitted && remote.entities.some((r) => (r.entityId === e.entityId && r.hasAudio) || r.entityId.startsWith(`recording-blob:${e.payload.id}:`)))) throw new Error('本机有超限或缺失的音频，而 NAS 上保留完整音频；禁止以不完整音频覆盖，请先保留当前 NAS 版本。');
+    const adds = entities.filter((e) => !remote.entities.some((r) => r.entityId === e.entityId));
+    const updates = entities.filter((e) => remote.entities.some((r) => r.entityId === e.entityId && r.hash !== recoveryHash(e.payload)));
+    const deletes = remote.entities.filter((r) => !local.has(r.entityId));
+    let operationId = paused.operationId;
+    const existing = await recoveryRequest('get', { operationId }).catch(() => null);
+    if ((paused.attemptHash && paused.attemptHash !== recoveryHash(entities)) || (existing?.status === 'committed' && existing.serverRev !== remote.serverRev)) { operationId = crypto.randomUUID(); recoveryStore().update({ operationId, attemptHash: null }); }
+    const id = crypto.randomUUID();
+    recoveryPreviews.clear();
+    recoveryPreviews.set(id, { root: workspaceRoot(), binding: JSON.stringify(syncCredentialsStore.getStatus()), fingerprint: await backupFingerprint(storage, workspaceRoot()), entities, remote, expiresAt: Date.now()+300000, operationId });
+    return { ok: true, previewId: id, adds: adds.map((e) => e.entityId), updates: updates.map((e) => e.entityId), deletes: deletes.map((e) => e.entityId), deleteLabels: deletes.map((e) => e.label || e.entityId), scope: RECOVERY_SCOPE, serverRev: remote.serverRev };
+  } catch (error) { return { ok: false, error: error.code || 'preview_failed', message: error.message }; }
+});
+ipcMain.handle('recovery:execute', async (event, id) => {
+  requireWorkspaceOwner(event);
+  const preview = recoveryPreviews.get(id);
+  if (!preview) return { ok: false, error: 'preview_expired', message: '请重新预览并确认影响范围。' };
+  let locked = false;
+  try {
+    const paused = recoveryStore().read();
+    if (!paused.paused || paused.operationId !== preview.operationId || Date.now()>preview.expiresAt || workspaceRoot() !== preview.root || JSON.stringify(syncCredentialsStore.getStatus()) !== preview.binding) throw new Error('preview_expired');
+    workspaceSwitching = true; locked = true;
+    await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = true');
+    const storage = await liveBackupStorage();
+    if (await backupFingerprint(storage, preview.root) !== preview.fingerprint) throw new Error('preview_expired');
+    const operationId = preview.operationId;
+    recoveryStore().update({ attemptHash: recoveryHash(preview.entities) });
+    const existing = await recoveryRequest('get', { operationId }).catch(() => null);
+    let result;
+    if (existing?.status === 'committed') result = existing;
+    else {
+      await recoveryRequest('prepare', { operationId, baseServerRev: preview.remote.serverRev, fingerprint: preview.remote.fingerprint });
+      const checked = await recoveryRequest('verify', { operationId });
+      if (!checked.verified || !checked.snapshotHash) throw new Error('snapshot_verification_failed');
+      const batches = splitMutationBatches(preview.entities);
+      for (let chunkId=0; chunkId<batches.length; chunkId++) await recoveryRequest('stage', { operationId, chunkId, entities: batches[chunkId] });
+      if (await backupFingerprint(await liveBackupStorage(), preview.root) !== preview.fingerprint) throw new Error('preview_expired');
+      result = await recoveryRequest('commit', { operationId, chunkCount: batches.length, entitiesHash: recoveryHash(preview.entities) });
+    }
+    if (result.status !== 'committed') throw new Error('commit_unverified');
+    const verifiedState = await recoveryRequest('state');
+    if (verifiedState.serverRev !== result.serverRev || verifiedState.entities.length !== preview.entities.length || preview.entities.some((e) => !verifiedState.entities.some((r) => r.entityId === e.entityId && r.collection === e.collection && r.hash === recoveryHash(e.payload)))) throw new Error('commit_unverified');
+    const ctx = readBoundSyncContext();
+    const replaced = ctx.store.replaceTodosFromEntities(ctx.accountId, preview.entities.filter((e) => e.collection === 'todos'), result.serverRev);
+    if (!replaced.ok) throw new Error('local_sync_store_failed');
+    if (!writeWorkspaceIndex(Object.fromEntries(preview.entities.filter((e) => e.collection !== 'todos').map((e) => [e.entityId, entityHash(e)])))) throw new Error('workspace_index_save_failed');
+    seedWorkspacePullCursors(ctx.store, ctx.accountId, result.serverRev);
+    recoveryStore().complete(operationId);
+    recoveryPreviews.delete(id); broadcastSyncStatus();
+    return { ok: true, ...result };
+  } catch (error) {
+    // A stale server preview needs a new operation, preserving the old snapshot.
+    const expired = ['preview_expired', 'recovery_expired', 'recovery_not_found'].includes(error.code || error.message);
+    if (expired) { recoveryStore().update({ operationId: crypto.randomUUID(), attemptHash: null }); recoveryPreviews.clear(); }
+    return { ok: false, error: error.code || error.message, message: expired ? '资料、NAS 版本或快照暂存有效期已变化，请重新预览并确认。同步保持暂停。' : `操作失败，同步保持暂停：${error.message}` };
+  } finally { if (locked) { workspaceSwitching = false; await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = false').catch(() => {}); } }
+});
+ipcMain.handle('recovery:rollback', async (event, operationId) => {
+  requireWorkspaceOwner(event);
+  try {
+    const ctx = readBoundSyncContext(); if (!ctx.ok) throw new Error('not_bound');
+    recoveryStore().pause({ uid: ctx.record.uid, serverId: ctx.record.serverId, root: workspaceRoot(), operationId: crypto.randomUUID(), reason: 'nas_rollback' });
+    if (boundTodosSyncTask) await boundTodosSyncTask;
+    const result = await recoveryRequest('rollback', { operationId });
+    broadcastSyncStatus(); return { ok: true, ...result };
+  } catch (error) { return { ok: false, message: `回退失败，同步保持暂停：${error.message}` }; }
+});
+
 ipcMain.handle('sync:retry', async () => {
   const result = await runBoundTodosSyncCycle({ broadcast: true });
   return { ...result, dashboard: buildNasSyncDashboard() };
 });
 
-ipcMain.handle('sync:export-todos-backup', async () => {
-  const ctx = readBoundSyncContext();
-  let todosJson = '{}';
-  let categoryNamesJson = '{}';
-  if (ctx.ok) {
-    const projection = ctx.store.buildTodosLocalStorageProjection(ctx.accountId);
-    todosJson = projection.todosJson;
-    categoryNamesJson = projection.categoryNamesJson;
-  } else {
-    // Unbound: export current renderer-held data is not available in main;
-    // fall back to empty shell so dialog still works for UX.
-    todosJson = JSON.stringify({ P0: [], P1: [], P2: [], P3: [] });
-  }
-  const win = BrowserWindow.getFocusedWindow() || mainWindow;
-  const save = await dialog.showSaveDialog(win, {
-    title: '导出待办备份',
-    defaultPath: `pome-todos-backup-${Date.now()}.json`,
-    filters: [{ name: 'JSON', extensions: ['json'] }],
-  });
-  if (save.canceled || !save.filePath) {
-    return { ok: false, error: 'cancelled' };
-  }
-  try {
-    fs.writeFileSync(
-      save.filePath,
-      `${JSON.stringify({ todos: JSON.parse(todosJson), categoryNames: JSON.parse(categoryNamesJson), exportedAt: Date.now() }, null, 2)}\n`,
-      'utf8',
-    );
-    return { ok: true, path: save.filePath };
-  } catch (error) {
-    return { ok: false, error: 'write_failed', message: error && error.message };
-  }
-});
+ipcMain.handle('sync:export-todos-backup', exportLocalBackup);
 
 ipcMain.handle('sync:pair-http-policy', (event, baseUrl) => {
   const policy = syncPairHttpPolicy(baseUrl);
@@ -3491,8 +3780,10 @@ function writeWorkspaceIndex(hashes) {
   try {
     fs.writeFileSync(temporary, JSON.stringify({ version: 1, hashes: hashes || {} }), { mode: 0o600 });
     fs.renameSync(temporary, target);
+    return true;
   } catch (error) {
     try { fs.unlinkSync(temporary); } catch (unlinkError) {}
+    return false;
   }
 }
 
@@ -3522,6 +3813,16 @@ function readWorkspaceBagValue(key) {
   const payload = readJsonFile(workspacePath(WORKSPACE_DATA_FILE), {});
   const stored = payload && payload.localStorage && payload.localStorage[key];
   return typeof stored === 'string' ? stored : null;
+}
+
+function recordingAudioForSync(row) {
+  if (!row.audioPath) return { audioBase64: '', audioOmitted: true, audioSyncReason: row.audioSyncReason || 'audio_missing' };
+  try {
+    const file = getSafeRecordingPath(row.audioPath), stat = fs.statSync(file);
+    if (stat.size > 6 * 1024 * 1024) return { audioBase64: '', audioOmitted: true, audioSyncReason: 'audio_too_large' };
+    const bytes = readOptionalFileBase64(file, 6 * 1024 * 1024);
+    return bytes ? { audioBase64: bytes, audioOmitted: false, audioSyncReason: '' } : { audioBase64: '', audioOmitted: true, audioSyncReason: 'audio_missing' };
+  } catch { return { audioBase64: '', audioOmitted: true, audioSyncReason: 'audio_missing' }; }
 }
 
 function assembleWorkspaceSnapshot(rendererSnapshot) {
@@ -3565,7 +3866,7 @@ function assembleWorkspaceSnapshot(rendererSnapshot) {
       if (!row || row.isDraft) return row;
       return {
         ...row,
-        audioBase64: readOptionalFileBase64(getSafeRecordingPath(row.audioPath), 8 * 1024 * 1024),
+        ...recordingAudioForSync(row),
       };
     }),
     aiSettings: {
@@ -3595,18 +3896,22 @@ function writeSyncedBytes(directory, fileName, base64) {
 
 function writeSyncedAiSettings(plain) {
   // Older peers omit this field; only an explicit empty string clears it.
-  if (typeof plain.cursorToken === 'string') writeCursorManualToken(plain.cursorToken);
+  if (typeof plain.cursorToken === 'string' && !writeCursorManualToken(plain.cursorToken).ok) {
+    throw new Error('cursor_token_save_failed');
+  }
   const previous = readStoredTranscriptionSettings();
   const next = { ...previous };
   if (plain.apiKey) {
     const encrypted = encryptStoredSecret(plain.apiKey);
-    if (encrypted) next.encryptedApiKey = encrypted;
+    if (!encrypted) throw new Error('ai_key_encrypt_failed');
+    next.encryptedApiKey = encrypted;
   } else if (plain.apiKey === '') {
     next.encryptedApiKey = '';
   }
   if (plain.llmApiKey) {
     const encrypted = encryptStoredSecret(plain.llmApiKey);
-    if (encrypted) next.encryptedLlmApiKey = encrypted;
+    if (!encrypted) throw new Error('ai_key_encrypt_failed');
+    next.encryptedLlmApiKey = encrypted;
   } else if (plain.llmApiKey === '') {
     next.encryptedLlmApiKey = '';
   }
@@ -3614,13 +3919,7 @@ function writeSyncedAiSettings(plain) {
   if (plain.region) next.region = String(plain.region);
   if (plain.llmBaseUrl) next.llmBaseUrl = String(plain.llmBaseUrl);
   if (plain.llmModel) next.llmModel = String(plain.llmModel);
-  try {
-    const target = getTranscriptionSettingsPath();
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, JSON.stringify(next), { mode: 0o600 });
-  } catch (error) {
-    // 磁盘写入失败时保留原来的转写配置。
-  }
+  if (!writeJsonFile(getTranscriptionSettingsPath(), next)) throw new Error('ai_settings_save_failed');
 }
 
 function materializeWorkspaceSnapshot(projected, previousSnapshot) {
@@ -3673,7 +3972,7 @@ function materializeWorkspaceSnapshot(projected, previousSnapshot) {
     const rows = snapshot.secrets
       .map((item) => normalizeCredentialInput(item, item && item.id, item && item.createdAt))
       .filter(Boolean);
-    writeCredentialsVault(rows);
+    if (!writeCredentialsVault(rows)) throw new Error('credentials_save_failed');
   }
   if (projected.aiApplied && snapshot.aiSettings) {
     writeSyncedAiSettings(snapshot.aiSettings);
@@ -3712,50 +4011,14 @@ async function readRendererWorkspaceSnapshot() {
   }
 }
 
-async function pushWorkspaceMutations(record, entities) {
-  if (!entities || !entities.length) return { ok: true, pushed: 0 };
+async function pushWorkspaceMutations(record, entities, { baseServerRev = 0 } = {}) {
   const transport = createTodosSyncTransport(record);
-  const mutations = entities.map((entity) => mutationFromEntity(entity, { deviceId: record.deviceId }));
-  let pushed = 0;
-  for (const batch of splitMutationBatches(mutations)) {
-    const result = await transport.pushMutations(batch);
-    if (!result || result.ok !== true) {
-      return { ok: false, error: (result && result.error) || 'push_failed', pushed };
-    }
-    pushed += batch.length;
-  }
-  return { ok: true, pushed };
+  return require('./workspace-sync').pushWorkspaceEntities({ entities, deviceId: record.deviceId, baseServerRev, pushMutations: transport.pushMutations });
 }
 
 async function pullWorkspaceChanges(ctx) {
   const transport = createTodosSyncTransport(ctx.record);
-  const remoteChanges = [];
-  for (const collection of WORKSPACE_COLLECTIONS) {
-    let cursor = ctx.store.getPullCursor(ctx.accountId, collection).cursor;
-    for (let guard = 0; guard < 40; guard += 1) {
-      const remote = await transport.pullPage({ cursor, collection });
-      if (!remote || remote.ok !== true) {
-        return { ok: false, error: (remote && remote.error) || 'pull_failed' };
-      }
-      const body = remote.body || {};
-      const normalized = {
-        changes: Array.isArray(body.changes) ? body.changes : [],
-        nextCursor: Object.prototype.hasOwnProperty.call(body, 'nextCursor') ? body.nextCursor : null,
-        hasMore: body.hasMore === true,
-        serverRev: Number(body.serverRev) || 0,
-      };
-      const applied = ctx.store.applyPullPage({
-        accountId: ctx.accountId,
-        collection,
-        pull: normalized,
-      });
-      if (!applied.ok) return { ok: false, error: applied.reason || 'apply_failed' };
-      remoteChanges.push(...selectWorkspaceChanges(normalized.changes, collection));
-      if (!normalized.hasMore) break;
-      cursor = normalized.nextCursor;
-    }
-  }
-  return { ok: true, remoteChanges };
+  return pullWorkspacePages({ store: ctx.store, accountId: ctx.accountId, pullPage: transport.pullPage });
 }
 
 /**
@@ -3782,26 +4045,53 @@ async function runBoundWorkspaceSyncCycle() {
   const ctx = readBoundSyncContext();
   if (!ctx.ok) return { ok: false, error: ctx.error };
   const accountKey = await ensureAccountSyncKey(ctx.record);
-  const rendererSnapshot = await readRendererWorkspaceSnapshot();
-  const snapshot = assembleWorkspaceSnapshot(rendererSnapshot);
-  const built = buildWorkspaceEntities(snapshot, { accountKey });
+  if (!accountKey) return { ok: false, error: 'account_key_required' };
   const pulled = await pullWorkspaceChanges(ctx);
   if (!pulled.ok) return pulled;
+  // Read after the network round trip so edits made while pulling are included.
+  const rendererSnapshot = await readRendererWorkspaceSnapshot();
+  if (!rendererSnapshot) return { ok: false, error: 'workspace_unavailable' };
+  const snapshot = assembleWorkspaceSnapshot(rendererSnapshot);
+  const built = buildWorkspaceEntities(snapshot, { accountKey });
+  const index = readWorkspaceIndex();
+  for (const full of pulled.fullCollections || []) {
+    const known = new Set(full.ids);
+    for (const id of Object.keys(index)) if (collectionForEntityId(id) === full.collection && !known.has(id)) pulled.remoteChanges.push({ entityId: id, collection: full.collection, op: 'delete', serverRev: full.serverRev });
+  }
   const plan = planWorkspaceSync({
-    index: readWorkspaceIndex(),
+    index,
     localEntities: built.entities,
     remoteChanges: pulled.remoteChanges,
+    deviceName: ctx.record.deviceName || require('node:os').hostname(),
   });
   if (pulled.remoteChanges.length) {
     const projected = projectWorkspaceEntities(plan.mergedEntities, { accountKey });
-    broadcastWorkspaceProjection(materializeWorkspaceSnapshot(projected, snapshot));
+    if (projected.warnings.some((warning) => ['audio_incomplete','audio_checksum_mismatch'].includes(warning.reason))) return { ok: false, error: '录音音频尚未完整到达或校验失败，保留原音频等待重试', warnings: projected.warnings };
+    if (pulled.remoteChanges.some((change) => change.collection === 'secrets' && change.op === 'delete')) projected.secretsApplied = true;
+    const projection = materializeWorkspaceSnapshot(projected, snapshot);
+    const stored = readJsonFile(workspacePath(WORKSPACE_DATA_FILE), {}).localStorage || {};
+    if (!persistWorkspaceStorage(workspaceProjectionToStorage(stored, projection))) return { ok: false, error: 'workspace_save_failed' };
+    if (!writeWorkspaceIndex(plan.appliedIndex)) return { ok: false, error: 'workspace_index_save_failed' };
+    broadcastWorkspaceProjection(projection);
   }
   if (plan.toPush.length) {
-    const pushed = await pushWorkspaceMutations(ctx.record, plan.toPush);
-    if (!pushed.ok) return pushed;
+    const pushed = await pushWorkspaceMutations(ctx.record, plan.toPush, { baseServerRev: Math.max(0, ...pulled.pages.map((p) => Number(p.pull?.serverRev || p.serverRev) || 0)) });
+    if (!pushed.ok) {
+      const acknowledged = { ...plan.appliedIndex };
+      const confirmed = new Set(pushed.confirmedIds || []);
+      for (const entity of plan.toPush) if (confirmed.has(entity.entityId)) { if (entity.op === 'delete') delete acknowledged[entity.entityId]; else acknowledged[entity.entityId] = entityHash(entity); }
+      if (!writeWorkspaceIndex(acknowledged)) return { ok: false, error: 'workspace_index_save_failed' };
+      commitWorkspacePullPages(ctx.store, ctx.accountId, pulled.pages);
+      return { ...pushed, partial: true, pendingCollections: [...new Set(plan.toPush.filter(entity => !confirmed.has(entity.entityId)).map(entity => entity.collection))] };
+    }
   }
-  writeWorkspaceIndex(plan.nextIndex);
-  return { ok: true, pushed: plan.toPush.length, pulled: pulled.remoteChanges.length };
+  if (!writeWorkspaceIndex(plan.nextIndex)) return { ok: false, error: 'workspace_index_save_failed' };
+  commitWorkspacePullPages(ctx.store, ctx.accountId, pulled.pages);
+  const audioStates = snapshot.recordings.filter((row) => row && !row.isDraft).map((row) => ({ id: row.id, audioOmitted: row.audioOmitted === true, audioSyncReason: row.audioSyncReason || '' }));
+  const omitted = audioStates.filter((row) => row.audioOmitted);
+  saveContentResult(['录音音频'], omitted.length ? `上次同步有 ${omitted.length} 段音频未传输（超限或缺失）` : '上次音频同步已确认', omitted.length === 0);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('recordings:sync-state', audioStates);
+  return { ok: true, pushed: plan.toPush.length, pulled: pulled.remoteChanges.length, warnings: built.warnings };
 }
 
 function readWorkspaceTodosRaw() {
@@ -3882,6 +4172,7 @@ ipcMain.handle('sync:classify-migration', async (event, payload = {}) => {
 });
 
 ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
+  if (recoveryStore().read().paused) return { ok: false, error: 'sync_paused_after_restore' };
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
 
@@ -4031,7 +4322,12 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
     writeWorkspaceIndex(readWorkspaceIndex());
   } else if (authority === 'local') {
     if (record && deferredEntities.length) {
-      const pushed = await pushWorkspaceMutations(record, deferredEntities);
+      const transport = createTodosSyncTransport(record);
+      const pushed = await require('./workspace-sync').pushMigrationWorkspaceEntities({
+        entities: deferredEntities, deviceId: record.deviceId,
+        baseServerRev: Number(result.serverRev) || 0,
+        pushMutations: transport.pushMutations, pullPage: transport.pullPage,
+      });
       if (!pushed.ok) {
         setMigrationSession({
           readonly: false,
@@ -4073,6 +4369,8 @@ ipcMain.handle('sync:ack-migration-projection', () => {
 });
 
 ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
+  requireWorkspaceOwner(event);
+  if (payload.confirmed === true && syncCredentialsStore.getStatus().bound) { const status = syncCredentialsStore.getStatus(); recoveryStore().pause({ uid: status.uid, serverId: status.serverId, root: workspaceRoot(), operationId: crypto.randomUUID(), reason: 'migration_restore' }); if (boundTodosSyncTask) await boundTodosSyncTask; }
   if (payload.confirmed !== true) {
     return { ok: false, error: 'confirm_required' };
   }
@@ -4767,7 +5065,7 @@ async function readSystemClipboard(includeImage = false) {
         );
       }
     }
-    return { concealed: observation.concealed, text: observation.text, image };
+    return { concealed: observation.concealed || sensitiveClipboardGuard.isSensitive(observation.text), text: observation.text, image };
   } catch (error) {
     return { concealed: false, text: '', image: null };
   }
@@ -5156,12 +5454,14 @@ app.whenReady().then(() => {
   // 迁移清掉的旧位置会决定第一帧胶囊落在哪里。
   migrateWindowsLayoutSettings();
   refreshRuntimeCapabilities();
+  backup.recoverWorkspaceRestore(workspaceRoot());
   createWindow();
   if (!process.env.TODO_TEST_USER_DATA) {
     createTray();
     startTaskNotificationServer();
     void promptForMissingPermissions();
   }
+  if (process.env.TODO_TEST_USER_DATA && process.env.POME_TEST_NOTIFICATIONS === '1') startTaskNotificationServer();
   watchDisplayChanges();
   watchActiveSpaceChanges();
   ensureClipImagesDir();

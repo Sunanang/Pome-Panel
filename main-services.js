@@ -201,6 +201,7 @@ function normalizeWindowRows(rows, platform = 'darwin') {
         windowNumber,
         appName,
         appPath,
+        bundleId: typeof row.bundleId === 'string' ? row.bundleId.trim().slice(0, 240) || null : null,
         title: title.slice(0, 240),
         ...(handle ? { handle } : {}),
       };
@@ -327,7 +328,7 @@ function cleanTaskLine(value, maxLength) {
 const TASK_NOTIFICATION_FALLBACK_TITLES = {
   codex: 'Codex 已完成任务',
   claude: 'Claude 已完成任务',
-  gpt: 'GPT 已完成任务',
+  cursor: 'Cursor 已完成任务',
 };
 
 function taskNotificationIdentity(payload, source = 'task') {
@@ -364,6 +365,33 @@ function taskNotificationIdentity(payload, source = 'task') {
       || TASK_NOTIFICATION_FALLBACK_TITLES[source]
       || '任务已完成',
   };
+}
+
+const TASK_SOURCE_APPS = {
+  codex: ['ChatGPT', 'Codex'], cursor: ['Cursor'],
+  claude: ['Terminal', '终端', 'iTerm', 'iTerm2', 'Warp', 'Ghostty', 'WezTerm', 'Alacritty', 'kitty', 'WindowsTerminal', 'PowerShell', 'cmd'],
+};
+
+function normalizeTaskNotificationWindow(payload, source) {
+  const data = payload?.window && typeof payload.window === 'object' ? payload.window : {};
+  const clean = (value, max) => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max) || null : null;
+  return {
+    app: clean(data.app, 160) || (source === 'codex' ? 'ChatGPT' : source === 'cursor' ? 'Cursor' : null),
+    bundleId: clean(data.bundleId, 240),
+    cwd: clean(firstPayloadText(payload, ['cwd', 'working_directory', 'working-directory']) || data.cwd, 4096),
+  };
+}
+
+function taskAppMatches(notification, app) {
+  const identity = notification?.window;
+  if (identity?.bundleId) return identity.bundleId === app.bundleId;
+  const name = String(app.appName || app.app || app.name || '').toLowerCase();
+  const fileName = String(app.appPath || app.path || '').split(/[\\/]/).pop()?.replace(/\.(app|exe)$/i, '').toLowerCase();
+  const sourceNames = TASK_SOURCE_APPS[notification?.source] || [];
+  const names = identity?.app
+    ? notification?.source === 'codex' && sourceNames.includes(identity.app) ? sourceNames : [identity.app]
+    : sourceNames;
+  return names.some(value => value.toLowerCase() === name || value.toLowerCase() === fileName);
 }
 
 function normalizeCredentialInput(value, id, createdAt) {
@@ -462,7 +490,7 @@ async function runOwnedOpenDialog(showOpenDialog, owner, options, updateGuard = 
 async function readClipboardObservation(items, options = {}) {
   const rows = Array.isArray(items) ? items.filter((item) => item && Array.isArray(item.types)) : [];
   const concealed = rows.some((item) => item.types.some((type) => (
-    String(type || '').toLowerCase().includes('org.nspasteboard.concealedtype')
+    /org\.nspasteboard\.concealedtype|excludeclipboardcontentfrommonitorprocessing|canincludeinclipboardhistory|canuploadtocloudclipboard/i.test(String(type || ''))
   )));
   if (concealed) return { concealed: true, text: '', image: null };
 
@@ -498,6 +526,15 @@ async function readClipboardObservation(items, options = {}) {
   }
 
   return { concealed: false, text, image };
+}
+
+function createSensitiveClipboardGuard() {
+  const hashes = new Set();
+  const fingerprint = (text) => crypto.createHash('sha256').update(String(text)).digest('hex');
+  return {
+    protect(text) { if (text) hashes.add(fingerprint(text)); },
+    isSensitive(text) { return Boolean(text) && hashes.has(fingerprint(text)); },
+  };
 }
 
 function screenRecordingProbePolicy(status) {
@@ -997,6 +1034,8 @@ module.exports = {
   todoReminderState,
   todoReminderTimerDelay,
   taskNotificationIdentity,
+  normalizeTaskNotificationWindow,
+  taskAppMatches,
   normalizeCredentialInput,
   parseSmartLinkMetadata,
   parseSmartMaterialMetadata,
@@ -1007,6 +1046,7 @@ module.exports = {
   installLocalWebContentsGuards,
   runOwnedOpenDialog,
   readClipboardObservation,
+  createSensitiveClipboardGuard,
   screenRecordingProbePolicy,
   taskNotificationWindowPolicy,
   LAYOUT_VERSION,

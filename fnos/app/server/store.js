@@ -13,6 +13,8 @@ const {
   isTokenExpired,
   publicDeviceRow,
 } = require('./pairing');
+const SYNC_COLLECTIONS = ['todos', 'notes', 'links', 'commands', 'clipboardHistory', 'recordings', 'aiSettings', 'secrets'];
+const DAY = 86400000;
 const { createCsrfStore } = require('./csrf');
 
 const WORKSPACE_ENTITY_PREFIXES = [
@@ -40,6 +42,10 @@ function changeCollection(change) {
 function createMemoryStore(options = {}) {
   const serverId = options.serverId || crypto.randomUUID();
   const nowFn = typeof options.now === 'function' ? options.now : () => Date.now();
+  const retentionMs = options.retentionMs ?? 90 * DAY;
+  const rollbackWindowMs = options.rollbackWindowMs ?? 30 * DAY;
+  if (!Number.isFinite(retentionMs) || retentionMs <= 0 || !Number.isFinite(rollbackWindowMs) || rollbackWindowMs <= 0) throw new Error('invalid_retention_policy');
+  const snapshots = new Map(); // bounded-lived full pulls; not a second durable database
   const csrf = options.csrfStore || createCsrfStore();
 
   /** @type {Map<string, TokenRow>} tokenHash → row */
@@ -62,6 +68,8 @@ function createMemoryStore(options = {}) {
         serverRev: 0,
         migrations: new Map(),
         accountSyncKey: null,
+        mutationResults: new Map(),
+        logFloor: 0, mutationFloor: 0,
       };
       byUid.set(key, b);
     }
@@ -317,6 +325,7 @@ function createMemoryStore(options = {}) {
           entityId,
           collection: changeCollection({ entityId, collection: prev && prev.collection }),
           op: 'delete',
+          at: ts,
           clientMutationId: `mig-del-${migrationId}-${entityId}`,
           deviceId: deviceId || 'migration',
         });
@@ -332,12 +341,14 @@ function createMemoryStore(options = {}) {
           payload: ent.payload || {},
           serverRev: b.serverRev,
           updatedAt: ts,
+          deviceId: deviceId || 'migration',
         });
         b.changeLog.push({
           serverRev: b.serverRev,
           entityId: ent.entityId,
           collection: ent.collection || 'todos',
           op: 'upsert',
+          at: ts,
           clientMutationId: `mig-up-${migrationId}-${ent.entityId}`,
           deviceId: deviceId || 'migration',
           payload: ent.payload || {},
@@ -353,14 +364,24 @@ function createMemoryStore(options = {}) {
   function applyPush(uid, mutations, { deviceId } = {}) {
     const b = bucket(uid);
     const applied = [];
-    const seen = new Set();
+    const floor = Math.max(b.mutationFloor || 0, b.logFloor || 0);
+    const needsRebase = mutations.some(m => {
+      const base = Number(m.baseServerRev) || 0;
+      return !b.mutationResults.has(JSON.stringify([deviceId || m.deviceId, m.clientMutationId])) && (base < floor || base > b.serverRev);
+    });
+    if (needsRebase) return { applied: mutations.map(m => ({ clientMutationId: m.clientMutationId, status: 'expired', error: 'mutation_expired_resync_required', serverRev: b.serverRev })), serverRev: b.serverRev };
     for (const m of mutations) {
-      const key = `${deviceId || m.deviceId}:${m.clientMutationId}`;
-      if (seen.has(key)) {
-        applied.push({ clientMutationId: m.clientMutationId, status: 'duplicate' });
+      const key = JSON.stringify([deviceId || m.deviceId, m.clientMutationId]);
+      if (b.mutationResults.has(key)) {
+        applied.push({ clientMutationId: m.clientMutationId, status: 'duplicate', serverRev: b.mutationResults.get(key).serverRev ?? b.mutationResults.get(key) });
         continue;
       }
-      seen.add(key);
+      const existing = b.live.get(m.entityId);
+      const tombstone = b.tombstones.get(m.entityId);
+      if (m.collection === 'notes' && tombstone && tombstone.serverRev > (Number(m.baseServerRev) || 0) && m.op !== 'delete') { applied.push({ clientMutationId: m.clientMutationId, status: 'conflict', serverRev: tombstone.serverRev }); continue; }
+      if (m.collection === 'notes' && existing && existing.serverRev > (Number(m.baseServerRev) || 0) && m.op !== 'delete' && JSON.stringify(existing.payload) !== JSON.stringify(m.payload)) {
+        applied.push({ clientMutationId: m.clientMutationId, status: 'conflict', serverRev: existing.serverRev }); continue;
+      }
       b.serverRev += 1;
       const rev = b.serverRev;
       if (m.op === 'delete') {
@@ -374,10 +395,12 @@ function createMemoryStore(options = {}) {
           payload: m.payload || {},
           serverRev: rev,
           updatedAt: nowFn(),
+          deviceId: deviceId || m.deviceId,
         });
       }
       b.changeLog.push({
         serverRev: rev,
+        at: nowFn(),
         entityId: m.entityId,
         collection: m.collection || 'todos',
         op: m.op,
@@ -385,11 +408,75 @@ function createMemoryStore(options = {}) {
         deviceId: deviceId || m.deviceId,
       });
       applied.push({ clientMutationId: m.clientMutationId, status: 'applied', serverRev: rev });
+      b.mutationResults.set(key, { serverRev: rev, at: nowFn() });
     }
     return { applied, serverRev: b.serverRev };
   }
 
-  function pull(uid, { cursor, collection } = {}) {
+  function pull(uid, { cursor, collection, deviceId, full = false } = {}) {
+    const b = bucket(uid);
+    if (full || String(cursor || '').startsWith('full:')) return fullPull(uid, { cursor, collection, deviceId, full });
+    const after = cursor == null || cursor === '' ? 0 : Number(cursor);
+    if (!Number.isSafeInteger(after) || after < 0 || after > b.serverRev) return { error: 'invalid_cursor', status: 422 };
+    if (after < (b.logFloor || 0)) return { error: 'full_resync_required', status: 409, logFloor: b.logFloor, serverRev: b.serverRev };
+    const device = devices.get(deviceId);
+    if (device && device.uid === String(uid) && !device.revokedAt) {
+      const key = collection || '*';
+      const old = device.ackCursors?.[key] || 0;
+      if (after > old) device.ackCursors = { ...device.ackCursors, [key]: after };
+    }
+    return incrementalPull(uid, { cursor, collection });
+  }
+
+  function fullPull(uid, { cursor, collection, deviceId, full }) {
+    const ts = nowFn();
+    for (const [id, row] of snapshots) if (row.expiresAt <= ts) snapshots.delete(id);
+    let snapshot, offset = 0, id;
+    if (full && !String(cursor || '').startsWith('full:')) {
+      // Limit concurrent snapshots per device/collection; restarting a failed full
+      // pull cannot accumulate copies of audio forever.
+      for (const [key, row] of snapshots) if (row.uid === String(uid) && row.deviceId === deviceId && row.collection === collection) snapshots.delete(key);
+      const b = bucket(uid);
+      const changes = [...b.live.values()].filter(e => !collection || changeCollection(e) === collection).map(e => {
+        const writer = devices.get(e.deviceId);
+        return { entityId: e.entityId, collection: changeCollection(e), op: 'upsert', payload: e.payload, serverRev: e.serverRev, deviceId: e.deviceId, deviceName: writer?.uid === String(uid) ? writer.name : '' };
+      });
+      changes.push(...[...b.tombstones.values()].filter(e => !collection || changeCollection(e) === collection).map(e => ({ entityId: e.entityId, collection: changeCollection(e), op: 'delete', tombstone: true, serverRev: e.serverRev })));
+      id = crypto.randomUUID();
+      snapshot = { uid: String(uid), deviceId, collection, changes, serverRev: b.serverRev, expiresAt: ts + 30 * 60000 };
+      snapshots.set(id, snapshot);
+    } else {
+      const match = /^full:([a-f0-9-]+):(\d+)$/.exec(String(cursor || ''));
+      if (match) { id = match[1]; offset = Number(match[2]); snapshot = snapshots.get(id); }
+      if (!snapshot || snapshot.uid !== String(uid) || snapshot.deviceId !== deviceId || snapshot.collection !== collection || !Number.isSafeInteger(offset) || offset > snapshot.changes.length) return { error: 'full_snapshot_expired', status: 409 };
+    }
+    const changes = snapshot.changes.slice(offset, offset + 500), hasMore = offset + changes.length < snapshot.changes.length;
+    return { changes, hasMore, nextCursor: hasMore ? `full:${id}:${offset + changes.length}` : String(snapshot.serverRev), serverRev: snapshot.serverRev, fullSnapshot: true };
+  }
+
+  // Called only as part of an atomic persistent checkpoint, never a journal trim.
+  function compactRetention() {
+    const ts = nowFn(), cutoff = ts - retentionMs;
+    for (const [uid, b] of byUid) {
+      const paired = [...devices.values()].filter(d => d.uid === uid && !d.revokedAt);
+      const ack = paired.length ? Math.min(...paired.map(d => Math.max(d.ackCursors?.['*'] || 0, Math.min(...SYNC_COLLECTIONS.map(c => d.ackCursors?.[c] || 0))))) : 0;
+      let count = 0;
+      for (const entry of b.changeLog) { if (entry.serverRev <= ack || entry.at <= cutoff) count++; else break; }
+      if (count) { b.logFloor = Math.max(b.logFloor || 0, b.changeLog[count - 1].serverRev); b.changeLog = b.changeLog.slice(count); }
+      for (const [key, row] of b.mutationResults) if (row.at <= cutoff) { b.mutationFloor = Math.max(b.mutationFloor || 0, row.serverRev); b.mutationResults.delete(key); }
+      const recoveries = b.recoveries || new Map();
+      const completed = [...recoveries.values()].filter(r => r.status === 'committed' || r.status === 'rolled_back');
+      const latest = recoveries.get(b.lastRecoveryId) || completed.sort((a, z) => (z.committedAt || z.createdAt || 0) - (a.committedAt || a.createdAt || 0) || (z.serverRev || 0) - (a.serverRev || 0))[0];
+      for (const [id, r] of recoveries) {
+        const active = r.status === 'prepared' && ts - r.createdAt < 24 * 3600000;
+        const rollbackProtected = r.status === 'committed' && ts - (r.committedAt || r.createdAt) < rollbackWindowMs;
+        if (!active && !rollbackProtected && r !== latest && ts - (r.committedAt || r.createdAt) >= retentionMs) recoveries.delete(id);
+      }
+    }
+    return { ok: true };
+  }
+
+  function incrementalPull(uid, { cursor, collection } = {}) {
     const b = bucket(uid);
     const after = cursor == null || cursor === '' ? 0 : Number(cursor);
     const matched = b.changeLog.filter((c) => {
@@ -408,16 +495,55 @@ function createMemoryStore(options = {}) {
       const ent = b.live.get(c.entityId);
       // A later delete supersedes this upsert; an empty payload would resurrect a ghost row.
       if (!ent) continue;
-      changes.push({ ...resolved, payload: ent.payload });
+      const writer = devices.get(ent.deviceId || c.deviceId);
+      changes.push({ ...resolved, serverRev: ent.serverRev, deviceId: ent.deviceId || c.deviceId, deviceName: writer?.uid === String(uid) ? writer.name : '', payload: ent.payload });
     }
-    const nextCursor = page.length ? String(page[page.length - 1].serverRev) : String(after);
     const hasMore = matched.length > page.length;
+    const nextCursor = hasMore ? String(page[page.length - 1].serverRev) : String(b.serverRev);
     return {
       changes,
       nextCursor,
       hasMore,
       serverRev: b.serverRev,
     };
+  }
+
+  function exportState() {
+    return structuredClone({ version: 1, serverId, tokens, devices, pairingCodes, byUid });
+  }
+
+  // Business payloads are immutable after insertion. Capture references for an
+  // incremental transaction diff without cloning unrelated audio payloads.
+  function persistenceView() {
+    const rows = new WeakMap();
+    const metadataMap = (map) => new Map([...map].map(([key, value]) => { if (!rows.has(value)) rows.set(value, { ...value }); return [key, rows.get(value)]; }));
+    return { version: 1, serverId, tokens: metadataMap(tokens), devices: metadataMap(devices), pairingCodes: metadataMap(pairingCodes),
+      byUid: new Map([...byUid].map(([uid, b]) => [uid, { ...b, live: new Map(b.live), tombstones: new Map(b.tombstones),
+        migrations: metadataMap(b.migrations), mutationResults: new Map(b.mutationResults), changeLog: b.changeLog.slice(),
+        ...(b.recoveries ? { recoveries: new Map([...b.recoveries].map(([id, r]) => [id, { ...r, chunks: new Map(r.chunks) }])) } : {}),
+      }])) };
+  }
+
+  function importState(state) {
+    if (!state || state.version !== 1 || state.serverId !== serverId
+      || !['tokens', 'devices', 'pairingCodes', 'byUid'].every((key) => state[key] instanceof Map)) {
+      throw new Error('invalid_store_snapshot');
+    }
+    for (const b of state.byUid.values()) {
+      b.logFloor ||= 0; b.mutationFloor ||= 0;
+      for (const row of b.changeLog) if (!Number.isFinite(row.at)) row.at = nowFn();
+      for (const [key, row] of b.mutationResults) if (typeof row === 'number') b.mutationResults.set(key, { serverRev: row, at: nowFn() });
+      if (!(b.live instanceof Map) || !(b.tombstones instanceof Map)
+        || !(b.migrations instanceof Map) || !(b.mutationResults instanceof Map)
+        || !Array.isArray(b.changeLog) || !Number.isSafeInteger(b.serverRev) || b.serverRev < 0) {
+        throw new Error('invalid_store_snapshot');
+      }
+    }
+    for (const [target, source] of [[tokens, state.tokens], [devices, state.devices],
+      [pairingCodes, state.pairingCodes], [byUid, state.byUid]]) {
+      target.clear();
+      for (const [key, value] of source) target.set(key, value);
+    }
   }
 
   return {
@@ -440,7 +566,13 @@ function createMemoryStore(options = {}) {
     commitMigration,
     applyPush,
     pull,
+    compactRetention,
+    now: nowFn,
+    rollbackWindowMs,
     bucket,
+    exportState,
+    persistenceView,
+    importState,
     // test seams
     _tokens: tokens,
     _devices: devices,

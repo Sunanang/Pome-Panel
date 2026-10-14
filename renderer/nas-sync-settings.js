@@ -32,6 +32,8 @@
       schemaIncompatible: false,
       schemaUpgradeTarget: null,
       schemaMessage: null,
+      contentResults: {},
+      recovery: null,
     };
   }
 
@@ -64,6 +66,8 @@
         next.insecureWarningVisible = Boolean(view && view.insecureHttpWarning);
         next.devicePortGuidanceVisible = Boolean(view && view.devicePortGuidance);
         next.error = action.error || '';
+        next.contentResults = action.contentResults || next.contentResults;
+        next.recovery = action.recovery || (sync && sync.recovery) || null;
         next.schemaIncompatible = Boolean(
           action.schemaIncompatible
           || (sync && sync.schemaIncompatible)
@@ -197,6 +201,7 @@
     return opts.api.syncAddEndpoint({
       baseUrl: check.baseUrl,
       kind: opts.kind || 'gateway',
+      ...(Number.isFinite(opts.priority) ? { priority: opts.priority } : {}),
     });
   }
 
@@ -260,6 +265,32 @@
   };
 
   const LOST_DEVICE_TOKEN_HINT = '本机曾配置同步地址，但设备令牌已丢失，请重新配对';
+
+  function connectionEndpoints(view, status) {
+    const endpoints = view?.endpoints || [];
+    const canonical = value => {
+      try { const url = new URL(value); return url.origin + url.pathname.replace(/\/+$/, ''); }
+      catch { return String(value || '').trim(); }
+    };
+    const pairedUrl = status?.baseUrl;
+    const primary = pairedUrl ? endpoints.find(row => canonical(row.baseUrl) === canonical(pairedUrl))
+      : endpoints[0] || view?.currentEndpoint || null;
+    return { primary, baseUrl: pairedUrl || primary?.baseUrl || '',
+      backup: endpoints.find(row => canonical(row.baseUrl) !== canonical(pairedUrl || primary?.baseUrl)) || null };
+  }
+
+  function contentResultRows(results, bound) {
+    const names = ['待办', '笔记', '链接', '常用指令', '剪贴板', '录音元数据', '录音音频', 'AI 配置', '密钥'];
+    for (const name of Object.keys(results || {})) if (!names.includes(name)) names.push(name);
+    return names.map(name => {
+      const row = bound ? results?.[name] : null;
+      const date = row?.at ? new Date(row.at) : null;
+      const valid = date && Number.isFinite(date.getTime());
+      return { name, message: row?.message || (bound ? '尚未完成首次资料同步' : '仅本机 · 未配对 NAS'),
+        ok: row?.ok, at: valid ? row.at : null,
+        time: valid ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—' };
+    });
+  }
 
   /**
    * Plaintext endpoints survive ad-hoc reinstalls; the safeStorage device token
@@ -325,6 +356,8 @@
     runRetrySync,
     humanizeSyncError,
     shouldPromptLostDeviceToken,
+    connectionEndpoints,
+    contentResultRows,
     LOST_DEVICE_TOKEN_HINT,
     isRawErrorCode,
     HTTP_CONFIRM_CONTROL_ID,

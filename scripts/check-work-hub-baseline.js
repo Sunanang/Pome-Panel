@@ -1,0 +1,22 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
+const {spawnSync}=require('node:child_process');
+const root=path.resolve(__dirname,'..');const runId=new Date().toISOString().replace(/[:.]/g,'-');
+const output=path.join(root,'dist.noindex/iteration-validation',runId);fs.mkdirSync(output,{recursive:true});
+const profile=fs.mkdtempSync(path.join(os.tmpdir(),'pome-baseline-'));
+const now=1700000000000;
+const notes=Array.from({length:250},(_,i)=>({id:`note-${i}`,title:`基线笔记 ${i}`,content:`# 笔记 ${i}\n固定内容`,createdAt:now+i,updatedAt:now+i}));
+const todos=Object.fromEntries(['P0','P1','P2','P3'].map((key,k)=>[key,Array.from({length:50},(_,i)=>({id:`todo-${k}-${i}`,text:`固定待办 ${i}`,done:false,createdAt:now+i,deadline:'',remindedAt:0}))]));
+const links=[{id:'links',name:'固定资料',links:Array.from({length:100},(_,i)=>({id:`link-${i}`,url:`https://example.com/${i}`,title:`链接 ${i}`,createdAt:now+i}))}];
+fs.mkdirSync(path.join(profile,'recordings'));
+const wav=Buffer.alloc(1644);wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(8000,24);wav.writeUInt32LE(16000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(1600,40);
+const recordings=Array.from({length:20},(_,i)=>{fs.writeFileSync(path.join(profile,`recordings/${i}.wav`),wav);return {id:`r-${i}`,title:`录音 ${i}`,createdAt:now+i,durationMs:100,transcript:`转写 ${i}`,audioPath:`recordings/${i}.wav`,mimeType:'audio/wav',category:'未分类'};});
+const storage={'notch-home-note':'# 基线首页','notch-note-archive-v1':JSON.stringify(notes),'notch-todo-data':JSON.stringify(todos),'notch-link-groups':JSON.stringify(links),'notch-recordings':JSON.stringify(recordings)};
+fs.writeFileSync(path.join(profile,'workspace.json'),JSON.stringify({version:1,localStorage:storage}));
+const inbox=require('../taskInbox').createTaskInbox({filePath:path.join(profile,'task-inbox.json')});for(let i=0;i<50;i++)inbox.accept({completedAt:1,source:['codex','claude','cursor'][i%3],taskId:`fixture-${i}`,title:`固定完成事件 ${i}`,project:'fixture'});
+const fixture={version:1,seed:'pome-work-hub-v1',notes:250,todos:200,links:100,recordings:20,events:50,mediaFiles:20,mediaBytes:wav.length*20,sha256:crypto.createHash('sha256').update(JSON.stringify(storage)).update(wav).digest('hex')};fs.writeFileSync(path.join(output,'fixture.json'),JSON.stringify(fixture,null,2));
+const env={...process.env,TODO_TEST_USER_DATA:profile,POME_BASELINE_OUTPUT:output,POME_BASELINE_FIXTURE:JSON.stringify(fixture)};delete env.ELECTRON_RUN_AS_NODE;
+const log=fs.openSync(path.join(output,'run.log'),'w');
+let result;try{result=spawnSync(require('electron'),[path.join(root,'tests/work-hub-baseline.electron.js')],{cwd:root,env,stdio:['ignore',log,log],timeout:180000});}finally{fs.closeSync(log);fs.rmSync(profile,{recursive:true,force:true});}
+console.log(`原始性能数据：${output}`);if(result.error)console.error(result.error.message);
+process.exit(result.status??1);

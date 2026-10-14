@@ -20,7 +20,8 @@
     "build:win": "electron-builder --win nsis --x64 --publish never",
     "build:zip": "electron-builder --mac zip",
     "pack": "electron-builder --dir",
-    "make-ico": "node scripts/make-ico.js"
+    "make-ico": "node scripts/make-ico.js",
+    "check:work-hub": "node scripts/check-work-hub-baseline.js"
   },
   "devDependencies": {
     "electron": "^44.0.0",
@@ -38,8 +39,17 @@
     },
     "afterPack": "./build/afterPack.js",
     "files": [
+      "panelTiming.js",
+      "atomicStorage.js",
+      "taskInbox.js",
+      "scripts/cursor-notify.js",
+      "scripts/pome-hook-runtime.ps1",
+      "aiSourceHooks.js",
+      "workspaceBackup.js",
+      "syncRecovery.js",
       "main.js",
       "main-services.js",
+      "public-http.js",
       "cursor-usage.js",
       "codex-usage.js",
       "codex-usage-remote.js",
@@ -72,8 +82,17 @@
     "mac": {
       "icon": "build/pome-panel-icon.icns",
       "files": [
+        "panelTiming.js",
+        "atomicStorage.js",
+        "taskInbox.js",
+        "scripts/cursor-notify.js",
+        "scripts/pome-hook-runtime.ps1",
+        "aiSourceHooks.js",
+        "workspaceBackup.js",
+        "syncRecovery.js",
         "main.js",
         "main-services.js",
+        "public-http.js",
         "cursor-usage.js",
         "codex-usage.js",
         "codex-usage-remote.js",
@@ -126,7 +145,8 @@
         "CFBundleDisplayName": "Pome Panel",
         "NSCameraUsageDescription": "Pome Panel 需要使用摄像头来显示「镜子」预览。",
         "NSMicrophoneUsageDescription": "Pome Panel 需要使用麦克风来录音并生成转写文本。",
-        "NSAppleEventsUsageDescription": "Pome Panel 需要控制「系统事件」来枚举并聚焦当前窗口、发送汽水音乐快捷键。"
+        "NSAppleEventsUsageDescription": "Pome Panel 需要控制「系统事件」来枚举并聚焦当前窗口、发送汽水音乐快捷键。",
+        "NSLocalNetworkUsageDescription": "Pome Panel 需要访问局域网中的飞牛 NAS 以同步数据。"
       }
     },
     "win": {
@@ -173,7 +193,11 @@
     }
   },
   "dependencies": {
+    "jsonc-parser": "^3.3.1",
     "koffi": "~3.3.0",
-    "ws": "^8.21.3"
+    "toml-eslint-parser": "^0.10.1",
+    "ws": "^8.21.3",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1"
   }
 }

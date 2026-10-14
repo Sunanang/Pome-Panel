@@ -5,11 +5,13 @@
 
 const { createDarwinAdapter } = require('./darwin');
 const { createWin32Adapter } = require('./win32');
+const { createTaskApps } = require('./task-apps');
 
 // 未支持的平台（Linux 等）仍要拿到一个可调用的对象，让 IPC 统一回 unsupported。
 function createUnsupportedAdapter(platform) {
   return {
     id: platform,
+    taskApps: createTaskApps(platform),
     native: { available: false, reason: 'unsupported_platform' },
     windows: {
       async list() { return { items: [], error: 'unsupported' }; },

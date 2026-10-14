@@ -7,11 +7,13 @@
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
+const { createTaskApps } = require('./task-apps');
 const {
   normalizeWindowRows,
   screenRecordingProbePolicy,
   sodaShortcutSpec,
   controlSodaMusic,
+  taskAppMatches,
 } = require('../main-services');
 
 const SODA_MUSIC_APP = '/Applications/汽水音乐.app';
@@ -57,11 +59,12 @@ function run() {
     }
     if (layer !== 0 || !pid || !appName || !title || !windowNumber) continue;
     if (!Object.prototype.hasOwnProperty.call(appPaths, pid)) {
-      const meta = { appPath: '', policy: -1 };
+      const meta = { appPath: '', bundleId: '', policy: -1 };
       try {
         const runningApp = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
         if (runningApp && !runningApp.isNil()) {
           meta.policy = Number(runningApp.activationPolicy);
+          meta.bundleId = String(ObjC.unwrap(runningApp.bundleIdentifier) || '');
           if (runningApp.bundleURL && !runningApp.bundleURL.isNil()) {
             meta.appPath = String(ObjC.unwrap(runningApp.bundleURL.path) || '');
           }
@@ -76,7 +79,7 @@ function run() {
     // 注意不能用 kCGWindowIsOnscreen 过滤：真实窗口在其他 Space 或被遮挡时该字段也是
     // nil，实测微信 / Arc / Chrome / 飞书都会被误删。
     if (appMeta.policy === 2) continue;
-    rows.push({ pid, appName, appPath: appMeta.appPath, title, windowIndex: index, windowNumber });
+    rows.push({ pid, appName, appPath: appMeta.appPath, bundleId: appMeta.bundleId, title, windowIndex: index, windowNumber });
   }
   // candidates 是本可列出的窗口数，titled 是其中拿到标题的数量。
   // candidates > 0 而 titled === 0 时几乎一定是缺「屏幕录制」权限，不是真的没窗口。
@@ -153,6 +156,23 @@ function run() {
     bundleId: ObjC.unwrap(app.bundleIdentifier) || '',
     path: app.bundleURL ? (ObjC.unwrap(app.bundleURL.path) || '') : ''
   });
+}`;
+
+const RUNNING_APPS_JXA = `
+ObjC.import('AppKit');
+function run() {
+  const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
+  const frontmost = $.NSWorkspace.sharedWorkspace.frontmostApplication;
+  const rows = [];
+  for (let i = 0; i < Number(apps.count); i++) {
+    const app = apps.objectAtIndex(i);
+    if (Number(app.activationPolicy) !== 0) continue;
+    rows.push({ pid: Number(app.processIdentifier), appName: String(ObjC.unwrap(app.localizedName) || ''),
+      bundleId: String(ObjC.unwrap(app.bundleIdentifier) || ''),
+      appPath: app.bundleURL ? String(ObjC.unwrap(app.bundleURL.path) || '') : '',
+      frontmost: frontmost && Number(frontmost.processIdentifier) === Number(app.processIdentifier) });
+  }
+  return JSON.stringify(rows.sort((a, b) => Number(b.frontmost) - Number(a.frontmost)));
 }`;
 
 const PASTE_TO_APP_JXA = `
@@ -262,6 +282,7 @@ function createDarwinAdapter(options = {}) {
   const systemIconQueue = [];
 
   function runJxa(script, args = []) {
+    if (options.runJxa) return options.runJxa(script, args);
     return new Promise((resolve, reject) => {
       execFile(
         '/usr/bin/osascript',
@@ -333,6 +354,10 @@ function createDarwinAdapter(options = {}) {
   }
 
   async function listWindows() {
+    if (systemPreferences?.isTrustedAccessibilityClient && !systemPreferences.isTrustedAccessibilityClient(false)) {
+      windowScanCache = new Map();
+      return { items: [], error: 'accessibility_permission_required' };
+    }
     try {
       const raw = await runJxa(WINDOWS_LIST_JXA);
       const parsed = JSON.parse(raw || '{}');
@@ -372,6 +397,29 @@ function createDarwinAdapter(options = {}) {
     } catch (error) {
       return false;
     }
+  }
+
+  async function resolveTaskApp(source, { window, senderPid } = {}) {
+    const apps = JSON.parse(await runJxa(RUNNING_APPS_JXA) || '[]');
+    // Claude runs inside a terminal (or an editor's integrated terminal).
+    // Walk its hook process ancestry instead of capturing an unrelated foreground app.
+    const pid = Number(senderPid);
+    if (source === 'claude' && Number.isSafeInteger(pid) && pid > 1) {
+      const parents = await new Promise(resolve => execFile('/bin/ps', ['-axo', 'pid=,ppid='], { timeout: 1000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout) => {
+        resolve(new Map(error ? [] : String(stdout).trim().split('\n').map(line => line.trim().split(/\s+/).map(Number))));
+      }));
+      const seen = new Set();
+      for (let ancestor = pid; ancestor > 1 && !seen.has(ancestor); ancestor = parents.get(ancestor) || 0) {
+        seen.add(ancestor);
+        const app = apps.find(row => row.pid === ancestor);
+        if (app) return app;
+      }
+    }
+    const candidates = apps.filter(row => taskAppMatches({ source, window }, row));
+    // With no sender identity, prefer an exact terminal title later instead of
+    // assigning an arbitrary terminal when several are running.
+    if (source === 'claude' && !window?.app && !window?.bundleId && candidates.length !== 1) return null;
+    return candidates[0] || null;
   }
 
   function readFrontmostApp() {
@@ -491,6 +539,7 @@ function createDarwinAdapter(options = {}) {
 
   return {
     id: 'darwin',
+    taskApps: createTaskApps('darwin', { ...options.taskApps, resolveTaskApp }),
     native: { available: true },
     windows: {
       list: listWindows,
@@ -499,6 +548,7 @@ function createDarwinAdapter(options = {}) {
       },
       // 通知点击聚焦不经过渲染层的窗口 ID，直接拿扫描结果里的行。
       focusRow: focusWindowRow,
+      resolveTaskApp,
       appIcon: readWindowAppIcon,
     },
     paste: {

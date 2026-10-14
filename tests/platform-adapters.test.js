@@ -8,6 +8,40 @@ const { loadAdapter } = require('../platform-adapters');
 const { createWin32Native, loadWin32Native } = require('../platform-adapters/win32-user32');
 const packageConfig = require('../package.json');
 
+test('Darwin uses runtime bundle metadata for window rows and app discovery', async () => {
+  const { createDarwinAdapter } = require('../platform-adapters/darwin');
+  const calls = [];
+  const app = { pid: 4242, appName: 'ChatGPT', bundleId: 'runtime.bundle', appPath: '/Applications/ChatGPT.app' };
+  const adapter = createDarwinAdapter({ runJxa: async (script, args) => {
+    calls.push({ script, args });
+    if (script.includes('runningApplications;')) return JSON.stringify([app]);
+    if (script.includes('CGWindowListCopyWindowInfo')) return JSON.stringify({ rows: [{ ...app, title: 'ChatGPT', windowNumber: 11 }], candidates: 1, titled: 1 });
+    if (script.includes("return 'missing'")) return 'ok';
+    return '';
+  } });
+  const detected = await adapter.windows.resolveTaskApp('codex');
+  assert.equal(detected.bundleId, 'runtime.bundle');
+  const listed = await adapter.windows.list();
+  assert.equal(listed.items[0].bundleId, 'runtime.bundle');
+
+});
+
+test('Darwin reports accessibility permission before attempting a window scan', async () => {
+  const { createDarwinAdapter } = require('../platform-adapters/darwin');
+  const adapter = createDarwinAdapter({ electron: { systemPreferences: { isTrustedAccessibilityClient: prompt => { assert.equal(prompt, false); return false; } } },
+    runJxa: async () => { throw new Error('must not scan'); } });
+  assert.equal((await adapter.windows.list()).error, 'accessibility_permission_required');
+});
+
+test('Darwin resolves Claude origin from the hook process ancestry, including an editor terminal', async () => {
+  const { createDarwinAdapter } = require('../platform-adapters/darwin');
+  const adapter = createDarwinAdapter({ runJxa: async () => JSON.stringify([
+    { pid: process.ppid, appName: 'Editor terminal', bundleId: 'runtime.origin' },
+    { pid: 987654321, appName: 'Terminal', bundleId: 'unrelated.terminal' },
+  ]) });
+  assert.equal((await adapter.windows.resolveTaskApp('claude', { senderPid: process.pid })).bundleId, 'runtime.origin');
+});
+
 // 适配层的形状是 main.js 的唯一契约（方案 §2.5）：IPC 一律走这些方法，
 // 缺失的能力（Windows 的汽水音乐、权限自检）表现为对应键不存在。
 const REQUIRED_METHODS = {

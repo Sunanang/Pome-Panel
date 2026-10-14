@@ -23,7 +23,9 @@ const {
   P0_ENABLED_COLLECTIONS,
   evaluateSchemaNegotiation,
   SCHEMA_UI_STATE_INCOMPATIBLE,
+  PUSH_BATCH_MAX_BYTES,
 } = require('./packages/sync-protocol');
+const { splitMutationBatches, pullFullSnapshot } = require('./workspace-sync');
 const {
   TODO_STORAGE_KEY,
   TODO_CATEGORY_KEY,
@@ -447,16 +449,34 @@ async function pushTodosOutbox(store, { accountId, pushMutations, localSchema } 
     return { ok: true, pushed: 0, acked: [], pendingCount: 0, skipped: true };
   }
 
+  let batches;
+  try {
+    batches = splitMutationBatches(pending.map(outboxRowToMutation), PUSH_BATCH_MAX_BYTES);
+  } catch (error) {
+    return { ok: false, reason: error.reason || 'push_batch_too_large', pendingCount: pending.length };
+  }
+  let pushed = 0;
+  let serverRev;
+  const acked = [];
+  for (const mutations of batches) {
+    const result = await pushTodosBatch(store, { accountId, pushMutations, localSchema, mutations });
+    if (!result.ok) return { ...result, pushed, acked, pendingCount: store.listPendingOutbox(accountId).length };
+    pushed += result.pushed;
+    acked.push(...result.acked);
+    serverRev = result.serverRev;
+  }
+  return { ok: true, pushed, acked, serverRev, pendingCount: store.listPendingOutbox(accountId).length };
+}
+
+async function pushTodosBatch(store, { accountId, pushMutations, localSchema, mutations }) {
   const schemaLocal = {
     minSupported: (localSchema && localSchema.minSupported) ?? MIN_SUPPORTED_SCHEMA_VERSION,
     maxSupported: (localSchema && localSchema.maxSupported) ?? MAX_SUPPORTED_SCHEMA_VERSION,
   };
 
-  const mutations = pending.map(outboxRowToMutation);
   const limits = assertPushBatchLimits(mutations);
   if (!limits.ok) {
-    // Auto-split would be nice; for P0 refuse oversize and keep queue.
-    return { ok: false, reason: limits.reason, pendingCount: pending.length };
+    return { ok: false, reason: limits.reason, pendingCount: store.listPendingOutbox(accountId).length };
   }
 
   const response = await pushMutations(mutations);
@@ -467,7 +487,7 @@ async function pushTodosOutbox(store, { accountId, pushMutations, localSchema } 
       return {
         ...schemaGate,
         error: SCHEMA_UI_STATE_INCOMPATIBLE,
-        pendingCount: pending.length,
+        pendingCount: store.listPendingOutbox(accountId).length,
         pushed: 0,
       };
     }
@@ -478,7 +498,7 @@ async function pushTodosOutbox(store, { accountId, pushMutations, localSchema } 
       ok: false,
       reason: (response && (response.error || response.reason)) || 'push_failed',
       status: response && response.status,
-      pendingCount: pending.length,
+      pendingCount: store.listPendingOutbox(accountId).length,
     };
   }
 
@@ -491,7 +511,7 @@ async function pushTodosOutbox(store, { accountId, pushMutations, localSchema } 
     }
   }
   // If server omitted applied[], treat full batch as accepted on HTTP 2xx.
-  if (acked.length === 0 && response.ok) {
+  if (!Array.isArray(response.applied) && response.ok) {
     for (const mutation of mutations) {
       acked.push(mutation.clientMutationId);
     }
@@ -518,6 +538,7 @@ async function runTodosSyncCycle(store, {
   pushMutations,
   maxPages = 50,
   localSchema,
+  resyncAttempted = false,
 } = {}) {
   if (!store) {
     return { ok: false, reason: 'store_required' };
@@ -540,6 +561,27 @@ async function runTodosSyncCycle(store, {
   while (hasMore && pages < maxPages) {
     const cursorState = store.getPullCursor(accountId, COLLECTIONS.TODOS);
     const remote = await pullPage({ cursor: cursorState.cursor });
+    if (!remote?.ok && remote?.error === 'full_resync_required') {
+      const full = await pullFullSnapshot({ pullPage, collection: COLLECTIONS.TODOS, maxPages });
+      if (!full.ok) return { ok: false, reason: full.error, phase: 'full_pull', projection: lastProjection, pendingCount: store.listPendingOutbox(accountId).length };
+      const schemaGate = gateSchemaCompatibility(full.peer, schemaLocal);
+      if (!schemaGate.ok) return schemaIncompatibleResult(schemaGate, {phase: 'full_pull', projection: lastProjection, pendingCount: pendingAtStart});
+      const pending = store.listPendingOutbox(accountId);
+      const deleted = new Set(full.changes.filter(e => e.op === 'delete').map(e => e.entityId));
+      store._runInTransaction(() => {
+        const replaced = store.replaceTodosFromEntities(accountId, full.changes, full.serverRev);
+        if (!replaced.ok) throw new Error(replaced.reason);
+        for (const row of pending) {
+          if (row.op === 'upsert' && deleted.has(row.entityId)) continue;
+          const result = store.writeLocalMutation({ ...outboxRowToMutation(row), accountId, clientMutationId: crypto.randomUUID(), baseServerRev: full.serverRev, clientTime: Date.now() });
+          if (!result.ok) throw new Error(result.reason);
+        }
+      });
+      lastProjection = store.buildTodosLocalStorageProjection(accountId);
+      pulledChanges += full.changes.length; pages++;
+      hasMore = false;
+      break;
+    }
     if (!remote || remote.ok !== true) {
       // Even failed responses may carry schema advertisement (e.g. 422 envelope).
       if (remote && remote.body) {
@@ -605,6 +647,10 @@ async function runTodosSyncCycle(store, {
         projection: lastProjection,
         pendingCount: pushed.pendingCount ?? pendingAtStart,
       });
+    }
+    if (pushed.reason === 'mutation_expired_resync_required' && !resyncAttempted) {
+      const refreshed = await runTodosSyncCycle(store, { accountId, pullPage: async args => args.full ? pullPage(args) : ({ok:false,error:'full_resync_required'}), pushMutations, maxPages, localSchema, resyncAttempted: true });
+      return refreshed;
     }
     return {
       ok: false,

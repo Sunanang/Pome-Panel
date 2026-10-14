@@ -122,7 +122,7 @@ test('unpaired status hides channel and retry; lost token is one line', () => {
   assert.match(workspaceJs, /settingsNasStatusMeta\.hidden = !bound/);
   assert.match(workspaceJs, /settingsNasSyncRetry\.hidden = !bound/);
   assert.match(workspaceJs, /textContent = '未配对'/);
-  assert.match(workspaceJs, /textContent = '已连接'/);
+  assert.match(workspaceJs, /nasSettingsUi\.uiLabel \|\| '已配对'/);
   assert.match(workspaceJs, /本机曾配置同步地址，但设备令牌已丢失，请重新配对/);
   assert.equal(settingsUi.LOST_DEVICE_TOKEN_HINT, '本机曾配置同步地址，但设备令牌已丢失，请重新配对');
   assert.equal(settingsUi.shouldPromptLostDeviceToken({
@@ -148,7 +148,7 @@ test('unpaired status hides channel and retry; lost token is one line', () => {
 });
 
 test('successful pairing opens sync options once; the sync button can open them again', () => {
-  assert.match(html, /id="settings-nas-sync-open"[^>]*hidden>同步</);
+  assert.match(html, /id="settings-nas-sync-open"[^>]*disabled>同步</);
   assert.match(html, /id="settings-nas-sync-options"/);
   assert.match(html, /id="settings-nas-sync-options-start"/);
   assert.match(workspaceJs, /function openNasSyncOptions\(\)/);
@@ -187,4 +187,35 @@ test('hydrate carries schema incompatible fields for T7 status', () => {
   assert.equal(state.schemaIncompatible, true);
   assert.equal(state.schemaUpgradeTarget, 'desktop');
   assert.equal(state.schemaMessage, '请升级桌面端');
+});
+
+test('paired primary address is independent from the last healthy backup endpoint', () => {
+  const primary = { endpointId: 'main', baseUrl: 'https://nas.local/sync/', priority: 0 };
+  const backup = { endpointId: 'backup', baseUrl: 'https://outside.example/sync', priority: 1 };
+  const result = settingsUi.connectionEndpoints({ endpoints: [primary, backup], currentEndpoint: backup, currentEndpointId: 'backup' }, { baseUrl: 'https://nas.local/sync' });
+  assert.equal(result.primary.endpointId, 'main'); assert.equal(result.backup.endpointId, 'backup');
+  assert.equal(result.baseUrl, 'https://nas.local/sync');
+});
+
+test('content details use each content type timestamp, retain partial errors and never invent a time', () => {
+  const rows = settingsUi.contentResultRows({
+    待办: { message: '上次同步已确认', at: 1700000000000, ok: true },
+    笔记: { message: '部分资料未传输：失败', at: 1700003600000, ok: false },
+    录音音频: { message: '尚未确认全部音频传输' },
+  }, true);
+  assert.equal(rows.length, 9);
+  assert.notEqual(rows[0].time, rows[1].time);
+  assert.equal(rows[1].message, '部分资料未传输：失败');
+  assert.equal(rows.find(row => row.name === '录音音频').time, '—');
+  assert.equal(settingsUi.contentResultRows({}, false).every(row => row.time === '—' && row.message === '仅本机 · 未配对 NAS'), true);
+});
+
+test('NAS card markup removes standalone cards and retains recovery outside collapsed details', () => {
+  assert.doesNotMatch(html, /settings-nas-endpoints|settings-nas-pair-card|settings-nas-endpoint-list|添加 endpoint|绑定本机/);
+  const secondary = html.slice(html.indexOf('settings-column settings-column-secondary'));
+  assert(secondary.indexOf('settings-mirror-card') < secondary.indexOf('id="settings-nas-sync-card"'));
+  assert(secondary.indexOf('id="settings-nas-sync-card"') < secondary.indexOf('settings-device-card'));
+  const advanced = secondary.match(/<details[^>]*id="settings-nas-advanced"[\s\S]*?<\/details>/)?.[0];
+  assert(advanced); assert.doesNotMatch(advanced, /\sopen(?:\s|>)/); assert.doesNotMatch(advanced, /上次同步|last-sync/);
+  assert(secondary.indexOf('id="settings-nas-recovery"') < secondary.indexOf('id="settings-nas-details"'));
 });

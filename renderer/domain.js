@@ -241,6 +241,8 @@
       durationMs: Math.max(0, Math.round(Number(value.durationMs) || 0)),
       transcript,
       audioPath: typeof value.audioPath === 'string' ? value.audioPath : '',
+      ...(value.audioOmitted !== undefined ? { audioOmitted: value.audioOmitted === true } : {}),
+      ...(value.audioSyncReason ? { audioSyncReason: String(value.audioSyncReason) } : {}),
       mimeType: typeof value.mimeType === 'string' ? value.mimeType : 'audio/webm',
       title: String(value.title || fallbackTitle).trim(),
       category: String(value.category || '未分类').replace(/\s+/g, ' ').trim().slice(0, 24),
@@ -426,11 +428,11 @@
         const id = String(item.id || '').trim();
         const content = item.content == null ? '' : String(item.content);
         if (!id) return null;
-        const title = Array.from(String(item.title || '').replace(/\s+/g, ' ').trim()).slice(0, 80).join('');
+        const title = Array.from(String(item.title || '').replace(/\s+/g, ' ').trim()).slice(0, item.conflict ? 220 : 80).join('');
         const titleSource = ['model', 'user'].includes(item.titleSource) ? item.titleSource : '';
         const createdAt = Math.max(0, Number(item.createdAt) || Date.now());
         const updatedAt = Math.max(createdAt, Number(item.updatedAt) || createdAt);
-        return { id, title, titleSource, content, createdAt, updatedAt };
+        return { id, title, titleSource, content, createdAt, updatedAt, ...(item.conflict && typeof item.conflict === "object" ? { conflict: item.conflict } : {}) };
       })
       .filter(Boolean)
       .sort((left, right) => right.updatedAt - left.updatedAt);
@@ -1179,6 +1181,43 @@
     };
   }
 
+  function isLegacyDefaultHomeLayout({ order, sizes, placements, hiddenIds = [] }) {
+    const oldOrder = ['music','pomodoro','cursor','windows','recorder','mirror','note','commands','sun'];
+    const oldSizes = {music:'small',pomodoro:'mini',cursor:'small',windows:'large',recorder:'small',mirror:'medium',note:'medium',commands:'mini',sun:'medium'};
+    if (!sizes || Object.hasOwn(sizes,'inbox') || oldOrder.some(id => sizes[id] !== oldSizes[id])) return false;
+    if (order && JSON.stringify(order) !== JSON.stringify(oldOrder)) return false;
+    if (hiddenIds.some(id => id !== 'sun')) return false;
+    const baseline = resolveHomeWidgetLayout(oldOrder,oldSizes,['sun']);
+    if (placements && (Object.keys(placements).length !== Object.keys(baseline.placements).length
+      || Object.entries(baseline.placements).some(([id,p]) => !placements[id] || ['column','row','width','height'].some(key => placements[id][key] !== p[key])))) return false;
+    return true;
+  }
+
+  // Insert a new inbox without rewriting user-selected footprints. Try its
+  // preferred slot, any free/repacked slot, then only shrink the new module.
+  function normalizeHomeInboxLayout({ order, sizes, placements, hiddenIds = [], registry = [], preservePositions = false, preferredInboxPlacement = null }) {
+    const nextSizes = { ...sizes }, hidden = new Set(hiddenIds);
+    const visible = order.filter(id => registry.includes(id) && !hidden.has(id));
+    const existing = placements && Object.fromEntries(Object.entries(placements).filter(([id]) => visible.includes(id)));
+    if (hidden.has('inbox') || existing?.inbox) return { sizes: nextSizes, placements: existing || placements, hiddenIds: [...hidden] };
+    const defaults = { music: {column:0,row:0}, pomodoro: {column:2,row:0}, commands: {column:2,row:1},
+      cursor: {column:4,row:0}, recorder: {column:6,row:0}, inbox: {column:8,row:0},
+      mirror: {column:0,row:2}, note: {column:4,row:2}, windows: {column:8,row:2} };
+    const options = existing ? { preferredPlacements: { ...existing, inbox: preferredInboxPlacement || defaults.inbox }, fixedIds: Object.keys(existing),
+      footprints: Object.fromEntries(Object.entries(existing).map(([id, p]) => [id, {width:p.width,height:p.height}])) } : {preferredPlacements: defaults};
+    const ranked = HOME_SIZE_FOOTPRINTS.filter(f => f.width * f.height <= (HOME_WIDGET_DIMENSIONS[nextSizes.inbox || 'medium'].width * HOME_WIDGET_DIMENSIONS[nextSizes.inbox || 'medium'].height)).reverse();
+    for (const footprint of ranked) {
+      nextSizes.inbox = footprint.name;
+      let packed = packHomeWidgetLayout(visible, nextSizes, 12, 4, false, options);
+      if (!packed && existing && !preservePositions) packed = packHomeWidgetLayout(visible, nextSizes, 12, 4, false, { ...options, fixedIds: [] });
+      if (packed && validateHomeWidgetLayout({placements:packed,allowGaps:true}, visible)) return {sizes:nextSizes,placements:packed,hiddenIds:[...hidden]};
+    }
+    // A completely full customized grid has no capacity for even a mini tile.
+    // Keep those choices, and retain a working badge/settings route.
+    nextSizes.inbox = sizes.inbox || 'medium'; hidden.add('inbox');
+    return { sizes: nextSizes, placements: existing || placements, hiddenIds: [...hidden] };
+  }
+
   function resolveHomeWidgetLayout(order, sizes, hiddenIds, columns = 12, rows = 4) {
     if (columns !== 12 || rows !== 4 || !sizes || typeof sizes !== 'object') return null;
     const ids = Array.isArray(order)
@@ -1305,6 +1344,8 @@
     todoTimeBattery,
     updateRangeSelection,
     normalizeHomeLayout,
+    normalizeHomeInboxLayout,
+    isLegacyDefaultHomeLayout,
     swapHomeLayoutSlots,
     normalizeTodoCategoryNames,
     normalizeHomeWidgetSizes,

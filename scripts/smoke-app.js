@@ -204,7 +204,7 @@ async function main() {
     await until(() => evaluate('localStorage.getItem("notch-home-note") === "Windows retained data"'), 'note persisted');
     await evaluate('window.notchAPI.saveWorkspaceData(Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)])))');
   }
-  const notify = await fetch('http://127.0.0.1:43821/notify/gpt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Windows smoke complete', task_id: `smoke-${Date.now()}` }) });
+  const notify = await fetch('http://127.0.0.1:43821/notify/cursor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Windows smoke complete', task_id: `smoke-${Date.now()}` }) });
   assert.equal(notify.ok, true);
   assert.equal((await fetch('http://127.0.0.1:43821/notify/unknown', { method: 'POST' })).status, 404);
   await until(() => evaluate('window.notchAPI.listTaskCompletions().then(r => r.some(i => i.title === "Windows smoke complete"))'), 'notification recorded');

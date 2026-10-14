@@ -11,6 +11,8 @@ const {
   COLLECTIONS,
   SCHEMA_VERSION,
   WORKSPACE_PUSH_MAX_BYTES,
+  PUSH_BATCH_MAX_MUTATIONS,
+  validatePullResponse,
   encryptJson,
   decryptJson,
   isSealedPayload,
@@ -276,6 +278,8 @@ function appendRecordingEntities(entities, warnings, recording) {
     mimeType: String(recording.mimeType || 'audio/webm'),
     title: String(recording.title || ''),
     category: String(recording.category || ''),
+    audioSyncReason: String(recording.audioSyncReason || ''),
+    audioOmitted: recording.audioOmitted === true,
   };
   const audioBase64 = typeof recording.audioBase64 === 'string' ? recording.audioBase64 : '';
   if (!audioBase64) {
@@ -294,6 +298,7 @@ function appendRecordingEntities(entities, warnings, recording) {
   }
   if (raw.length > AUDIO_MAX_RAW) {
     meta.audioOmitted = true;
+    meta.audioSyncReason = 'audio_too_large';
     warnings.push({ entityId: `recording:${id}`, reason: 'audio_too_large' });
     pushEntity(entities, COLLECTIONS.RECORDINGS, `recording:${id}`, meta);
     return;
@@ -342,6 +347,7 @@ function buildWorkspaceEntities(snapshot, { accountKey = null } = {}) {
       content,
       createdAt: Number(note.createdAt) || 0,
       updatedAt: Number(note.updatedAt) || 0,
+      ...(note.conflict ? { conflict: note.conflict } : {}),
     });
   }
   if (notes.activeId) {
@@ -467,18 +473,41 @@ function partitionEntities(entities, maxBytes = MIGRATION_INLINE_MAX_BYTES) {
   return { inline, deferred };
 }
 
-function planWorkspaceSync({ index, localEntities, remoteChanges } = {}) {
+function planWorkspaceSync({ index, localEntities, remoteChanges, deviceName = '本机' } = {}) {
   const prior = index && typeof index === 'object' ? index : {};
   const hashes = { ...prior };
   const remoteIds = new Set();
-  const localList = Array.isArray(localEntities) ? localEntities : [];
+  const localList = Array.isArray(localEntities) ? [...localEntities] : [];
+  function noteVersion(local) { const p = local.payload; const rootTitle = p.conflict?.originalTitle || p.title || (local.entityId === 'note:home' ? '首页笔记' : '笔记'); const title = p.conflict && String(p.title || '').startsWith(`${rootTitle}（冲突副本 · `) ? rootTitle : p.title || rootTitle; return crypto.createHash('sha256').update(JSON.stringify({ title, content: p.content ?? p.markdown ?? '' })).digest('hex'); }
+  function preserveNote(local, provenance = null) {
+    const p = local.payload, rootId = p.conflict?.originId || local.entityId;
+    const originalTitle = p.conflict?.originalTitle || p.title || (local.entityId === 'note:home' ? '首页笔记' : '笔记');
+    const versionHash = noteVersion(local);
+    const id = `conflict-${crypto.createHash('sha256').update(`${rootId}:${versionHash}`).digest('hex').slice(0,32)}`;
+    if (merged.has(`note:${id}`)) return;
+    const at = Number(p.updatedAt || p.createdAt) || 0;
+    const conflict = { originId: rootId, originalTitle, versionHash, deviceName: String(provenance ? provenance.deviceName || provenance.deviceId || '未知设备' : deviceName), ...(provenance?.deviceId ? { deviceId: provenance.deviceId } : {}), createdAt: at };
+    const entity = { entityId: `note:${id}`, collection: COLLECTIONS.NOTES, op: 'upsert', payload: { kind: 'archive', id, title: `${originalTitle}（冲突副本 · ${conflict.deviceName} · ${at ? new Date(at).toLocaleString('zh-CN', { hour12: false }) : '时间未知'}）`, titleSource: 'user', content: String(p.content ?? p.markdown ?? ''), createdAt: at, updatedAt: at, conflict } };
+    merged.set(entity.entityId, entity); localList.push(entity);
+  }
+  const localById = new Map(localList.map((entity) => [entity.entityId, entity]));
   const merged = new Map(localList.map((entity) => [entity.entityId, entity]));
-
+  const latestChanges = new Map();
   for (const change of remoteChanges || []) {
     if (!change || !change.entityId) continue;
+    const previous = latestChanges.get(change.entityId);
+    if (!previous || (Number(change.serverRev) || 0) >= (Number(previous.serverRev) || 0)) {
+      latestChanges.set(change.entityId, change);
+    }
+  }
+
+  for (const change of latestChanges.values()) {
+    if (!change || !change.entityId) continue;
     if (change.op !== 'delete' && (!change.payload || typeof change.payload !== 'object')) continue;
-    remoteIds.add(change.entityId);
+    const localNote = localById.get(change.entityId);
     if (change.op === 'delete') {
+      if (change.collection === COLLECTIONS.NOTES && localNote && prior[change.entityId] !== undefined && entityHash(localNote) !== prior[change.entityId]) preserveNote(localNote);
+      remoteIds.add(change.entityId);
       merged.delete(change.entityId);
       delete hashes[change.entityId];
       continue;
@@ -489,10 +518,24 @@ function planWorkspaceSync({ index, localEntities, remoteChanges } = {}) {
       op: 'upsert',
       payload: change.payload,
     };
+    const local = localById.get(change.entityId);
+    const baseline = prior[change.entityId];
+    if (entity.collection === COLLECTIONS.NOTES && change.entityId !== 'note:active' && local && (baseline === undefined || entityHash(local) !== baseline) && entityHash(entity) !== baseline && entityHash(local) !== entityHash(entity)) {
+      if (noteVersion(local) === noteVersion(entity)) { remoteIds.add(entity.entityId); merged.set(entity.entityId, entity); hashes[entity.entityId] = entityHash(entity); continue; }
+      preserveNote(local); remoteIds.add(entity.entityId); merged.set(entity.entityId, entity); hashes[entity.entityId] = entityHash(entity); continue;
+    }
+    if (entity.collection === COLLECTIONS.NOTES && entity.entityId !== 'note:active' && baseline !== undefined && !local && entityHash(entity) !== baseline) { preserveNote(entity, change); merged.delete(entity.entityId); continue; }
+    // A previous push may echo back after another local edit (or delete).
+    // Keep local changes relative to the acknowledged baseline. Remote deletes
+    // still win, so an edited stale copy cannot resurrect a tombstone.
+    if (baseline !== undefined && (!local || (entityHash(local) !== baseline
+      && entityHash(local) !== entityHash(entity)))) continue;
+    remoteIds.add(change.entityId);
     merged.set(change.entityId, entity);
     hashes[change.entityId] = entityHash(entity);
   }
 
+  const appliedIndex = { ...hashes };
   const toPush = [];
   const localIds = new Set(localList.map((entity) => entity.entityId));
   for (const entity of localList) {
@@ -513,6 +556,7 @@ function planWorkspaceSync({ index, localEntities, remoteChanges } = {}) {
 
   return {
     toPush,
+    appliedIndex,
     nextIndex: hashes,
     mergedEntities: [...merged.values()],
   };
@@ -538,16 +582,22 @@ function reassembleRecording(meta, blobs) {
     title: String(meta.title || ''),
     category: String(meta.category || ''),
     audioOmitted: meta.audioOmitted === true,
+    audioSyncReason: String(meta.audioSyncReason || ''),
     audioBase64: '',
   };
+  function unavailable(reason) { recording.audioOmitted = true; recording.audioSyncReason = reason; return recording; }
   if (typeof meta.audioBase64 === 'string' && meta.audioBase64) {
-    recording.audioBase64 = meta.audioBase64;
-    return recording;
+    const raw = Buffer.from(meta.audioBase64, 'base64');
+    if (meta.audioSha256 && crypto.createHash('sha256').update(raw).digest('hex') !== meta.audioSha256) return unavailable('audio_checksum_mismatch');
+    recording.audioBase64 = raw.toString('base64'); return recording;
   }
-  if (!Array.isArray(blobs) || !blobs.length) return recording;
+  if (!meta.audioChunks) return recording;
+  if (!Array.isArray(blobs) || blobs.length !== meta.audioChunks) return unavailable('audio_incomplete');
   const ordered = blobs.slice().sort((left, right) => left.index - right.index);
-  const buffers = ordered.map((blob) => Buffer.from(String(blob.data || ''), 'base64'));
-  recording.audioBase64 = Buffer.concat(buffers).toString('base64');
+  if (ordered.some((blob, index) => blob.index !== index)) return unavailable('audio_incomplete');
+  const raw = Buffer.concat(ordered.map((blob) => Buffer.from(String(blob.data || ''), 'base64')));
+  if (meta.audioSha256 && crypto.createHash('sha256').update(raw).digest('hex') !== meta.audioSha256) return unavailable('audio_checksum_mismatch');
+  recording.audioBase64 = raw.toString('base64');
   return recording;
 }
 
@@ -583,6 +633,7 @@ function projectWorkspaceEntities(entities, { accountKey = null } = {}) {
         content: String(payload.content || ''),
         createdAt: Number(payload.createdAt) || 0,
         updatedAt: Number(payload.updatedAt) || 0,
+        ...(payload.conflict ? { conflict: payload.conflict } : {}),
       });
       continue;
     }
@@ -654,7 +705,9 @@ function projectWorkspaceEntities(entities, { accountKey = null } = {}) {
   }
 
   for (const [id, meta] of recordingMeta) {
-    snapshot.recordings.push(reassembleRecording(meta, recordingBlobs.get(id)));
+    const recording = reassembleRecording(meta, recordingBlobs.get(id));
+    snapshot.recordings.push(recording);
+    if (['audio_incomplete', 'audio_checksum_mismatch'].includes(recording.audioSyncReason)) warnings.push({ entityId: `recording:${id}`, reason: recording.audioSyncReason });
   }
   snapshot.commands.sort((left, right) => {
     const delta = (Number(right.createdAt) || 0) - (Number(left.createdAt) || 0);
@@ -693,9 +746,12 @@ function splitMutationBatches(mutations, maxBytes = WORKSPACE_PUSH_MAX_BYTES) {
   const batches = [];
   let current = [];
   for (const mutation of mutations || []) {
+    if (Buffer.byteLength(JSON.stringify([mutation]), 'utf8') > maxBytes) {
+      throw Object.assign(new Error('push_mutation_too_large'), { reason: 'push_mutation_too_large' });
+    }
     const trial = current.concat(mutation);
     const size = Buffer.byteLength(JSON.stringify(trial), 'utf8');
-    if (current.length && size > maxBytes) {
+    if (current.length && (size > maxBytes || trial.length > PUSH_BATCH_MAX_MUTATIONS)) {
       batches.push(current);
       current = [mutation];
       continue;
@@ -704,6 +760,90 @@ function splitMutationBatches(mutations, maxBytes = WORKSPACE_PUSH_MAX_BYTES) {
   }
   if (current.length) batches.push(current);
   return batches;
+}
+
+// Stage the whole pull before changing durable cursors. A later collection or
+// page failing must leave every page available for the next attempt.
+async function pullFullSnapshot({ pullPage, collection, maxPages = 10000 }) {
+  let cursor = null, serverRev = null;
+  const changes = [], visited = new Set();
+  for (let page = 0; page < maxPages; page++) {
+    const response = await pullPage({ cursor, collection, full: true });
+    if (!response?.ok) return { ok: false, error: response?.error || 'full_pull_failed' };
+    const body = response.body || {};
+    const checked = validatePullResponse({ changes: body.changes, nextCursor: body.nextCursor, hasMore: body.hasMore, serverRev: body.serverRev });
+    if (!checked.ok || body.fullSnapshot !== true || (serverRev !== null && body.serverRev !== serverRev)) return { ok: false, error: 'full_snapshot_invalid' };
+    serverRev = body.serverRev;
+    changes.push(...body.changes);
+    if (!body.hasMore) return { ok: true, changes, serverRev, nextCursor: body.nextCursor, peer: body };
+    if (visited.has(body.nextCursor)) return { ok: false, error: 'full_snapshot_cursor_loop' };
+    cursor = body.nextCursor; visited.add(cursor);
+  }
+  return { ok: false, error: 'full_snapshot_page_limit' };
+}
+
+async function pullWorkspacePages({ store, accountId, pullPage, collections = WORKSPACE_COLLECTIONS, maxPages = Infinity }) {
+  const pages = [];
+  const remoteChanges = [];
+  const fullCollections = [];
+  for (const collection of collections) {
+    let cursor = store.getPullCursor(accountId, collection).cursor;
+    const visited = new Set([cursor]);
+    for (let page = 0; page < maxPages; page += 1) {
+      const response = await pullPage({ cursor, collection });
+      if (!response?.ok && ['full_resync_required', 'mutation_expired_resync_required'].includes(response?.error)) {
+        const full = await pullFullSnapshot({ pullPage, collection, maxPages });
+        if (!full.ok) return full;
+        const selected = selectWorkspaceChanges(full.changes, collection);
+        remoteChanges.push(...selected);
+        fullCollections.push({ collection, serverRev: full.serverRev, ids: selected.map(e => e.entityId) });
+        // SQLite still applies bounded pages, all within the final transaction.
+        const chunks = full.changes.length ? Array.from({length: Math.ceil(full.changes.length / 500)}, (_, i) => full.changes.slice(i*500, (i+1)*500)) : [[]];
+        for (const changes of chunks) pages.push({ collection, pull: { changes, nextCursor: full.nextCursor, serverRev: full.serverRev, hasMore: false } });
+        break;
+      }
+      if (!response || !response.ok) return { ok: false, error: response?.error || 'pull_failed' };
+      const body = response.body || {};
+      const check = validatePullResponse({ changes: body.changes, nextCursor: body.nextCursor,
+        hasMore: body.hasMore, serverRev: body.serverRev });
+      if (!check.ok) return { ok: false, error: check.reason };
+      const pull = check.pull;
+      pages.push({ collection, pull });
+      remoteChanges.push(...selectWorkspaceChanges(pull.changes, collection));
+      if (!pull.hasMore) break;
+      if (page + 1 === maxPages || visited.has(pull.nextCursor)) return { ok: false, error: 'pull_page_limit' };
+      cursor = pull.nextCursor;
+      visited.add(cursor);
+    }
+  }
+  return { ok: true, pages, remoteChanges, fullCollections };
+}
+
+function commitWorkspacePullPages(store, accountId, pages) {
+  store._runInTransaction(() => {
+    for (const { collection, pull } of pages) {
+      const applied = store.applyPullPage({ accountId, collection, pull });
+      if (!applied.ok) throw new Error(applied.reason || 'apply_pull_failed');
+    }
+  });
+}
+
+function workspaceProjectionToStorage(storage, projection) {
+  const next = { ...storage };
+  if (projection.notes) {
+    next['notch-home-note'] = projection.notes.home || '';
+    next['notch-note-archive-v1'] = JSON.stringify(projection.notes.archive || []);
+    next['notch-note-active-archive-v1'] = projection.notes.activeId || '';
+  }
+  for (const [field, key] of [['links', 'notch-link-groups'], ['commands', 'notch-home-commands'],
+    ['recordings', 'notch-recordings']]) {
+    if (Array.isArray(projection[field])) next[key] = JSON.stringify(projection[field]);
+  }
+  if (projection.clipboard) {
+    next['notch-clip-history'] = JSON.stringify(projection.clipboard.history || []);
+    next['notch-clip-favorites'] = JSON.stringify(projection.clipboard.favorites || []);
+  }
+  return next;
 }
 
 module.exports = {
@@ -726,5 +866,46 @@ module.exports = {
   hashesForEntities,
   mutationFromEntity,
   splitMutationBatches,
+  pullWorkspacePages,
+  pullFullSnapshot,
+  commitWorkspacePullPages,
+  workspaceProjectionToStorage,
   entityHash,
 };
+
+// A server push can accept independent mutations and reject a competing note.
+// Continue later batches and acknowledge only the entities actually accepted.
+async function pushWorkspaceEntities({ entities, deviceId, baseServerRev = 0, pushMutations }) {
+  const confirmedIds = [], conflictIds = [];
+  for (const batch of splitMutationBatches((entities || []).map(entity => mutationFromEntity(entity, { deviceId, baseServerRev })))) {
+    const result = await pushMutations(batch);
+    if (!result?.ok) return { ok: false, error: result?.error || 'push_failed', pushed: confirmedIds.length, confirmedIds, conflictIds };
+    const statuses = new Map((result.applied || []).map(row => [row.clientMutationId, row.status]));
+    for (const mutation of batch) {
+      const status = statuses.get(mutation.clientMutationId);
+      if (status === 'expired') return { ok: false, error: 'mutation_expired_resync_required', pushed: confirmedIds.length, confirmedIds, conflictIds };
+      if (status === 'conflict') conflictIds.push(mutation.entityId);
+      else if (status === 'applied' || status === 'duplicate') confirmedIds.push(mutation.entityId);
+      else return { ok: false, error: 'push_ack_incomplete', pushed: confirmedIds.length, confirmedIds, conflictIds };
+    }
+  }
+  return { ok: conflictIds.length === 0, ...(conflictIds.length ? { error: 'note_conflict_retry' } : {}), pushed: confirmedIds.length, confirmedIds, conflictIds };
+}
+module.exports.pushWorkspaceEntities = pushWorkspaceEntities;
+
+// Migration deferred media must use the migration's acknowledged revision.
+// A compacted history requires a real full snapshot before one bounded retry.
+async function pushMigrationWorkspaceEntities({ entities, deviceId, baseServerRev, pushMutations, pullPage }) {
+  let result = await pushWorkspaceEntities({ entities, deviceId, baseServerRev, pushMutations });
+  if (result.ok || !['mutation_expired_resync_required', 'full_resync_required'].includes(result.error)) return result;
+  const snapshots = [];
+  for (const collection of WORKSPACE_COLLECTIONS) {
+    const snapshot = await pullFullSnapshot({ pullPage, collection });
+    if (!snapshot.ok) return snapshot;
+    snapshots.push(snapshot);
+  }
+  const rebasedRev = Math.max(0, ...snapshots.map(snapshot => Number(snapshot.serverRev) || 0));
+  result = await pushWorkspaceEntities({ entities, deviceId, baseServerRev: rebasedRev, pushMutations });
+  return { ...result, resynced: true, rebasedRev };
+}
+module.exports.pushMigrationWorkspaceEntities = pushMigrationWorkspaceEntities;

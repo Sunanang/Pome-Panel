@@ -144,7 +144,7 @@ body {
   will-change: clip-path;
 }
 
-.notification-shell[data-source='gpt'] {
+.notification-shell[data-source='cursor'] {
   --notification-accent: #a988ff;
   --notification-accent-rgb: 169, 136, 255;
 }
@@ -229,8 +229,8 @@ body {
 
 .notification-shell[data-source='codex'] .notification-glyph-check,
 .notification-shell[data-source='task'] .notification-glyph-check,
-.notification-shell[data-source='gpt'] .notification-glyph-spark,
-.notification-shell[data-source='chatgpt'] .notification-glyph-spark,
+.notification-shell[data-source='cursor'] .notification-glyph-spark,
+.notification-shell[data-source='cursor'] .notification-glyph-spark,
 .notification-shell[data-source='todo'] .notification-glyph-clock {
   opacity: 1;
   transform: scale(1) rotate(0);

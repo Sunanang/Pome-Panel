@@ -9,7 +9,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createApp } = require('./createApp');
-const { createMemoryStore } = require('./store');
+const { createPersistentStore } = require('./persistentStore');
 const {
   chooseDeviceBindHost,
   listenPersistedDevicePort,
@@ -37,7 +37,7 @@ function readOrCreateServerId(filePath) {
 async function main() {
   const gatewayPrefix = process.env.FNOS_GATEWAY_PREFIX || DEFAULT_GATEWAY_PREFIX;
   const socketPath = process.env.FNOS_SOCKET_PATH || path.join(process.cwd(), 'runtime', 'pomepanel-sync.sock');
-  const serverIdFile = process.env.FNOS_SERVER_ID_FILE || '';
+  const serverIdFile = process.env.FNOS_SERVER_ID_FILE;
   const devicePortEnv = process.env.FNOS_DEVICE_PORT;
   const dataDir = process.env.FNOS_DATA_DIR || path.join(process.cwd(), 'data');
   const configuredPortFile = process.env.FNOS_DEVICE_PORT_FILE;
@@ -53,7 +53,13 @@ async function main() {
     || (fs.existsSync(wwwRoot) ? wwwRoot : uiRoot);
   const resolvedStatic = fs.existsSync(staticRoot) ? staticRoot : uiRoot;
 
-  const store = createMemoryStore({ serverId: readOrCreateServerId(serverIdFile) });
+  const days = (key, fallback) => { const value = process.env[key] == null ? fallback : Number(process.env[key]); if (!Number.isFinite(value) || value <= 0) throw new Error(`invalid_${key}`); return value * 86400000; };
+  const store = createPersistentStore({
+    retentionMs: days('FNOS_SYNC_RETENTION_DAYS', 90),
+    rollbackWindowMs: days('FNOS_ROLLBACK_WINDOW_DAYS', 30),
+    serverId: readOrCreateServerId(serverIdFile || path.join(dataDir, 'server-id')),
+    filePath: path.join(dataDir, 'sync-state.bin'),
+  });
   store.devicePortFile = devicePortFile;
   store.deviceBindFile = deviceBindFile;
   store.deviceBindEnv = process.env.FNOS_DEVICE_BIND;

@@ -18,15 +18,37 @@ run(process.execPath, ['--test', ...fs.readdirSync(path.join(root, 'tests')).fil
 env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-test.log');
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
-for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap']) {
+for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap', 'security-recovery', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   run(require('electron'), [`tests/${file}.electron.js`]);
+  if (file === 'work-hub' || file === 'work-hub-nas') {
+    env.POME_RESTART_CHECK = file === 'work-hub' ? 'inbox' : 'paused-sync';
+    run(require('electron'), ['tests/work-hub-restart.electron.js']);
+    delete env.POME_RESTART_CHECK;
+  }
   fs.rmSync(testProfile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
 for (const file of [
+  'scripts/check-work-hub-baseline.js',
+  'scripts/work-hub-statistics.js',
+  'tests/work-hub-baseline.electron.js',
+  'panelTiming.js',
+  'atomicStorage.js',
+  'taskInbox.js',
+  'aiSourceHooks.js',
+  'renderer/ai-sources.js',
+  'scripts/cursor-notify.js',
+  'workspaceBackup.js',
+  'syncRecovery.js',
+  'renderer/task-inbox.js',
+  'renderer/task-inbox-domain.js',
+  'platform-adapters/task-apps.js',
+  'fnos/app/server/recovery.js',
+  'fnos/app/server/transactionLog.js',
   'main.js',
   'main-services.js',
+  'public-http.js',
   'cursor-usage.js',
   'codex-usage.js',
   'codex-usage-remote.js',
@@ -76,6 +98,7 @@ for (const file of [
   'fnos/app/server/auth.js',
   'fnos/app/server/csrf.js',
   'fnos/app/server/store.js',
+  'fnos/app/server/persistentStore.js',
   'fnos/app/server/routes.js',
   'fnos/app/server/createApp.js',
   'fnos/app/server/devicePort.js',

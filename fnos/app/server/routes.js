@@ -357,6 +357,28 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
         return;
       }
 
+      if (path.startsWith('/api/v1/recovery/')) {
+        const id = resolveIdentity(headers, { listenMode, store });
+        if (!id.ok) { sendJson(res, id.status, { error: id.reason || 'unauthenticated' }); return; }
+        if (!store.recovery) { sendJson(res, 501, { error: 'recovery_unsupported' }); return; }
+        try {
+          const action = path.slice('/api/v1/recovery/'.length);
+          if (method === 'GET' && action === 'state') { sendJson(res, 200, store.recovery.state(id.uid)); return; }
+          const body = await readJsonBody(req, { maxBytes: SYNC_BODY_MAX_BYTES });
+          let result;
+          if (method !== 'POST') throw new Error('invalid_method');
+          if (action === 'prepare') result = store.recovery.prepare(id.uid, body, id.deviceId);
+          else if (action === 'verify') result = store.recovery.verify(id.uid, body.operationId, id.deviceId);
+          else if (action === 'stage') result = store.recovery.stage(id.uid, body, id.deviceId);
+          else if (action === 'commit') result = store.recovery.commit(id.uid, body, id.deviceId);
+          else if (action === 'rollback') result = store.recovery.rollback(id.uid, body.operationId, id.deviceId);
+          else if (action === 'get') result = store.recovery.get(id.uid, body.operationId, id.deviceId);
+          else throw new Error('invalid_action');
+          sendJson(res, 200, result);
+        } catch (error) { sendJson(res, 409, { error: error.message }); }
+        return;
+      }
+
       if (method === 'GET' && path === '/api/v1/sync/state') {
         const id = resolveIdentity(headers, { listenMode, store });
         if (!id.ok) {
@@ -491,7 +513,7 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
           }
         }
         const result = store.applyPush(id.uid, mutations, { deviceId: id.deviceId });
-        sendJson(res, 200, result);
+        sendJson(res, result.applied.some(row => row.status === 'expired') ? 409 : 200, { ...result, ...(result.applied.some(row => row.status === 'expired') ? { error: 'mutation_expired_resync_required' } : {}) });
         return;
       }
 
@@ -503,7 +525,8 @@ function createRequestHandler({ store, listenMode, allowedOrigins } = {}) {
         }
         const cursor = url.searchParams.get('cursor');
         const collection = url.searchParams.get('collection') || undefined;
-        sendJson(res, 200, store.pull(id.uid, { cursor, collection }));
+        const result = store.pull(id.uid, { cursor, collection, deviceId: id.deviceId, full: url.searchParams.get('full') === '1' });
+        sendJson(res, result.status || 200, result);
         return;
       }
 

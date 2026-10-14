@@ -272,7 +272,7 @@ async function main() {
       api: true,
       mirror: true,
       features: 6,
-      homeModules: 9,
+      homeModules: 10,
       shortcut: true,
       defaultTab: { exists: true, value: 'home', options: 8 },
       workspace: true,
@@ -780,6 +780,7 @@ async function main() {
       const matrix = await window.webContents.executeJavaScript(`
         (async () => {
           const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          window.NotchHome.setModuleVisible('inbox', false);
           ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
           const results = [];
           for (let count = 8; count >= 1; count -= 1) {
@@ -816,13 +817,14 @@ async function main() {
       `);
       assert.equal(finalWidgetGuard.checked, true);
       assert.equal(finalWidgetGuard.visibleCount, 1);
-      assert.equal(finalWidgetGuard.storedCount, 8);
+      assert.equal(finalWidgetGuard.storedCount, 9);
       assert.match(finalWidgetGuard.message, /至少保留一个/);
     }
 
     const transactionAudit = await window.webContents.executeJavaScript(`
       (() => {
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         const first = window.NotchHome.setModuleVisible('mirror', false);
         const second = window.NotchHome.setModuleVisible('note', false);
@@ -880,7 +882,7 @@ async function main() {
     `);
     assert.equal(transactionAudit.first.ok, true);
     assert.equal(transactionAudit.second.ok, true);
-    assert.deepEqual(transactionAudit.rapidHidden, ['mirror', 'note', 'sun']);
+    assert.deepEqual(transactionAudit.rapidHidden, ['inbox', 'mirror', 'note', 'sun']);
     assert.equal(transactionAudit.noop.changed, false);
     assert.equal(transactionAudit.eventCount, 0);
     assert.equal(transactionAudit.noOpStorageStable, true);
@@ -894,6 +896,7 @@ async function main() {
     const persistenceAndRecorderAudit = await window.webContents.executeJavaScript(`
       (() => {
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         const originalSetItem = Storage.prototype.setItem;
         const storedBefore = localStorage.getItem('notch-home-hidden-modules-v1');
@@ -1020,6 +1023,7 @@ async function main() {
     const lifecycleAudit = await window.webContents.executeJavaScript(`
       (async () => {
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         document.getElementById('tab-button-home').click();
         document.getElementById('app').classList.remove('collapsed', 'closing', 'opening');
@@ -1177,14 +1181,16 @@ async function main() {
           sizeButton.click();
         };
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         document.getElementById('tab-button-home').click();
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         document.getElementById('home-layout-edit').click();
-        const musicTile = document.querySelector('[data-home-module="music"]');
+        const musicTile = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')].find(tile => tile.dataset.widgetSize !== 'mini');
+        const resizingId = musicTile.dataset.homeModule;
         const beforeSize = musicTile.dataset.widgetSize;
         // Prefer shrinking so the size change always fits the 48-cell grid.
-        applySizeViaContextMenu('music', beforeSize === 'mini' ? 'small' : 'mini');
+        applySizeViaContextMenu(resizingId, beforeSize === 'mini' ? 'small' : 'mini');
         await new Promise((resolve) => requestAnimationFrame(resolve));
         const ghosts = [...document.querySelectorAll('.home-layout-ghost')];
         const tileAnimations = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
@@ -1220,8 +1226,8 @@ async function main() {
         const ghostsAfter = document.querySelectorAll('.home-layout-ghost').length;
         const tileAnimationsAfter = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
           .reduce((count, tile) => count + tile.getAnimations().length, 0);
-        applySizeViaContextMenu('music', 'small');
-        applySizeViaContextMenu('music', 'mini');
+        applySizeViaContextMenu(resizingId, 'small');
+        applySizeViaContextMenu(resizingId, 'mini');
         await new Promise((resolve) => requestAnimationFrame(resolve));
         const rapidGhostIds = [...document.querySelectorAll('.home-layout-ghost')]
           .map((ghost) => ghost.dataset.homeLayoutGhost);

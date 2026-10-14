@@ -52,8 +52,8 @@ function normalizeNotification(payload) {
   const sourceNames = {
     codex: 'Codex',
     claude: 'Claude',
-    gpt: 'GPT',
-    chatgpt: 'GPT',
+    cursor: 'Cursor',
+    gpt: '其他',
     task: '任务',
     todo: '待办',
   };

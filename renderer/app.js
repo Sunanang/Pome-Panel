@@ -19,12 +19,14 @@ function collectLocalStorageSnapshot() {
   const result = {};
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key) result[key] = localStorage.getItem(key);
+    if (key && key !== 'notch-workspace-root') result[key] = localStorage.getItem(key);
   }
   return result;
 }
 
 let workspaceReloadPending = false;
+let workspacePersistenceTimer = null;
+let workspacePersistenceRoot = null;
 let applyingSyncTodosProjection = false;
 let todosSyncBound = false;
 
@@ -78,7 +80,7 @@ async function refreshTodosSyncBindingState() {
 
 async function hydrateTodosSyncProjectionAfterWorkspace() {
   const bound = await refreshTodosSyncBindingState();
-  if (!bound || typeof window.notchAPI.syncTodosGetProjection !== 'function') return;
+  if (!bound || (await window.notchAPI.syncGetStatus())?.recovery?.paused || typeof window.notchAPI.syncTodosGetProjection !== 'function') return;
   try {
     const result = await window.notchAPI.syncTodosGetProjection();
     if (result && result.ok && result.projection) {
@@ -110,16 +112,32 @@ function mirrorTodoToSync(payload) {
 async function hydratePortableWorkspace() {
   if (!window.notchAPI?.loadWorkspaceData) return;
   try {
-    const snapshot = await window.notchAPI.loadWorkspaceData();
+    const [snapshot, workspace] = await Promise.all([
+      window.notchAPI.loadWorkspaceData(), window.notchAPI.getWorkspace(),
+    ]);
+    workspacePersistenceRoot = workspace.path;
+    const previousRoot = localStorage.getItem('notch-workspace-root');
+    if (previousRoot && previousRoot !== workspace.path) {
+      sessionStorage.removeItem('notch-workspace-hydrated');
+      sessionStorage.setItem('notch-workspace-replace', '1');
+    }
     let imported = false;
     if (sessionStorage.getItem('notch-workspace-hydrated') !== '1' && snapshot && typeof snapshot === 'object') {
+      const replace = sessionStorage.getItem('notch-workspace-replace') === '1';
+      if (replace) {
+        workspaceReloadPending = true;
+        localStorage.clear();
+      }
       Object.entries(snapshot).forEach(([key, value]) => {
-        if (typeof value === 'string' && localStorage.getItem(key) === null) {
+        if (typeof value === 'string' && (replace || localStorage.getItem(key) === null)) {
           localStorage.setItem(key, value);
           imported = true;
         }
       });
       sessionStorage.setItem('notch-workspace-hydrated', '1');
+      sessionStorage.removeItem('notch-workspace-replace');
+      localStorage.setItem('notch-workspace-root', workspace.path);
+      if (replace) imported = true;
     }
     if (imported) {
       // The current editors were initialized before the asynchronous import.
@@ -128,9 +146,12 @@ async function hydratePortableWorkspace() {
       location.reload();
       return;
     }
+    localStorage.setItem('notch-workspace-root', workspace.path);
     // Bound startup: hydratePortableWorkspace → SQLite projection overrides workspace.
     await hydrateTodosSyncProjectionAfterWorkspace();
-    setInterval(() => window.notchAPI.saveWorkspaceData(collectLocalStorageSnapshot()).catch(() => {}), 2000);
+    workspacePersistenceTimer = setInterval(() => {
+      if (!workspaceReloadPending) window.notchAPI.saveWorkspaceData(collectLocalStorageSnapshot(), workspacePersistenceRoot).catch(() => {});
+    }, 2000);
   } catch (error) {}
 }
 // Do not interrupt parser-loaded workspace scripts with a recovery navigation.
@@ -140,8 +161,11 @@ if (document.readyState === 'loading') {
   hydratePortableWorkspace();
 }
 window.notchAPI?.onWorkspaceChanged?.(() => {
+  workspaceReloadPending = true;
+  clearInterval(workspacePersistenceTimer);
   sessionStorage.removeItem('notch-workspace-hydrated');
-  window.notchAPI.saveWorkspaceData(collectLocalStorageSnapshot()).finally(() => location.reload());
+  sessionStorage.setItem('notch-workspace-replace', '1');
+  location.reload();
 });
 
 let statusToastTimer = null;
@@ -685,6 +709,7 @@ async function setMode(expanded) {
   isExpanded = expanded;
   try {
     if (expanded) {
+      await window.notchAPI?.beginOpenTiming?.();
       // 每次召回使用设置中的默认页，不沿用上次收起时的停留页。
       _justExpanded = true;
       setTimeout(() => {
@@ -909,6 +934,7 @@ document.addEventListener('compositionend', () => {
 
 if (window.notchAPI && typeof window.notchAPI.onEscape === 'function') {
   window.notchAPI.onEscape(() => {
+    if (window.closeWorkHubOverlay?.()) return;
     const el = document.activeElement;
     if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
       el.blur();
@@ -1121,9 +1147,11 @@ async function ipcSetTab(name) {
 
 // 固定展开尺寸下，Tab 只切换内容与指示器，不再改变原生窗口边界。
 async function morphToTab(name) {
-  await ipcSetTab(name);
+  // All pages share one native canvas. Show the page immediately; background
+  // sync must not leave the previous page intercepting a user's first click.
   applyTabDom(name);
   positionIndicator();
+  await ipcSetTab(name);
 }
 
 let tabBusy = false;
@@ -2628,7 +2656,7 @@ async function requestNoteTitle(note) {
     noteTitleAttempts.delete(note.id);
     return;
   }
-  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(next.slice(0, 200)));
+  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(next));
   renderNotesLibrary();
 }
 
@@ -2657,7 +2685,7 @@ function persistNotesEditor(editor) {
     editor.value,
     Date.now()
   );
-  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes.slice(0, 200)));
+  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
   const updated = notes.find((note) => note.id === editor.dataset.noteId);
   if (localStorage.getItem(NOTE_ACTIVE_ARCHIVE_KEY) === editor.dataset.noteId && noteInput) {
     noteInput.value = editor.value;
@@ -2690,6 +2718,7 @@ function scheduleNotesEditorSave(editor) {
   }, 220);
 }
 
+let notesVisibleLimit = 80;
 function renderNotesLibrary() {
   if (!notesList) return;
   const archive = loadNoteArchive();
@@ -2705,7 +2734,7 @@ function renderNotesLibrary() {
     renderNotesDetail(notes);
     return;
   }
-  notes.forEach((note) => {
+  notes.slice(0, notesVisibleLimit).forEach((note) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `notes-list-item${note.id === selectedNoteId ? ' active' : ''}`;
@@ -2721,6 +2750,14 @@ function renderNotesLibrary() {
     button.append(title, excerpt, time);
     notesList.append(button);
   });
+  if (notes.length > notesVisibleLimit) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'workspace-button compact';
+    more.textContent = `查看更多（已显示 ${notesVisibleLimit} / ${notes.length}）`;
+    more.addEventListener('click', () => { notesVisibleLimit += 80; renderNotesLibrary(); });
+    notesList.append(more);
+  }
   renderNotesDetail(notes);
 }
 
@@ -2735,7 +2772,7 @@ notesNewButton?.addEventListener('click', () => {
     createdAt: now,
     updatedAt: now,
   };
-  const notes = [note, ...loadNoteArchive()].slice(0, 200);
+  const notes = [note, ...loadNoteArchive()];
   localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
   selectedNoteId = note.id;
   notesDetailMode = 'edit';
@@ -2764,7 +2801,7 @@ noteSaveButton?.addEventListener('click', () => {
     notes.unshift({ id: activeId, content, createdAt: Date.now(), updatedAt: Date.now() });
   }
   localStorage.setItem(NOTE_ACTIVE_ARCHIVE_KEY, activeId);
-  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes.slice(0, 200)));
+  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
   localStorage.setItem(NOTE_KEY, noteInput.value);
   selectedNoteId = activeId;
   renderNotesLibrary();
@@ -2793,7 +2830,7 @@ notesDetail?.addEventListener('input', (event) => {
       title.value,
       Date.now()
     );
-    localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes.slice(0, 200)));
+    localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
     updateSavedNotePresentation(notes.find((note) => note.id === title.dataset.noteId));
     return;
   }
@@ -2902,7 +2939,7 @@ const HOME_ORDER_KEY = 'notch-home-order-v3';
 const HOME_SIZES_KEY = 'notch-home-widget-sizes-v2';
 const HOME_PLACEMENTS_KEY = 'notch-home-placements-v1';
 const HOME_HIDDEN_MODULES_KEY = 'notch-home-hidden-modules-v1';
-const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands', 'sun'];
+const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'windows', 'mirror', 'note', 'commands', 'sun'];
 // 渲染层只读能力层（P0-1），不再自己判断平台。主进程通过 preload 下发 capabilities；
 // 拿不到时（例如没有 preload 的测试窗口）才用本地能力层按平台名补齐。
 function readPlatformCapabilities() {
@@ -2918,10 +2955,11 @@ window.notchAPI?.onCapabilitiesChanged?.((capabilities) => {
   unavailableHomeModules.splice(0, unavailableHomeModules.length, ...capabilities.unavailableHomeModules);
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
 });
-const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'windows', 'recorder', 'mirror', 'note', 'commands', 'sun'];
+const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'commands', 'mirror', 'note', 'windows', 'sun'];
 const HOME_SIZE_DEFAULTS = {
   music: 'small',
-  windows: 'large',
+  windows: 'medium',
+  inbox: 'medium',
   recorder: 'small',
   mirror: 'medium',
   note: 'medium',
@@ -3069,9 +3107,29 @@ function loadHomePlacements() {
   }
 }
 
+let legacyDefaultHome = false;
+try {
+  legacyDefaultHome = window.NotchDomain.isLegacyDefaultHomeLayout({
+    order: JSON.parse(localStorage.getItem(HOME_ORDER_KEY) || 'null'),
+    sizes: JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || 'null'),
+    placements: JSON.parse(localStorage.getItem(HOME_PLACEMENTS_KEY) || 'null'),
+    hiddenIds: JSON.parse(localStorage.getItem(HOME_HIDDEN_MODULES_KEY) || '[]'),
+  });
+} catch {}
 let homeOrder = loadHomeOrder();
 let homeSizes = loadHomeSizes();
 let homeWorkingLayout = loadHomePlacements();
+// A hidden card's remembered slot is separate from the active grid: it may be
+// occupied later, so it must never participate in layout validation or swaps.
+let homeInboxSavedPlacement = homeWorkingLayout?.placements.inbox || null;
+const HOME_INBOX_SLOT_KEY = 'notch-home-inbox-slot-v1';
+if (!homeInboxSavedPlacement) {
+  try {
+    const slot = JSON.parse(localStorage.getItem(HOME_INBOX_SLOT_KEY) || 'null');
+    if (slot && window.NotchDomain.validateHomeWidgetLayout({ allowGaps: true, placements: { inbox: slot } }, ['inbox'], 12, 4)) homeInboxSavedPlacement = slot;
+  } catch {}
+}
+if (legacyDefaultHome) { homeOrder = [...HOME_ORDER_DEFAULTS]; homeSizes = {...HOME_SIZE_DEFAULTS}; homeWorkingLayout = null; }
 const loadedHomeVisibility = loadHiddenHomeModules();
 let hiddenHomeModules = loadedHomeVisibility.hiddenIds;
 let homeVisibilityPersisted = true;
@@ -3086,7 +3144,9 @@ function saveHomeLayout() {
     localStorage.setItem(HOME_ORDER_KEY, JSON.stringify(homeOrder));
     localStorage.setItem(HOME_SIZES_KEY, JSON.stringify(homeSizes));
     if (homeWorkingLayout?.placements) {
+      if (homeWorkingLayout.placements.inbox) homeInboxSavedPlacement = { ...homeWorkingLayout.placements.inbox };
       localStorage.setItem(HOME_PLACEMENTS_KEY, JSON.stringify(homeWorkingLayout.placements));
+      if (homeInboxSavedPlacement) localStorage.setItem(HOME_INBOX_SLOT_KEY, JSON.stringify(homeInboxSavedPlacement));
     }
   } catch (error) {
     // LocalStorage 不可用时仍保留当前会话内的布局。
@@ -3292,6 +3352,13 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
     ? null
     : captureHomeLayoutVisualState();
   cancelHomeLayoutMotion();
+  const placeholder = document.getElementById('home-inbox-placeholder');
+  if (placeholder) {
+    const slot = homeInboxSavedPlacement;
+    const overlaps = slot && Object.values(layout.placements).some(p => p.column < slot.column + slot.width && p.column + p.width > slot.column && p.row < slot.row + slot.height && p.row + p.height > slot.row);
+    placeholder.hidden = !hiddenHomeModules.includes('inbox') || !slot || overlaps;
+    if (!placeholder.hidden) placeholder.style.gridArea = `${slot.row + 1} / ${slot.column + 1} / span ${slot.height} / span ${slot.width}`;
+  }
   const automaticLayout = !homeLayoutReadOnly && effectiveHomeHidden(hiddenHomeModules).length > 0;
   homeBento.dataset.layoutMode = homeLayoutReadOnly ? 'safe' : automaticLayout ? 'automatic' : 'preferred';
   homeTiles.forEach((tile) => {
@@ -3336,6 +3403,7 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
     }
   });
   animateCommittedHomeLayout(reason, beforeState);
+  document.dispatchEvent(new CustomEvent('notch:home-layout-applied', { detail: { reason } }));
 }
 
 /* layout chrome removed: right-click menu + whole-tile drag in edit mode */
@@ -3377,12 +3445,22 @@ if (introducedSunLayout.placements) {
     ))),
   };
 }
+let inboxAlreadyKnown = false;
+try { inboxAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'inbox'); } catch {}
+const introducedInboxLayout = inboxAlreadyKnown ? { sizes: homeSizes, placements: homeWorkingLayout?.placements, hiddenIds: effectiveHomeHidden(hiddenHomeModules) } : window.NotchDomain.normalizeHomeInboxLayout({
+  order: homeOrder, sizes: homeSizes, placements: homeWorkingLayout?.placements,
+  hiddenIds: effectiveHomeHidden(hiddenHomeModules), registry: HOME_MODULE_REGISTRY,
+});
+homeSizes = introducedInboxLayout.sizes;
+const inboxHiddenChanged = !hiddenHomeModules.includes('inbox') && introducedInboxLayout.hiddenIds.includes('inbox');
+if (inboxHiddenChanged) hiddenHomeModules.push('inbox');
+if (introducedInboxLayout.placements) homeWorkingLayout = { allowGaps: true, placements: introducedInboxLayout.placements };
 saveHomeLayout();
-if (sunHiddenChanged) saveHiddenHomeModules();
+if (sunHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
 
 let initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
-  sealGaps: true,
-  persistSeal: true,
+  sealGaps: false,
+  persistSeal: false,
 });
 if (!initialHomeLayout) {
   // Repair once without entering safe mode: keep visibility prefs, reset packable sizes.
@@ -3446,6 +3524,41 @@ function setHomeModuleVisible(moduleId, visible) {
   }
   const previousWorking = cloneHomeLayout(homeWorkingLayout);
   const previousSizes = { ...homeSizes };
+  if (moduleId === 'inbox') {
+    const currentLayout = previousWorking || resolveValidatedHomeLayout(current);
+    if (!currentLayout) return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
+    const previousSlot = homeInboxSavedPlacement;
+    if (currentLayout.placements.inbox) homeInboxSavedPlacement = { ...currentLayout.placements.inbox };
+    const retained = Object.fromEntries(Object.entries(currentLayout.placements).filter(([id]) => id !== 'inbox'));
+    const result = window.NotchDomain.normalizeHomeInboxLayout({
+      order: homeOrder, sizes: homeSizes, placements: retained,
+      hiddenIds: effectiveHomeHidden(next.hiddenIds), registry: HOME_MODULE_REGISTRY,
+      preservePositions: true, preferredInboxPlacement: homeInboxSavedPlacement,
+    });
+    const visibleIds = HOME_MODULE_REGISTRY.filter(id => !effectiveHomeHidden(next.hiddenIds).includes(id));
+    const layout = { allowGaps: true, placements: result.placements,
+      variants: Object.fromEntries(Object.entries(result.placements || {}).map(([id, item]) => [id, window.NotchDomain.layoutVariantForPlacement(item)])) };
+    if ((visible && result.hiddenIds.includes('inbox')) || !window.NotchDomain.validateHomeWidgetLayout(layout, visibleIds, 12, 4)) {
+      homeInboxSavedPlacement = previousSlot;
+      return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
+    }
+    try {
+      if (!visible && document.getElementById('home-inbox')?.contains(document.activeElement)) document.activeElement.blur();
+      hiddenHomeModules = next.hiddenIds;
+      homeSizes = result.sizes;
+      homeWorkingLayout = cloneHomeLayout(layout);
+      applyHomeLayout(layout, { reason: 'visibility' });
+    } catch {
+      hiddenHomeModules = current; homeSizes = previousSizes;
+      homeWorkingLayout = previousWorking; homeInboxSavedPlacement = previousSlot;
+      try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch {}
+      return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
+    }
+    const persisted = saveHiddenHomeModules();
+    saveHomeLayout();
+    document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
+    return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
+  }
   const areaOf = { mini: 2, small: 4, medium: 8, large: 16 };
   homeWorkingLayout = null;
   let preferredIds = [];
@@ -3515,6 +3628,11 @@ window.NotchHome = Object.freeze({
   getVisibility: visibilitySnapshot,
   isVisible: (moduleId) => visibilitySnapshot().visibleIds.includes(String(moduleId || '')),
   setModuleVisible: setHomeModuleVisible,
+});
+document.getElementById('home-inbox-placeholder')?.addEventListener('click', async () => {
+  await setActiveTab('settings');
+  const input = document.querySelector('[data-settings-home-module="inbox"]');
+  input?.scrollIntoView({ block: 'center' }); input?.focus({ preventScroll: true });
 });
 
 document.dispatchEvent(new CustomEvent('notch:home-modules-changed', {
@@ -4929,3 +5047,9 @@ document.addEventListener('nas-sync:todos-projection', (event) => {
 renderClipList(); // 首屏确保 clip-list DOM 就绪时渲染一次（幂等）
 renderClipFavs(); // 首屏渲染收藏剪贴块
 initTab();
+
+window.prepareWorkspaceBackupSnapshot = () => {
+  flushNotesEditorSave();
+  localStorage.setItem('notch-home-note', noteInput.value);
+  return collectLocalStorageSnapshot();
+};

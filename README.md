@@ -59,11 +59,23 @@ Pome Panel 基于 Todo Panel 二次开发。仓库没有登记可核对的上游
 | **密钥** | 账号、密码和 API Key 使用系统安全存储，页面不能直接读出明文 |
 | **设置** | 转写与智能命名、AI 剩余额度（Cursor / Codex 状态与 Token）、NAS 同步、功能显隐、首页组件、镜子封面、默认展开页、唤出快捷键、面板位置、数据目录、开机启动 |
 
+首页 Bento 的「AI 完成」模块可回看 Codex / Claude Code / Cursor 的本机完成事件（旧 GPT 历史保留，显示为“其他”）。模块支持四档尺寸：迷你显示未读数与最新来源，小号显示最近 3 条，中号显示最近 5 条，大号显示 10 条及项目摘要。记录按模块尺寸分页（迷你 1、小号 3、中号 5、大号 10 条），不再提供“查看全部”模式。第 1 页只显示“下一页”；后续页显示“上一页”和当前页码，仅在确实有下一页数据时显示“下一页”，总数不超过一页时隐藏分页区。新完成记录到达时保留当前页，翻页后列表回到顶部，卡片尺寸保持不变；「全部已读」通过逐条保存标记已有记录。首页 tab 未选中时在文字右上方显示未读角标（超过 9 为 9+），损坏时显示 !；选中首页时隐藏。模块关闭时角标显示小点，点击转到首页模块设置；模块开启时点击返回首页并高亮。关闭 AI 完成后在原空位显示淡色“添加模块”入口；再开启会保留其他组件的尺寸和位置，重新开启时优先恢复原位置，空间不足只缩小 AI 完成本身。记录先落盘再提醒，点击记录时标已读，已读保留 30 天，未读不自动清理。去重使用来源的完成事件 ID，或来源、任务与完成时间/回合序号生成的稳定身份，延迟重试和重启重投不会再提醒；同一会话的新回合仍正常接收。去重信息随记录保留，已读首次标记后 30 天一起清理，未读继续保留。缺少明确身份的旧钩子事件仍接收，以补充的完成/接收时间和内容生成身份；没有原始 ID 的旧事件无法保证跨时间重投仍被识别为同一事件。收件箱损坏时显示“备份损坏文件并重建”，确认弹窗展示完整备份路径和可能无法恢复历史的影响；取消继续暂停，确认后先保存并校验原始字节，再原子建立空收件箱。收件箱固定保存在本机 userData，不参与 NAS 同步或普通资料备份。点击记录直接打开来源软件，不定位聊天或会话：Codex 打开桌面版，Cursor 打开 Cursor，Claude Code 打开终端。macOS 优先复用 cwd 对应的 Terminal 标签页，找不到时新开终端并进入该目录；Windows 优先 Windows Terminal，回退 PowerShell。没有 cwd 时只打开终端；目录须为存在的绝对目录。未安装或打开失败时显示轻提示。
+
+「设置 → NAS 同步」提供 `.pome-backup.zip` 本机资料备份，即使未配对也能导出实际待办、分类、笔记、链接、指令、剪贴板和录音媒体。v1 清单记录应用版本、集合条数及 SHA-256；恢复先校验并保存当前资料快照，替换失败会回滚。密钥、AI Key、配对、同步控制状态、首页布局和系统设置不进入普通备份，恢复保留当前凭据与设置。
+
+已配对设备恢复后暂停同步，重启继续暂停。需要重新预览并确认本机覆盖 NAS 的新增、修改和删除影响；本机或 NAS 变化使预览过期。NAS 必须先保存并读回验证快照，覆盖按服务器版本原子提交，核验成功后恢复同步；不支持快照的旧伴侣禁止覆盖。本轮没有“先拉取再合并”的执行入口。最近覆盖可在 NAS 没有后续变更时回退快照，回退产生新版本并保持同步暂停。
+
+同步结果按内容类型显示，录音元数据与音频分开；超过 6 MiB 或缺失的音频不会显示为已传输。本机备份仍保存完整超限音频；本机音频不完整且 NAS 已有完整音频时禁止破坏性覆盖。笔记冲突以新的笔记 ID 保留版本，按来源及版本去重，标题不会递归生成“副本的副本”；待办维持服务器实际接受的版本顺序，不做字段级自动合并。密钥新增与编辑默认使用密码掩码。
+
 剪贴板历史默认关闭，可从菜单栏或「设置 → 显示功能」打开。它只在本机轮询，不占用全局快捷键。Windows 上没打开原生能力时，点击条目是复制，再用 Ctrl+V 粘贴。
 
 Windows 上「汽水音乐」永久隐藏；「当前窗口」与剪贴板自动粘贴需要在「设置 → Windows 原生能力 · 实验功能」里手动打开（见 [Windows 上的几件事](#windows-上的几件事)）。关闭状态下不会改写已经保存的显隐偏好，换回 macOS 时组件还在。
 
-飞牛同步在「设置 → NAS 同步」里填写地址和一次性配对码。设备令牌放在系统安全存储，不写入 LocalStorage。本机工作区仍是数据落点；明文 HTTP 默认关闭，回环地址除外。
+飞牛同步在设置页右侧的「NAS 同步」卡里填写地址和一次性配对码，卡片位于封面图片与本机设置之间。「高级」可配置一个备用外网地址；状态行显示整体同步时间，「详情」逐项显示各类内容的结果和各自同步时间。同步暂停时，恢复预览与快照回退入口直接显示在卡内。设备令牌放在系统安全存储，不写入 LocalStorage。本机工作区仍是数据落点；明文 HTTP 默认关闭，回环地址除外。
+
+飞牛伴侣将同步数据、设备配对、账号同步密钥和请求去重记录保存在数据目录的 `sync-state.bin` 检查点及 `sync-state.bin.transactions/` 增量事务目录，服务重启后继续使用原状态。每次写入只持久化变动，累计 256 个事务再安全合并检查点，旧录音不会随普通修改反复写入；校验、顺序或存储损坏时停止启动并保留原文件。NAS 内部检查点 v3 自动读取并升级旧 v1/v2 数据，旧伴侣不能读取 v3，不可直接降级。备份伴侣数据时必须一并保留检查点、事务目录与 `server-id`；普通桌面 ZIP 备份仍为 v1。清理按原子检查点完成：所有未撤销配对设备已确认的日志前缀可截断；未确认日志默认保留 90 天，超期游标明确要求全量重同步。幂等结果默认保留 90 天，清理后拒绝旧基线请求，客户端拉取并重建待发送请求；远端删除不能被旧队列复活。快照保护最近一次已提交覆盖、30 天回退窗口内的覆盖，以及 24 小时有效期内正在暂存的操作；其他快照默认达到 90 天后清理。准备操作超出 24 小时需要重新预览；回退仍需校验 NAS 没有后续变更。可通过 `FNOS_SYNC_RETENTION_DAYS` 与 `FNOS_ROLLBACK_WINDOW_DAYS` 设置正数天数；处理请求时每小时或累计 256 个事务触发检查。实际内容、未读收件箱及删除标记不按这些缓存规则清空。
+
+更换本机数据文件夹时，空目录用于迁移当前工作区；已有 `workspace.json` 的目录会提示打开其中的数据，当前工作区先保存到原目录。复制密钥密码时会标记为敏感内容，并从本应用剪贴板历史采集中排除。
 
 Cursor 用量默认自动读取本机 Cursor 登录态。「设置 → AI 剩余额度 → Cursor」中的「获取本机 Token」可一键读取已登录的本机 Cursor（macOS 与 Windows 均支持），填入密码输入框后再点击「保存」。无需安装 sqlite3 或 Python。保存的 Token 优先用于查询用量，本机以系统安全存储加密，并随 NAS 的 AI 配置以加密盒同步到其他已配对设备；失效时回退本机登录态。点击「清除」会恢复本机登录模式，并同步清除其他设备保存的 Token。未保存的输入不会同步。
 
@@ -85,48 +97,27 @@ Codex 配置手动 access token 后，由主进程向 `https://chatgpt.com/backe
 
 ## 本机 AI 完成提醒
 
-Pome Panel 只在 `127.0.0.1:43821` 监听通知，来源限 `codex`、`claude` 与 `gpt`，其余一律 404。提醒是一块不抢焦点的小窗。子代理结束和云端会话不会弹出。Windows 上点击提醒即关闭。
+Pome Panel 只在 `127.0.0.1:43821` 监听通知，来源限 `codex`、`claude` 与 `cursor`，其余一律 404。提醒是一块不抢焦点的小窗。子代理结束和云端会话不会弹出。Windows 上点击提醒即关闭。
 
 ```bash
 curl -X POST http://127.0.0.1:43821/notify/codex \
   -H 'Content-Type: application/json' \
-  -d '{"title":"任务已完成","project":"my-project","task_id":"demo"}'
+  -d '{"title":"任务已完成","project":"my-project","task_id":"demo","event_id":"demo-completion-1"}'
 ```
 
-仓库提供 [Codex 转发脚本](scripts/codex-notify.js) 和 [Claude Code 转发脚本](scripts/claude-notify.js)。Codex 走 `~/.codex/config.toml` 的 notify；Claude Code 走 `~/.claude/settings.json` 的 Stop 钩子。云端会话（`CLAUDE_CODE_REMOTE=true`）会直接放弃，因为那里的 `127.0.0.1` 不是这台电脑。
+在「设置 → AI 完成来源」检测并接入 Codex、Claude Code、Cursor。确认浮层列出修改文件、Pome 钩子内容和同目录的 `.pome-backup-时间戳` 备份；确认后先校验备份再原子写入。配置损坏时拒绝修改，预览过期或文件被外部编辑后需要重新确认。仅增删 Pome 标记项，其他配置、钩子和缩进保留；Codex 的原 `notify` 被继续转发，断开后还原。Codex 接入后需重启工具。
+
+优先用 Pome 自带 Electron 的 Node 运行时，脚本采用当前应用安装路径。每次启动检查接入路径，应用搬家后可点「修复」。Claude Code 使用 `hooks.Stop`，Cursor 使用官方 `hooks.json` v1 的 `hooks.stop`，以 conversation_id 与 generation_id 组合去重。首次检测到未接入工具会提示；「以后再说」仅存本机并停止重复提示。
+
+「发送测试」经过同一转发脚本和本机接收服务，送达后显示“测试通知已送达”；测试不会产生历史、未读或真实完成提醒。首页未接入、等待第一条、接入失效三个空状态分别引导接入、测试/管理、修复。损坏收件箱仍使用独立的确认重建流程。
+
+仓库提供 [Codex](scripts/codex-notify.js)、[Claude Code](scripts/claude-notify.js)、[Cursor](scripts/cursor-notify.js) 转发脚本。Claude 云端会话（`CLAUDE_CODE_REMOTE=true`）不会转发。
 
 ## Windows 上的几件事
 
 ### 通知钩子怎么配
 
-两个钩子都由 `node` 拉起，先确认 `node --version` 在 PowerShell 里能跑通。安装目录默认是 `%LOCALAPPDATA%\Programs\Pome Panel`，路径里有空格，所以命令中的脚本路径必须带引号，JSON 和 TOML 里的反斜杠还要再转义一次。
-
-`%USERPROFILE%\.codex\config.toml`：
-
-```toml
-notify = ["node", "C:\\Users\\你的用户名\\AppData\\Local\\Programs\\Pome Panel\\resources\\app\\scripts\\codex-notify.js"]
-```
-
-`%USERPROFILE%\.claude\settings.json`：
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"C:\\Users\\你的用户名\\AppData\\Local\\Programs\\Pome Panel\\resources\\app\\scripts\\claude-notify.js\""
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-从源码运行时把路径换成仓库里的 `scripts\codex-notify.js` 与 `scripts\claude-notify.js`。转发脚本只往 `127.0.0.1:43821` 发一条本机请求，面板没开时静默失败，不会拖住 CLI。
+优先使用设置页的一键接入，不依赖 PATH 中的 Node。默认应用目录为 `%LOCALAPPDATA%\Programs\Pome Panel`，接入器使用实际安装路径。本机配置分别位于 `%USERPROFILE%\.codex\config.toml`、`%USERPROFILE%\.claude\settings.json` 和 `%USERPROFILE%\.cursor\hooks.json`。Windows 通过随应用分发的 PowerShell 文件桥接设置 `ELECTRON_RUN_AS_NODE=1`，把通知 JSON 当数据传给脚本；不会把 JSON 拼进命令表达式。只有用户确认后才写工具配置。仍需 Windows 真机验证，不以 Mac 回归代替。
 
 ### 原生能力（实验功能，默认关闭）
 
@@ -203,3 +194,5 @@ npm run dev
 ## License
 
 [MIT](LICENSE) © 2026 [Sunanang](https://github.com/Sunanang)
+
+工作中枢回归可运行 `npm run check:work-hub`：隔离夹具固定为 250 条笔记、200 条待办、100 个链接、20 条录音及 50 条完成记录，测量普通唤出与隔离 NAS 同步负载各 20 次。环境、原始耗时、P95、几何与同步结果留在 `dist.noindex/iteration-validation/<run-id>/`，不提交生成文件；Windows 真机和实体显示器/DPI 检查需要单独执行。
