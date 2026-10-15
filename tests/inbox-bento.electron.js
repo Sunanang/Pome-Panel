@@ -40,14 +40,16 @@ async function run(c){
  assert.equal(await js(`document.getElementById('task-inbox-toggle')===null && document.getElementById('task-inbox-dialog')===null`),true);
  assert.equal(await js(`document.querySelectorAll('.home-inbox-row').length`),5);
  const positions=await js(`({inbox:homeWorkingLayout.placements.inbox,windows:homeWorkingLayout.placements.windows,linkMargin:getComputedStyle(document.getElementById('tab-button-links')).marginRight})`);
- assert.deepEqual(positions.inbox,{column:8,row:0,width:4,height:2});assert.deepEqual(positions.windows,{column:8,row:2,width:4,height:2});assert.equal(positions.linkMargin,'0px');
+ const windowsAvailable=await js(`!notchAPI.capabilities.unavailableHomeModules.includes('windows')`);
+ assert.deepEqual(positions.inbox,{column:8,row:0,width:4,height:2});assert.deepEqual(positions.windows,windowsAvailable?{column:8,row:2,width:4,height:2}:undefined);assert.equal(positions.linkMargin,'0px');
+ assert.equal(await js(`NotchHome.isVisible('windows')`),windowsAvailable,'default layout respects native capability gating');
  assert.equal(await js(`getComputedStyle(document.getElementById('home-inbox')).backgroundImage.includes('radial-gradient')`),true);
  assert.equal(await js(`document.getElementById('home-inbox-badge').hidden`),true,'B3: selected home hides badge');
  await capture('default-medium');
  await js(`setActiveTab('notes')`);await until(c,`document.querySelector('.tab.active').dataset.tab==='notes'`);assert.equal(await js(`document.getElementById('home-inbox-badge').hidden`),false);await capture('notes-badge');
  await js(`document.getElementById('home-inbox-badge').click()`);await until(c,`document.querySelector('.tab.active').dataset.tab==='home' && document.getElementById('home-inbox').classList.contains('inbox-highlight')`);await capture('highlight');await sleep(650);assert.equal(await js(`document.getElementById('home-inbox').classList.contains('inbox-highlight')`),false);
  for(const [size,count] of [['mini',0],['small',3],['medium',5],['large',10]]){
-  await js(`(() => {homeSizes={...homeSizes,inbox:${JSON.stringify(size)}};hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!['music','inbox'].includes(id));homeWorkingLayout=null;const layout=NotchDomain.resolveHomeWidgetLayout(homeOrder,homeSizes,hiddenHomeModules);applyHomeLayout(layout,{reason:'initial'});})()`);
+  await js(`(() => {homeSizes={...homeSizes,inbox:${JSON.stringify(size)}};hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!['recorder','inbox'].includes(id));homeWorkingLayout=null;const layout=NotchDomain.resolveHomeWidgetLayout(homeOrder,homeSizes,hiddenHomeModules);applyHomeLayout(layout,{reason:'initial'});})()`);
   await until(c,`document.getElementById('home-inbox').dataset.widgetSize==='${size}' && document.querySelectorAll('.home-inbox-row').length===${count}`);
   assert.equal(await js(`Array.from(document.querySelectorAll('.home-inbox-copy strong')).every(el=>el.title===el.closest('.home-inbox-row').title)`),true);
   if(size==='small')assert.equal(await js(`getComputedStyle(document.getElementById('home-inbox-read-all')).display!=='none' && getComputedStyle(document.getElementById('home-inbox-latest')).display!=='none'`),true);
@@ -83,12 +85,12 @@ async function run(c){
  await js(`document.getElementById('task-inbox-rebuild').click()`);await until(c,`document.getElementById('task-inbox-status').textContent.includes('已重建')`);assert(fs.readdirSync(profile).some(name=>name.startsWith('task-inbox.json.corrupt-')));assert.equal((await js('window.notchAPI.getTaskInbox()')).total,0);await js('window.NotchTaskInbox.refresh()');await capture('empty');
  assert.equal((await send({event_id:'bento-restored',title:'恢复接收'})).status,202);await until(c,`document.getElementById('home-inbox-badge').textContent==='1'`);
  // Real reload of a v0.11-era full custom layout must not overwrite its sizes.
- const oldPositions={music:{column:0,row:0,width:4,height:4},cursor:{column:4,row:0,width:4,height:4},recorder:{column:8,row:0,width:4,height:4}};
- const oldSizes={...initial.sizes,music:'large',cursor:'large',recorder:'large'};delete oldSizes.inbox;
- await js(`localStorage.setItem('notch-home-placements-v1',${JSON.stringify(JSON.stringify(oldPositions))});localStorage.setItem('notch-home-widget-sizes-v2',${JSON.stringify(JSON.stringify(oldSizes))});localStorage.setItem('notch-home-hidden-modules-v1',JSON.stringify(HOME_MODULE_REGISTRY.filter(id=>!['music','cursor','recorder','inbox'].includes(id))));localStorage.setItem('notch-home-order-v3',JSON.stringify(HOME_MODULE_REGISTRY.filter(id=>id!=='inbox')));`);await reload();
+ const oldPositions={cursor:{column:0,row:0,width:4,height:4},recorder:{column:4,row:0,width:4,height:4},note:{column:8,row:0,width:4,height:4}};
+ const oldSizes={...initial.sizes,cursor:'large',recorder:'large',note:'large'};delete oldSizes.inbox;
+ await js(`localStorage.setItem('notch-home-placements-v1',${JSON.stringify(JSON.stringify(oldPositions))});localStorage.setItem('notch-home-widget-sizes-v2',${JSON.stringify(JSON.stringify(oldSizes))});localStorage.setItem('notch-home-hidden-modules-v1',JSON.stringify(HOME_MODULE_REGISTRY.filter(id=>!['cursor','recorder','note','inbox'].includes(id))));localStorage.setItem('notch-home-order-v3',JSON.stringify(HOME_MODULE_REGISTRY.filter(id=>id!=='inbox')));`);await reload();
  await until(c,`!!window.NotchHome && !!window.NotchTaskInbox && document.getElementById('home-inbox-badge').dataset.dot==='true' && document.getElementById('home-inbox-unread-label').textContent==='1 条未读'`);await js('setMode(true)');
  const migrated=await js(`({sizes:JSON.parse(localStorage.getItem('notch-home-widget-sizes-v2')),placements:homeWorkingLayout.placements,hidden:NotchHome.getVisibility().hiddenIds})`);
- for(const id of Object.keys(oldSizes))assert.equal(migrated.sizes[id],oldSizes[id]);assert.deepEqual(migrated.placements,oldPositions);assert(migrated.hidden.includes('inbox'));assert.equal(await js(`NotchDomain.validateHomeWidgetLayout(homeWorkingLayout,['music','cursor','recorder'])`),true);
+ for(const id of Object.keys(oldSizes))assert.equal(migrated.sizes[id],oldSizes[id]);assert.deepEqual(migrated.placements,oldPositions);assert(migrated.hidden.includes('inbox'));assert.equal(await js(`NotchDomain.validateHomeWidgetLayout(homeWorkingLayout,['cursor','recorder','note'])`),true);
  const legacyOrder=['music','pomodoro','cursor','windows','recorder','mirror','note','commands','sun'];
  const legacySizes={...initial.sizes,windows:'large'};delete legacySizes.inbox;
  const legacyPositions=await js(`NotchDomain.resolveHomeWidgetLayout(${JSON.stringify(legacyOrder)},${JSON.stringify(legacySizes)},['sun']).placements`);
