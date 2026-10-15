@@ -163,6 +163,9 @@ npm start
 | `npm run build` | 在 macOS 上构建 Apple Silicon 产物 |
 | `npm run build:win` | 在 Windows 上构建 x64 产物 |
 | `npm run build:zip` | 构建 ZIP 产物 |
+| `node scripts/build-fpk.js` | 使用已安装的官方 fnpack，在临时目录构建 NAS 通用 FPK 与 SHA-256，输出到 `dist.noindex/` |
+
+GitHub Actions 的「Release macOS, Windows and NAS」会在推送 `main` / `feat/**`、提交 PR 或手动运行时测试并构建 DMG、Windows EXE 和 NAS FPK，产物可从该次运行的 Artifacts 下载。只有推送与桌面端及两份 NAS manifest 版本一致的 `v*.*.*` 标签，且三个构建任务都成功，才会把三种安装包及校验文件发布到同一个 Release。NAS 使用固定版本、校验 SHA-256 的[官方 fnpack](https://developer.fnnas.com/docs/cli/fnpack/)，无需连接 NAS 或提供设备凭据；真实 NAS 安装验证仍需另做。`scripts/pack-fpk.sh` 保持仅刷新协议副本和图标，不生成安装包。
 
 官网在 `website/`，要求 Node.js 22.13.0 及以上，技术栈是 React 19 与 Vinext：
 

@@ -10,6 +10,13 @@ if (lock.version !== packageJson.version || lock.packages[''].version !== packag
   process.stderr.write('package.json and package-lock.json versions must match\n');
   process.exit(1);
 }
+const nasManifest = fs.readFileSync(path.join(projectRoot, 'fnos/manifest'), 'utf8');
+const nasVersion = nasManifest.match(/^version=([^\r\n]+)$/m)?.[1];
+const nasManifestJson = require(path.join(projectRoot, 'fnos/manifest.json'));
+if (nasVersion !== packageJson.version || nasManifestJson.version !== packageJson.version) {
+  process.stderr.write('NAS manifests and package.json versions must match\n');
+  process.exit(1);
+}
 const outputPath = process.env.GITHUB_OUTPUT;
 const expectedTag = `v${packageJson.version}`;
 const isPushedTag = process.env.GITHUB_EVENT_NAME === 'push'

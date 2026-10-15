@@ -31,6 +31,7 @@ for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 
 }
 for (const file of [
   'scripts/check-work-hub-baseline.js',
+  'scripts/build-fpk.js',
   'scripts/work-hub-statistics.js',
   'tests/work-hub-baseline.electron.js',
   'panelTiming.js',

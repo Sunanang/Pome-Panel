@@ -88,6 +88,44 @@ test('the release workflow lets manual runs verify artifacts while policy gates 
   );
 });
 
+test('NAS builds use a pinned official tool and join the desktop release gate', () => {
+  const workflow = fs.readFileSync(releaseWorkflowPath, 'utf8');
+  const nas = workflow.slice(workflow.indexOf('\n  nas:'), workflow.indexOf('\n  release:'));
+  assert.match(nas, /runs-on: ubuntu-24\.04/);
+  assert.match(nas, /node scripts\/release-policy\.js/);
+  assert.match(nas, /node --test .*tests\/fnos-\*\.test\.js.*tests\/fpk-build\.test\.js/);
+  assert.match(nas, /https:\/\/static2\.fnnas\.com\/fnpack\/fnpack-1\.2\.3-linux-amd64/);
+  assert.match(nas, /'[a-f0-9]{64}' "\$FNPACK" \| sha256sum --check -/);
+  assert.ok(nas.indexOf('sha256sum --check') < nas.indexOf('chmod +x'));
+  assert.match(nas, /run: node scripts\/build-fpk\.js/);
+  assert.match(nas, /name: nas-installer/);
+  assert.match(nas, /dist\.noindex\/\*-fnos-all\.fpk\.sha256/);
+  assert.match(workflow, /needs: \[mac, windows, nas\]/);
+  assert.match(workflow, /pattern: '\*-installer'/);
+  assert.match(workflow, /gh release create .*release-assets\/\*\.fpk/);
+  assert.ok(workflow.indexOf('sha256sum --check *.sha256') < workflow.indexOf('gh release create'));
+});
+
+for (const manifest of ['manifest', 'manifest.json']) {
+  test(`release policy rejects NAS ${manifest} version drift`, t => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pome-nas-release-policy-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, 'scripts')); fs.mkdirSync(path.join(root, 'fnos'));
+    fs.copyFileSync(releasePolicyScript, path.join(root, 'scripts/release-policy.js'));
+    for (const file of ['package.json', 'package-lock.json', 'fnos/manifest', 'fnos/manifest.json']) {
+      fs.copyFileSync(path.join(projectRoot, file), path.join(root, file));
+    }
+    const file = path.join(root, 'fnos', manifest);
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(packageVersion, '9.9.9'));
+    const result = spawnSync(process.execPath, [path.join(root, 'scripts/release-policy.js')], {
+      encoding: 'utf8', env: { ...process.env, GITHUB_OUTPUT: path.join(root, 'output') },
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /NAS manifests and package.json versions must match/);
+    assert.equal(fs.existsSync(path.join(root, 'output')), false);
+  });
+}
+
 test('macOS packaging declares the Electron 44 minimum and least-privilege runtime entitlements', () => {
   const entitlements = fs.readFileSync(entitlementsPath, 'utf8');
   const readme = fs.readFileSync(readmePath, 'utf8');

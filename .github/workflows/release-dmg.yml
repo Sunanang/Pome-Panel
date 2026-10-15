@@ -1,8 +1,8 @@
-name: Release macOS and Windows
+name: Release macOS, Windows and NAS
 
 on:
   workflow_dispatch:
-  # 分支推送与 PR 只做双端构建和安装验证；只有推送 v*.*.* 标签才发布（见 release-policy.js）。
+  # 分支推送与 PR 构建三端产物，桌面端验证安装；只有推送 v*.*.* 标签才发布。
   push:
     branches: [main, 'feat/**']
     tags: ['v*.*.*']
@@ -86,9 +86,42 @@ jobs:
             dist.noindex/*-setup.exe.sha256
           if-no-files-found: error
 
+  nas:
+    name: Build fnOS FPK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/release-policy.js
+      - name: Test NAS server and packaging
+        run: node --test tests/fnos-*.test.js tests/sync-protocol.test.js tests/schema-version.test.js tests/nas-recovery.test.js tests/fpk-build.test.js tests/release-policy.test.js
+      - name: Install pinned official fnpack
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Official tool: https://developer.fnnas.com/docs/cli/fnpack/
+          FNPACK="$RUNNER_TEMP/fnpack"
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 120 \
+            https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64 --output "$FNPACK"
+          printf '%s  %s\n' '54b97fa7b70968c4d05c79840f5daeff508957d0bb2062fdb0376d00d9615c93' "$FNPACK" | sha256sum --check -
+          chmod +x "$FNPACK"
+          printf 'FNPACK=%s\n' "$FNPACK" >> "$GITHUB_ENV"
+      - name: Build NAS FPK and checksum
+        run: node scripts/build-fpk.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nas-installer
+          path: |
+            dist.noindex/*-fnos-all.fpk
+            dist.noindex/*-fnos-all.fpk.sha256
+          if-no-files-found: error
+
   release:
     name: Publish verified installers
-    needs: [mac, windows]
+    needs: [mac, windows, nas]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -113,4 +146,4 @@ jobs:
           cd ..
           sed "s/{{VERSION}}/${{ steps.release.outputs.version }}/g" docs/release-notes.md > release-notes.rendered.md
           if grep -q '{{VERSION}}' release-notes.rendered.md; then echo 'release notes placeholder not rendered' >&2; exit 1; fi
-          gh release create "${GITHUB_REF_NAME}" release-assets/*.dmg release-assets/*.exe release-assets/*.sha256 --title "Pome Panel ${GITHUB_REF_NAME}" --notes-file release-notes.rendered.md
+          gh release create "${GITHUB_REF_NAME}" release-assets/*.dmg release-assets/*.exe release-assets/*.fpk release-assets/*.sha256 --title "Pome Panel ${GITHUB_REF_NAME}" --notes-file release-notes.rendered.md
