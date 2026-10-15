@@ -19,6 +19,7 @@
 - 发版前在 `dev` 完成测试、版本号与发布资料检查，再合并到 `main`；GitHub Actions 自动测试并构建 macOS DMG、Windows EXE 与 NAS FPK。
 - 安装包构建成功后，在 `main` 对应提交上推送与版本一致的 `v*.*.*` 标签，触发正式 GitHub Release。分支合并本身只构建，不直接发布 Release。
 - 合并后切回 `dev`，同步 `main` 的合并结果后继续开发；不要删除长期 `dev` 分支。
+- 新克隆后执行 `npm run setup:hooks` 将 `.githooks` 安装到 Git 公共目录并启用：禁止在 `main` 提交，禁止直接推送、强推或删除远程 `main`。切换分支不会移除已安装的保护。不要使用 `--no-verify` 或覆盖 hook 配置绕过保护；远端仍需单独配置 GitHub 分支保护。
 
 ## Phase 1: 需求 → PRD
 

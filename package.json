@@ -14,6 +14,7 @@
     "url": "https://github.com/Sunanang/Pome-Panel/issues"
   },
   "scripts": {
+    "setup:hooks": "node scripts/setup-git-hooks.js",
     "test": "node scripts/test-desktop.js",
     "start": "electron .",
     "build": "electron-builder --mac dmg --publish never",
