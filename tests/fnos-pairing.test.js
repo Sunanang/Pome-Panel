@@ -115,6 +115,7 @@ test('pair/claim single-consume in same transaction; second claim 409', async ()
   const store = createMemoryStore({ serverId: 'srv-once' });
   const app = createApp({ listenMode: 'gateway', store });
   const started = await startPair(app);
+  assert.equal(started.statusCode, 200, started.getJson().error || 'pair/start failed');
   const code = started.getJson().pairingCode;
 
   const first = await dispatch(app, {
