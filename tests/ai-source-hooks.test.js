@@ -3,7 +3,9 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {spawn}=require('node:child_process');
 const {createAiSourceHooks,readConfig}=require('../aiSourceHooks');
 const {createTaskInbox,completionEventId}=require('../taskInbox');
-function fixture(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'pome-hooks-test-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));for(const dir of ['.codex','.claude','.cursor'])fs.mkdirSync(path.join(home,dir));return {home,service:createAiSourceHooks({homeDir:home}),files:{codex:path.join(home,'.codex/config.toml'),claude:path.join(home,'.claude/settings.json'),cursor:path.join(home,'.cursor/hooks.json')}};}
+// This fixture already runs in the selected Node runtime. Launch tests below
+// verify the installed commands; config tests need no extra runtime probes.
+function fixture(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'pome-hooks-test-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));for(const dir of ['.codex','.claude','.cursor'])fs.mkdirSync(path.join(home,dir));return {home,service:createAiSourceHooks({homeDir:home,runtimeCheck:()=>true}),files:{codex:path.join(home,'.codex/config.toml'),claude:path.join(home,'.claude/settings.json'),cursor:path.join(home,'.cursor/hooks.json')}};}
 for(const source of ['codex','claude','cursor']){
  test(`${source}: isolated HOME connect, repeat connect, repair moved paths, disconnect`,async t=>{
   const {home,service,files}=fixture(t);
@@ -100,7 +102,7 @@ test('time-expired confirmation refuses writing even if file is unchanged',async
 test('installed Claude and Cursor shell commands run with spaces and apostrophes in application path',async t=>{
  const {home}=fixture(t),appDir=path.join(home,"Pome Panel's app");fs.mkdirSync(path.join(appDir,'scripts'),{recursive:true});for(const source of ['claude','cursor'])fs.copyFileSync(path.join(__dirname,'../scripts',source+'-notify.js'),path.join(appDir,'scripts',source+'-notify.js'));
  fs.copyFileSync(path.join(__dirname,'../scripts/pome-hook-runtime.ps1'),path.join(appDir,'scripts/pome-hook-runtime.ps1'));
- const service=createAiSourceHooks({homeDir:home,appDir}),received=[];
+ const service=createAiSourceHooks({homeDir:home,appDir,runtimeCheck:()=>true}),received=[];
  const server=http.createServer((req,res)=>{let b='';req.on('data',c=>b+=c);req.on('end',()=>{received.push(JSON.parse(b));res.end('{}');});});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  for(const source of ['claude','cursor']){
   const p=await service.preview(source);await service.apply(p.token);const file=path.join(home,source==='claude'?'.claude/settings.json':'.cursor/hooks.json'),value=JSON.parse(fs.readFileSync(file,'utf8'));

@@ -1,6 +1,12 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const {app,dialog}=require('electron');
+const {app,dialog,ipcMain}=require('electron');
+// Keep paging pending long enough to exercise the absent page label.
+const handle=ipcMain.handle.bind(ipcMain);
+ipcMain.handle=(channel,handler)=>handle(channel,channel==='tasks:inbox'?async(event,options)=>{
+ if(options?.offset>0)await new Promise(resolve=>setTimeout(resolve,100));
+ return handler(event,options);
+}:handler);
 // The return-button check must not foreground a terminal on the host machine.
 const adapters=require('../platform-adapters'),originalAdapter=adapters.loadAdapter;
 adapters.loadAdapter=(...args)=>{
@@ -26,8 +32,9 @@ async function until(c,expr){for(let i=0;i<350;i++){try{if(await c.executeJavaSc
 app.on('web-contents-created',(_event,c)=>{c.on('console-message',details=>{if(details.level==='error'&&!details.message.includes('ERR_'))errors.push(details.message);});c.once('did-finish-load',()=>{if(started||!c.getURL().endsWith('/renderer/index.html'))return;started=true;run(c).then(()=>{clearTimeout(watchdog);console.log('Bento inbox: 4 sizes, inline paging, read-all, badge, disabled module, corruption/rebuild and legacy layouts passed');app.exit(0);}).catch(e=>{console.error(e,errors);app.exit(1);});});});
 async function run(c){
  const js=code=>c.executeJavaScript(code);
+ async function reload(){const loaded=new Promise(resolve=>c.once('did-finish-load',resolve));c.reload();await loaded;}
  async function capture(name){await sleep(700);fs.writeFileSync(path.join(artifacts,`${name}.png`),(await c.capturePage()).toPNG());}
- await until(c,`!!window.NotchTaskInbox && document.getElementById('home-inbox-badge').textContent==='3'`);
+ await until(c,`!!window.NotchTaskInbox && !workspaceReloadPending && sessionStorage.getItem('notch-workspace-hydrated')==='1' && document.getElementById('home-inbox-badge').textContent==='3'`);
  await js('setMode(true)');await sleep(800);
  const initial=await js(`({sizes:{...homeSizes},hidden:[...hiddenHomeModules],order:[...homeOrder],layout:JSON.parse(JSON.stringify(homeWorkingLayout))})`);
  assert.equal(await js(`document.getElementById('task-inbox-toggle')===null && document.getElementById('task-inbox-dialog')===null`),true);
@@ -49,7 +56,7 @@ async function run(c){
  }
  await js(`document.querySelector('.home-inbox-row').click()`);await until(c,`document.getElementById('home-inbox-badge').textContent==='2'`);assert.equal((await js('window.notchAPI.getTaskInbox()')).unread,2);assert.equal(await js(`document.querySelector('.home-inbox-detail')`),null);await until(c,`document.getElementById('task-inbox-status').textContent.length>0`);await capture('large-detail');
  await until(c,`document.querySelectorAll('.home-inbox-row').length===10`);
- await js(`document.querySelector('.home-inbox-pagination button:last-child').click()`);await until(c,`document.querySelector('.home-inbox-pagination span').textContent==='第 2 页'`);assert.equal(await js(`document.getElementById('task-inbox-dialog')===null`),true);
+ await js(`document.querySelector('.home-inbox-pagination button:last-child').click()`);await until(c,`document.querySelector('.home-inbox-pagination span')?.textContent==='第 2 页'`);assert.equal(await js(`document.getElementById('task-inbox-dialog')===null`),true);
  await js(`document.getElementById('home-inbox-read-all').click()`);await until(c,`document.getElementById('home-inbox-unread-label').textContent==='' && document.getElementById('home-inbox-read-all').disabled`);assert.equal((await js('window.notchAPI.getTaskInbox()')).unread,0);
  while(!port)await sleep(10);
  const send=payload=>fetch(`http://127.0.0.1:${port}/notify/codex`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -65,7 +72,7 @@ async function run(c){
  assert.equal(await js(`document.getElementById('home-inbox-badge').dataset.dot`),'true','B4: closed module shows dot');assert.equal(await js(`document.getElementById('home-inbox-badge').textContent`),'');
  await js(`document.getElementById('home-inbox-badge').click()`);await until(c,`document.querySelector('.tab.active').dataset.tab==='settings'`);assert.equal(await js(`document.activeElement.matches('[data-settings-home-module="inbox"]')`),true);
  // The retained slot must survive a real renderer reload while disabled.
- await js(`location.reload()`);await until(c,`!!window.NotchTaskInbox && !!window.NotchHome && !NotchHome.isVisible('inbox')`);
+ await reload();await until(c,`!!window.NotchTaskInbox && !!window.NotchHome && !NotchHome.isVisible('inbox')`);
  assert.equal((await js(`NotchHome.setModuleVisible('inbox',true)`)).ok,true);
  const afterToggle=await js(`({sizes:{...homeSizes},placements:JSON.parse(JSON.stringify(homeWorkingLayout.placements))})`);
  assert.deepEqual(afterToggle,beforeToggle,'B5: off/reload/on preserves every footprint and position');await js(`setActiveTab('home')`);await until(c,`document.querySelector('.tab.active').dataset.tab==='home'`);
@@ -78,14 +85,14 @@ async function run(c){
  // Real reload of a v0.11-era full custom layout must not overwrite its sizes.
  const oldPositions={music:{column:0,row:0,width:4,height:4},cursor:{column:4,row:0,width:4,height:4},recorder:{column:8,row:0,width:4,height:4}};
  const oldSizes={...initial.sizes,music:'large',cursor:'large',recorder:'large'};delete oldSizes.inbox;
- await js(`localStorage.setItem('notch-home-placements-v1',${JSON.stringify(JSON.stringify(oldPositions))});localStorage.setItem('notch-home-widget-sizes-v2',${JSON.stringify(JSON.stringify(oldSizes))});localStorage.setItem('notch-home-hidden-modules-v1',JSON.stringify(HOME_MODULE_REGISTRY.filter(id=>!['music','cursor','recorder','inbox'].includes(id))));localStorage.setItem('notch-home-order-v3',JSON.stringify(HOME_MODULE_REGISTRY.filter(id=>id!=='inbox')));location.reload()`);
+ await js(`localStorage.setItem('notch-home-placements-v1',${JSON.stringify(JSON.stringify(oldPositions))});localStorage.setItem('notch-home-widget-sizes-v2',${JSON.stringify(JSON.stringify(oldSizes))});localStorage.setItem('notch-home-hidden-modules-v1',JSON.stringify(HOME_MODULE_REGISTRY.filter(id=>!['music','cursor','recorder','inbox'].includes(id))));localStorage.setItem('notch-home-order-v3',JSON.stringify(HOME_MODULE_REGISTRY.filter(id=>id!=='inbox')));`);await reload();
  await until(c,`!!window.NotchHome && !!window.NotchTaskInbox && document.getElementById('home-inbox-badge').dataset.dot==='true' && document.getElementById('home-inbox-unread-label').textContent==='1 条未读'`);await js('setMode(true)');
  const migrated=await js(`({sizes:JSON.parse(localStorage.getItem('notch-home-widget-sizes-v2')),placements:homeWorkingLayout.placements,hidden:NotchHome.getVisibility().hiddenIds})`);
  for(const id of Object.keys(oldSizes))assert.equal(migrated.sizes[id],oldSizes[id]);assert.deepEqual(migrated.placements,oldPositions);assert(migrated.hidden.includes('inbox'));assert.equal(await js(`NotchDomain.validateHomeWidgetLayout(homeWorkingLayout,['music','cursor','recorder'])`),true);
  const legacyOrder=['music','pomodoro','cursor','windows','recorder','mirror','note','commands','sun'];
  const legacySizes={...initial.sizes,windows:'large'};delete legacySizes.inbox;
  const legacyPositions=await js(`NotchDomain.resolveHomeWidgetLayout(${JSON.stringify(legacyOrder)},${JSON.stringify(legacySizes)},['sun']).placements`);
- await js(`localStorage.setItem('notch-home-placements-v1',${JSON.stringify(JSON.stringify(legacyPositions))});localStorage.setItem('notch-home-widget-sizes-v2',${JSON.stringify(JSON.stringify(legacySizes))});localStorage.setItem('notch-home-order-v3',${JSON.stringify(JSON.stringify(legacyOrder))});localStorage.setItem('notch-home-hidden-modules-v1','["sun"]');location.reload()`);
+ await js(`localStorage.setItem('notch-home-placements-v1',${JSON.stringify(JSON.stringify(legacyPositions))});localStorage.setItem('notch-home-widget-sizes-v2',${JSON.stringify(JSON.stringify(legacySizes))});localStorage.setItem('notch-home-order-v3',${JSON.stringify(JSON.stringify(legacyOrder))});localStorage.setItem('notch-home-hidden-modules-v1','["sun"]');`);await reload();
  await until(c,`!!window.NotchHome && !!window.NotchTaskInbox && document.getElementById('home-inbox-badge').textContent==='1'`);
  assert.equal(await js(`NotchHome.isVisible('inbox')`),true);assert.equal(await js(`homeSizes.windows`),'medium');assert.deepEqual(await js(`homeWorkingLayout.placements.inbox`),{column:8,row:0,width:4,height:2});
  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(artifacts,'result.json'),JSON.stringify({fourSizes:true,inlinePaging:true,readAll:true,badge:true,disabledModule:true,corruption:true,rebuild:true,legacyLayout:true,selectedHomeBadgeHidden:true,disabledBadgeDot:true,togglePreservesLayout:true,consoleErrors:errors},null,2));
