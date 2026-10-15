@@ -14,6 +14,7 @@ const {
   PAIRING_CODE_TTL_MS,
 } = require('../packages/sync-protocol');
 const { hashSecret } = require('../fnos/app/server/pairing');
+const crypto = require('node:crypto');
 
 function gatewayHeaders(uid = 'uid-alice', extra = {}) {
   return {
@@ -109,6 +110,22 @@ test('pair/start issues code once; store keeps only hash', async () => {
   assert.equal(row.codeHash, hashSecret(body.pairingCode));
   assert.equal(row.uid, 'uid-alice');
   assert.equal(JSON.stringify(row).includes(body.pairingCode), false);
+});
+
+test('pair/start resamples a code that coincides with public expiry digits without relaxing the leak guard', async (t) => {
+  const now = 1_000_000;
+  const store = createMemoryStore({ serverId: 'srv-collision', now: () => now });
+  const app = createApp({ listenMode: 'gateway', store });
+  t.mock.method(crypto, 'randomUUID', () => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  const codes = [Number(String(now + PAIRING_CODE_TTL_MS).slice(-6)), 123456];
+  const random = t.mock.method(crypto, 'randomInt', () => codes.shift());
+  const started = await startPair(app);
+  assert.equal(started.statusCode, 200, started.getJson().error || 'pair/start failed');
+  assert.equal(random.mock.callCount(), 2);
+  const body = started.getJson();
+  assert.match(body.pairingCode, /^\d{6}$/);
+  assert.equal(JSON.stringify({ codeId: body.codeId, expiresAt: body.expiresAt }).includes(body.pairingCode), false);
+  assert.equal(store._peekPairingByCode(body.pairingCode).codeHash, hashSecret(body.pairingCode));
 });
 
 test('pair/claim single-consume in same transaction; second claim 409', async () => {

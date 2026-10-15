@@ -161,17 +161,22 @@ function createMemoryStore(options = {}) {
    */
   function startPairing({ uid, sessionId } = {}) {
     if (!uid) return { error: 'uid_required' };
-    const code = generatePairingCode();
-    const codeHash = hashSecret(code);
     const ts = nowFn();
     const codeId = crypto.randomUUID();
+    const expiresAt = ts + PAIRING_CODE_TTL_MS;
+    const publicMetadata = JSON.stringify({ codeId, expiresAt });
+    // Keep the route's leak guard intact when independent public metadata
+    // happens to contain the same six digits as the random secret.
+    let code;
+    do { code = generatePairingCode(); } while (publicMetadata.includes(code));
+    const codeHash = hashSecret(code);
     const row = {
       codeId,
       codeHash,
       uid: String(uid),
       sessionId: sessionId ? String(sessionId) : null,
       createdAt: ts,
-      expiresAt: ts + PAIRING_CODE_TTL_MS,
+      expiresAt,
       attempts: 0,
       maxAttempts: PAIRING_MAX_ATTEMPTS,
       consumedAt: null,
