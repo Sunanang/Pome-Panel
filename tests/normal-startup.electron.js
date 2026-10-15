@@ -8,8 +8,14 @@ if(process.platform==='darwin')app.commandLine.appendSwitch('use-mock-keychain')
 // effects are injected: never register Electron or request real OS permission.
 delete process.env.TODO_TEST_USER_DATA;
 require('../cursor-usage').readAuthToken=()=>({ok:false});require('../cursor-usage').fetchCursorUsage=async()=>({ok:false});require('../codex-usage').readCodexUsage=async()=>({ok:true,detected:false});require('../codex-auth').readLocalCodexToken=async()=>({ok:false});
-let login=false,loginWrites=0,permissions=0;
-app.getLoginItemSettings=()=>({openAtLogin:login});app.setLoginItemSettings=({openAtLogin})=>{login=openAtLogin;loginWrites++;};
+let login=false,loginApproved=true,loginWrites=0,permissions=0;
+app.getLoginItemSettings=options=>{
+ if(process.platform==='win32'){
+  assert.equal(options?.path,`"${process.execPath}"`,'Windows login lookup must preserve spaces in the executable path');
+  return {openAtLogin:login,executableWillLaunchAtLogin:login&&loginApproved};
+ }
+ return {openAtLogin:login};
+};app.setLoginItemSettings=({openAtLogin})=>{login=openAtLogin;loginWrites++;};
 const adapters=require('../platform-adapters'),original=adapters.loadAdapter;
 adapters.loadAdapter=(...args)=>{const adapter=original(...args);if(adapter.permissions)adapter.permissions.selfCheck=async()=>{permissions++;await new Promise(()=>{});};return adapter;};
 systemPreferences.subscribeNotification=()=>1;systemPreferences.unsubscribeNotification=()=>{};
@@ -22,6 +28,12 @@ async function run(c){
  await c.executeJavaScript(`document.getElementById('notch').click()`);
  for(let i=0;i<200;i++){if(await c.executeJavaScript(`document.getElementById('app').classList.contains('expanded') && !modeBusy`))break;await new Promise(r=>setTimeout(r,20));}
  assert.equal(await c.executeJavaScript(`document.getElementById('app').classList.contains('expanded')`),true);
- if(process.platform==='darwin'){assert.equal(permissions,1);assert(loginWrites>0);}
+ assert(loginWrites>0);
+ assert.equal(await c.executeJavaScript('notchAPI.getAppSettings().then(s=>s.autoLaunch)'),true);
+ if(process.platform==='win32'){
+  loginApproved=false;
+  assert.equal(await c.executeJavaScript('notchAPI.getAppSettings().then(s=>s.autoLaunch)'),false,'StartupApproved disable must take precedence over an existing Run entry');
+ }
+ if(process.platform==='darwin')assert.equal(permissions,1);
 }
 require('../main.js');

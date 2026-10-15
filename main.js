@@ -1327,7 +1327,11 @@ function toggleVisibility() {
 function isAutoLaunchEnabled() {
   if (!platformCapabilities.features.autoLaunch) return false;
   try {
-    const settings = app.getLoginItemSettings();
+    // Electron 44 parses the lookup path as a command line (electron#54364).
+    // Quote Windows paths so an install under "Pome Panel" matches its Run entry.
+    const settings = process.platform === 'win32'
+      ? app.getLoginItemSettings({ path: `"${process.execPath}"` })
+      : app.getLoginItemSettings();
     // Windows：openAtLogin 只看 Run 键还在不在，用户在任务管理器里禁用后它仍为 true，
     // 界面会显示"开"但实际不启动。executableWillLaunchAtLogin 同时考虑 StartupApproved。
     if (process.platform === 'win32' && typeof settings.executableWillLaunchAtLogin === 'boolean') {
