@@ -148,12 +148,15 @@ curl -X POST http://127.0.0.1:43821/notify/codex \
 ```bash
 git clone https://github.com/Sunanang/Pome-Panel.git
 cd Pome-Panel
+git switch dev
 npm install
 npm test
 npm start
 ```
 
 没有渲染层构建步骤。`npm start` 就是完整的桌面运行路径。
+
+`dev` 是长期开发分支，开发、修复、测试和版本准备都在此完成。`main` 只用于发布，禁止直接开发或提交修改，只接收 `dev → main` 的 PR 合并。合并后 GitHub Actions 自动测试并构建 Mac、Windows 和 NAS 安装包；正式 Release 继续通过 `main` 上与版本一致的 `v*.*.*` 标签发布。合并后将 `main` 同步回 `dev`，后续继续在 `dev` 开发。
 
 | 命令 | 用途 |
 | --- | --- |

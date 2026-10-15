@@ -80,6 +80,9 @@
 
 ## GitHub 推送与发布联动
 
+- `dev` 是长期开发分支。所有开发、修复、测试和版本准备都在 `dev` 完成；开始工作前先确认当前分支，不得直接在 `main` 开发或提交修改。
+- `main` 是发布分支，只接收 `dev` 的合并。发版前在 `dev` 完成检查，再通过 `dev → main` 的 PR 合并；合并后 GitHub Actions 自动测试并构建 macOS DMG、Windows EXE、NAS FPK。不要从其它分支直接合入 `main`。
+- 合并发布后切回 `dev`，将 `main` 的合并结果同步回 `dev` 再继续开发；保留长期 `dev` 分支。正式 GitHub Release 仍由 `main` 上与版本一致的 `v*.*.*` 标签触发。
 - 任何产品更新推送到 GitHub 前，必须联动检查版本号、`CHANGELOG.md`、README 当前稳定版本与下载入口、GitHub Pages 下载按钮。
 - 正式发布必须保证 `package.json` 与 `package-lock.json` 版本一致，推送匹配的 `v*.*.*` 标签，并在 GitHub Actions 完成后验证同一 Release 的 DMG、Windows EXE 及各自 SHA-256 资产与 Pages 实际下载指向。
 - 官网下载按钮分别从 GitHub `releases/latest` 动态解析当前版本的 `arm64.dmg` 与 `windows-x64-setup.exe`，不得留下过期固定链接或跨平台误下载。验证两个安装包及各自 SHA-256。
