@@ -28,11 +28,11 @@ $start.FileName = $RuntimePath
 $start.Arguments = ($arguments | ForEach-Object { Quote-NativeArgument $_ }) -join ' '
 $start.UseShellExecute = $false
 $start.CreateNoWindow = $true
-$start.RedirectStandardInput = $true
+# Force explicit standard handles even with CreateNoWindow. The child inherits
+# stdin directly; .NET ConsoleStream cannot reliably read Node's overlapped pipe.
+$start.RedirectStandardError = $true
 $child = [Diagnostics.Process]::Start($start)
-# Forward JSON as bytes: the .NET text writer can emit a BOM or use a console
-# code page, both of which corrupt the UTF-8 input expected by the hooks.
-if ($PomeMarker -ne '--pome-panel-hook=codex') { [Console]::OpenStandardInput().CopyTo($child.StandardInput.BaseStream) }
-$child.StandardInput.BaseStream.Close()
+$errorText = $child.StandardError.ReadToEnd()
+if ($errorText) { [Console]::Error.Write($errorText) }
 $child.WaitForExit()
 exit $child.ExitCode
