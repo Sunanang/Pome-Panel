@@ -35,7 +35,11 @@ test('Darwin reports accessibility permission before attempting a window scan', 
 
 test('Darwin resolves Claude origin from the hook process ancestry, including an editor terminal', async () => {
   const { createDarwinAdapter } = require('../platform-adapters/darwin');
-  const adapter = createDarwinAdapter({ runJxa: async () => JSON.stringify([
+  const adapter = createDarwinAdapter({ execFile: (file, args, options, callback) => {
+    assert.equal(file, '/bin/ps');
+    assert.deepEqual(args, ['-axo', 'pid=,ppid=']);
+    callback(null, `${process.pid} ${process.ppid}\n${process.ppid} 1\n`);
+  }, runJxa: async () => JSON.stringify([
     { pid: process.ppid, appName: 'Editor terminal', bundleId: 'runtime.origin' },
     { pid: 987654321, appName: 'Terminal', bundleId: 'unrelated.terminal' },
   ]) });
@@ -132,6 +136,12 @@ test('Windows adapter defers the native layer until activateNative()', () => {
   assert.deepEqual(win32.native, { available: false, reason: 'not_enabled' });
   assert.deepEqual(win32.activateNative(), { available: false, reason: 'not_win32' });
   assert.deepEqual(win32.native, { available: false, reason: 'not_win32' });
+});
+
+test('forced disable takes precedence over a previously loaded Windows native layer', () => {
+  // On Windows the binding check above has already populated the native cache.
+  assert.deepEqual(loadWin32Native({ platform: 'win32', env: { POME_DISABLE_WIN_NATIVE: '1' } }),
+    { available: false, reason: 'disabled_by_env' });
 });
 
 test('UWP windows report the hosted app instead of ApplicationFrameHost', async () => {

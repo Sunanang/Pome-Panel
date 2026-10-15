@@ -163,7 +163,7 @@ async function exportWorkspaceBackup({ root, storage, destination, appVersion })
     for (const file of files) zip.addFile(path.join(stage, file.path), file.path);
     zip.end();
     await writing;
-    const fd = fs.openSync(temporary, 'r'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    const fd = fs.openSync(temporary, 'r+'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
     const checked = await inspectWorkspaceBackup(temporary);
     checked.dispose();
     fs.renameSync(temporary, destination);
@@ -266,7 +266,7 @@ function applyWorkspaceRestore({ root, inspected, currentStorage, afterRename = 
     const source = path.join(inspected.stage, 'media', folder);
     if (fs.existsSync(source)) fs.cpSync(source, path.join(incoming, folder), { recursive: true });
   }
-  for (const relative of mediaReferences(inspected.storage)) { const fd = fs.openSync(path.join(incoming, relative), 'r'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } }
+  for (const relative of mediaReferences(inspected.storage)) { const fd = fs.openSync(path.join(incoming, relative), 'r+'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } }
   const journal = { version: 1, phase: 'applying', existed: RESTORE_PARTS.map((part) => fs.existsSync(path.join(root, part))) };
   writeJsonAtomic(path.join(area, 'journal.json'), journal);
   try {

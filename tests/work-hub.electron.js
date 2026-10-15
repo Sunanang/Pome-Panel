@@ -1,6 +1,12 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const {app,dialog,BrowserWindow}=require('electron');
+const {app,dialog,BrowserWindow,ipcMain}=require('electron');
+// Exercise paging while its IPC result (and page label) is still pending.
+const handle=ipcMain.handle.bind(ipcMain);
+ipcMain.handle=(channel,handler)=>handle(channel,channel==='tasks:inbox'?async(event,options)=>{
+ if(options?.offset>0)await new Promise(resolve=>setTimeout(resolve,100));
+ return handler(event,options);
+}:handler);
 const sourceCalls=[];
 const sourceApps={codex:{pid:101,appName:'ChatGPT',bundleId:'fixture.codex'},cursor:{pid:102,appName:'Cursor',bundleId:'fixture.cursor'},claude:{pid:103,appName:'Terminal',bundleId:'fixture.terminal'}};
 // Never open host applications from integration tests.
@@ -51,7 +57,7 @@ async function run(c){
  }
  let inbox=await c.executeJavaScript('window.notchAPI.getTaskInbox()');assert.equal(inbox.total,50);assert.equal(inbox.items.length,20);assert.equal(inbox.unread,50);
  await c.executeJavaScript(`setActiveTab('home')`);await until(c,`document.querySelectorAll('.home-inbox-row').length===5`);
- await c.executeJavaScript(`document.querySelector('.home-inbox-pagination button:last-child').click()`);await until(c,`document.querySelector('.home-inbox-pagination span').textContent==='第 2 页'`);
+ await c.executeJavaScript(`document.querySelector('.home-inbox-pagination button:last-child').click()`);await until(c,`document.querySelector('.home-inbox-pagination span')?.textContent==='第 2 页'`);
  await c.executeJavaScript(`document.querySelector('.home-inbox-row').click()`);await until(c,`document.getElementById('home-inbox-unread-label').textContent==='49 条未读'`);
  const inboxDisk=JSON.parse(fs.readFileSync(path.join(profile,'task-inbox.json')));assert.equal(inboxDisk.records.filter(r=>r.readAt!==null).length,1);
  for(const source of ['codex','cursor','claude']){

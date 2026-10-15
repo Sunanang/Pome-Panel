@@ -405,7 +405,7 @@ function createDarwinAdapter(options = {}) {
     // Walk its hook process ancestry instead of capturing an unrelated foreground app.
     const pid = Number(senderPid);
     if (source === 'claude' && Number.isSafeInteger(pid) && pid > 1) {
-      const parents = await new Promise(resolve => execFile('/bin/ps', ['-axo', 'pid=,ppid='], { timeout: 1000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout) => {
+      const parents = await new Promise(resolve => (options.execFile || execFile)('/bin/ps', ['-axo', 'pid=,ppid='], { timeout: 1000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout) => {
         resolve(new Map(error ? [] : String(stdout).trim().split('\n').map(line => line.trim().split(/\s+/).map(Number))));
       }));
       const seen = new Set();

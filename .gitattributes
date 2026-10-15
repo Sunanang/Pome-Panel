@@ -1,0 +1,2 @@
+# Keep scripts, manifests and their vendored copies identical on both runners.
+* text=auto eol=lf

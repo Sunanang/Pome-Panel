@@ -630,7 +630,7 @@ exit 0
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('server keeps the gateway up when no device port is configured', async () => {
+test('server keeps the gateway up when no device port is configured', { skip: process.platform === 'win32' && 'fnOS gateway requires Unix domain sockets' }, async () => {
   const dir = tmpDir('fnos-gateway-noport-');
   const socketPath = path.join(dir, 'app.sock');
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'fnos/app/server/index.js')], {
@@ -675,7 +675,7 @@ test('server keeps the gateway up when no device port is configured', async () =
   }
 });
 
-test('server binds 0.0.0.0 when device-bind requests lan', async () => {
+test('server binds 0.0.0.0 when device-bind requests lan', { skip: process.platform === 'win32' && 'fnOS gateway requires Unix domain sockets' }, async () => {
   const dir = tmpDir('fnos-gateway-lan-');
   const holder = http.createServer();
   const addr = await listen(holder);
@@ -718,7 +718,7 @@ test('server binds 0.0.0.0 when device-bind requests lan', async () => {
   }
 });
 
-test('server binds the saved device port once it is configured', async () => {
+test('server binds the saved device port once it is configured', { skip: process.platform === 'win32' && 'fnOS gateway requires Unix domain sockets' }, async () => {
   const dir = tmpDir('fnos-gateway-port-');
   const holder = http.createServer();
   const addr = await listen(holder);

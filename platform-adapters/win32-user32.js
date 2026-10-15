@@ -372,6 +372,9 @@ function createWin32Native(options = {}) {
 let cached = null;
 
 function loadWin32Native(options = {}) {
+  // A cached native layer must not override the platform or forced-disable gate.
+  if ((options.platform || process.platform) !== 'win32'
+    || String((options.env || process.env)[DISABLE_ENV] || '') === '1') return createWin32Native(options);
   if (!cached) cached = createWin32Native(options);
   return cached;
 }

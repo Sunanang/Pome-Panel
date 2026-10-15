@@ -423,7 +423,7 @@ test('device port listen uses ephemeral port (not hardcoded 5001)', async () => 
   await app.close();
 });
 
-test('unix gateway socket serves health', async () => {
+test('unix gateway socket serves health', { skip: process.platform === 'win32' && 'fnOS gateway requires Unix domain sockets' }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fnos-sock-'));
   const socketPath = path.join(dir, 'test.sock');
   const app = createApp({ listenMode: 'gateway', serverId: 'srv-unix' });

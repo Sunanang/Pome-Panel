@@ -79,9 +79,9 @@ function createTaskApps(platform, options = {}) {
         if (app?.bundleId && /^[\w.-]+$/.test(app.bundleId)) return app.bundleId;
       } catch {}
     }
-    const roots = source === 'claude' ? ['/System/Applications/Utilities', '/Applications/Utilities'] : ['/Applications', path.join(options.homeDir || os.homedir(), 'Applications')];
+    const roots = source === 'claude' ? ['/System/Applications/Utilities', '/Applications/Utilities'] : ['/Applications', path.posix.join(options.homeDir || os.homedir(), 'Applications')];
     for (const root of roots) for (const name of APP_NAMES[source]) {
-      const plist = path.join(root, `${name}.app`, 'Contents', 'Info.plist');
+      const plist = path.posix.join(root, `${name}.app`, 'Contents', 'Info.plist');
       if (!exists(plist)) continue;
       try {
         const bundleId = await run('/usr/libexec/PlistBuddy', ['-c', 'Print:CFBundleIdentifier', plist]);

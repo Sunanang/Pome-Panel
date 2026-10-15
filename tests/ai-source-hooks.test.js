@@ -16,7 +16,7 @@ for(const source of ['codex','claude','cursor']){
   const connected=fs.readFileSync(files[source],'utf8');plan=await service.preview(source);result=await service.apply(plan.token);assert.equal(result.ok,true);assert.equal(fs.readFileSync(files[source],'utf8'),connected,'repeat does not duplicate or rewrite');
   const moved=createAiSourceHooks({homeDir:home,runtimePath:'/missing/pome-node',runtimeCheck:()=>true});assert.equal((await moved.status(source)).state,'error');
   // A real stale Pome entry remains recognizable and can be rewritten safely.
-  const stale=connected.split(process.execPath).join('/old/Pome Panel');fs.writeFileSync(files[source],stale);
+  const stale=connected.split(JSON.stringify(process.execPath).slice(1,-1)).join('/old/Pome Panel');assert.notEqual(stale,connected);fs.writeFileSync(files[source],stale);
   assert.equal((await service.status(source)).state,'error');plan=await service.preview(source,'repair');assert.equal((await service.apply(plan.token)).ok,true);assert.equal((await service.status(source)).state,'connected');
   plan=await service.preview(source,'disconnect');assert.equal((await service.apply(plan.token)).ok,true);
   const after=readConfig(files[source],source).value;
@@ -99,6 +99,7 @@ test('time-expired confirmation refuses writing even if file is unchanged',async
 });
 test('installed Claude and Cursor shell commands run with spaces and apostrophes in application path',async t=>{
  const {home}=fixture(t),appDir=path.join(home,"Pome Panel's app");fs.mkdirSync(path.join(appDir,'scripts'),{recursive:true});for(const source of ['claude','cursor'])fs.copyFileSync(path.join(__dirname,'../scripts',source+'-notify.js'),path.join(appDir,'scripts',source+'-notify.js'));
+ fs.copyFileSync(path.join(__dirname,'../scripts/pome-hook-runtime.ps1'),path.join(appDir,'scripts/pome-hook-runtime.ps1'));
  const service=createAiSourceHooks({homeDir:home,appDir}),received=[];
  const server=http.createServer((req,res)=>{let b='';req.on('data',c=>b+=c);req.on('end',()=>{received.push(JSON.parse(b));res.end('{}');});});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  for(const source of ['claude','cursor']){
