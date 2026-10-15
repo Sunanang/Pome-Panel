@@ -105,7 +105,11 @@ test('installed Claude and Cursor shell commands run with spaces and apostrophes
  for(const source of ['claude','cursor']){
   const p=await service.preview(source);await service.apply(p.token);const file=path.join(home,source==='claude'?'.claude/settings.json':'.cursor/hooks.json'),value=JSON.parse(fs.readFileSync(file,'utf8'));
   const command=source==='claude'?value.hooks.Stop[0].hooks[0].command:value.hooks.stop[0].command;
-  await new Promise((resolve,reject)=>{const child=spawn(command,{shell:true,env:{...process.env,POME_NOTIFY_PORT:String(server.address().port)},stdio:['pipe','ignore','ignore']});child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(Error('command failed')));child.stdin.end(JSON.stringify({_pome_test:true,_pome_test_token:source,conversation_id:'session',generation_id:source}));});
+  const cwd="C:\\工程\\Panel's path";
+  await new Promise((resolve,reject)=>{const child=spawn(command,{shell:true,env:{...process.env,POME_NOTIFY_PORT:String(server.address().port)},stdio:['pipe','ignore','ignore']});child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(Error(`${source} command failed`)));child.stdin.end(JSON.stringify({_pome_test:true,_pome_test_token:source,conversation_id:'session',generation_id:source,cwd}));});
+  assert.equal(received.length,source==='claude'?1:2,`${source} must deliver its completion`);
+  assert.equal(received.at(-1)._pome_test,true,`${source} must parse the forwarded JSON`);
+  assert.equal(received.at(-1).cwd,cwd,`${source} must preserve UTF-8 input`);
  }
  assert.equal(received.length,2);assert.equal(received[1].event_id,'session:cursor');
 });

@@ -30,7 +30,9 @@ $start.UseShellExecute = $false
 $start.CreateNoWindow = $true
 $start.RedirectStandardInput = $true
 $child = [Diagnostics.Process]::Start($start)
-if ($PomeMarker -ne '--pome-panel-hook=codex') { $child.StandardInput.Write([Console]::In.ReadToEnd()) }
-$child.StandardInput.Close()
+# Forward JSON as bytes: the .NET text writer can emit a BOM or use a console
+# code page, both of which corrupt the UTF-8 input expected by the hooks.
+if ($PomeMarker -ne '--pome-panel-hook=codex') { [Console]::OpenStandardInput().CopyTo($child.StandardInput.BaseStream) }
+$child.StandardInput.BaseStream.Close()
 $child.WaitForExit()
 exit $child.ExitCode
