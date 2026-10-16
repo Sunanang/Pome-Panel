@@ -36,6 +36,8 @@ let isHovering = false;
 let timing = null;
 let lastHeight = 0;
 let keepShell = false;
+let activationError = false;
+let activating = false;
 
 function updateHeight() {
   if (!currentNotification || !isVisible || isHiding) return;
@@ -86,17 +88,20 @@ function showNotification(payload) {
   currentNotification = domain.normalize(payload);
   const notification = currentNotification;
   isVisible = true;
+  activationError = false;
+  activating = false;
   isHiding = false;
   timing = null;
   keepShell = false;
   const replace = payload?.replace === true && root.classList.contains('is-visible');
   lastHeight = 0;
   titleElement.textContent = notification.title;
-  titleElement.title = notification.title;
+  titleElement.title = [notification.sessionTitle, notification.completionSummary || notification.title].filter(Boolean).join('\n');
   sourceElement.textContent = notification.source;
   detailElement.textContent = notification.detail;
   detailElement.hidden = !notification.detail;
   document.getElementById('notification-separator').hidden = !notification.detail;
+  shell.classList.remove('has-activation-error');
   shell.dataset.source = notification.sourceKey;
   shell.dataset.status = notification.status;
   const brandPath = ['codex','claude','cursor'].includes(notification.sourceKey)
@@ -158,12 +163,26 @@ function dismissNotification() {
   else hideNotification(currentNotification.eventId);
 }
 shell.addEventListener('pointerenter', () => reportHover(true));
-shell.addEventListener('pointerleave', () => reportHover(false));
+shell.addEventListener('pointerleave', () => { if (!activationError) reportHover(false); });
 openButton.addEventListener('click', async () => {
-  if (!isVisible || isHiding) return;
+  if (!isVisible || isHiding || activating) return;
   const eventId = currentNotification.eventId;
   if (canFocusWindows() && api?.activateTaskNotification) {
-    try { await api.activateTaskNotification(eventId); } catch (error) { /* Dismiss still works when activation fails. */ }
+    activating = true;
+    let result;
+    try { result = await api.activateTaskNotification(eventId); } catch { result = { ok: false }; }
+    if (currentNotification?.eventId !== eventId) return;
+    activating = false;
+    if (result !== true && result?.ok !== true) {
+      activationError = true;
+      detailElement.textContent = result?.message || '打开来源软件失败，请稍后重试。';
+      detailElement.title = detailElement.textContent;
+      detailElement.hidden = false;
+      document.getElementById('notification-separator').hidden = false;
+      shell.classList.add('has-activation-error');
+      reportHover(true);
+      return;
+    }
   }
   if (currentNotification?.eventId === eventId) dismissNotification();
 });
@@ -171,7 +190,7 @@ closeButton.addEventListener('click', event => { event.stopPropagation(); dismis
 shell.addEventListener('keydown', event => {
   if (event.key === 'Escape' && currentNotification?.status !== 'awaiting') { event.preventDefault(); dismissNotification(); }
 });
-window.addEventListener('blur', () => reportHover(false));
+window.addEventListener('blur', () => { if (!activationError) reportHover(false); });
 window.addEventListener('resize', updateHeight);
 window.addEventListener('beforeunload', stopTickers);
 api?.onTaskNotification?.(showNotification);

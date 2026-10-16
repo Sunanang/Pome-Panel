@@ -8,7 +8,7 @@ const TIMEOUT_MS = 10_000;
 const CACHE_TTL_MS = 60_000;
 
 function finite(value) {
-  if (value == null || value === '') return null;
+  if (value == null || typeof value === 'boolean' || typeof value === 'string' && !value.trim()) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -22,9 +22,23 @@ function parseRemoteUsage(body, now = Date.now()) {
       windowMinutes: seconds == null ? null : seconds / 60, resetsAt: finite(window.reset_at) };
   }
   const credits = body?.credits;
+  const windows = [];
+  for (const [index, extra] of (Array.isArray(body?.additional_rate_limits) ? body.additional_rate_limits.slice(0, 16) : []).entries()) {
+    for (const key of ['primary', 'secondary']) {
+      const value = windowUsage(extra?.rate_limit?.[`${key}_window`]);
+      if (value) windows.push({ ...value, id: `extra-${index}-${key}`, label: String(extra.limit_name || extra.metered_feature || '其他额度').slice(0, 80) });
+    }
+  }
+  if (windows.length) {
+    for (const key of ['secondary', 'primary']) {
+      const value = windowUsage(body?.rate_limit?.[`${key}_window`]);
+      if (value) windows.unshift({ ...value, id: key, label: '' });
+    }
+  }
   return withExpiry({ ok: true, detected: false, configured: true, authSource: 'manual',
     updatedAt: new Date(now).toISOString(),
     plan: typeof body?.plan_type === 'string' ? body.plan_type.slice(0, 80) : null,
+    ...(windows.length ? { windows } : {}),
     primary: windowUsage(body?.rate_limit?.primary_window),
     secondary: windowUsage(body?.rate_limit?.secondary_window),
     credits: credits && typeof credits === 'object' ? {
@@ -103,7 +117,7 @@ function createCodexUsageService({ fetchImpl = fetch, readLocal = readCodexUsage
       return { ...local, configured, authSource: 'local', manualTokenInvalid: invalid, remoteError };
     }
     if (token && !invalid && lastSuccess) {
-      return { ...withExpiry(lastSuccess, now()), configured, cached: true, manualTokenInvalid: false, remoteError };
+      return { ...withExpiry(lastSuccess, now()), configured, cached: true, stale: true, manualTokenInvalid: false, remoteError };
     }
     return { ...local, configured, authSource: local?.detected ? 'local' : null,
       manualTokenInvalid: invalid, remoteError };

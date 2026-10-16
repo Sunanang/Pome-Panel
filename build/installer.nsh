@@ -8,6 +8,14 @@
 ; ${isUpdated} 保护是必须的：升级安装时旧版本的卸载器也会跑一遍，
 ; 不加判断就会把用户的自启设置连同升级一起抹掉。
 
+; 使用标准安装向导：先说明目录与快捷方式，再进入可浏览的目录选择页。
+!macro customWelcomePage
+  !define MUI_WELCOMEPAGE_TITLE "安装 Pome Panel"
+  !define MUI_WELCOMEPAGE_TEXT "此向导将安装 Pome Panel。$\r$\n$\r$\n下一步可以选择程序的安装目录。安装完成后，将在桌面和开始菜单创建启动快捷方式。"
+  !insertmacro MUI_PAGE_WELCOME
+  !define MUI_DIRECTORYPAGE_TEXT_TOP "请选择 Pome Panel 的安装目录。程序文件保存在此目录，桌面将创建启动快捷方式。"
+!macroend
+
 !macro customUnInstall
   ${ifNot} ${isUpdated}
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "com.dynamicpanel.app"

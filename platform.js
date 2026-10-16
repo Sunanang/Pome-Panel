@@ -11,6 +11,7 @@
     const win = platform === 'win32';
     return {
       platform,
+      homeDefaults: { showSun: win, fillGrid: win },
       layout: {
         areaKind: win ? 'workArea' : 'bounds', // 夹紧 / 侧边停靠的参考区域
         topInsetKind: mac ? 'menuBar' : 'none',

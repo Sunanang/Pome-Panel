@@ -7250,10 +7250,15 @@ html[data-platform="win32"] .note-format-actions::-webkit-scrollbar {
 .sun-suggest { color: #FFC9A3; }
 
 .sun-popover {
+  --sun-popover-gap: 8px;
+  --sun-popover-height: 420px;
   position: fixed;
   z-index: 10000;
+  display: flex;
+  flex-direction: column;
   width: 264px;
-  max-height: min(420px, calc(100vh - 24px));
+  max-width: calc(100vw - 16px);
+  max-height: min(var(--sun-popover-height), calc(100vh - 16px));
   overflow: auto;
   padding: 8px;
   border-radius: var(--r-popover);
@@ -7264,10 +7269,11 @@ html[data-platform="win32"] .note-format-actions::-webkit-scrollbar {
   color: var(--text-1);
 }
 .sun-popover[hidden] { display: none !important; }
+.sun-popover > :not(ul) { flex-shrink: 0; }
 .sun-search { display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px; border-radius: var(--r-input); background: rgba(255,255,255,.06); box-shadow: 0 0 0 1px rgba(110,168,255,.55); color: var(--text-1); }
 .sun-search svg { width: 13px; height: 13px; color: var(--text-2); flex: none; }
 .sun-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--text-1); font: 12px/1 var(--font); }
-.sun-popover ul { margin: 6px 0 0; padding: 0; }
+.sun-popover ul { min-height: 34px; overflow-y: auto; margin: 6px 0 0; padding: 0; }
 .sun-popover li { list-style: none; }
 .sun-popover li button {
   width: 100%;
@@ -7555,3 +7561,10 @@ html[data-liquid-glass='1'] .tile.home-inbox[data-source-state='error'] { backgr
 .home-inbox-source-suggestion { display:flex; flex-wrap:wrap; align-items:center; gap:6px; flex-shrink:0; color:var(--text-2); font-size:var(--fs-caption); }
 .home-inbox-source-suggestion span { flex:1 0 100%; }
 .home-inbox .home-inbox-onboard-primary { padding:5px 10px; border:1px solid var(--hairline-soft); border-radius:var(--r-pill); background:var(--surface-3); color:var(--text-2); }
+
+/* Additional model pools stay reachable without expanding the Bento tile. */
+.home-cursor .ai-usage-providers:has([data-dynamic='true']) { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.home-inbox-event-status { color: var(--muted, #a4a4ad); }
+
+.home-cursor .ai-quota-row .cursor-usage-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-cursor .cursor-usage-rows[data-dynamic='true'] .ai-quota-row { flex-shrink: 0; }

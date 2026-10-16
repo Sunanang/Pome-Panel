@@ -4,7 +4,10 @@
   const tile = document.getElementById('home-cursor');
   if (!tile || !D) return;
   const byId = (id) => document.getElementById(id);
-  const state = { cursor: null, codex: null };
+  const registry = D.registry;
+  const state = Object.fromEntries(registry.providers.map(({ id }) => [id, null]));
+  let refreshTimer;
+  const revisions = Object.fromEntries(registry.providers.map(({ id }) => [id, 0]));
   let remembered = null;
   try { remembered = localStorage.getItem(D.TAB_KEY); } catch {}
   let active = null;
@@ -21,7 +24,7 @@
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     if (byId('tab-settings').getAttribute('aria-hidden') !== 'false') return;
-    const card = byId(provider === 'codex' ? 'settings-codex-token-card' : 'settings-cursor-token-card');
+    const card = byId(registry.get(provider)?.settingsCard || registry.providers[0].settingsCard);
     card?.scrollIntoView({ block: 'center', behavior: 'instant' });
     card?.querySelector('input')?.focus({ preventScroll: true });
   }
@@ -51,7 +54,8 @@
   }
   // Both providers use exactly this row component; size differences live in CSS.
   function renderQuotaRows(provider, specs) {
-    const container = byId(provider === 'cursor' ? 'cursor-usage-rows' : 'codex-usage-rows');
+    const container = byId(`${provider}-usage-rows`);
+    container.dataset.dynamic = String(specs.length > 3);
     const rows = specs.map(({ key, name, windowUsage, help }) => {
       const row = document.createElement('div');
       row.className = 'cursor-usage-row ai-quota-row';
@@ -75,18 +79,19 @@
     source.textContent = invalid ? data?.ok ? 'Token 失效 · 已改用本机' : 'Token 失效'
       : data?.warning ? '请求失败 · 已改用本机' : data?.authSource === 'manual' || data?.configured && !data?.ok ? '手动 Token' : '本机登录';
     source.classList.toggle('is-error', Boolean(invalid));
-    renderQuotaRows('cursor', [['auto', 'auto', 'Auto'], ['other', 'other', 'Other'], ['grok', 'grokBot', 'Grok Bot']].map(([key, pool, name]) => ({
-      key, name, windowUsage: data?.ok ? data[pool] : null,
-      help: key === 'grok' ? (date(data?.grokBot?.resetAt) ? `周重置 ${date(data.grokBot.resetAt)}` : '周重置时间未知')
+    renderQuotaRows('cursor', D.quotaRows(data, 'cursor').map(({ key, name, windowUsage }) => ({
+      key, name, windowUsage: data?.ok ? windowUsage : null,
+      help: data?.poolWarnings?.grokBot && key === 'grok' ? data.poolWarnings.grokBot : key === 'grok' ? (date(data?.grokBot?.resetAt) ? `周重置 ${date(data.grokBot.resetAt)}` : '周重置时间未知')
         : (date(data?.billing?.cycleEnd) ? `账期至 ${date(data.billing.cycleEnd)}` : '账期未知'),
     })));
     const footnote = byId('cursor-usage-footnote');
+    footnote.classList.toggle('is-stale', Boolean(data?.stale));
     if (!data?.ok) {
       if (invalid) errorSettings(footnote, 'Token 已失效，本机登录也不可用', 'cursor');
       else footnote.textContent = '暂时读不到用量，点刷新重试';
       return;
     }
-    footnote.textContent = `${data.cached ? '缓存 · ' : ''}最近刷新 ${D.clock(data.fetchedAt)}`;
+    footnote.textContent = `${data.stale ? '刷新失败，显示上次数据 · ' : data.cached ? '缓存 · ' : ''}最近刷新 ${D.clock(data.fetchedAt)}`;
   }
   function paintCodex() {
     const data = state.codex;
@@ -97,15 +102,15 @@
     source.textContent = data?.manualTokenInvalid
       ? fromLocal && data.updatedAt ? 'Token 失效 · 已改用本机' : 'Token 失效' : sourceLabel;
     source.classList.toggle('is-error', Boolean(data?.manualTokenInvalid));
-    renderQuotaRows('codex', [['primary', '5 小时额度'], ['secondary', '每周额度']].map(([key, name]) => {
-      const windowUsage = data?.ok ? data[key] : null;
-      return { key, name, windowUsage, help: D.resetText(windowUsage) };
-    }));
-    const stale = D.expired(data?.primary) || D.expired(data?.secondary);
+    const quotaRows = D.quotaRows(data, 'codex');
+    renderQuotaRows('codex', (quotaRows.length ? quotaRows : [{ key: 'primary', name: '额度', windowUsage: null }]).map(({ key, name, windowUsage }) => ({
+      key, name, windowUsage: data?.ok ? windowUsage : null, help: D.resetText(windowUsage),
+    })));
+    const stale = data?.stale || D.quotaRows(data, 'codex').some(row => D.expired(row.windowUsage));
     const foot = byId('codex-usage-footnote');
     foot.classList.toggle('is-stale', stale);
     foot.classList.toggle('is-error', Boolean(data?.manualTokenInvalid || data?.remoteError || !data?.ok || !data?.updatedAt));
-    const windows = [data?.primary, data?.secondary].filter((w) => w?.resetsAt != null);
+    const windows = D.quotaRows(data, 'codex').map(row => row.windowUsage).filter((w) => w?.resetsAt != null);
     const earliest = windows.sort((a, b) => a.resetsAt - b.resetsAt)[0];
     const miniReset = byId('codex-usage-mini-reset');
     miniReset.textContent = D.resetText(earliest);
@@ -143,7 +148,7 @@
     if (size === 'mini') head.insertBefore(tabs, byId('cursor-usage-refresh'));
     else head.after(tabs);
     byId('ai-usage-title').hidden = size === 'mini' && switchable;
-    for (const id of ['cursor', 'codex']) {
+    for (const { id } of registry.providers) {
       const provider = byId(`ai-provider-${id}`);
       provider.hidden = !ids.includes(id) || switchable && active !== id;
       provider.setAttribute('role', switchable ? 'tabpanel' : 'region');
@@ -155,7 +160,7 @@
       button.tabIndex = active === id ? 0 : -1;
       const remaining = D.lowestRemaining(state[id], id);
       button.dataset.level = active !== id ? D.level(remaining) : 'ok';
-      const name = id === 'cursor' ? 'Cursor' : 'Codex';
+      const name = registry.get(id).label;
       const hint = button.dataset.level === 'critical' ? ' · 剩余额度紧张' : button.dataset.level === 'warn' ? ' · 剩余额度较少' : '';
       button.title = `${name} 最少剩余额度：${D.formatPercent(remaining)}${hint}`;
       button.setAttribute('aria-label', button.title);
@@ -166,7 +171,7 @@
     tile.querySelector('.ai-empty-body').textContent = size === 'mini' ? D.FALLBACK.miniBody : D.FALLBACK.body;
     if (!ids.length && size === 'mini') byId('ai-usage-title').hidden = true;
     paintCursor(); paintCodex();
-    for (const id of ['cursor', 'codex']) {
+    for (const { id } of registry.providers) {
       const source = byId(`ai-${id}-source`); source.title = source.textContent;
       const foot = byId(`${id === 'cursor' ? 'cursor' : 'codex'}-usage-footnote`); foot.title = foot.textContent;
     }
@@ -178,18 +183,22 @@
     if (inFlight) { queuedForce ||= force; return inFlight; }
     byId('cursor-usage-refresh').classList.add('is-loading');
     inFlight = (async () => {
-      const tasks = [api?.getCursorUsage ? api.getCursorUsage({ force }) : Promise.resolve({ detected: false }),
-        api?.getCodexUsage ? api.getCodexUsage({ force }) : Promise.resolve({ detected: false })];
-      await Promise.all(tasks.map(async (task, index) => {
-        const id = index === 0 ? 'cursor' : 'codex';
-        try { state[id] = await task; }
-        catch { state[id] = { detected: state[id]?.detected, configured: state[id]?.configured, ok: false }; }
+      await Promise.all(registry.providers.map(async ({ id, request }) => {
+        const revision = revisions[id];
+        try {
+          const result = api?.[request] ? await api[request]({ force }) : { detected: false };
+          if (revisions[id] === revision) state[id] = result;
+        } catch {
+          if (revisions[id] === revision) state[id] = state[id]?.ok ? { ...state[id], stale: true, refreshError: 'ipc_failed' }
+            : { detected: state[id]?.detected, configured: state[id]?.configured, ok: false };
+        }
       }));
       render();
     })();
     try { await inFlight; }
     finally {
       inFlight = null; byId('cursor-usage-refresh').classList.remove('is-loading');
+      scheduleRefresh();
       if (queuedForce) { queuedForce = false; refresh({ force: true }); }
     }
   }
@@ -206,9 +215,14 @@
   });
   tile.querySelector('.ai-open-settings').addEventListener('click', () => openSettings());
   new MutationObserver(render).observe(tile, { attributes: true, attributeFilter: ['data-widget-size'] });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
-  document.addEventListener('notch:cursor-token-changed', () => refresh({ force: true }));
+  const usageVisible = () => document.visibilityState === 'visible' && document.getElementById('app')?.classList.contains('expanded')
+    && document.getElementById('tab-button-home')?.classList.contains('active') && !tile.hidden;
+  for (const event of ['visibilitychange', 'notch:modechange', 'notch:tabchange', 'notch:home-modules-changed']) {
+    document.addEventListener(event, () => { if (usageVisible()) refresh(); else scheduleRefresh(); });
+  }
+  document.addEventListener('notch:cursor-token-changed', () => { revisions.cursor++; state.cursor = null; render(); refresh({ force: true }); });
   document.addEventListener('notch:codex-token-changed', (event) => {
+    revisions.codex++;
     if (state.codex) {
       state.codex = { ...state.codex, manualTokenInvalid: false, remoteError: null,
         configured: event.detail?.configured ?? state.codex.configured };
@@ -221,7 +235,10 @@
   });
   // Expiry must update even when no new session record is written.
   setInterval(render, 30_000);
-  setInterval(() => refresh(), 5 * 60_000);
+  function scheduleRefresh() {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => refresh({ force: usageVisible() }), D.refreshDelay(state, usageVisible()));
+  }
   window.NotchAiUsage = { refresh, openSettings };
   refresh();
 })();

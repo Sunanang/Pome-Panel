@@ -816,3 +816,18 @@ test('Soda Music play uses the play/pause toggle instead of the next-track key',
   assert.notDeepEqual(sodaShortcutSpec('play'), sodaShortcutSpec('next'));
   assert.equal(sodaShortcutSpec('invalid'), null);
 });
+
+test('completion titles skip boilerplate and retain meaningful long text until UI truncation', () => {
+  const long = '修复窗口布局与数据同步。'.repeat(30);
+  assert.equal(taskNotificationIdentity({ last_assistant_message: `# 已完成\n\n${long}` }, 'codex').title, long);
+  assert.equal(taskNotificationIdentity({ title: '已完成' }, 'cursor').title, 'Cursor 已完成任务');
+  assert.equal(Array.from(taskNotificationIdentity({ title: '😀'.repeat(5000) }, 'claude').title).length, 4096);
+});
+
+test('native conversation title and multiline completion summary stay separate', () => {
+  const { taskNotificationContent } = require('../main-services');
+  const summary = '已完成\n\n修复布局。\n测试通过。';
+  const content = taskNotificationContent({ completionSummary: summary, session_title: '首页改版', project: 'Done' }, 'codex');
+  assert.equal(content.title, '修复布局。'); assert.equal(content.project, 'Done');
+  assert.equal(content.sessionTitle, '首页改版'); assert.equal(content.completionSummary, summary);
+});

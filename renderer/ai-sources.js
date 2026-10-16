@@ -50,6 +50,7 @@
       }
       const actions = document.createElement('div'); actions.className = 'ai-source-actions';
       if (row.state === 'connected') {
+        if (row.summaryHookMissing) actions.append(makeButton('补全摘要', event => void request(row.source, 'repair', event.currentTarget)));
         actions.append(makeButton('发送测试', () => void test(row.source)), makeButton('断开', event => void request(row.source, 'disconnect', event.currentTarget)));
       } else {
         const connect = makeButton(row.state === 'error' ? '修复' : '一键接入', event => void request(row.source, row.state === 'error' ? 'repair' : 'connect', event.currentTarget));

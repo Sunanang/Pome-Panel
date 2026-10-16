@@ -27,6 +27,7 @@ function readConfig(filePath, source) {
   if (source === 'codex' && value.notify !== undefined && (!Array.isArray(value.notify) || value.notify.some(v => typeof v !== 'string'))) throw new Error('notify 必须为命令数组。');
   if (source !== 'codex') {
     if (value.hooks !== undefined && (!value.hooks || typeof value.hooks !== 'object' || Array.isArray(value.hooks))) throw new Error('hooks 必须为对象。');
+    if (source === 'cursor' && value.hooks?.afterAgentResponse !== undefined && !Array.isArray(value.hooks.afterAgentResponse)) throw new Error('afterAgentResponse hooks 必须为数组。');
     const hooks = value.hooks?.[source === 'claude' ? 'Stop' : 'stop'];
     if (hooks !== undefined && !Array.isArray(hooks)) throw new Error('完成 hooks 必须为数组。');
     if (source === 'claude' && hooks?.some(group => !group || !Array.isArray(group.hooks))) throw new Error('Stop 钩子格式损坏。');
@@ -124,8 +125,12 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
       if (!(await runtimeReady()) || !fs.existsSync(runtimePath) || !fs.existsSync(script(source))) return { ...base, state: 'error', message: '脚本路径不存在或运行时不可用', repairable: false };
       if (!items.length) return { ...base, state: 'disconnected', message: source === 'codex' ? '将写入 notify，保留并转发原命令' : `将追加 ${source === 'claude' ? 'Stop' : 'stop'} 钩子，保留已有配置` };
       const expected = source === 'codex' ? codexCommand(originalNotify(items[0])) : shellCommand(source);
-      const matches = items.length === 1 && (source === 'codex' ? JSON.stringify(items[0]) === JSON.stringify(expected) : items[0].command === expected && (source === 'claude' ? items[0].type === 'command' : !items[0].type || items[0].type === 'command'));
-      return { ...base, state: matches ? 'connected' : 'error', repairable: true, message: matches ? '已接入，本机监听完成事件' : 'Pome 钩子路径或运行时已变化，请修复' };
+      const responseItems = source === 'cursor' ? (config.value.hooks?.afterAgentResponse || []).filter(item => isOwned(item, source)) : [];
+      const responseMatches = !responseItems.length || responseItems.length === 1 && responseItems[0].command === expected && (!responseItems[0].type || responseItems[0].type === 'command');
+      const matches = responseMatches && items.length === 1 && (source === 'codex' ? JSON.stringify(items[0]) === JSON.stringify(expected) : items[0].command === expected && (source === 'claude' ? items[0].type === 'command' : !items[0].type || items[0].type === 'command'));
+      return { ...base, state: matches ? 'connected' : 'error', repairable: true,
+        ...(source === 'cursor' ? { summaryHookMissing: !responseItems.length } : {}),
+        message: matches ? source === 'cursor' && !responseItems.length ? '已接入，可补全完成摘要钩子' : '已接入，本机监听完成事件' : 'Pome 钩子路径或运行时已变化，请修复' };
     } catch (error) { return { ...base, state: 'error', repairable: false, message: `配置异常：${error.message}` }; }
   }
   async function list() { return Promise.all(SOURCES.map(status)); }
@@ -137,7 +142,7 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
     if (action !== 'disconnect' && (current.state === 'error' && !current.repairable)) throw new Error(current.message);
     const config = readConfig(files[source], source), owned = installedItems(config, source);
     let text = config.text, added;
-    if (action === 'disconnect' && !owned.length) {
+    if (action === 'disconnect' && !owned.length && !(source === 'cursor' && config.value.hooks?.afterAgentResponse?.some(item => isOwned(item, source)))) {
       added = '未发现 Pome 配置，无需修改';
     } else if (source === 'codex') {
       const previous = owned.length ? originalNotify(owned[0]) : config.value.notify ?? null;
@@ -173,8 +178,25 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
           text = editJson(text, hasArray ? ['hooks', event, -1] : ['hooks', event], hasArray ? value : [value]);
         }
       }
+      if (source === 'cursor') {
+        const event = 'afterAgentResponse';
+        const old = JSON.parse(text).hooks?.[event] || [];
+        const marked = old.map((hook, index) => isOwned(hook, source) ? index : -1).filter(index => index >= 0);
+        if (action !== 'disconnect' && marked.length === 1) {
+          text = editJson(text, ['hooks', event, marked[0], 'command'], shellCommand(source));
+          if (old[marked[0]].type && old[marked[0]].type !== 'command') text = editJson(text, ['hooks', event, marked[0], 'type'], 'command');
+        } else {
+          if (action === 'disconnect' && marked.length && marked.length === old.length) text = editJson(text, ['hooks', event], undefined);
+          else for (const index of marked.reverse()) text = editJson(text, ['hooks', event, index], undefined);
+          if (action !== 'disconnect') {
+            const hasArray = Array.isArray(JSON.parse(text).hooks?.[event]);
+            const value = { command: shellCommand(source), timeout: 5 };
+            text = editJson(text, hasArray ? ['hooks', event, -1] : ['hooks', event], hasArray ? value : [value]);
+          }
+        }
+      }
       if (source === 'cursor' && config.value.version === undefined && action !== 'disconnect') text = editJson(text, ['version'], 1);
-      added = `${event} → ${action === 'disconnect' ? '移除 Pome 钩子' : shellCommand(source)}`;
+      added = `${source === 'cursor' ? 'stop + afterAgentResponse' : event} → ${action === 'disconnect' ? '移除 Pome 钩子' : shellCommand(source)}`;
     }
     if (source === 'codex') toml.parseTOML(text); else JSON.parse(text);
     const token = randomUUID(), backupPath = `${files[source]}.pome-backup-${new Date(now()).toISOString().replace(/[:.]/g, '-')}-${token}`;

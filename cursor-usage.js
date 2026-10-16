@@ -3,6 +3,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { createHash } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 
 const API_BASE = 'https://api2.cursor.sh';
@@ -10,7 +11,6 @@ const PERIOD_PATH = '/aiserver.v1.DashboardService/GetCurrentPeriodUsage';
 const SAND_PATH = '/aiserver.v1.DashboardService/GetSandUsageStatus';
 const CACHE_TTL_MS = 60_000;
 
-let cache = null;
 
 function cursorStateDbPath() {
   if (process.platform === 'darwin') {
@@ -53,10 +53,10 @@ function isAuthFailure(error) {
   return status === 401 || status === 403;
 }
 
-async function postConnect(pathname, token, body = {}) {
-  const response = await fetch(`${API_BASE}${pathname}`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(15000),
+async function postConnect(pathname, token, body = {}, { fetchImpl = fetch, signal } = {}) {
+  const response = await fetchImpl(`${API_BASE}${pathname}`, {
+    method: 'POST', redirect: 'error',
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -74,10 +74,12 @@ async function postConnect(pathname, token, body = {}) {
     err.body = json || text;
     throw err;
   }
+  if (!json || typeof json !== 'object' || Array.isArray(json)) throw new Error('cursor_invalid_response');
   return json;
 }
 
 function toNumber(value) {
+  if (value == null || typeof value === 'boolean' || typeof value === 'string' && !value.trim()) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -129,89 +131,73 @@ function buildSnapshot(period, sand, auth) {
   };
 }
 
-async function fetchUsageWithToken(token, authMeta = {}) {
-  const [period, sand] = await Promise.all([
-    postConnect(PERIOD_PATH, token, {}),
-    postConnect(SAND_PATH, token, {}),
-  ]);
-  return buildSnapshot(period, sand, authMeta);
-}
-
-async function fetchCursorUsage({ force = false, manualToken = '' } = {}) {
-  const manual = String(manualToken || '').trim();
-  const cacheKey = manual ? `manual:${manual.slice(0, 12)}` : 'local';
-  if (
-    !force
-    && cache
-    && cache.key === cacheKey
-    && (Date.now() - cache.cachedAt) < CACHE_TTL_MS
-    && !cache.snapshot.manualTokenInvalid
-  ) {
-    return { ...cache.snapshot, cached: true };
+// Like Codex's service, requests belong to a credential generation. Never expose
+// credentials (or response bodies) in IPC, errors or cache keys sent to the UI.
+function createCursorUsageService({ fetchImpl = (...args) => fetch(...args), readAuth = readAuthToken, now = Date.now } = {}) {
+  let key = '', generation = 0, pending = null, lastAttempt = null, lastSuccess = null, manualInvalid = false;
+  function reset() {
+    generation++; pending?.controller.abort();
+    pending = null; lastAttempt = null; lastSuccess = null; key = ''; manualInvalid = false;
   }
-
-  let manualTokenInvalid = false;
-  let manualFailure = null;
-
-  if (manual) {
-    try {
-      const snapshot = await fetchUsageWithToken(manual, { email: null, plan: null });
-      snapshot.authSource = 'manual';
-      snapshot.manualTokenInvalid = false;
-      snapshot.manualTokenConfigured = true;
-      cache = { cachedAt: Date.now(), key: cacheKey, snapshot };
-      return { ...snapshot, cached: false };
-    } catch (error) {
-      manualFailure = error;
-      if (isAuthFailure(error)) manualTokenInvalid = true;
-      // 其他错误也回退本机，双保险
+  async function getUsage({ force = false, manualToken = '' } = {}) {
+    const manual = String(manualToken || '').trim();
+    let auth;
+    try { auth = readAuth(); } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
+    // Re-read the owner's login before cache lookup: local sign-out/account switch
+    // must invalidate snapshots even when a request is in flight.
+    const identity = createHash('sha256').update(JSON.stringify([manual, auth.ok ? auth.token : null, auth.email || null])).digest('hex');
+    if (key !== identity) { reset(); key = identity; }
+    const revision = generation;
+    if (!force && lastAttempt && now() - lastAttempt.at < CACHE_TTL_MS) return { ...lastAttempt.result, cached: true };
+    if (!pending) {
+      const controller = new AbortController();
+      async function fetchWithToken(token, meta, source) {
+        const options = { fetchImpl, signal: controller.signal };
+        const [period, sand] = await Promise.allSettled([
+          postConnect(PERIOD_PATH, token, {}, options), postConnect(SAND_PATH, token, {}, options),
+        ]);
+        if (period.status === 'rejected') throw period.reason;
+        const snapshot = buildSnapshot(period.value, sand.status === 'fulfilled' ? sand.value : null, meta);
+        snapshot.fetchedAt = new Date(now()).toISOString();
+        snapshot.authSource = source;
+        if (sand.status === 'rejected') snapshot.poolWarnings = { grokBot: '暂时读不到用量' };
+        return snapshot;
+      }
+      const task = (async () => {
+        let manualTokenInvalid = manualInvalid, manualFailure = false;
+        if (manual) {
+          try { return { ...await fetchWithToken(manual, {}, 'manual'), manualTokenConfigured: true, manualTokenInvalid: false }; }
+          catch (error) { manualTokenInvalid ||= isAuthFailure(error); manualFailure = true; }
+        }
+        if (auth.ok) {
+          try {
+            const snapshot = await fetchWithToken(auth.token, auth, 'local');
+            return { ...snapshot, manualTokenConfigured: Boolean(manual), manualTokenInvalid,
+              ...(manualFailure ? { warning: manualTokenInvalid ? '手动 Token 已失效，已改用本机登录态' : '手动 Token 请求失败，已改用本机登录态' } : {}) };
+          } catch (error) {
+            if (isAuthFailure(error)) return { ok: false, error: 'cursor_token_invalid', status: error.status, manualTokenInvalid, authSource: null, manualTokenConfigured: Boolean(manual) };
+          }
+        }
+        return { ok: false, error: manualTokenInvalid ? 'cursor_manual_token_invalid' : manual || auth.ok ? 'cursor_fetch_failed' : auth.error,
+          manualTokenInvalid, manualTokenConfigured: Boolean(manual), authSource: null };
+      })();
+      pending = { controller, task };
     }
+    const request = pending;
+    let result = await request.task;
+    if (revision !== generation) return { superseded: true };
+    if (pending === request) pending = null;
+    manualInvalid = result.manualTokenInvalid === true;
+    if (result.ok) lastSuccess = result;
+    else if (result.manualTokenInvalid || result.status === 401 || result.status === 403) lastSuccess = null;
+    else if (lastSuccess) result = { ...lastSuccess, stale: true, cached: true, refreshError: result.error };
+    lastAttempt = { at: now(), result };
+    return result;
   }
-
-  const auth = readAuthToken();
-  if (!auth.ok) {
-    return {
-      ok: false,
-      error: manualTokenInvalid ? 'cursor_manual_token_invalid' : auth.error,
-      detail: auth.detail || (manualFailure && manualFailure.message) || null,
-      status: manualFailure && manualFailure.status || null,
-      manualTokenInvalid,
-      manualTokenConfigured: Boolean(manual),
-      authSource: null,
-      fetchedAt: new Date().toISOString(),
-    };
-  }
-
-  try {
-    const snapshot = await fetchUsageWithToken(auth.token, auth);
-    snapshot.authSource = 'local';
-    snapshot.manualTokenConfigured = Boolean(manual);
-    snapshot.manualTokenInvalid = manualTokenInvalid;
-    if (manualTokenInvalid) {
-      snapshot.warning = '手动 Token 已失效，已改用本机登录态';
-    } else if (manual && manualFailure && !manualTokenInvalid) {
-      snapshot.warning = '手动 Token 请求失败，已改用本机登录态';
-    }
-    cache = { cachedAt: Date.now(), key: 'local', snapshot };
-    return { ...snapshot, cached: false };
-  } catch (error) {
-    return {
-      ok: false,
-      error: manualTokenInvalid ? 'cursor_manual_token_invalid' : (error && error.message || 'cursor_fetch_failed'),
-      status: error && error.status || null,
-      manualTokenInvalid,
-      manualTokenConfigured: Boolean(manual),
-      authSource: null,
-      fetchedAt: new Date().toISOString(),
-    };
-  }
+  return { getUsage, reset };
 }
-
-module.exports = {
-  cursorStateDbPath,
-  readAuthToken,
-  fetchCursorUsage,
-  buildSnapshot,
-  CACHE_TTL_MS,
-  isAuthFailure,
-};
+const defaultService = createCursorUsageService();
+const fetchCursorUsage = options => defaultService.getUsage(options);
+const resetCursorUsage = () => defaultService.reset();
+module.exports = { cursorStateDbPath, readAuthToken, fetchCursorUsage, resetCursorUsage, createCursorUsageService,
+  buildSnapshot, CACHE_TTL_MS, isAuthFailure };

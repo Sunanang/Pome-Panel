@@ -69,6 +69,17 @@ async function run(c){
  await assertRestartSources(['codex','claude','cursor']);assert(await js(`document.getElementById('ai-sources-status').textContent.includes('完全退出并重新打开 Cursor')`));
  for(const source of ['claude','cursor'])assert.equal((await js(`NotchAiSources.test('${source}')`)).ok,true);
  await capture('settings-all-connected');
+ const cursorFile=path.join(home,'.cursor/hooks.json'),legacyCursor=JSON.parse(fs.readFileSync(cursorFile));
+ delete legacyCursor.hooks.afterAgentResponse;fs.writeFileSync(cursorFile,JSON.stringify(legacyCursor));
+ await js('NotchAiSources.refresh()');
+ await until(`Array.from(document.querySelectorAll('.ai-source-row[data-source="cursor"] button')).some(button=>button.textContent==='补全摘要')`);
+ assert.equal(await js(`NotchAiSources.getState().sources.find(row=>row.source==='cursor').state`),'connected','legacy stop-only stays connected');
+ await js(`Array.from(document.querySelectorAll('.ai-source-row[data-source="cursor"] button')).find(button=>button.textContent==='补全摘要').click()`);
+ await until(`document.getElementById('ai-source-confirm').open`);
+ await js(`document.getElementById('ai-source-confirm-apply').click()`);
+ await until(`!document.getElementById('ai-source-confirm').open && !NotchAiSources.getState().sources.find(row=>row.source==='cursor').summaryHookMissing`);
+ assert.equal(JSON.parse(fs.readFileSync(cursorFile)).hooks.afterAgentResponse.length,1);
+
  await apply('codex','disconnect');await assertRestartSources(['claude','cursor']);assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('Codex')`),false);assert.deepEqual(readConfig(config,'codex').value.notify,['echo','original-notify']);await apply('codex');
  await js(`setActiveTab('home')`);const beforeToggle=await js(`({sizes:{...homeSizes},placements:JSON.parse(JSON.stringify(homeWorkingLayout.placements))})`);
  assert.equal((await js(`NotchHome.setModuleVisible('inbox',false)`)).ok,true);

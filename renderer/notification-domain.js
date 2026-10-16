@@ -22,7 +22,7 @@
     return sourceKey(source) === 'task' ? '任务已完成' : `${name} 已完成任务`;
   }
   function concreteTitle(value) {
-    return /^(?:任务已完成|新的任务已经完成|任务完成)$/.test(value) ? '' : value;
+    return /^(?:已完成|完成了|完成|Done[.!]?|任务已完成|新的任务已经完成|任务完成)$/i.test(value) ? '' : value;
   }
   function eventTime(value, fallback = Date.now()) {
     const timestamp = typeof value === 'number' || /^\d+(\.\d+)?$/.test(String(value || ''))
@@ -47,6 +47,8 @@
     return {
       sourceKey: source, source: sources[source], status, project,
       title: concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])) || fallbackTitle(source, status),
+      completionSummary: text([data.completionSummary, data.completion_summary, data.title]).slice(0, 4096),
+      sessionTitle: text([data.sessionTitle, data.session_title]).slice(0, 256),
       detail: status === 'due' ? '将在 1 小时内截止' : project,
       eventId: data.eventId ?? null,
       occurredAt: eventTime(data.occurredAt ?? data.completedAt ?? data.completed_at ?? data.timestamp ?? data.queuedAt, now),

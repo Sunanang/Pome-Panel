@@ -57,7 +57,7 @@ test('remaining warning thresholds and hidden tab indicators use unrounded value
 test('expired quota copy uses the record reset time without pretending to refresh', () => {
   const window = { resetsAt: 1000 };
   assert.equal(D.expired(window, 1000000), true);
-  assert.match(D.resetText(window, 1000000), /^已过 .* 重置 · 实际应更低$/);
+  assert.match(D.resetText(window, 1000000), /^已过 .* 重置 · 待刷新$/);
   assert.match(D.resetText(window, 999000), /重置$/);
 });
 test('resetText uses local calendar dates for today, tomorrow, week, month and year boundaries', () => {
@@ -78,4 +78,26 @@ test('fallback has calm copy for full and mini layouts', () => {
   assert.equal(D.FALLBACK.miniTitle, '未连接 AI 工具');
   assert.equal(D.FALLBACK.miniBody, 'Cursor、Codex 都未检测到');
   assert.match(D.FALLBACK.body, /在本机登录 Cursor，或用过一次 Codex/);
+});
+
+test('dynamic quota labels use actual cadence including weekly-only primary and unknown windows', () => {
+  assert.equal(D.windowLabel({ windowMinutes: 10080 }), '每周额度');
+  assert.equal(D.windowLabel({ windowMinutes: 300 }), '5 小时额度');
+  assert.equal(D.windowLabel({ windowMinutes: 60 }), '1 小时额度');
+  assert.equal(D.windowLabel({ windowMinutes: 1440 }), '每日额度');
+  const rows = D.quotaRows({ primary: { percent: 20, windowMinutes: 10080 }, secondary: null }, 'codex');
+  assert.equal(rows.length, 1); assert.equal(rows[0].name, '每周额度');
+  assert.equal(D.quotaRows({ primary: {} }, 'codex')[0].name, '主要额度');
+});
+test('registry describes only implemented providers and dynamic model rows participate in remaining quota', () => {
+  assert.deepEqual(D.registry.providers.map(provider => provider.id), ['cursor', 'codex']);
+  const data = { windows: [{ id: 'spark', label: 'Spark', percent: 98, windowMinutes: 300 }] };
+  assert.equal(D.quotaRows(data, 'codex')[0].name, 'Spark · 5 小时额度');
+  assert.equal(D.lowestRemaining(data, 'codex'), 2);
+});
+test('quota refresh adapts to reset time and visibility without retrying expired snapshots in a loop', () => {
+  const data = { codex: { primary: { resetsAt: 1001 } } };
+  assert.equal(D.refreshDelay(data, true, 1000000), 2000);
+  assert.equal(D.refreshDelay(data, false, 1000000), 900000);
+  assert.equal(D.refreshDelay(data, true, 1002000), 300000);
 });

@@ -13,10 +13,11 @@ require('../codex-auth').readLocalCodexToken = async () => ({ ok: false });
 const adapters = require('../platform-adapters');
 const originalAdapter = adapters.loadAdapter;
 const activated = [];
+let launchFailure = false;
 adapters.loadAdapter = (...args) => {
   const adapter = originalAdapter(...args);
   adapter.windows.resolveTaskApp = async () => null;
-  adapter.taskApps.open = async record => { activated.push(record.source); return { ok: true }; };
+  adapter.taskApps.open = async record => { activated.push(record.source); return launchFailure ? { ok: false, message: '未找到 Cursor。' } : { ok: true }; };
   return adapter;
 };
 process.env.POME_TEST_NOTIFICATIONS = '1';
@@ -56,7 +57,13 @@ async function dismiss(win, open = false) {
   await delay(600);
 }
 async function capture(win, name) {
-  fs.writeFileSync(path.join(output, `${name}.png`), (await win.webContents.capturePage()).toPNG());
+  const snapshot = await win.webContents.capturePage();
+  fs.writeFileSync(path.join(output, `${name}.png`), snapshot.toPNG());
+  if (/-enter-|-exit-/.test(name)) {
+    const pixels = snapshot.getSize(), bitmap = snapshot.toBitmap();
+    const x = Math.floor(2*pixels.width/400), y = Math.floor(pixels.height*0.7);
+    assert.equal(bitmap[(y*pixels.width+x)*4+3],0,`${name}: animated outer edge must stay transparent`);
+  }
 }
 app.on('web-contents-created', (_event, contents) => {
   contents.on('console-message', details => { if (details.level === 'error') errors.push(details.message); });
@@ -78,6 +85,7 @@ async function run(mainContents) {
     ['cursor-completed', 'cursor', { title: '修复剪贴板图片预览在 Retina 下模糊', project: 'notch-todo' }],
     ['codex-failed', 'codex', { title: '构建失败：类型检查未通过（3 处错误）', project: 'Pome-Panel', status: 'failed' }],
     ['claude-completed-long-title', 'claude', { title: '已将通知窗口的倒计时、悬停暂停与队列徽标重构为独立模块，同时修复了 Windows 首次启动时的边界问题，并补齐回归测试。', project: 'Pome-Panel', completed_at: Date.now()-120000 }],
+    ['codex-full-summary', 'codex', { last_assistant_message: '已完成\n\n' + '修复布局与同步。'.repeat(30) + '\n测试全部通过。', session_title: '原生会话短标题', project: 'Pome-Panel' }],
     ['codex-completed-fallback', 'codex', { project: 'Pome-Panel' }],
   ];
   for (const [name, source, payload] of variants) {
@@ -85,16 +93,47 @@ async function run(mainContents) {
     const title = require('../main-services').taskNotificationIdentity(payload, source).title;
     const win = await shown(title);
     assert.equal(win.getBounds().width, 400);
+    assert.equal(win.hasShadow(), false, 'native window cannot add a second outer shadow');
+    const edge = await evaluate(win, `({shadow:getComputedStyle(shell.querySelector('.notification-shape')).boxShadow,
+      mask:getComputedStyle(shell.querySelector('.notification-shape'),'::after').maskImage,
+      border:getComputedStyle(shell.querySelector('.notification-shape'),'::after').borderBottomWidth})`);
+    if (process.platform === 'darwin') { assert.equal(edge.shadow,'none'); assert.equal(edge.mask,'none'); assert.equal(edge.border,'1px'); }
+    const image = await win.webContents.capturePage(), bitmap = image.toBitmap(), pixels = image.getSize();
+    const x = Math.floor(2*pixels.width/400), y = Math.floor(pixels.height*0.7);
+    assert.equal(bitmap[(y*pixels.width+x)*4+3], 0, 'outside edge stays fully transparent without a second shadow silhouette');
+
     const state = await evaluate(win, `({titleHeight:document.getElementById('notification-title').offsetHeight,detail:document.getElementById('notification-detail').textContent,status:document.getElementById('notification-shell').dataset.status,mask:getComputedStyle(document.getElementById('notification-brand')).maskImage})`);
     assert.equal(state.detail, payload.project);
     assert.equal(state.status, payload.status || 'completed');
     assert(state.mask.includes(`/inbox/${source}.svg`));
     assert.equal(win.getBounds().height, (process.platform === 'win32' ? 96 : 92) + (state.titleHeight > 18 ? 18 : 0));
     if (name.includes('long-title')) { assert.equal(state.titleHeight, 36); assert.equal(await evaluate(win, 'document.getElementById("notification-time").textContent'), '2 分钟前'); }
+    if (name === 'codex-full-summary') {
+      const tooltip = await evaluate(win, 'titleElement.title');
+      assert(tooltip.includes('原生会话短标题')); assert(tooltip.includes('测试全部通过。'));
+      const stored = JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records[0];
+      assert.equal(stored.status, 'completed'); assert(stored.completionSummary.includes('测试全部通过。'));
+    }
     await capture(win, name);
     const count = activated.length;
     await dismiss(win, source === 'cursor');
     assert.equal(activated.length, count + (source === 'cursor' && process.platform === 'darwin' ? 1 : 0), '× must never activate an app');
+  }
+  // A failed launch retains the actionable notification and preserves its error.
+  if (process.platform === 'darwin') {
+    launchFailure = true;
+    await send('cursor', { title: '软件打开失败仍可重试' });
+    const failed = await shown('软件打开失败仍可重试');
+    await dismiss(failed, true);
+    assert.equal(await evaluate(failed, 'isVisible && !isHiding'), true);
+    assert.equal(await evaluate(failed, 'detailElement.textContent'), '未找到 Cursor。');
+    assert.equal(await evaluate(failed, 'timing.paused'), true);
+    await delay(6200);
+    assert.equal(await evaluate(failed, 'isVisible && !isHiding'), true, 'failed launch must survive normal timeout');
+    await capture(failed, 'activation-failure-retained');
+    launchFailure = false;
+    await dismiss(failed, true);
+    assert.equal(failed.isDestroyed() || !failed.isVisible(), true);
   }
   // Awaiting has no countdown, survives Escape and the entire normal 6000ms lifetime.
   const awaitingTitle = '需要你确认：允许运行 npm install 吗？';
@@ -180,7 +219,10 @@ async function previewVariants() {
           additionalArguments:[`--pome-caps=${Buffer.from(JSON.stringify(caps)).toString('base64')}`]}});
       await preview.loadFile(path.join(__dirname,'..','renderer','notification.html'));
       preview.webContents.send('task-notification:show', {...fixture,eventId:name,completedAt:fixture.completedAt||Date.now()});
-      preview.showInactive(); await delay(500);
+      preview.showInactive();
+      if (name === 'windows-codex-completed' || name === 'task-completed') {
+        for (const frame of [40, 100, 180]) { await delay(frame); await capture(preview, `${name}-enter-${frame}`); }
+      } else await delay(500);
       if (hover) await evaluate(preview, 'reportHover(true)');
       await delay(160);
       await capture(preview,name);
@@ -192,6 +234,11 @@ async function previewVariants() {
       await preview.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
       await delay(140);
       assert.equal(await evaluate(preview,'getComputedStyle(root).transform'),'none');
+      if (name === 'windows-codex-completed' || name === 'task-completed') {
+        await preview.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[]});
+        preview.webContents.send('task-notification:hide',{eventId:name});
+        for (const frame of [40, 100, 180]) { await delay(frame); await capture(preview, `${name}-exit-${frame}`); }
+      }
       preview.destroy(); preview=null;
     }
   } finally {

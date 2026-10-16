@@ -51,7 +51,7 @@ async function run(c){
  for(const [size,count] of [['mini',0],['small',3],['medium',5],['large',10]]){
   await js(`(() => {homeSizes={...homeSizes,inbox:${JSON.stringify(size)}};hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!['recorder','inbox'].includes(id));homeWorkingLayout=null;const layout=NotchDomain.resolveHomeWidgetLayout(homeOrder,homeSizes,hiddenHomeModules);applyHomeLayout(layout,{reason:'initial'});})()`);
   await until(c,`document.getElementById('home-inbox').dataset.widgetSize==='${size}' && document.querySelectorAll('.home-inbox-row').length===${count}`);
-  assert.equal(await js(`Array.from(document.querySelectorAll('.home-inbox-copy strong')).every(el=>el.title===el.closest('.home-inbox-row').title)`),true);
+  assert.equal(await js(`Array.from(document.querySelectorAll('.home-inbox-copy strong')).every(el=>el.title===el.textContent)`),true);
   if(size==='small')assert.equal(await js(`getComputedStyle(document.getElementById('home-inbox-read-all')).display!=='none' && getComputedStyle(document.getElementById('home-inbox-latest')).display!=='none'`),true);
   if(size==='mini')assert.equal(await js(`document.getElementById('home-inbox-unread').textContent`),'3');
   const overflow=await js(`(()=>{const t=document.getElementById('home-inbox');return {w:t.scrollWidth<=t.clientWidth+1,h:t.scrollHeight<=t.clientHeight+1}})()`);assert(overflow.w&&overflow.h,`inbox ${size} overflows`);await capture(size);

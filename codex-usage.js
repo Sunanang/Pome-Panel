@@ -14,7 +14,7 @@ function codexHomes({ env = process.env, home = os.homedir(), platform = process
 }
 
 function finite(value) {
-  if (value == null || value === '') return null;
+  if (value == null || typeof value === 'boolean' || typeof value === 'string' && !value.trim()) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -56,6 +56,7 @@ function withExpiry(snapshot, now = Date.now()) {
     result[key] = snapshot[key] ? { ...snapshot[key], expired: snapshot[key].resetsAt != null
       && snapshot[key].resetsAt * 1000 <= now } : null;
   }
+  if (Array.isArray(snapshot.windows)) result.windows = snapshot.windows.map(window => ({ ...window, expired: window.resetsAt != null && window.resetsAt * 1000 <= now }));
   return result;
 }
 

@@ -1193,6 +1193,21 @@
     return true;
   }
 
+  // The old Windows default saved the Mac slots minus unavailable modules,
+  // leaving holes and automatically hiding sun. Match the entire known baseline;
+  // a user's different order, size, visibility or placement must stay untouched.
+  function isLegacyWindowsDefaultHomeLayout({ order, defaultOrder, sizes, defaults, placements, hiddenIds = [], unavailableIds = [], registry }) {
+    if (!placements || !defaults || !Array.isArray(defaultOrder) || !Array.isArray(registry)) return false;
+    if (!unavailableIds.includes('music') || !unavailableIds.includes('windows')) return false;
+    if (hiddenIds.length !== 1 || hiddenIds[0] !== 'sun') return false;
+    if (JSON.stringify(order) !== JSON.stringify(defaultOrder)) return false;
+    if (registry.some(id => sizes?.[id] !== defaults[id])) return false;
+    const baseline = normalizeHomeInboxLayout({ order: defaultOrder, sizes: defaults, registry, hiddenIds: [...unavailableIds, 'sun'] }).placements;
+    return baseline && Object.keys(placements).length === Object.keys(baseline).length
+      && Object.entries(baseline).every(([id, p]) => placements[id]
+        && ['column', 'row', 'width', 'height'].every(key => placements[id][key] === p[key]));
+  }
+
   // Insert a new inbox without rewriting user-selected footprints. Try its
   // preferred slot, any free/repacked slot, then only shrink the new module.
   function normalizeHomeInboxLayout({ order, sizes, placements, hiddenIds = [], registry = [], preservePositions = false, preferredInboxPlacement = null }) {
@@ -1346,6 +1361,7 @@
     normalizeHomeLayout,
     normalizeHomeInboxLayout,
     isLegacyDefaultHomeLayout,
+    isLegacyWindowsDefaultHomeLayout,
     swapHomeLayoutSlots,
     normalizeTodoCategoryNames,
     normalizeHomeWidgetSizes,

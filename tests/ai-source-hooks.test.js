@@ -130,3 +130,42 @@ test('Cursor keeps explicit alert status and rejects non-final hook events',()=>
  assert.equal(cursorCompletion({hook_event_name:'beforeShellExecution',status:'awaiting'}),null);
  assert.equal(cursorCompletion({agent_id:'child',status:'completed'}),null);
 });
+
+test('Cursor native error maps to failed and aborted never becomes completed', () => {
+ const {cursorCompletion}=require('../scripts/cursor-notify');
+ assert.equal(cursorCompletion({status:'error'}).status,'failed');
+ assert.equal(cursorCompletion({status:'aborted'}),null);
+});
+test('Cursor final response is correlated by conversation and generation with bounded private cache', t => {
+ const {cursorCompletion}=require('../scripts/cursor-notify');
+ const {home}=fixture(t), options={cacheDir:path.join(home,'response-cache'),now:()=>10000};
+ const ids={conversation_id:'c',generation_id:'g'};
+ assert.equal(cursorCompletion({...ids,hook_event_name:'afterAgentResponse',text:'真实完成摘要'},options),null);
+ assert.equal(cursorCompletion({...ids,generation_id:'other'},options).last_assistant_message,'');
+ assert.equal(cursorCompletion({...ids,status:'completed'},options).last_assistant_message,'真实完成摘要');
+ assert.equal(cursorCompletion({...ids},options).last_assistant_message,'');
+ cursorCompletion({...ids,hook_event_name:'afterAgentResponse',text:'旧摘要'},options);
+ assert.equal(cursorCompletion(ids,{...options,now:()=>700001}).last_assistant_message,'');
+});
+test('Cursor bounded transcript fallback reads assistant text and ignores child agents', t => {
+ const {cursorCompletion}=require('../scripts/cursor-notify'),{home}=fixture(t),file=path.join(home,'transcript.jsonl');
+ fs.writeFileSync(file,[{role:'user',content:'问题'}, {role:'assistant',content:[{type:'text',text:'修复完成'}]}, {type:'assistant',isSidechain:true,message:{content:'子代理'}}].map(JSON.stringify).join('\n'));
+ assert.equal(cursorCompletion({transcript_path:file}).last_assistant_message,'修复完成');
+ assert.equal(cursorCompletion({transcript_path:path.join(home,'missing')}).last_assistant_message,'');
+});
+test('Cursor response hook installs/repairs/removes only Pome entries', async t => {
+ const {service,files}=fixture(t),original={version:1,hooks:{stop:[{command:'user-stop'}],afterAgentResponse:[{command:'user-response'}]},extra:'keep'};
+ fs.writeFileSync(files.cursor,JSON.stringify(original));
+ let p=await service.preview('cursor');await service.apply(p.token);
+ let data=JSON.parse(fs.readFileSync(files.cursor));assert.equal(data.hooks.afterAgentResponse.length,2);assert.equal(data.hooks.afterAgentResponse[0].command,'user-response');
+ p=await service.preview('cursor','repair');await service.apply(p.token);data=JSON.parse(fs.readFileSync(files.cursor));assert.equal(data.hooks.afterAgentResponse.length,2);
+ p=await service.preview('cursor','disconnect');await service.apply(p.token);assert.deepEqual(JSON.parse(fs.readFileSync(files.cursor)),original);
+});
+test('Cursor repairs a stale response hook and removes orphaned Pome response entries on disconnect', async t => {
+ const {service,files}=fixture(t);let p=await service.preview('cursor');await service.apply(p.token);
+ let data=JSON.parse(fs.readFileSync(files.cursor));data.hooks.afterAgentResponse[0].command=data.hooks.afterAgentResponse[0].command.replace(process.execPath,'/previous/node');
+ fs.writeFileSync(files.cursor,JSON.stringify(data));assert.equal((await service.status('cursor')).state,'error');
+ p=await service.preview('cursor','repair');await service.apply(p.token);assert.equal((await service.status('cursor')).state,'connected');
+ data=JSON.parse(fs.readFileSync(files.cursor));delete data.hooks.stop;fs.writeFileSync(files.cursor,JSON.stringify(data));
+ p=await service.preview('cursor','disconnect');await service.apply(p.token);assert.equal(JSON.parse(fs.readFileSync(files.cursor)).hooks.afterAgentResponse,undefined);
+});

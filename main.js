@@ -37,7 +37,7 @@ const { createSyncRecovery } = require('./syncRecovery');
 function recoveryStore() { return createSyncRecovery(path.join(app.getPath('userData'), 'sync-recovery.json')); }
 const platformPolicy = require('./platform');
 const { loadAdapter } = require('./platform-adapters');
-const { fetchCursorUsage, readAuthToken: readCursorAuthToken } = require('./cursor-usage');
+const { fetchCursorUsage, resetCursorUsage, readAuthToken: readCursorAuthToken } = require('./cursor-usage');
 const { readCodexUsage } = require('./codex-usage');
 const { readLocalCodexToken } = require('./codex-auth');
 const { createCodexUsageService } = require('./codex-usage-remote');
@@ -54,7 +54,7 @@ const {
   recordingExtension,
   todoReminderState,
   todoReminderTimerDelay,
-  taskNotificationIdentity,
+  taskNotificationContent,
   normalizeTaskNotificationWindow,
   normalizeCredentialInput,
   parseSmartLinkMetadata,
@@ -703,7 +703,7 @@ function isSubagentNotification(payload) {
 function normalizeTaskNotification(payload, source) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   if (isSubagentNotification(payload)) return null;
-  const identity = taskNotificationIdentity(payload, source);
+  const identity = taskNotificationContent(payload, source);
 
   const taskId = cleanTaskNotificationText(
     pickTaskNotificationValue(payload, [
@@ -736,6 +736,8 @@ function normalizeTaskNotification(payload, source) {
     status: notificationDomain.statusKey(payload.status, source),
     taskId,
     title: identity.title,
+    completionSummary: identity.completionSummary,
+    sessionTitle: identity.sessionTitle,
     project: identity.project,
     window: normalizeTaskNotificationWindow(payload, source),
     completedAt,
@@ -1024,6 +1026,7 @@ function startTaskNotificationCountdown() {
 
 function setTaskNotificationPaused(paused) {
   if (!activeTaskNotification || taskNotificationLeaving || taskNotificationPaused === paused) return;
+  if (!paused && (activeTaskNotification.activationPending || activeTaskNotification.activationFailed)) return;
   taskNotificationPaused = paused;
   if (paused) {
     if (taskNotificationTimer) {
@@ -2491,11 +2494,19 @@ ipcMain.handle('windows:focus', async (event, windowId) => {
 
 async function activateActiveTaskNotification(eventId = null) {
   const notification = activeTaskNotification;
-  if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return false;
-  if (!platformCapabilities.features.windowFocus) return false;
-  const result = await platformAdapter.taskApps.open(notification);
+  if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return { ok: false, message: '任务提醒已失效' };
+  if (!platformCapabilities.features.windowFocus) return { ok: false, message: '当前无法打开来源软件' };
+  notification.activationPending = true;
+  setTaskNotificationPaused(true);
+  let result;
+  try { result = await platformAdapter.taskApps.open(notification); }
+  catch { result = { ok: false, message: '打开来源软件失败，请稍后重试。' }; }
+  if (activeTaskNotification !== notification || taskNotificationLeaving) return { ok: false, message: '任务提醒已失效' };
+  notification.activationPending = false;
+  notification.activationFailed = !result.ok;
   if (result.ok) beginTaskNotificationDismiss();
-  return result.ok;
+  else setTaskNotificationPaused(true);
+  return result;
 }
 
 ipcMain.handle('task-notification:activate', async (event, eventId) => {
@@ -4463,14 +4474,14 @@ ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
 });
 
 ipcMain.handle('cursor:usage', async (_event, options = {}) => {
-  const manualToken = readCursorManualToken();
-  const detected = readCursorAuthToken().ok === true;
-  const configured = Boolean(readAppSettings().encryptedCursorToken);
   try {
-    const data = await fetchCursorUsage({ force: options && options.force === true, manualToken });
-    return { ...data, detected, configured };
+    let data;
+    do { data = await fetchCursorUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
+    while (data.superseded);
+    return { ...data, detected: readCursorAuthToken().ok === true, configured: Boolean(readAppSettings().encryptedCursorToken) };
   } catch {
-    return { ok: false, error: 'cursor_usage_failed', detected, configured, fetchedAt: new Date().toISOString() };
+    return { ok: false, error: 'cursor_usage_failed', detected: readCursorAuthToken().ok === true,
+      configured: Boolean(readAppSettings().encryptedCursorToken) };
   }
 });
 
@@ -4623,6 +4634,7 @@ function writeCursorManualToken(token) {
     next.encryptedCursorToken = encrypted;
   }
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  resetCursorUsage?.();
   const status = cursorTokenStatus();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cursor:token-changed', status);
   return status;

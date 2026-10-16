@@ -20,6 +20,8 @@
     claude: { label: 'Claude', icon: 'assets/inbox/claude.svg' },
     cursor: { label: 'Cursor', icon: 'assets/inbox/cursor.svg' },
   };
+  const statusLabels = { completed: '已完成', failed: '出错', awaiting: '等待确认', due: '即将截止' };
+  const recordStatus = row => statusLabels[row?.status] ? row.status : 'completed';
   function pageSizeForWidget() { return { mini: 1, small: 3, medium: 5, large: 10 }[tile.dataset.widgetSize] || 5; }
   let rows = [], total = 0, unread = 0, page = 0;
   let busy = false, editing = false, opening = false, resetScroll = false, queued = false, failure = null, failureGeneration = 0;
@@ -122,8 +124,8 @@
       sourceSuggestion.append(text, button('接入', event => window.NotchAiSources?.request(suggestion.source, 'connect', event.currentTarget)), button('以后再说', () => window.NotchAiSources?.dismiss(suggestion.source)));
       if (size === 'mini') mini.hidden = true;
     }
-    latest.textContent = rows[0] ? `${sources[rows[0].source]?.label || '其他'} · ${relativeTime(rows[0].receivedAt)}` : '';
-    latest.title = openLabel(rows[0]?.source);
+    latest.textContent = rows[0] ? `${sources[rows[0].source]?.label || '其他'}${recordStatus(rows[0]) !== 'completed' ? ` · ${statusLabels[recordStatus(rows[0])]}` : ''} · ${relativeTime(rows[0].receivedAt)}` : '';
+    latest.title = [openLabel(rows[0]?.source), statusLabels[recordStatus(rows[0])], rows[0]?.completionSummary || rows[0]?.title].filter(Boolean).join(' · ');
     delete tile.dataset.sourceState;
     if (!total) {
       paintEmpty(size, sourceState);
@@ -132,13 +134,17 @@
         const source = sources[row.source] || {label:'其他',icon:'assets/inbox/openai.svg'};
         const item = document.createElement('div'); item.className = 'home-inbox-item';
         const rowButton = button('', () => void openRecord(row), 'home-inbox-row');
-        rowButton.dataset.id = row.id; rowButton.dataset.unread = String(row.readAt === null);
+        rowButton.dataset.id = row.id; rowButton.dataset.status = recordStatus(row); rowButton.dataset.unread = String(row.readAt === null);
         rowButton.title = openLabel(row.source);
-        rowButton.setAttribute('aria-label', `${source.label}：${row.title || '任务已完成'}，${relativeTime(row.receivedAt)}${row.readAt === null ? '，未读' : ''}`);
+        rowButton.setAttribute('aria-label', `${source.label}，${statusLabels[recordStatus(row)]}：${row.title || '任务已完成'}，${relativeTime(row.receivedAt)}${row.readAt === null ? '，未读' : ''}`);
         const iconWrap = document.createElement('span'); iconWrap.className = 'home-inbox-source-wrap'; iconWrap.dataset.source = sources[row.source] ? row.source : 'other';
         const icon = document.createElement('img'); icon.src = source.icon; icon.alt = ''; icon.className = 'home-inbox-source'; icon.dataset.source = iconWrap.dataset.source;
         const copy = document.createElement('span'); copy.className = 'home-inbox-copy';
-        const title = document.createElement('strong'); title.textContent = row.title || '任务已完成'; title.title = rowButton.title; copy.append(title);
+        const title = document.createElement('strong'); title.textContent = row.title || '任务已完成'; title.title = [row.sessionTitle, row.completionSummary || row.title].filter(Boolean).join('\n'); copy.append(title);
+        if (recordStatus(row) !== 'completed') {
+          const state = document.createElement('small'); state.className = 'home-inbox-event-status';
+          state.textContent = statusLabels[recordStatus(row)]; copy.append(state);
+        }
         if (size === 'large') {
           const summary = document.createElement('small'); summary.textContent = row.project || source.label; summary.title = rowButton.title; copy.append(summary);
         }

@@ -315,8 +315,8 @@ function firstPayloadText(payload, keys) {
   return '';
 }
 
-function cleanTaskLine(value, maxLength) {
-  const line = String(value || '').split(/\r?\n/).map((item) => item.trim()).find(Boolean) || '';
+function cleanTaskLine(value, maxLength, skipBoilerplate = false) {
+  const line = String(value || '').split(/\r?\n/).map((item) => item.trim()).find((item) => item && (!skipBoilerplate || notificationDomain.concreteTitle(item.replace(/^[#>*`_~\-\s]+/, '').replace(/[`*_~]/g, '').trim()))) || '';
   const cleaned = line
     .replace(/^[#>*`_~\-\s]+/, '')
     .replace(/[`*_~]/g, '')
@@ -337,6 +337,8 @@ function taskNotificationIdentity(payload, source = 'task') {
     48
   );
   const concreteTitle = firstPayloadText(data, [
+    'completionSummary',
+    'completion_summary',
     'last_assistant_message',
     'last-assistant-message',
     'lastAssistantMessage',
@@ -358,9 +360,17 @@ function taskNotificationIdentity(payload, source = 'task') {
   ]);
   return {
     project,
-    title: notificationDomain.concreteTitle(cleanTaskLine(concreteTitle, 120))
+    title: notificationDomain.concreteTitle(cleanTaskLine(concreteTitle, 4096, true))
       || notificationDomain.fallbackTitle(source, status),
   };
+}
+
+function taskNotificationContent(payload, source) {
+  const identity = taskNotificationIdentity(payload, source);
+  const summary = firstPayloadText(payload, ['completionSummary', 'completion_summary', 'last_assistant_message', 'last-assistant-message', 'lastAssistantMessage', 'title']) || identity.title;
+  const clean = (value, max) => Array.from(String(value).replace(/[\u202a-\u202e\u2066-\u2069]/g, '').replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, ' ').trim()).slice(0, max).join('');
+  return { ...identity, completionSummary: clean(summary, 4096),
+    sessionTitle: clean(firstPayloadText(payload, ['sessionTitle', 'session_title', 'thread_name']), 256) };
 }
 
 const TASK_SOURCE_APPS = {
@@ -1030,6 +1040,7 @@ module.exports = {
   todoReminderState,
   todoReminderTimerDelay,
   taskNotificationIdentity,
+  taskNotificationContent,
   normalizeTaskNotificationWindow,
   taskAppMatches,
   normalizeCredentialInput,

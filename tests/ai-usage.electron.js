@@ -7,7 +7,7 @@ const now = new Date().toISOString();
 const cursor = { ok: true, detected: true, authSource: 'local', fetchedAt: now,
   auto: { percent: 40 }, other: { percent: 12 }, grokBot: { percent: 20, resetAt: now }, billing: { cycleEnd: now } };
 const codex = { ok: true, detected: true, plan: 'plus', updatedAt: now,
-  primary: { percent: 86, resetsAt: Date.now() / 1000 + 3600 }, secondary: { percent: 10, resetsAt: Date.now() / 1000 + 86400 }, credits: { balance: 20 } };
+  primary: { percent: 86, windowMinutes: 300, resetsAt: Date.now() / 1000 + 3600 }, secondary: { percent: 10, windowMinutes: 10080, resetsAt: Date.now() / 1000 + 86400 }, credits: { balance: 20 } };
 const missing = { ok: true, detected: false, configured: false };
 async function main() {
   await app.whenReady();
@@ -56,7 +56,7 @@ async function main() {
         width:tile.getBoundingClientRect().width,height:tile.getBoundingClientRect().height,
         overflow:tile.scrollWidth>tile.clientWidth};
     })()`);
-    assert.ok(layout.shapes.length === 5);
+    assert.ok(layout.shapes.length >= 4, 'unknown quotas retain one placeholder; real windows determine row count');
     assert.equal(new Set(layout.shapes).size, 1, 'both providers must have the same row component and child structure');
     assert.equal(layout.overflow, false);
     assert.equal(layout.footSingleLine, true, 'footnotes must stay on one line');
@@ -100,6 +100,29 @@ async function main() {
     assert.equal(await js("document.querySelector('#codex-usage-rows strong').textContent"), '--%');
     assert.equal(await js("document.querySelector('#codex-usage-rows [role=progressbar]').hasAttribute('aria-valuenow')"), false);
     assert.equal(await js("document.querySelector('#codex-usage-rows i').style.width"), '0%');
+    // A weekly-only primary is a single weekly row, never a fabricated five-hour pool.
+    await supply(missing, { ...codex, primary: { percent: 20, windowMinutes: 10080 }, secondary: null });
+    assert.equal(await js("document.querySelectorAll('#codex-usage-rows .ai-quota-row').length"), 1);
+    assert.equal(await js("document.querySelector('#codex-usage-rows .cursor-usage-meta > span').textContent"), '每周额度');
+    // Extra model windows scroll within every supported tile size.
+    await supply(missing, { ...codex, windows: Array.from({length:8}, (_,index)=>({id:`pool-${index}`,label:`Model ${index}`,percent:index*10,windowMinutes:300})) });
+    for (const size of ['mini','small','medium','large']) {
+      const extra = await js(`(async()=>{
+        const tile=document.getElementById('home-cursor'); tile.dataset.widgetSize='${size}';
+        tile.style.width='${['mini','small'].includes(size)?196:404}px';
+        tile.style.height='${size==='mini'?118:size==='large'?510:248}px';
+        await new Promise(r=>setTimeout(r,30));
+        const pools=document.querySelector('.ai-usage-providers'); pools.scrollTop=10000;
+        return {count:document.querySelectorAll('#codex-usage-rows .ai-quota-row').length,
+          overflow:tile.scrollWidth>tile.clientWidth||tile.scrollHeight>tile.clientHeight,scroll:pools.scrollTop};
+      })()`);
+      assert.equal(extra.count,8); assert.equal(extra.overflow,false,`dynamic windows ${size} stay in tile`);
+      if(size!=='large')assert.ok(extra.scroll>0,`dynamic windows ${size} remain reachable`);
+    }
+    const staleTime = new Date(Date.now()-120000).toISOString();
+    await supply({...cursor,stale:true,cached:true,fetchedAt:staleTime},missing);
+    assert.match(await js("document.getElementById('cursor-usage-footnote').textContent"), /刷新失败，显示上次数据/);
+    assert.equal(await js("document.getElementById('cursor-usage-auto-pct').textContent"),'60%');
     // A real renderer reload must restore the saved selection.
     await js('window.notchAPI=undefined');
     await win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
@@ -246,7 +269,7 @@ async function main() {
     await supply(missing,{...codex,detected:false,configured:true,authSource:'manual',remoteError:'codex_network_failed',manualTokenInvalid:false});
     assert.match(await js("document.getElementById('codex-usage-footnote').textContent"),/暂时无法联网查询 · 更新于/);
     assert.equal(await js("document.getElementById('settings-codex-token-guide').hidden"),true);
-    await supply(cursor, { ...codex, primary: { percent: 86, resetsAt: Date.now() / 1000 - 10 } });
+    await supply(cursor, { ...codex, primary: { percent: 86, windowMinutes: 300, resetsAt: Date.now() / 1000 - 10 } });
     assert.equal(await js("document.querySelector('#codex-usage-rows .ai-quota-row').dataset.expired"), 'true');
     assert.equal(await js("document.getElementById('codex-usage-footnote').classList.contains('is-stale')"), true);
     await js("document.getElementById('cursor-usage-refresh').click(); new Promise(r=>setTimeout(r,50))");

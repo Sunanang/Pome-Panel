@@ -138,6 +138,15 @@ test('macOS packaging declares the Electron 44 minimum and least-privilege runti
   assert.match(entitlements, /com\.apple\.security\.cs\.disable-library-validation/);
 });
 
+test('Windows uses a directory-selection wizard and repairs desktop shortcuts on manual reinstall', () => {
+  const nsis = packageConfig.build.nsis;
+  assert.equal(nsis.oneClick, false, 'show the installation wizard');
+  assert.equal(nsis.allowToChangeInstallationDirectory, true, 'allow a user-selected directory');
+  assert.equal(nsis.createDesktopShortcut, 'always', 'restore missing desktop shortcuts on manual reinstall');
+  assert.equal(nsis.createStartMenuShortcut, true);
+  assert.equal(nsis.deleteAppDataOnUninstall, false);
+});
+
 // P3-1：卸载后残留的 Run 值会让系统反复尝试拉起已被删掉的 exe。
 test('the NSIS uninstaller clears the auto-launch registry values, but not on upgrade', () => {
   const installerPath = path.join(projectRoot, 'build', 'installer.nsh');

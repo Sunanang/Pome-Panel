@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { statusKey } = require('./renderer/notification-domain');
 const { randomUUID, createHash } = require('node:crypto');
 const { readJsonStrict, writeJsonAtomic, writeAtomic } = require('./atomicStorage');
 
@@ -48,6 +49,7 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     throw Object.assign(new Error('收件箱格式损坏，原文件已保留。'), { code: 'storage_corrupt' });
   }
   if (new Set(state.records.map((r) => r.id)).size !== state.records.length || Object.values(state.dedupe).some((r) => !r || typeof r.id !== 'string' || !Number.isFinite(r.at))) throw Object.assign(new Error('收件箱格式损坏，原文件已保留。'), { code: 'storage_corrupt' });
+  state.records = state.records.map(record => ({ ...record, status: statusKey(record.status, record.source) }));
   const diskVersion = () => { if (!disk.existsSync(filePath)) return null; const stat = disk.statSync(filePath); return [stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':'); };
   const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
   let lastDiskVersion = diskVersion();
@@ -76,7 +78,7 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     prune();
     const ts = now();
     const taskId = clean(input.taskId, 160);
-    const title = clean(input.title, 240);
+    const title = clean(input.title, 4096);
     const project = clean(input.project, 320);
     const key = `event:${stableId}`;
     const prior = state.dedupe[key];
@@ -84,7 +86,8 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     const rawCompletedAt = input.completedAt ?? input.completed_at;
     const parsedCompletedAt = typeof rawCompletedAt === 'string' && !/^\d+(\.\d+)?$/.test(rawCompletedAt) ? Date.parse(rawCompletedAt) : Number(rawCompletedAt);
     const record = {
-      id: randomUUID(), completionEventId: stableId, source: input.source, taskId, title, project,
+      id: randomUUID(), completionEventId: stableId, source: input.source, status: statusKey(input.status, input.source), taskId, title, project,
+      sessionTitle: clean(input.sessionTitle, 256), completionSummary: clean(input.completionSummary || input.title, 4096),
       receivedAt: ts, completedAt: Number.isFinite(parsedCompletedAt) && parsedCompletedAt > 0 ? parsedCompletedAt : ts, readAt: null,
       window: input.window && typeof input.window === 'object' ? {
         app: clean(input.window.app, 160), title: clean(input.window.title, 320),

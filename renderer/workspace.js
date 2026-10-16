@@ -1091,7 +1091,8 @@
     const remote = data.authSource === 'manual';
     local.textContent = remote ? ['手动 Token', D.planLabel(data.plan), `更新于 ${D.clock(data.updatedAt)}`].filter(Boolean).join(' · ')
       : data.detected ? ['本机 Codex', D.planLabel(data.plan), `最近一次使用 ${recent}`].filter(Boolean).join(' · ') : '未检测到本机 Codex';
-    percent.textContent = data.updatedAt ? `5 小时 ${D.formatPercent(D.remaining(data.primary?.percent))} · 每周 ${D.formatPercent(D.remaining(data.secondary?.percent))}${D.expired(data.primary) || D.expired(data.secondary) ? ' · 重置时间已过，实际应更低' : ''}` : '';
+    percent.textContent = data.updatedAt ? D.quotaRows(data, 'codex').map(({ name, windowUsage }) => `${name.replace(/额度$/, '')} ${D.formatPercent(D.remaining(windowUsage?.percent))}`).join(' · ')
+      + (D.quotaRows(data, 'codex').some(row => D.expired(row.windowUsage)) ? ' · 重置时间已过，待刷新' : '') : '';
     if (data.remoteError && !invalid) percent.textContent += `${percent.textContent ? ' · ' : ''}暂时无法联网查询`;
     else if (!data.ok && data.error && !invalid) percent.textContent = '暂时无法读取本机记录，点首页刷新重试';
   }

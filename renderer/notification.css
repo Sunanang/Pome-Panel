@@ -73,7 +73,7 @@ html, body {
 }
 button { font: inherit; color: inherit; border: 0; padding: 0; cursor: pointer; }
 .notification-root {
-  width: 100%; height: 100%; position: relative;
+  width: 100%; height: 100%; position: relative; isolation: isolate; contain: paint;
   clip-path: inset(0 calc((var(--nb-window-w) - var(--nb-notch-w))/2) calc(100% - var(--nb-cap-h)) round 0 0 var(--nb-radius-notch) var(--nb-radius-notch));
   transition: clip-path var(--nb-enter-ms) var(--nb-ease-island);
 }
@@ -83,13 +83,16 @@ button { font: inherit; color: inherit; border: 0; padding: 0; cursor: pointer; 
 .notification-shape {
   position: relative; border-radius: 0 0 var(--nb-radius-body) var(--nb-radius-body);
   background: linear-gradient(180deg,var(--nb-cap) 0,var(--nb-cap) var(--nb-cap-h),var(--nb-surface-top) calc(var(--nb-cap-h) + 14px),var(--nb-surface-bottom) 100%);
-  box-shadow: 0 14px 36px rgba(0,0,0,.42),0 2px 8px rgba(0,0,0,.28);
+  box-shadow: none;
 }
+/* A single inset outline. Layered shadows + XOR masks on transparent native
+   windows produced an extra silhouette at rest and during clip-path animation. */
 .notification-shape::after {
-  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
-  background: linear-gradient(180deg,transparent 0,transparent calc(var(--nb-cap-h) + 4px),var(--nb-hairline) calc(var(--nb-cap-h) + 26px),rgba(255,255,255,.10) 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  content: ''; position: absolute; inset: calc(var(--nb-cap-h) + 4px) 0 0;
+  border: 1px solid var(--nb-hairline); border-top: 0;
+  border-radius: 0 0 var(--nb-radius-body) var(--nb-radius-body); pointer-events: none;
 }
+
 .shoulder { position: absolute; top: 0; width: var(--nb-shoulder); height: var(--nb-shoulder); }
 .shoulder.left { left: calc(-1 * var(--nb-shoulder)); background: radial-gradient(circle at 0 100%,transparent calc(var(--nb-shoulder) - .5px),var(--nb-cap) var(--nb-shoulder)); }
 .shoulder.right { right: calc(-1 * var(--nb-shoulder)); background: radial-gradient(circle at 100% 100%,transparent calc(var(--nb-shoulder) - .5px),var(--nb-cap) var(--nb-shoulder)); }
@@ -146,7 +149,7 @@ button { font: inherit; color: inherit; border: 0; padding: 0; cursor: pointer; 
 .notification-open:focus-visible { outline: 1px solid var(--nb-text-3); outline-offset: -3px; }
 .notification-shell.is-hover { --nb-ring: #151517; }
 .is-hover .notification-shape { background: linear-gradient(180deg,var(--nb-cap) 0,var(--nb-cap) var(--nb-cap-h),#121214 calc(var(--nb-cap-h) + 14px),#1B1B1E 100%); }
-.is-hover .notification-shape::after { background: linear-gradient(180deg,transparent 0,transparent calc(var(--nb-cap-h) + 4px),rgba(255,255,255,.12) calc(var(--nb-cap-h) + 26px),rgba(255,255,255,.16) 100%); }
+.is-hover .notification-shape::after { border-color: rgba(255,255,255,.12); }
 .is-hover .notification-progress i { background: rgba(255,255,255,.16); }
 .is-hover .notification-time, .notification-shell:focus-within .notification-time { display: none; }
 .is-hover .notification-close, .notification-shell:focus-within .notification-close { display: grid; }
@@ -156,7 +159,7 @@ html[data-platform="win32"] .notification-root { clip-path: none; opacity: 0; tr
 html[data-platform="win32"] .notification-root.is-visible { opacity: 1; transform: translateY(0) scale(1); }
 html[data-platform="win32"] .notification-root.is-hiding { opacity: 0; transform: translateY(-8px); transition-duration: 160ms; transition-delay: 0ms; }
 html[data-platform="win32"] .notification-shape { border-radius: var(--nb-radius-win); background: linear-gradient(180deg,rgba(30,30,33,.97),rgba(22,22,24,.97));
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08),inset 0 1px 0 rgba(255,255,255,.06),0 10px 28px rgba(0,0,0,.34),0 2px 6px rgba(0,0,0,.22); --nb-ring: #1C1C1F; }
+  box-shadow: inset 0 0 0 1px var(--nb-hairline); --nb-ring: #1C1C1F; }
 html[data-platform="win32"] .is-hover .notification-shape { background: linear-gradient(180deg,rgba(35,35,38,.97),rgba(27,27,30,.97)); }
 html[data-platform="win32"] .notification-cap,html[data-platform="win32"] .shoulder,html[data-platform="win32"] .notification-shape::after { display: none; }
 html[data-platform="win32"] .notification-content { padding: 12px 16px 16px; }
@@ -178,3 +181,7 @@ html[data-platform="win32"] .notification-content { padding: 12px 16px 16px; }
 @media (prefers-reduced-motion: reduce) {
   .is-switching .notification-content { transform: none; transition: opacity 120ms linear; }
 }
+
+/* Failed launches stay actionable even after the pointer leaves the bubble. */
+.has-activation-error .notification-time { display: none; }
+.has-activation-error .notification-close { display: grid; }

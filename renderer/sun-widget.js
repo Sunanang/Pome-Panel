@@ -326,7 +326,6 @@
 
   function render() {
     const size = tile.dataset.widgetSize || 'medium';
-    const query = panelOpen ? (document.getElementById('sun-city-query')?.value || '') : '';
     if (!location) {
       tile.dataset.phase = 'night';
       tile.dataset.skySide = 'west';
@@ -343,7 +342,8 @@
       tile.innerHTML = `<div class="sun-sky" aria-hidden="true"><img src="${Sun.skyAsset(size, model.phase)}" alt="" draggable="false"></div>${renderBody(model, size)}`;
       requestAnimationFrame(syncGlow);
     }
-    if (panelOpen) openPanel(query);
+    // Refresh the card without rebuilding/refocusing the user's open form.
+    if (panelOpen) positionPanel();
     schedule();
   }
 
@@ -363,7 +363,43 @@
     }).join('');
   }
 
+  function canShowPanel() {
+    const surface = document.getElementById('app');
+    return surface?.classList.contains('expanded') && !surface.classList.contains('closing')
+      && !tile.hidden && document.getElementById('tab-home')?.classList.contains('active');
+  }
+
+  function positionPanel() {
+    if (!panelOpen) return;
+    if (!canShowPanel()) { closePanel(); return; }
+    const pop = document.getElementById('sun-location-popover');
+    if (!pop) return;
+    const style = getComputedStyle(pop);
+    const gap = parseFloat(style.getPropertyValue('--sun-popover-gap'));
+    const maxHeight = parseFloat(style.getPropertyValue('--sun-popover-height'));
+    const panel = document.getElementById('panel').getBoundingClientRect();
+    const bounds = {
+      left: Math.max(gap, panel.left + gap),
+      right: Math.min(window.innerWidth - gap, panel.right - gap),
+      top: Math.max(gap, panel.top + gap),
+      bottom: Math.min(window.innerHeight - gap, panel.bottom - gap),
+    };
+    const availableWidth = bounds.right - bounds.left;
+    const availableHeight = bounds.bottom - bounds.top;
+    if (availableWidth <= 0 || availableHeight <= 0) { closePanel(); return; }
+    pop.style.maxWidth = `${availableWidth}px`;
+    pop.style.maxHeight = `${Math.min(maxHeight, availableHeight)}px`;
+    const rect = (tile.querySelector('[data-sun-place]') || tile).getBoundingClientRect();
+    const { width, height } = pop.getBoundingClientRect();
+    const below = bounds.bottom - rect.bottom - gap;
+    const above = rect.top - gap - bounds.top;
+    const top = below >= height || below >= above ? rect.bottom + gap : rect.top - gap - height;
+    pop.style.left = `${Math.max(bounds.left, Math.min(bounds.right - width, rect.right - width))}px`;
+    pop.style.top = `${Math.max(bounds.top, Math.min(bounds.bottom - height, top))}px`;
+  }
+
   function openPanel(preset) {
+    if (!canShowPanel()) return;
     panelOpen = true;
     let pop = document.getElementById('sun-location-popover');
     if (!pop) {
@@ -387,24 +423,25 @@
         <p class="sun-manual-error" data-sun-manual-error hidden></p>
       </form>
       <p class="foot">位置只保存在本机</p>`;
-    const anchor = tile.querySelector('[data-sun-place]') || tile;
-    const rect = anchor.getBoundingClientRect();
-    const width = 264;
-    const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.right - width));
-    const top = Math.min(window.innerHeight - 16, rect.bottom + 6);
-    pop.style.left = `${left}px`;
-    pop.style.top = `${top}px`;
     pop.hidden = false;
+    pop.scrollTop = 0;
+    positionPanel();
+    if (!panelOpen) return;
     const input = document.getElementById('sun-city-query');
     const caret = input.value.length;
-    input.focus();
+    input.focus({ preventScroll: true });
     input.setSelectionRange(caret, caret);
   }
 
   function closePanel() {
     panelOpen = false;
+    manualOpen = false;
     const pop = document.getElementById('sun-location-popover');
-    if (pop) pop.hidden = true;
+    if (pop) {
+      if (pop.contains(document.activeElement)) document.activeElement.blur();
+      pop.hidden = true;
+      pop.replaceChildren();
+    }
   }
 
   function applyCity(city, persist) {
@@ -442,6 +479,7 @@
     if (event.target.id !== 'sun-city-query') return;
     const results = document.getElementById('sun-city-results');
     if (results) results.innerHTML = resultRows(event.target.value);
+    positionPanel();
   });
 
   document.addEventListener('click', (event) => {
@@ -459,6 +497,7 @@
     const form = document.querySelector('[data-sun-manual-form]');
     if (form) form.hidden = !manualOpen;
     manual.setAttribute('aria-expanded', String(manualOpen));
+    positionPanel();
   });
 
   document.addEventListener('submit', (event) => {
@@ -473,6 +512,7 @@
         error.hidden = false;
         error.textContent = parsed.error;
       }
+      positionPanel();
       return;
     }
     parsed.location.tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
@@ -497,12 +537,33 @@
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) render();
+    if (document.hidden) closePanel();
+    else render();
   });
+  document.addEventListener('notch:will-collapse', closePanel);
+  document.addEventListener('notch:modechange', (event) => {
+    if (!event.detail?.expanded) closePanel();
+  });
+  document.addEventListener('notch:tabchange', (event) => {
+    if (event.detail?.tab !== 'home') closePanel();
+  });
+  document.addEventListener('notch:home-layout-applied', positionPanel);
+  window.addEventListener('blur', closePanel);
+  window.addEventListener('resize', positionPanel);
+  document.addEventListener('scroll', (event) => {
+    if (!document.getElementById('sun-location-popover')?.contains(event.target)) positionPanel();
+  }, true);
   window.addEventListener('focus', () => render());
 
-  const sizeObserver = new MutationObserver(() => render());
-  sizeObserver.observe(tile, { attributes: true, attributeFilter: ['data-widget-size'] });
+  const sizeObserver = new MutationObserver(() => {
+    if (tile.hidden) closePanel();
+    render();
+  });
+  sizeObserver.observe(tile, { attributes: true, attributeFilter: ['data-widget-size', 'hidden'] });
+  const surfaceObserver = new MutationObserver(() => {
+    if (panelOpen && !canShowPanel()) closePanel();
+  });
+  surfaceObserver.observe(document.getElementById('app'), { attributes: true, attributeFilter: ['class'] });
 
   window.PomeSun = Object.freeze({
     render,

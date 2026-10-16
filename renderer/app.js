@@ -2972,6 +2972,14 @@ const HOME_SIZE_LABELS = { mini: '迷你', small: '小', medium: '中', large: '
 const homeBento = document.getElementById('home-bento');
 const homeContextMenu = document.getElementById('home-context-menu');
 const homeTabPanel = document.getElementById('tab-home');
+// New profiles and an exact old Windows default get platform defaults.
+// Customized visibility, sizes and deliberate gaps remain the user's choices.
+let freshWindowsHome = false;
+try {
+  freshWindowsHome = readPlatformCapabilities().homeDefaults?.showSun === true
+    && [HOME_ORDER_KEY, HOME_SIZES_KEY, HOME_PLACEMENTS_KEY, HOME_HIDDEN_MODULES_KEY, 'notch-home-layout-v2']
+      .every((key) => localStorage.getItem(key) === null);
+} catch {}
 
 function bindHomeTilePointerGlow(bento) {
   if (!bento || bento.dataset.tileGlowBound === 'true') return;
@@ -3132,6 +3140,17 @@ if (!homeInboxSavedPlacement) {
 if (legacyDefaultHome) { homeOrder = [...HOME_ORDER_DEFAULTS]; homeSizes = {...HOME_SIZE_DEFAULTS}; homeWorkingLayout = null; }
 const loadedHomeVisibility = loadHiddenHomeModules();
 let hiddenHomeModules = loadedHomeVisibility.hiddenIds;
+const repairWindowsDefaultHome = readPlatformCapabilities().homeDefaults?.showSun === true
+  && window.NotchDomain.isLegacyWindowsDefaultHomeLayout({
+    order: homeOrder, defaultOrder: HOME_ORDER_DEFAULTS, sizes: homeSizes, defaults: HOME_SIZE_DEFAULTS,
+    placements: homeWorkingLayout?.placements, hiddenIds: hiddenHomeModules,
+    unavailableIds: unavailableHomeModules, registry: HOME_MODULE_REGISTRY,
+  });
+const useWindowsHomeDefaults = freshWindowsHome || repairWindowsDefaultHome;
+if (repairWindowsDefaultHome) {
+  hiddenHomeModules = hiddenHomeModules.filter(id => id !== 'sun');
+  homeWorkingLayout = null;
+}
 let homeVisibilityPersisted = true;
 let homeLayoutReadOnly = false;
 let homeLayoutMotionGeneration = 0;
@@ -3422,7 +3441,9 @@ if (!HOME_ORDER_DEFAULTS.every((id) => homeOrder.includes(id))
   || homeOrder.length !== HOME_ORDER_DEFAULTS.length) {
   homeOrder = loadHomeOrder();
 }
-const introducedSunLayout = window.NotchDomain.introduceHomeModule({
+const introducedSunLayout = useWindowsHomeDefaults ? {
+  order: homeOrder, sizes: homeSizes, hiddenIds: hiddenHomeModules, placements: null,
+} : window.NotchDomain.introduceHomeModule({
   order: homeOrder,
   sizes: homeSizes,
   defaults: HOME_SIZE_DEFAULTS,
@@ -3456,11 +3477,12 @@ const inboxHiddenChanged = !hiddenHomeModules.includes('inbox') && introducedInb
 if (inboxHiddenChanged) hiddenHomeModules.push('inbox');
 if (introducedInboxLayout.placements) homeWorkingLayout = { allowGaps: true, placements: introducedInboxLayout.placements };
 saveHomeLayout();
-if (sunHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
+if (repairWindowsDefaultHome || sunHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
 
 let initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
-  sealGaps: false,
-  persistSeal: false,
+  forcePack: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
+  sealGaps: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
+  persistSeal: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
 });
 if (!initialHomeLayout) {
   // Repair once without entering safe mode: keep visibility prefs, reset packable sizes.

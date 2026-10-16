@@ -117,3 +117,23 @@ test('external content changes remain protected even when valid JSON', (t) => {
   assert.equal(fs.readFileSync(filePath, 'utf8'), bytes);
   assert.equal(createTaskInbox({ filePath }).list().items[0].title, '外部修改');
 });
+
+test('inbox persists status, native session title and bounded full summary across restart', t => {
+  const filePath = fixture(t); let inbox = createTaskInbox({ filePath });
+  for (const status of ['completed', 'failed', 'awaiting', 'due']) {
+    const row = inbox.accept({ source: 'cursor', eventId: status, status, sessionTitle: '会话名称',
+      title: '长标题'.repeat(150), completionSummary: '完整内容'.repeat(2000) }).record;
+    assert.equal(row.status, status); assert.ok(row.title.length > 240); assert.equal(row.completionSummary.length, 4096);
+  }
+  inbox = createTaskInbox({ filePath });
+  assert.deepEqual(new Set(inbox.list().items.map(row => row.status)), new Set(['completed', 'failed', 'awaiting', 'due']));
+  assert.equal(inbox.list().items[0].sessionTitle, '会话名称');
+});
+test('old records without status or a window remain readable as completed', t => {
+  const filePath = fixture(t), inbox = createTaskInbox({ filePath });
+  const row = inbox.accept({ source: 'codex', title: '旧记录' }).record;
+  const data = JSON.parse(fs.readFileSync(filePath)); delete data.records[0].status;
+  fs.writeFileSync(filePath, JSON.stringify(data));
+  assert.equal(createTaskInbox({ filePath }).get(row.id).status, 'completed');
+  assert.equal(createTaskInbox({ filePath }).get(row.id).window, null);
+});

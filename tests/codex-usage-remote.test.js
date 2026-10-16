@@ -181,3 +181,12 @@ test('production Codex code never accesses renewal or ID credentials or token re
   const snapshot = main.slice(main.indexOf('function assembleWorkspaceSnapshot'), main.indexOf('function writeSyncedBytes'));
   assert.doesNotMatch(snapshot, /[Cc]odex[Tt]oken|encryptedCodex/);
 });
+
+test('additional model limits retain their own names and real window cadence', () => {
+  const snapshot = parseRemoteUsage({ ...body, additional_rate_limits: [{ limit_name: 'Spark', rate_limit: {
+    primary_window: { used_percent: 42, limit_window_seconds: 604800, reset_at: now / 1000 + 300 },
+  } }] }, now);
+  assert.equal(snapshot.windows.length, 3);
+  assert.equal(snapshot.windows[2].label, 'Spark'); assert.equal(snapshot.windows[2].windowMinutes, 10080);
+  assert.equal(snapshot.windows[2].percent, 42);
+});

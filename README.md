@@ -81,7 +81,7 @@ Cursor 用量默认自动读取本机 Cursor 登录态。「设置 → AI 剩余
 
 首页「AI 剩余额度」只显示已检测到或配置 Token 的来源。Cursor 与 Codex 都存在时，迷你和小尺寸可切换来源并记住本机选择；首次默认选剩余额度最少的来源，中尺寸左右并排，大尺寸上下分区。两个来源共用额度行：中、大尺寸依次展示名称与剩余比例、通栏进度条、账期或重置说明；迷你尺寸使用 12px 文字与 4px 条高，均分剩余高度。来源标签承载来源和套餐，单行脚注只显示刷新或更新时间；都未检测到时显示连接说明与设置入口。首页布局沿用原 `cursor` 模块 ID，不迁移已保存布局。Cursor / Codex 的额度统一显示「59%」，额度条越满表示剩余越多；以原始已用比例换算剩余后四舍五入，剩余 ≤20% 为橙色、≤5% 为红色，隐藏来源的提示点也遵循此规则。缺失数据保持 `--%`，本地数据仍保存原始已用比例。
 
-Codex 配置手动 access token 后，由主进程向 `https://chatgpt.com/backend-api/wham/usage` 查询实时额度，超时 10 秒；沿用首页的定期刷新与刷新按钮。未配置 Token 或联网失败时，回退读取本机 `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` 的最近 `token_count` 记录，默认目录为 `~/.codex`；Windows 还会检查 `%USERPROFILE%\.codex`。两种来源统一显示 5 小时和每周窗口、套餐、Credits 与更新时间，标签分别为「手动 Token」和「本机 Codex」。重置时间按本地日期显示为「HH:MM 重置」「明天 HH:MM 重置」或「M/D HH:MM 重置」。过期记录的额度条变灰并提示「实际应更低」。网络故障且没有可用本机记录时保留上次成功的远程数据与原更新时间。
+Codex 配置手动 access token 后，由主进程向 `https://chatgpt.com/backend-api/wham/usage` 查询实时额度，超时 10 秒；沿用首页的定期刷新与刷新按钮。未配置 Token 或联网失败时，回退读取本机 `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` 的最近 `token_count` 记录，默认目录为 `~/.codex`；Windows 还会检查 `%USERPROFILE%\.codex`。两种来源按实际 windowMinutes 展示额度周期、套餐、Credits 与更新时间；仅有每周窗口时只显示每周额度，额外模型额度按各自名称和周期列出，标签分别为「手动 Token」和「本机 Codex」。重置时间按本地日期显示为「HH:MM 重置」「明天 HH:MM 重置」或「M/D HH:MM 重置」。过期记录的额度条变灰并提示「待刷新」。网络故障且没有可用本机记录时保留上次成功的远程数据与原更新时间。Cursor 也保留同一账号的最近成功值并标注刷新失败；退出、切换账号或认证失效时不复用旧账号缓存。可选的 Grok Bot 用量失败不会阻断 Cursor 主额度。刷新按可见性降频，并在已知额度重置后主动更新；手动刷新仍立即查询。
 
 「设置 → AI 剩余额度」将 Cursor 与 Codex 放在同一卡片内。Codex「获取本机 Token」仅在主动点击时只读本机 `auth.json`，只提取 access token 并填入密码框，再点击保存。Token 由 `safeStorage` 加密保存在本机，不写入工作区、不参与 NAS 同步，也不进入日志；不提取或使用其他登录凭证，不自动续期。返回 401/403 时标记「Token 失效」，有本机记录则显示「Token 失效 · 已改用本机」，并提供设置入口。用户可重新获取本机 Token，或先在 Codex 重新登录后获取；没有安装 Codex 的设备可从另一台电脑获取后粘贴保存。重新保存立即清除失效状态并刷新，网络故障和 5xx 不会把有效 Token 标记为失效。
 
@@ -107,13 +107,21 @@ curl -X POST http://127.0.0.1:43821/notify/codex \
 
 在「设置 → AI 完成来源」检测并接入 Codex、Claude Code、Cursor。确认浮层列出修改文件、Pome 钩子内容和同目录的 `.pome-backup-时间戳` 备份；确认后先校验备份再原子写入。配置损坏时拒绝修改，预览过期或文件被外部编辑后需要重新确认。仅增删 Pome 标记项，其他配置、钩子和缩进保留；Codex 的原 `notify` 被继续转发，断开后还原。Codex 接入后需重启工具。
 
-优先用 Pome 自带 Electron 的 Node 运行时，脚本采用当前应用安装路径。每次启动检查接入路径，应用搬家后可点「修复」。Claude Code 使用 `hooks.Stop`，Cursor 使用官方 `hooks.json` v1 的 `hooks.stop`，以 conversation_id 与 generation_id 组合去重。首次检测到未接入工具会提示；「以后再说」仅存本机并停止重复提示。
+通知与收件箱保留 completed / failed / awaiting / due 状态。标题跳过空泛的“已完成”首行，摘要最多保留 4096 字符，省略只发生在显示层，悬停可读完整摘要。Codex 原生会话名按精确 thread ID 只读本机会话索引或 SQLite 元数据，与完成摘要分开保存；不存在时不伪造。打开来源软件失败时保留气泡、暂停倒计时并显示原因，可重试或点 × 关闭。
+
+优先用 Pome 自带 Electron 的 Node 运行时，脚本采用当前应用安装路径。每次启动检查接入路径，应用搬家后可点「修复」。Claude Code 使用 `hooks.Stop`，Cursor 使用官方 `hooks.json` v1 的 `hooks.stop` 与 `hooks.afterAgentResponse`，以 conversation_id 与 generation_id 关联摘要并去重。现有 stop-only 配置仍可接收通知；在设置中点「补全摘要」可补上摘要钩子。原生 error 映射为失败，aborted 不作为成功提醒。摘要仅在本机私有目录缓存（读取有效期 10 分钟、最多 256 条、每条 4096 字符；后续写入清理过期项），stop 读取后移除；可用时也会有界读取 transcript_path。首次检测到未接入工具会提示；「以后再说」仅存本机并停止重复提示。
 
 「发送测试」经过同一转发脚本和本机接收服务，送达后显示“测试通知已送达”；测试不会产生历史、未读或真实完成提醒。首页未接入、等待第一条、接入失效三个空状态分别引导接入、测试/管理、修复。损坏收件箱仍使用独立的确认重建流程。
 
 仓库提供 [Codex](scripts/codex-notify.js)、[Claude Code](scripts/claude-notify.js)、[Cursor](scripts/cursor-notify.js) 转发脚本。Claude 云端会话（`CLAUDE_CODE_REMOTE=true`）不会转发。
 
 ## Windows 上的几件事
+
+全新安装首次打开首页时，日出日落默认显示，可用组件会重新排布并填满首页网格；未改动的旧 Windows 默认布局也会自动修复。Mac 默认布局与用户自定义的组件显隐、尺寸和位置不变。两端的城市选择气泡会避开面板边界，搜索列表较长时在气泡内滚动，自定义位置表单保持可操作；收起面板后立即关闭，下次展开需手动点击位置按钮重新打开。
+
+### 安装目录与桌面快捷方式
+
+双击 `windows-x64-setup.exe` 进入安装向导，在「选择安装位置」中填写目录或点击「浏览」选择，例如 `D:\Apps\Pome Panel`。安装完成后，桌面和开始菜单会创建指向该目录主程序的 `Pome Panel` 快捷方式；手动重新安装会恢复缺失的桌面快捷方式。程序文件保存在所选目录，默认目录为 `%LOCALAPPDATA%\Programs\Pome Panel`。
 
 ### 通知钩子怎么配
 

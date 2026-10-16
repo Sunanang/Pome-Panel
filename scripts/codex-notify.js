@@ -20,6 +20,9 @@ if (!payload._pome_test) {
     }
   } catch {}
 }
+if (!payload._pome_test && !payload.session_title && !payload.sessionTitle) {
+  try { payload.session_title = require('../codex-thread-metadata').readCodexThreadTitle(payload.thread_id || payload['thread-id'] || payload.session_id); } catch {}
+}
 const body = Buffer.from(JSON.stringify(payload));
 const request = http.request({ hostname: '127.0.0.1', port: Number(process.env.POME_NOTIFY_PORT) || 43821,
   path: '/notify/codex', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': body.length } }, res => res.resume());
