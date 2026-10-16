@@ -18,7 +18,7 @@ run(process.execPath, ['--test', ...fs.readdirSync(path.join(root, 'tests')).fil
 env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-test.log');
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
-for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap', 'security-recovery', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'normal-startup']) {
+for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap', 'security-recovery', 'notification', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   run(require('electron'), [`tests/${file}.electron.js`]);
@@ -87,6 +87,7 @@ for (const file of [
   'renderer/workspace.js',
   'renderer/icon-motion.js',
   'renderer/notification.js',
+  'renderer/notification-domain.js',
   'renderer/nas-sync-pair.js',
   'renderer/nas-sync-migration.js',
   'renderer/nas-sync-settings.js',

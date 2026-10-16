@@ -161,6 +161,11 @@ contextBridge.exposeInMainWorld('notchAPI', {
     subscribe('task-notification:show', (event, notification) => cb(notification)),
   onTaskNotificationQueue: (cb) =>
     subscribe('task-notification:queue', (event, count) => cb(count)),
+  onTaskNotificationTiming: (cb) =>
+    subscribe('task-notification:timing', (event, timing) => cb(timing)),
+  taskNotificationShown: (eventId) => ipcRenderer.send('task-notification:shown', eventId),
+  taskNotificationResize: (size) => ipcRenderer.send('task-notification:resize', size),
+  dismissTaskNotification: (eventId) => ipcRenderer.send('task-notification:close', eventId),
   onTaskNotificationHide: (cb) =>
     subscribe('task-notification:hide', (event, eventId) => cb(eventId)),
   onTaskCompletion: (cb) =>

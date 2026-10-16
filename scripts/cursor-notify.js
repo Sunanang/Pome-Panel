@@ -4,7 +4,7 @@ const http = require('node:http');
 // https://cursor.com/docs/hooks: hooks.stop, conversation_id + generation_id.
 function cursorCompletion(payload) {
   if (!payload || typeof payload !== 'object' || payload.agent_id || (payload.hook_event_name && payload.hook_event_name !== 'stop')) return null;
-  if (payload.status && payload.status !== 'completed') return null;
+  if (payload.status && !['completed', 'due', 'failed', 'awaiting'].includes(payload.status)) return null;
   const conversation = String(payload.conversation_id || ''), generation = String(payload.generation_id || '');
   return { ...payload, source: 'cursor', session_id: conversation,
     event_id: conversation && generation ? `${conversation}:${generation}` : payload.event_id,

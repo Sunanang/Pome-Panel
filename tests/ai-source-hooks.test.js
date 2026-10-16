@@ -108,10 +108,11 @@ test('installed Claude and Cursor shell commands run with spaces and apostrophes
   const p=await service.preview(source);await service.apply(p.token);const file=path.join(home,source==='claude'?'.claude/settings.json':'.cursor/hooks.json'),value=JSON.parse(fs.readFileSync(file,'utf8'));
   const command=source==='claude'?value.hooks.Stop[0].hooks[0].command:value.hooks.stop[0].command;
   const cwd="C:\\工程\\Panel's path";
-  await new Promise((resolve,reject)=>{const child=spawn(command,{shell:true,env:{...process.env,POME_NOTIFY_PORT:String(server.address().port)},stdio:['pipe','ignore','ignore']});child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(Error(`${source} command failed`)));child.stdin.end(JSON.stringify({_pome_test:true,_pome_test_token:source,conversation_id:'session',generation_id:source,cwd}));});
+  await new Promise((resolve,reject)=>{const child=spawn(command,{shell:true,env:{...process.env,POME_NOTIFY_PORT:String(server.address().port)},stdio:['pipe','ignore','ignore']});child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(Error(`${source} command failed`)));child.stdin.end(JSON.stringify({_pome_test:true,_pome_test_token:source,conversation_id:'session',generation_id:source,cwd,status:'awaiting'}));});
   assert.equal(received.length,source==='claude'?1:2,`${source} must deliver its completion`);
   assert.equal(received.at(-1)._pome_test,true,`${source} must parse the forwarded JSON`);
   assert.equal(received.at(-1).cwd,cwd,`${source} must preserve UTF-8 input`);
+  assert.equal(received.at(-1).status,'awaiting',`${source} must forward optional notification status`);
  }
  assert.equal(received.length,2);assert.equal(received[1].event_id,'session:cursor');
 });
@@ -120,4 +121,12 @@ test('Windows configuration uses a data-only -File bridge, preserves original no
  for(const source of ['codex','claude','cursor']){const p=await service.preview(source);assert.equal((await service.apply(p.token)).ok,true);assert.equal((await service.status(source)).state,'connected');}
  const command=readConfig(files.codex,'codex').value.notify;assert(command.includes('-File'));assert(!command.includes('-Command'));assert(command.includes('pome-panel-hook=codex'));assert(command.some(value=>value.endsWith('pome-hook-runtime.ps1')));
  const p=await service.preview('codex','disconnect');await service.apply(p.token);assert.deepEqual(readConfig(files.codex,'codex').value.notify,['original.exe','turn-ended']);
+});
+
+test('Cursor keeps explicit alert status and rejects non-final hook events',()=>{
+ const {cursorCompletion}=require('../scripts/cursor-notify');
+ for(const status of ['completed','due','failed','awaiting'])assert.equal(cursorCompletion({status}).status,status);
+ assert.equal(cursorCompletion({status:'running'}),null);
+ assert.equal(cursorCompletion({hook_event_name:'beforeShellExecution',status:'awaiting'}),null);
+ assert.equal(cursorCompletion({agent_id:'child',status:'completed'}),null);
 });

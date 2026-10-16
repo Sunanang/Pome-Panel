@@ -1,6 +1,7 @@
 const net = require('net');
 const path = require('path');
 const crypto = require('crypto');
+const notificationDomain = require('./renderer/notification-domain');
 
 function isPrivateAddress(address) {
   const value = String(address || '').trim().toLowerCase().split('%', 1)[0];
@@ -325,18 +326,14 @@ function cleanTaskLine(value, maxLength) {
   return Array.from(cleaned).slice(0, maxLength).join('');
 }
 
-const TASK_NOTIFICATION_FALLBACK_TITLES = {
-  codex: 'Codex 已完成任务',
-  claude: 'Claude 已完成任务',
-  cursor: 'Cursor 已完成任务',
-};
-
 function taskNotificationIdentity(payload, source = 'task') {
   const data = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+  source = notificationDomain.sourceKey(source);
+  const status = notificationDomain.statusKey(data.status, source);
   const cwd = firstPayloadText(data, ['cwd', 'working_directory', 'working-directory']);
   const project = cleanTaskLine(
     firstPayloadText(data, ['project', 'project_name', 'project-name', 'projectName'])
-      || (cwd && path.isAbsolute(cwd) ? path.basename(path.normalize(cwd)) : ''),
+      || (cwd && (path.isAbsolute(cwd) || path.win32.isAbsolute(cwd)) ? cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : ''),
     48
   );
   const concreteTitle = firstPayloadText(data, [
@@ -361,9 +358,8 @@ function taskNotificationIdentity(payload, source = 'task') {
   ]);
   return {
     project,
-    title: cleanTaskLine(concreteTitle, 120)
-      || TASK_NOTIFICATION_FALLBACK_TITLES[source]
-      || '任务已完成',
+    title: notificationDomain.concreteTitle(cleanTaskLine(concreteTitle, 120))
+      || notificationDomain.fallbackTitle(source, status),
   };
 }
 

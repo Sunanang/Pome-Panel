@@ -154,6 +154,7 @@ async function main() {
 
   await post({
     source: 'claude',
+    status: payload.status,
     sender_pid: process.pid,
     session_id: typeof payload.session_id === 'string' ? payload.session_id : '',
     cwd: typeof payload.cwd === 'string' ? payload.cwd : '',

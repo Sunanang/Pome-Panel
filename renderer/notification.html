@@ -2,54 +2,45 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
-    />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pome Panel 提醒</title>
     <link rel="stylesheet" href="./notification.css" />
   </head>
   <body>
-    <main
-      id="notification-root"
-      class="notification-root"
-      aria-live="polite"
-      aria-atomic="true"
-      hidden
-    >
-      <button
-        id="notification-shell"
-        class="notification-shell"
-        type="button"
-        aria-label="打开任务对应窗口"
-      >
-        <span class="notification-content">
-          <span class="notification-logo-wrap" aria-hidden="true">
-            <svg class="notification-glyph notification-glyph-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6.5 12.5 3.5 3.5 7.5-8"/></svg>
-            <svg class="notification-glyph notification-glyph-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5c.7 4 2.8 6.1 6.8 6.8-4 .7-6.1 2.8-6.8 6.8-.7-4-2.8-6.1-6.8-6.8 4-.7 6.1-2.8 6.8-6.8Z"/><path d="M18.5 16.5c.25 1.35.95 2.05 2.3 2.3-1.35.25-2.05.95-2.3 2.3-.25-1.35-.95-2.05-2.3-2.3 1.35-.25 2.05-.95 2.3-2.3Z"/></svg>
-            <svg class="notification-glyph notification-glyph-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.5"/><path d="M12 7.8v4.7l3.2 1.8"/></svg>
-            <span class="notification-status-dot"></span>
-          </span>
-
-          <span class="notification-copy">
-            <span id="notification-title" class="notification-title">任务已完成</span>
-            <span class="notification-meta">
-              <span id="notification-source" class="notification-source">Codex</span>
-              <span id="notification-detail" class="notification-detail"
-                >任务已完成，可以查看了</span
-              >
+    <main id="notification-root" class="notification-root" aria-live="polite" aria-atomic="true" hidden>
+      <div id="notification-shell" class="notification-shell">
+        <span class="shoulder left" aria-hidden="true"></span>
+        <span class="shoulder right" aria-hidden="true"></span>
+        <div class="notification-shape">
+          <div class="notification-cap" aria-hidden="true"></div>
+          <div class="notification-content">
+            <span class="notification-icon" aria-hidden="true">
+              <span id="notification-brand" class="notification-brand"></span>
+              <span id="notification-status" class="notification-status">
+                <svg viewBox="0 0 10 10"><use id="notification-status-glyph" href="./assets/notification/glyphs.svg#completed"></use></svg>
+              </span>
             </span>
-          </span>
-
-          <span class="notification-trailing" aria-hidden="true">
-            <span class="notification-time">刚刚</span>
-            <span id="notification-queue" class="notification-queue" hidden>+1</span>
-          </span>
-        </span>
-      </button>
+            <div class="notification-copy">
+              <span id="notification-title" class="notification-title"></span>
+              <span class="notification-trailing">
+                <span id="notification-time" class="notification-time"></span>
+                <span id="notification-queue" class="notification-queue" hidden></span>
+                <button id="notification-close" class="notification-close" type="button" aria-label="关闭任务提醒">
+                  <svg viewBox="0 0 10 10" aria-hidden="true"><use href="./assets/notification/glyphs.svg#close"></use></svg>
+                </button>
+              </span>
+              <span class="notification-subtitle">
+                <span id="notification-source"></span><span id="notification-separator" class="notification-separator">·</span><span id="notification-detail" class="notification-detail"></span>
+              </span>
+            </div>
+            <div id="notification-progress" class="notification-progress" aria-hidden="true"><i id="notification-progress-fill"></i></div>
+          </div>
+          <button id="notification-open" class="notification-open" type="button" aria-label="打开任务对应窗口"></button>
+        </div>
+      </div>
     </main>
-
+    <script src="./notification-domain.js" defer></script>
     <script src="./notification.js" defer></script>
   </body>
 </html>

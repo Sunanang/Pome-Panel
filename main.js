@@ -331,11 +331,14 @@ const LINK_FETCH_TIMEOUT_MS = 8000;
 const LINK_FETCH_MAX_BYTES = 512 * 1024;
 const LINK_FETCH_MAX_REDIRECTS = 3;
 
+const notificationDomain = require('./renderer/notification-domain');
+
 const TASK_NOTIFICATION_WIDTH = 400;
-const TASK_NOTIFICATION_HEIGHT = 96;
+const TASK_NOTIFICATION_HEIGHT = process.platform === 'win32' ? 96 : 92;
+const TASK_NOTIFICATION_ENTER_MS = process.platform === 'win32' ? 220 : 300;
 const TASK_NOTIFICATION_SCREEN_MARGIN = 12;
 const TASK_NOTIFICATION_VISIBLE_MS = 6000;
-const TASK_NOTIFICATION_LEAVE_MS = 360;
+const TASK_NOTIFICATION_LEAVE_MS = 420;
 const TASK_NOTIFICATION_DEDUPE_MS = 2000;
 const TASK_NOTIFICATION_MAX_QUEUE = 5;
 const TASK_NOTIFICATION_BODY_LIMIT = 64 * 1024;
@@ -382,6 +385,10 @@ let taskNotificationTimer = null;
 let taskNotificationFallbackTimer = null;
 let taskNotificationTimerStartedAt = 0;
 let taskNotificationRemainingMs = TASK_NOTIFICATION_VISIBLE_MS;
+let taskNotificationEnterTimer = null;
+let taskNotificationStarted = false;
+let taskNotificationSwitching = false;
+let taskNotificationHeight = TASK_NOTIFICATION_HEIGHT;
 let taskNotificationPaused = false;
 const taskNotificationQueue = [];
 const recentTaskNotifications = new Map();
@@ -490,7 +497,7 @@ function notificationBounds(width, height, display) {
   const area = process.platform === 'win32' ? d.workArea : d.bounds;
   return {
     x: Math.round(area.x + (area.width - width) / 2),
-    y: area.y,
+    y: area.y + (process.platform === 'win32' ? 10 : 0),
     width,
     height,
   };
@@ -726,6 +733,7 @@ function normalizeTaskNotification(payload, source) {
   return {
     eventId: completionEventId({ ...payload, source, taskId, completedAt: Number.isFinite(completedAtValue) && completedAtValue > 0 ? completedAt : undefined }, completedAt),
     source,
+    status: notificationDomain.statusKey(payload.status, source),
     taskId,
     title: identity.title,
     project: identity.project,
@@ -758,6 +766,10 @@ function sendTaskNotificationQueueCount() {
 
 function enqueueTaskNotification(notification) {
   if (!notification) return 'ignored';
+  const queuedAt = Date.now();
+  notification = { ...notification,
+    status: notificationDomain.statusKey(notification.status, notification.source),
+    queuedAt, occurredAt: notificationDomain.eventTime(notification.completedAt, queuedAt) };
   if (notification.source !== 'todo' && !notification.eventId) return 'identity_required';
   if (notification.source !== 'todo') {
     try {
@@ -785,7 +797,7 @@ function enqueueTaskNotification(notification) {
 
   if (taskNotificationQueue.length < TASK_NOTIFICATION_MAX_QUEUE) {
     taskNotificationQueue.push(notification);
-  } else {
+  } else if (notification.status === 'completed' && taskNotificationQueue.at(-1)?.status === 'completed') {
     const lastIndex = taskNotificationQueue.length - 1;
     const previous = taskNotificationQueue[lastIndex];
     const summaryCount = previous.isSummary ? previous.summaryCount + 1 : 2;
@@ -798,6 +810,9 @@ function enqueueTaskNotification(notification) {
       isSummary: true,
       summaryCount,
     };
+  } else {
+    // Actionable alerts must never turn into a misleading completion summary.
+    taskNotificationQueue.push(notification);
   }
 
   if (activeTaskNotification) {
@@ -818,6 +833,7 @@ function fireTodoReminder(todo) {
   const notification = {
     eventId: `todo-${todo.id}-${deadline}`,
     source: 'todo',
+    status: 'due',
     taskId: String(todo.id || ''),
     title: String(todo.text || '').trim() || '待办即将截止',
     project: '',
@@ -891,7 +907,7 @@ function getTaskNotificationBounds(display) {
     TASK_NOTIFICATION_WIDTH,
     Math.max(280, d.bounds.width - TASK_NOTIFICATION_SCREEN_MARGIN * 2)
   );
-  return notificationBounds(width, TASK_NOTIFICATION_HEIGHT, d);
+  return notificationBounds(width, taskNotificationHeight, d);
 }
 
 function recoverClosedTaskNotificationWindow(targetWindow) {
@@ -900,6 +916,7 @@ function recoverClosedTaskNotificationWindow(targetWindow) {
   clearTaskNotificationTimers();
   notificationWindow = null;
   notificationWindowReady = false;
+  taskNotificationSwitching = false;
   activeTaskNotification = null;
   taskNotificationLeaving = false;
   taskNotificationPaused = false;
@@ -965,6 +982,8 @@ function createTaskNotificationWindow() {
 }
 
 function clearTaskNotificationTimers() {
+  clearTimeout(taskNotificationEnterTimer);
+  taskNotificationEnterTimer = null;
   if (taskNotificationTimer) {
     clearTimeout(taskNotificationTimer);
     taskNotificationTimer = null;
@@ -975,14 +994,32 @@ function clearTaskNotificationTimers() {
   }
 }
 
+function sendTaskNotificationTiming() {
+  if (!activeTaskNotification || !notificationWindow || notificationWindow.isDestroyed()) return;
+  notificationWindow.webContents.send('task-notification:timing', {
+    eventId: activeTaskNotification.eventId,
+    durationMs: TASK_NOTIFICATION_VISIBLE_MS,
+    remainingMs: taskNotificationRemainingMs,
+    startedAt: taskNotificationTimerStartedAt,
+    paused: taskNotificationPaused || !taskNotificationStarted || activeTaskNotification.status === 'awaiting',
+  });
+}
+
 function scheduleTaskNotificationDismiss() {
-  if (!activeTaskNotification || taskNotificationLeaving || taskNotificationPaused) return;
+  if (!activeTaskNotification || taskNotificationLeaving || taskNotificationPaused || !taskNotificationStarted || activeTaskNotification.status === 'awaiting') return;
   if (taskNotificationTimer) clearTimeout(taskNotificationTimer);
   taskNotificationTimerStartedAt = Date.now();
-  taskNotificationTimer = setTimeout(
-    beginTaskNotificationDismiss,
-    Math.max(0, taskNotificationRemainingMs)
-  );
+  taskNotificationTimer = setTimeout(beginTaskNotificationDismiss, Math.max(0, taskNotificationRemainingMs));
+  sendTaskNotificationTiming();
+}
+
+function startTaskNotificationCountdown() {
+  if (!activeTaskNotification || taskNotificationStarted || taskNotificationLeaving) return;
+  clearTimeout(taskNotificationEnterTimer);
+  taskNotificationEnterTimer = null;
+  taskNotificationStarted = true;
+  scheduleTaskNotificationDismiss();
+  sendTaskNotificationTiming();
 }
 
 function setTaskNotificationPaused(paused) {
@@ -990,16 +1027,16 @@ function setTaskNotificationPaused(paused) {
   taskNotificationPaused = paused;
   if (paused) {
     if (taskNotificationTimer) {
-      taskNotificationRemainingMs = Math.max(
-        0,
-        taskNotificationRemainingMs - (Date.now() - taskNotificationTimerStartedAt)
-      );
+      taskNotificationRemainingMs = Math.max(0, taskNotificationRemainingMs - (Date.now() - taskNotificationTimerStartedAt));
       clearTimeout(taskNotificationTimer);
       taskNotificationTimer = null;
     }
   } else {
+    // Give the user time to leave the bubble before it disappears.
+    taskNotificationRemainingMs = Math.max(1500, taskNotificationRemainingMs);
     scheduleTaskNotificationDismiss();
   }
+  sendTaskNotificationTiming();
 }
 
 function showNextTaskNotification() {
@@ -1011,14 +1048,21 @@ function showNextTaskNotification() {
   taskNotificationLeaving = false;
   taskNotificationPaused = false;
   taskNotificationRemainingMs = TASK_NOTIFICATION_VISIBLE_MS;
+  taskNotificationStarted = false;
+  taskNotificationHeight = TASK_NOTIFICATION_HEIGHT;
   targetWindow.setBounds(getTaskNotificationBounds(getTargetDisplay()));
+  const replace = taskNotificationSwitching && targetWindow.isVisible();
+  taskNotificationSwitching = false;
   targetWindow.showInactive();
   targetWindow.webContents.send('task-notification:show', {
     ...activeTaskNotification,
     pendingCount: getPendingTaskNotificationCount(),
     visibleMs: TASK_NOTIFICATION_VISIBLE_MS,
+    replace,
   });
-  scheduleTaskNotificationDismiss();
+  // The renderer acknowledges the end of entry. This fallback handles a lost IPC.
+  taskNotificationEnterTimer = setTimeout(startTaskNotificationCountdown, (replace ? 180 : TASK_NOTIFICATION_ENTER_MS) + 120);
+  sendTaskNotificationTiming();
 }
 
 function beginTaskNotificationDismiss() {
@@ -1027,7 +1071,8 @@ function beginTaskNotificationDismiss() {
   clearTaskNotificationTimers();
   const eventId = activeTaskNotification.eventId;
   if (notificationWindow && !notificationWindow.isDestroyed() && notificationWindowReady) {
-    notificationWindow.webContents.send('task-notification:hide', eventId);
+    taskNotificationSwitching = taskNotificationQueue.length > 0;
+    notificationWindow.webContents.send('task-notification:hide', { eventId, keepShell: taskNotificationSwitching });
   }
   taskNotificationFallbackTimer = setTimeout(
     () => finishTaskNotification(eventId),
@@ -1039,7 +1084,7 @@ function finishTaskNotification(eventId) {
   if (!activeTaskNotification || activeTaskNotification.eventId !== eventId) return;
   clearTaskNotificationTimers();
   const completedWindow = notificationWindow;
-  if (completedWindow && !completedWindow.isDestroyed()) completedWindow.hide();
+  if (completedWindow && !completedWindow.isDestroyed() && !taskNotificationSwitching) completedWindow.hide();
   activeTaskNotification = null;
   taskNotificationLeaving = false;
   taskNotificationPaused = false;
@@ -1190,6 +1235,24 @@ function stopTaskNotificationServer() {
   notificationServerAvailable = false;
   if (server) server.close();
 }
+
+function isActiveTaskNotificationSender(event, eventId) {
+  return notificationWindow && !notificationWindow.isDestroyed()
+    && event.sender === notificationWindow.webContents && activeTaskNotification
+    && activeTaskNotification.eventId === eventId;
+}
+ipcMain.on('task-notification:shown', (event, eventId) => {
+  if (isActiveTaskNotificationSender(event, eventId)) startTaskNotificationCountdown();
+});
+ipcMain.on('task-notification:close', (event, eventId) => {
+  if (isActiveTaskNotificationSender(event, eventId)) beginTaskNotificationDismiss();
+});
+ipcMain.on('task-notification:resize', (event, value) => {
+  if (!isActiveTaskNotificationSender(event, value?.eventId) || taskNotificationLeaving) return;
+  if (![TASK_NOTIFICATION_HEIGHT, TASK_NOTIFICATION_HEIGHT + 18].includes(value.height)) return;
+  taskNotificationHeight = value.height;
+  notificationWindow.setBounds(getTaskNotificationBounds(getTargetDisplay()));
+});
 
 ipcMain.on('task-notification:hover', (event, paused) => {
   if (

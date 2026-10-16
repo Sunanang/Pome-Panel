@@ -467,7 +467,16 @@ test('task notification identifies the repository and concrete finished work', (
   // 记录文件还没落盘时标题为空，各来源要退回自己的兜底文案。
   assert.equal(taskNotificationIdentity({ cwd: '/tmp/demo' }, 'claude').title, 'Claude 已完成任务');
   assert.equal(taskNotificationIdentity({ cwd: '/tmp/demo' }, 'codex').title, 'Codex 已完成任务');
-  assert.equal(taskNotificationIdentity({ cwd: '/tmp/demo' }, 'todo').title, '任务已完成');
+  assert.equal(taskNotificationIdentity({ cwd: '/tmp/demo' }, 'todo').title, '待办即将截止');
+});
+
+test('notification identity normalizes source fallbacks and Windows project paths', () => {
+  assert.equal(taskNotificationIdentity({}, 'CODEX').title, 'Codex 已完成任务');
+  assert.equal(taskNotificationIdentity({}, 'Claude Code').title, 'Claude 已完成任务');
+  assert.equal(taskNotificationIdentity({ status: 'failed' }, 'cursor').title, 'Cursor任务出错');
+  assert.equal(taskNotificationIdentity({ status: 'awaiting' }, 'claude').title, 'Claude等待确认');
+  assert.equal(taskNotificationIdentity({ cwd: 'C:\\Users\\Lando\\Pome-Panel' }, 'cursor').project, 'Pome-Panel');
+  assert.equal(taskNotificationIdentity({ 'last-assistant-message': '# 修复崩溃', title: '任务已完成' }, 'codex').title, '修复崩溃');
 });
 
 test('credential input trims metadata but preserves password bytes and rejects incomplete records', () => {
