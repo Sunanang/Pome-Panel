@@ -179,6 +179,19 @@ async function run(mainContents) {
   assert.deepEqual(await evaluate(win, '({remaining:timing.remainingMs,bar:progressFill.style.transform})'), paused);
   await capture(win, 'production-hover-paused');
   await evaluate(win, 'reportHover(false)');
+  await until(() => evaluate(win, '!timing.paused'), 'countdown resumes after hover');
+  assert.equal(await evaluate(win, 'timing.remainingMs'), paused.remaining, 'leaving hover must preserve the remaining lifetime');
+  // Hover again near expiry, where the old 1500ms grace period extended the timer.
+  await until(() => evaluate(win, 'timing.remainingMs - (Date.now() - timing.startedAt) < 1000'), 'countdown reaches its final second');
+  await evaluate(win, 'reportHover(true)');
+  await until(() => evaluate(win, 'timing.paused'), 'near-expiry hover pauses countdown');
+  const nearExpiry = await evaluate(win, '({remaining:timing.remainingMs,bar:parseFloat(progressFill.style.transform.slice(7))})');
+  assert.ok(nearExpiry.remaining > 0 && nearExpiry.remaining < 1500);
+  await delay(100);
+  await evaluate(win, 'reportHover(false)');
+  await until(() => evaluate(win, '!timing.paused'), 'near-expiry countdown resumes');
+  assert.equal(await evaluate(win, 'timing.remainingMs'), nearExpiry.remaining, 'leaving hover near expiry must not add time');
+  assert.ok(await evaluate(win, 'parseFloat(progressFill.style.transform.slice(7))') <= nearExpiry.bar, 'progress bar must not grow when leaving hover');
   await until(() => !notificationWindow() || !notificationWindow().isVisible(), 'normal countdown resumes and closes');
   // Exercise the real todo IPC rather than creating a completion record for a reminder.
   const before = JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length;

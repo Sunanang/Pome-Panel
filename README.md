@@ -99,6 +99,8 @@ Codex 配置手动 access token 后，由主进程向 `https://chatgpt.com/backe
 
 Pome Panel 只在 `127.0.0.1:43821` 监听通知，来源限 `codex`、`claude` 与 `cursor`，其余一律 404。提醒是一块不抢焦点的小窗。子代理结束和云端会话不会弹出。Windows 上点击提醒即关闭。
 
+带倒计时的通知气泡在鼠标悬停时暂停，移开后从原剩余时间继续，不额外补时；即使已经接近消失，也不会把进度条重新拉长。
+
 ```bash
 curl -X POST http://127.0.0.1:43821/notify/codex \
   -H 'Content-Type: application/json' \

@@ -1035,8 +1035,6 @@ function setTaskNotificationPaused(paused) {
       taskNotificationTimer = null;
     }
   } else {
-    // Give the user time to leave the bubble before it disappears.
-    taskNotificationRemainingMs = Math.max(1500, taskNotificationRemainingMs);
     scheduleTaskNotificationDismiss();
   }
   sendTaskNotificationTiming();
