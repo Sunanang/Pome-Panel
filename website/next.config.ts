@@ -6,7 +6,9 @@ const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
 const nextConfig: NextConfig = {
   output: pagesExport ? "export" : undefined,
   assetPrefix: basePath || undefined,
-  trailingSlash: pagesExport,
+  // Vinext's RSC prerender requests use slashless routes. Canonical links
+  // and the static export postprocessor provide directory URLs on Pages.
+  trailingSlash: false,
 };
 
 export default nextConfig;

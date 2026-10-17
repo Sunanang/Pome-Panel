@@ -1,0 +1,181 @@
+<div align="center">
+  <img src="build/pome-panel-icon.png" width="112" alt="Pome Panel icon" />
+  <h1>Pome Panel</h1>
+  <p><strong>A local desktop workspace for Mac and Windows.</strong></p>
+  <p>A translucent glass panel with a Bento home screen, tasks, notes, links, recordings and credentials. Collapse it into a small capsule and drag it to any screen edge. It expands from your saved position.</p>
+  <p>Based on Todo Panel. Developed by Lando.</p>
+  <p><a href="README.md">简体中文</a> · <a href="CHANGELOG.en.md">Release notes</a> · <a href="https://github.com/Sunanang/Pome-Panel/issues">Report an issue</a> · <a href="https://github.com/Sunanang/Pome-Panel/releases/latest">Downloads</a></p>
+</div>
+
+![Pome Panel Home in English](website/public/product-captures/en/home.jpg)
+
+Supports macOS 13+ on Apple Silicon and Windows 10/11 x64. The desktop app uses Electron 44. Clipboard history is optional and off by default. The optional NAS companion keeps workspace content in sync across paired devices.
+
+## Language
+
+The desktop app starts in the system language: Simplified Chinese or English, with English as the fallback for other languages. Change it at **Settings → Language**: System, 简体中文 or English. The preference belongs to this device and is not synced to the NAS. Changing the language preserves your content and unsaved form input.
+
+Recording recognition has its own **Chinese / English** setting in API configuration. Changing the interface language does not change recognition, including an ongoing recording or a reconnection. Smart naming follows the language of the note or recording content. Existing titles, notes, task summaries, project names and custom locations are not translated. Dates and numbers follow the interface language and system regional conventions.
+
+The NAS application page also has a language setting. Native NAS install, configuration, upgrade and uninstall pages follow the host language. Windows setup and uninstall use the current Windows display language on each launch; they do not follow the app's manual preference. Only Chinese and English are included. macOS uses a DMG and Finder; there is no separate uninstall wizard. Camera and microphone purpose strings are localized.
+
+The website has [Chinese](https://Sunanang.github.io/Pome-Panel/) and [English](https://Sunanang.github.io/Pome-Panel/en/) pages. English documentation is here; internal development plans and ADRs remain in their original language.
+
+## What is different from Todo Panel?
+
+The repository does not identify a verifiable upstream URL, so this describes only the features in this repository.
+
+| Area | Pome Panel |
+| --- | --- |
+| Workspace | Bento Home plus Tasks, Notes, Links, Recordings, Credentials and Settings |
+| Position | Both platforms support docking at all four edges. Collapse, drag, release to dock. The expanded panel aligns to a nearby corner or centers along the edge. Settings can reset it to the top. |
+| Home | Quick recording, Pomodoro, AI quota, AI activity, commands, Markdown notes, mirror and sunrise/sunset. Soda Music is Mac-only; Current windows depends on platform support. Modules can be resized, hidden and rearranged. Layout stays local. |
+| Multiple devices | The optional Pome Panel NAS companion in `fnos/` syncs workspace content. Credentials and AI keys travel in encrypted envelopes. |
+
+## Position and controls
+
+The collapsed capsule is approximately `85 × 9` logical pixels at the top or bottom, and `9 × 85` at the sides. Click to expand; drag only while collapsed. Release to snap to the closest edge. Within approximately 120 logical pixels of a corner, the expanded panel aligns toward that corner. The saved position belongs to this device.
+
+The default is top-center, below the macOS menu bar or at the top of the Windows work area, avoiding the taskbar. Every expanded page has a `1240 × 540` content area; the normal window is `1240 × 638`. Switching pages does not resize it. Smaller displays retain a 24px safety margin.
+
+Use the menu bar or tray to show the panel, configure the summon shortcut, enable launch at login, view About or quit. The default summon action is hover + Space. Window bounds change without system animation; renderer animations respect reduced-motion preferences.
+
+## Pages
+
+| Page | Purpose |
+| --- | --- |
+| Home | Resizable Bento modules. Keep at least one module; the others fill available space when a module is hidden. |
+| Tasks | Four renameable workflows, internally still `P0`–`P3`. Defaults are Courses, Media & writing, Vibe coding and Daily life. New tasks default to 23:30 today, sort by deadline and remind you one hour before they are due. |
+| Notes | Save Home notes to a searchable library; rename, edit or delete them. |
+| Links | Save public HTTP/HTTPS URLs. Title fetching rejects local addresses, private networks and unsafe redirects. |
+| Recordings | Audio stays in the local `recordings/` directory. Optional Model Studio Qwen3-ASR live transcription uses an encrypted API key or an environment variable. |
+| Credentials | Accounts, passwords and API keys use system secure storage; the page cannot directly read plaintext. New and edited passwords are masked by default. |
+| Settings | Language, transcription and smart naming, AI quota, AI activity sources, NAS sync, feature visibility, Home modules, mirror cover, default page, summon shortcut, dock position, data folder and launch at login. |
+
+Home edit mode swaps cards while preserving their sizes. Packing keeps the swapped pair fixed and may expand other cards to fill holes. If the requested swap does not fit, it reports insufficient space and retains the saved layout.
+
+## AI activity and notifications
+
+Connect **Codex, Claude Code and Cursor** at **Settings → AI activity sources**. Preview shows the exact files, Pome hook entries and timestamped backups. Confirmation verifies the backup and writes atomically. Invalid configurations and stale previews are rejected. Only Pome-owned entries change; other hooks, formatting and comments are retained. Existing Codex `notify` commands are forwarded and restored on disconnect. After a configuration change, fully quit and reopen the connected tool.
+
+The local receiver listens only on `127.0.0.1:43821`, at `/notify/codex`, `/notify/claude` and `/notify/cursor`. Other sources return 404. Child-agent completion and cloud sessions do not show notifications.
+
+Hovering pauses timed notifications. Leaving resumes the original remaining time without extending it, so the progress bar does not grow even near expiry. Example:
+
+```bash
+curl -X POST http://127.0.0.1:43821/notify/codex \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Fixed settings layout","project":"my-project","task_id":"demo","event_id":"demo-completion-1"}'
+```
+
+Notifications preserve `completed`, `failed`, `awaiting` and `due` states. Awaiting confirmation does not expire automatically. The bubble shows a source icon, actual summary, source/project, event-relative time, queued count and a hover-paused progress bar. Generated fallback titles follow the interface language. Actual AI summaries stay unchanged; only display is truncated, and the complete stored summary is available on hover, up to 4096 characters. Codex session names are read only by exact thread ID and kept separate from the completion summary; missing names are not invented. If opening an app fails, the bubble shows the reason, pauses its timer and allows retry or close. Windows behavior continues to follow the native-capability setting below.
+
+Home AI activity has four sizes: mini shows the unread count and latest summary; small, medium and large show 3, 5 and 10 records per page. Mini never shows pagination. Other sizes show Next only when more data exists, with Previous and the current page from page 2 onward. A single page hides pagination. New records do not change your page; paging scrolls the list to the top without resizing the card.
+
+Clicking a record marks it read and opens the source application, without trying to locate a particular chat: Codex desktop, Cursor, or a terminal for Claude Code. On macOS, an existing Terminal tab for the recorded `cwd` is preferred; otherwise Terminal opens in that directory. Windows prefers Windows Terminal, then PowerShell. Without `cwd`, it opens a terminal normally. Directories must be existing absolute paths. Missing applications and launch failures show a brief message.
+
+Records are saved before a notification is accepted. Read records are retained for 30 days after their first read; unread records are retained. Source completion IDs, or stable task/time/turn identities, deduplicate retries and restarts while allowing later turns. Legacy notifications with insufficient identity are accepted using supplemented time/content, but cannot guarantee deduplication across different delivery times. Old GPT history remains visible as Other; no new GPT integration is installed.
+
+The Home tab shows an unread badge when another tab is active (`9+` above nine), an error marker for damaged data, or a dot if the module is disabled. It is hidden while Home is selected. Clicking it highlights the module or opens its settings. Disabling and re-enabling preserves other module sizes and positions, preferring the previous location and shrinking only AI activity if needed. A disabled module leaves an Add module placeholder.
+
+A damaged inbox requires explicit **Back up damaged file and rebuild** confirmation with the full backup path and consequences. Cancel keeps it paused. Original bytes must be saved and verified before creating an empty inbox. The inbox stays in local `userData`; it is excluded from NAS sync and ordinary workspace backups.
+
+The connector uses Electron's bundled Node runtime rather than relying on PATH. It detects changed install paths and offers Repair. Claude Code uses `hooks.Stop`; Cursor uses official `hooks.json` v1 `hooks.stop` and `hooks.afterAgentResponse`. Conversation and generation IDs associate summaries and deduplicate events. Stop-only setups remain compatible and can add the summary hook. Cursor `error` is failed; `aborted` is not reported as success. Summary cache is local and private: 10-minute read lifetime, at most 256 entries and 4096 characters each; entries are removed after stop and expired entries are cleaned on subsequent writes. Transcript reads are bounded. Claude cloud sessions (`CLAUDE_CODE_REMOTE=true`) are excluded.
+
+**Send test** uses the same forwarding and receiver path but creates no history, unread count or real completion bubble. Empty states distinguish unconnected, waiting for the first record and broken connections. Initial detection can be dismissed locally with Later. Scripts: [Codex](scripts/codex-notify.js), [Claude Code](scripts/claude-notify.js), [Cursor](scripts/cursor-notify.js).
+
+## AI quota
+
+Only detected providers or providers with a configured token appear. With both Codex and Cursor, mini/small remember the selected provider locally; the initial choice has the lowest remaining quota. Medium places providers side by side; large stacks them. Layout retains the existing `cursor` module ID.
+
+Quota is **remaining**, rounded from the original used percentage. A fuller bar means more remains. At ≤20% it is orange; at ≤5% it is red. Unknown remains `--%`; expired samples are gray and request refresh. Stored usage retains the original used percentage. Periods, extra models, plans, credits and timestamps come from actual provider data. Refresh follows visibility and known reset times; manual refresh runs immediately.
+
+Cursor reads the local login state by default. **Get local token** reads a signed-in Cursor on Mac or Windows into a password field; Save applies it. No sqlite3 or Python is required. Saved tokens take priority, are encrypted locally and sync as encrypted AI configuration. Invalid saved tokens fall back to the local login. Clear restores local-login mode and propagates the saved-token removal. Unsaved input is not synced. Network failures retain the same account's last successful value and original timestamp; logout, account change and authentication failure do not reuse another account's cache. Optional Grok Bot quota failures do not block the main quota.
+
+Codex **Get local token** reads only the access token from local `auth.json` when you explicitly click it; Save encrypts it with `safeStorage`. It is excluded from workspace files, NAS sync and logs. No refresh token is extracted or used, and tokens are not silently renewed. A saved token queries `https://chatgpt.com/backend-api/wham/usage` with a 10-second timeout. Otherwise, or on network failure, bounded local reads use recent `token_count` entries under `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` (default `~/.codex`; Windows also checks `%USERPROFILE%\.codex`).
+
+401/403 marks a Codex token invalid and offers re-acquisition or settings; local data remains a fallback. Saving a token clears that state and refreshes. Network errors and 5xx do not invalidate it. Without local data, a network failure preserves the previous successful remote sample and its original time. Reset labels use local dates, including tomorrow when appropriate.
+
+## Data, backup and NAS sync
+
+Workspace files stay local: `workspace.json`, `clipboard-images/` and `recordings/` under the selected data folder. New media references use portable relative paths with `/`. System-encrypted credentials may not transfer between computers. Selecting an empty data folder migrates the current workspace; selecting one with `workspace.json` offers to open it after saving the current workspace in its original location.
+
+Clipboard history is off by default. Enable it from the menu or **Settings → Visible features**. It polls locally without claiming a global shortcut and skips password-manager content marked sensitive. Copied credential passwords are marked sensitive and excluded from Pome's history. The mirror starts only on a click and releases the camera when Home is left or the panel collapses. Recording starts the microphone only on request and releases it on stop or exit.
+
+The single **NAS sync** card is on the right of Settings, between Cover image and local settings. Enter the address and one-time pairing code. Advanced offers one optional external fallback address. The status row shows overall sync time; Details shows each content type's own result and time. Paused sync exposes recovery preview and snapshot rollback in the same card. Pairing tokens use system secure storage, not LocalStorage. Plain HTTP is off by default except for loopback. Untrusted HTTPS certificates require explicit trust scoped to the exact host, port and certificate; certificate validation is never disabled globally.
+
+The companion syncs tasks/categories, notes, links, commands, clipboard, recordings including audio, AI configuration and credentials. Home layout is local. Credentials and AI keys use account-sync-key AES-GCM envelopes; the NAS stores ciphertext. Recording metadata and audio report separately. Missing audio or audio above 6 MiB is not claimed as transferred. Local backups still contain complete oversized audio. An incomplete local copy cannot destructively overwrite complete NAS audio. Note conflicts retain separate versions with stable source/version deduplication, without recursively named copies. Tasks follow actual server-accepted version order; there is no field-level merge.
+
+**Settings → NAS sync** also exports `.pome-backup.zip` without pairing. The v1 manifest includes app version, collection counts and SHA-256 hashes. It covers tasks, categories, notes, links, commands, clipboard and recording media. Restore validates first, snapshots the current data and rolls back failed replacement. Credentials, AI keys, pairing, sync controls, Home layout and system settings are excluded; existing credentials/settings remain.
+
+Restoring on a paired device pauses sync, including after restart. Recovery requires a fresh preview and confirmation of all additions, updates and deletions before replacing NAS data with the local workspace. Changes on either side invalidate the preview. The NAS must persist and read back a verified snapshot, then commit atomically against its version. Sync resumes only after verification. Older companions without snapshots cannot overwrite. There is no pull-and-merge recovery action. The most recent overwrite may be rolled back only if the NAS has had no later changes; rollback creates a new version and keeps sync paused.
+
+The companion persists `sync-state.bin`, `sync-state.bin.transactions/` and `server-id`. Incremental writes avoid repeatedly serializing old audio, with checkpoints every 256 transactions. Corruption, invalid order or checksum failure stops startup and preserves the originals. v3 automatically upgrades v1/v2; old companions cannot read v3 and must not be used to downgrade. Back up all three storage components together; ordinary desktop ZIP backups remain v1.
+
+Acknowledged log prefixes can be compacted. Unacknowledged logs and idempotency results normally remain for 90 days; older cursors must fully resync, and expired requests rebuild against a fresh baseline without reviving remotely deleted items. Snapshots protect the last committed overwrite, the 30-day rollback window and staged operations for 24 hours; other snapshots normally expire after 90 days. After 24 hours a staged operation needs another preview. Set positive `FNOS_SYNC_RETENTION_DAYS` and `FNOS_ROLLBACK_WINDOW_DAYS` to change retention. Checks run hourly during requests or after 256 transactions. Actual content, unread inbox records and deletion markers are not cleared by these cache rules.
+
+## Windows
+
+Fresh Home layouts enable sunrise/sunset and fill the grid with available modules. Untouched old default layouts are repaired; custom layouts and Mac defaults stay unchanged. The city popover avoids panel edges, scrolls long search results and keeps manual location controls accessible. Any collapse closes it on both platforms; reopen it explicitly next time.
+
+Run `windows-x64-setup.exe`. Choose a folder on the installation directory page, for example `D:\Apps\Pome Panel`. Setup creates desktop and Start menu shortcuts to the executable, and manual reinstall repairs a missing desktop shortcut. Default: `%LOCALAPPDATA%\Programs\Pome Panel`. An installation folder contains the executable plus supporting files; use the shortcut to launch.
+
+One-click source setup is preferred. Configuration paths are `%USERPROFILE%\.codex\config.toml`, `%USERPROFILE%\.claude\settings.json` and `%USERPROFILE%\.cursor\hooks.json`. The bundled PowerShell bridge uses `ELECTRON_RUN_AS_NODE=1` and passes notification JSON as data, never as a command expression. It uses the actual install path and writes tool configuration only after confirmation. Mac tests do not replace Windows validation.
+
+**Settings → Windows native capabilities · Experimental** enables Current windows, automatic clipboard paste and notification focus. It is off by default, loads no native module while off and preserves saved visibility preferences. When enabled, it lists current-desktop windows in front-to-back order, excluding tool windows, and restores minimized targets. Paste sends one Ctrl+V without a global keyboard hook. Elevated targets prompt for manual paste; closed or changed targets fall back to Copied. `POME_DISABLE_WIN_NATIVE=1` forces native loading off.
+
+Native capabilities remain off until Windows Defender, Huorong and 360 checks have passed. Unsigned installers may show **Windows protected your PC**: use **More info → Run anyway** only when you trust the downloaded package. Each new unsigned release can trigger it again. Launch-at-login changes may also be reported by security software. Fresh installs enable launch at login; upgrades preserve the existing choice. The setting reads the actual OS state, including Task Manager overrides; uninstall removes the startup registry entry.
+
+Known limitations: no code signing; no following between virtual desktops; Soda Music is permanently hidden on Windows; ARM64 is not tested (only x64 builds/native modules); the 9px capsule can cover the top strip of a maximized browser and overlap the Windows 11 Snap UI. With native capabilities off, clipboard clicks copy only, requiring manual Ctrl+V, and notification clicks only close the notification.
+
+## Run from source
+
+Desktop requires Node.js 18+:
+
+```bash
+git clone https://github.com/Sunanang/Pome-Panel.git
+cd Pome-Panel
+git switch dev
+npm install
+npm run setup:hooks
+npm test
+npm start
+```
+
+There is no renderer build step. `npm start` runs the complete Electron desktop app. `dev` is the long-lived development branch; `main` only receives `dev → main` pull requests for releases. Local hooks refuse commits on main and all direct pushes to remote main, including force pushes/deletion. Do not bypass them. After release, sync main back into dev. Hooks do not replace remote branch protection.
+
+| Command | Purpose |
+| --- | --- |
+| `npm test` | Localization checks, Node tests, Electron integration tests and JavaScript syntax checks |
+| `npm run i18n:generate` | Validate shared dictionaries and regenerate browser, native and website resources |
+| `npm run i18n:check` | Verify generated resources are current, without writing |
+| `npm start` | Start desktop development app |
+| `npm run pack` | Create an unpacked app directory |
+| `npm run build` | Build Apple Silicon macOS artifacts |
+| `npm run build:win` | Build Windows x64 artifacts |
+| `npm run build:zip` | Build ZIP artifacts |
+| `node scripts/build-fpk.js` | Build a universal NAS FPK and SHA-256 in a temporary staging directory with official fnpack |
+
+Packaging and publishing require explicit approval. GitHub Actions tests/builds Mac DMG, Windows EXE and NAS FPK; only a matching `v*.*.*` tag with all three jobs successful publishes one Release with checksums. Desktop and both NAS manifests must match. fnpack is version-pinned and checksum-verified; it does not require NAS credentials. Actual installation checks remain separate. `scripts/pack-fpk.sh` refreshes protocol/icon copies only.
+
+Website (`website/`) requires Node.js 22.13.0+, React 19 and Vinext:
+
+```bash
+cd website
+npm install
+npm run dev
+# Verification
+npm test
+npm run lint
+npm run build:pages
+```
+
+The shared `localization/` dictionaries feed desktop, NAS pages, installer resources and the website. Native package localization does not translate arbitrary HTML. User content and protocol identifiers are not translation keys.
+
+`npm run check:work-hub` measures an isolated fixture of 250 notes, 200 tasks, 100 links, 20 recordings and 50 completion records, with 20 normal and 20 simulated NAS-load summons. Environment, raw samples, P95, geometry and sync results go to `dist.noindex/iteration-validation/<run-id>/`; generated reports are not committed. Windows hardware, actual monitors/DPI and native installers need separate validation.
+
+Main entry points: `main.js` and `main-services.js`; safe IPC in `preload.js`; desktop UI in `renderer/`; shared sync protocol in `packages/sync-protocol/`; NAS companion in `fnos/`; tests in `tests/`; packaging assets in `build/`; design/ADR documents in `docs/`; website in `website/`.
+
+## License
+
+[MIT](LICENSE) © 2026 [Sunanang](https://github.com/Sunanang)

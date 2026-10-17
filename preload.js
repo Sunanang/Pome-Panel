@@ -45,7 +45,20 @@ function readCapabilities() {
   return deepFreeze({ platform: process.platform });
 }
 
+function readLocalization() {
+  const argument = process.argv.find(value => value.startsWith('--pome-locale='));
+  try {
+    const value = argument && decodeBase64Json(argument.slice('--pome-locale='.length));
+    if (value && ['zh-CN', 'en-US'].includes(value.effectiveLocale)) return deepFreeze(value);
+  } catch {}
+  return deepFreeze({ preference: 'system', effectiveLocale: 'en-US', formatLocale: 'en-US', revision: 0 });
+}
 contextBridge.exposeInMainWorld('notchAPI', {
+  localization: readLocalization(),
+  setLanguage: value => ipcRenderer.invoke('settings:set-language', value),
+  onLocalizationChanged: cb => subscribe('localization:changed', (_event, value) => {
+    if (value && ['zh-CN', 'en-US'].includes(value.effectiveLocale)) cb(deepFreeze(value));
+  }),
   // platform 保留一个版本给尚未迁移到 capabilities 的调用方。
   platform: process.platform,
   // additionalArguments 只在创建窗口时生效，运行期的能力变化走 capabilities:changed。
@@ -101,7 +114,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   copyCredential: (id, field) => ipcRenderer.invoke('credentials:copy', { id, field }),
   getTranscriptionConfig: () => ipcRenderer.invoke('transcription:get-config'),
   setTranscriptionConfig: (config) => ipcRenderer.invoke('transcription:set-config', config),
-  startTranscription: () => ipcRenderer.invoke('transcription:start'),
+  startTranscription: language => ipcRenderer.invoke('transcription:start', { language }),
   sendTranscriptionAudio: (bytes) => ipcRenderer.send('transcription:audio', bytes),
   finishTranscription: () => ipcRenderer.invoke('transcription:finish'),
   onTranscriptionEvent: (cb) => subscribe('transcription:event', (event, payload) => cb(payload)),

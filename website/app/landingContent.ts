@@ -1,3 +1,4 @@
+import { siteT, type SiteLocale } from "./siteI18n";
 import { assetPath } from "./assetPath.mjs";
 
 export const DOWNLOAD_URL = "https://github.com/Sunanang/Pome-Panel/releases/latest";
@@ -24,35 +25,48 @@ export type TabItem = {
   accent: string;
 };
 
-export const NAV_ITEMS = [
+export function getLandingContent(locale: SiteLocale) {
+const NAV_ITEMS = [
   ["GITHUB", GITHUB_URL],
   ["FEATURES", "#features"],
   ["TABS", "#tabs"],
 ] as const;
 
-export const MARQUEE_ITEMS: MediaItem[] = [
-  { id: "todo", src: assetPath("/product-captures/todo.webp"), fallbackSrc: "", kind: "image", alt: "Pome Panel 待办完整面板" },
-  { id: "clipboard", src: assetPath("/product-captures/clipboard.webp"), fallbackSrc: "", kind: "image", alt: "Pome Panel 剪贴完整面板" },
-  { id: "notes", src: assetPath("/product-captures/notes.webp"), fallbackSrc: "", kind: "image", alt: "Pome Panel 笔记完整面板" },
-  { id: "links", src: assetPath("/product-captures/links.webp"), fallbackSrc: "", kind: "image", alt: "Pome Panel 链接完整面板" },
-  { id: "recordings", src: assetPath("/product-captures/recordings.webp"), fallbackSrc: "", kind: "image", alt: "Pome Panel 录制完整面板" },
-  { id: "credentials", src: assetPath("/product-captures/credentials.webp"), fallbackSrc: "", kind: "image", alt: "Pome Panel 密钥完整面板" },
+const MARQUEE_ITEMS: MediaItem[] = [
+  { id: "todo", src: assetPath("/product-captures/todo.webp"), fallbackSrc: "", kind: "image", alt: siteT(locale, "copy.pomePanelTasksView.580a50") },
+  { id: "clipboard", src: assetPath("/product-captures/clipboard.webp"), fallbackSrc: "", kind: "image", alt: siteT(locale, "copy.pomePanelClipboardView.9683d3") },
+  { id: "notes", src: assetPath("/product-captures/notes.webp"), fallbackSrc: "", kind: "image", alt: siteT(locale, "copy.pomePanelNotesView.ee0c13") },
+  { id: "links", src: assetPath("/product-captures/links.webp"), fallbackSrc: "", kind: "image", alt: siteT(locale, "copy.pomePanelLinksView.e5dcc1") },
+  { id: "recordings", src: assetPath("/product-captures/recordings.webp"), fallbackSrc: "", kind: "image", alt: siteT(locale, "copy.pomePanelRecordingsView.0e96db") },
+  { id: "credentials", src: assetPath("/product-captures/credentials.webp"), fallbackSrc: "", kind: "image", alt: siteT(locale, "copy.pomePanelCredentialsView.721abf") },
 ];
 
-export const CAPABILITIES = [
-  ["01", "贴顶待命", "需要时展开，用完即收起。"],
-  ["02", "任务提醒", "四个工作流与清晰的截止时间。"],
-  ["03", "随手收集", "笔记、链接和剪贴集中整理。"],
-  ["04", "本地录音", "主动开启，可选实时转写。"],
-  ["05", "AI 完成提醒", "Codex、Claude 与 GPT 做完再告诉你。"],
-  ["06", "数据留在本机", "工作内容留在自己的电脑。"],
+const CAPABILITIES = [
+  ["01", siteT(locale, "copy.readyAtTheScreenEdge.4ce687"), siteT(locale, "copy.expandWhenNeededCollapseWhenDone.bc23cd")],
+  ["02", siteT(locale, "copy.taskReminders.f741f8"), siteT(locale, "copy.fourWorkflowsWithClearDeadlines.e93cbe")],
+  ["03", siteT(locale, "copy.captureAsYouGo.3bb8e1"), siteT(locale, "copy.notesLinksAndClipboardHistoryInOne.dd8395")],
+  ["04", siteT(locale, "copy.localRecording.895688"), siteT(locale, "copy.recordWhenYouChooseWithOptionalLive.466e17")],
+  ["05", siteT(locale, "copy.aiNotifications.d94669"), siteT(locale, "copy.localTaskNotificationsFromCodexClaudeCode.8c8b56")],
+  ["06", siteT(locale, "copy.yourDataStaysLocal.076404"), siteT(locale, "copy.yourWorkStaysOnYourOwnComputer.635445")],
 ] as const;
 
-export const TAB_ITEMS: TabItem[] = [
-  { id: "todo", eyebrow: "PLAN THE DAY", title: "待办", description: "四个可改名工作流，按截止时间排序，并在到期前一小时提醒。", capture: assetPath("/tab-captures/todo.mp4"), capturePoster: assetPath("/product-captures/todo.webp"), captureKind: "video", accent: "red" },
-  { id: "clipboard", eyebrow: "CAPTURE FAST", title: "剪贴", description: "按需启用的本机剪贴历史，支持文本、图片、收藏与快速复制。", capture: assetPath("/tab-captures/clipboard.mp4"), capturePoster: assetPath("/product-captures/clipboard.webp"), captureKind: "video", accent: "amber" },
-  { id: "notes", eyebrow: "THINK IN TEXT", title: "笔记", description: "首页随手写，保存后进入资料库继续编辑、搜索与重命名。", capture: assetPath("/tab-captures/notes.mp4"), capturePoster: assetPath("/product-captures/notes.webp"), captureKind: "video", accent: "green" },
-  { id: "links", eyebrow: "SAVE THE WEB", title: "链接", description: "粘贴公开网址，自动补全标题、图标和分组。", capture: assetPath("/tab-captures/links.mp4"), capturePoster: assetPath("/product-captures/links.webp"), captureKind: "video", accent: "blue" },
-  { id: "recordings", eyebrow: "RECORD THE MOMENT", title: "录制", description: "主动点击才启用麦克风，本地保存并可选实时转写。", capture: assetPath("/tab-captures/recordings.mp4"), capturePoster: assetPath("/product-captures/recordings.webp"), captureKind: "video", accent: "rose" },
-  { id: "credentials", eyebrow: "KEEP IT SAFE", title: "密钥", description: "账号、密码与 API Key 由系统安全存储加密。", capture: assetPath("/tab-captures/credentials.mp4"), capturePoster: assetPath("/product-captures/credentials.webp"), captureKind: "video", accent: "violet" },
+const TAB_ITEMS: TabItem[] = [
+  { id: "todo", eyebrow: "PLAN THE DAY", title: siteT(locale, "copy.tasks.52fdbb"), description: siteT(locale, "copy.fourWorkflowsYouCanRenameSortedBy.cfe3e2"), capture: assetPath("/tab-captures/todo.mp4"), capturePoster: assetPath("/product-captures/todo.webp"), captureKind: "video", accent: "red" },
+  { id: "clipboard", eyebrow: "CAPTURE FAST", title: siteT(locale, "copy.clipboard.658c84"), description: siteT(locale, "copy.optionalLocalClipboardHistoryForTextImages.d1c5a0"), capture: assetPath("/tab-captures/clipboard.mp4"), capturePoster: assetPath("/product-captures/clipboard.webp"), captureKind: "video", accent: "amber" },
+  { id: "notes", eyebrow: "THINK IN TEXT", title: siteT(locale, "copy.notes.b778e3"), description: siteT(locale, "copy.writeOnHomeThenSaveToYour.c4232e"), capture: assetPath("/tab-captures/notes.mp4"), capturePoster: assetPath("/product-captures/notes.webp"), captureKind: "video", accent: "green" },
+  { id: "links", eyebrow: "SAVE THE WEB", title: siteT(locale, "copy.links.305378"), description: siteT(locale, "copy.pasteAPublicUrlToFetchIts.96c0d6"), capture: assetPath("/tab-captures/links.mp4"), capturePoster: assetPath("/product-captures/links.webp"), captureKind: "video", accent: "blue" },
+  { id: "recordings", eyebrow: "RECORD THE MOMENT", title: siteT(locale, "copy.recordings.4b6ef7"), description: siteT(locale, "copy.theMicrophoneStartsOnlyWhenYouChoose.8f8615"), capture: assetPath("/tab-captures/recordings.mp4"), capturePoster: assetPath("/product-captures/recordings.webp"), captureKind: "video", accent: "rose" },
+  { id: "credentials", eyebrow: "KEEP IT SAFE", title: siteT(locale, "copy.credentials.f67bca"), description: siteT(locale, "copy.accountsPasswordsAndApiKeysAreEncrypted.73f485"), capture: assetPath("/tab-captures/credentials.mp4"), capturePoster: assetPath("/product-captures/credentials.webp"), captureKind: "video", accent: "violet" },
 ];
+
+if (locale === "en-US") {
+  for (const item of MARQUEE_ITEMS) item.src = assetPath(`/product-captures/en/${item.id}.jpg`);
+  for (const item of TAB_ITEMS) {
+    item.capture = assetPath(`/product-captures/en/${item.id}.jpg`);
+    item.capturePoster = item.capture;
+    item.captureKind = "image";
+  }
+}
+return { NAV_ITEMS, MARQUEE_ITEMS, CAPABILITIES, TAB_ITEMS };
+}
+export const { NAV_ITEMS, MARQUEE_ITEMS, CAPABILITIES, TAB_ITEMS } = getLandingContent("zh-CN");

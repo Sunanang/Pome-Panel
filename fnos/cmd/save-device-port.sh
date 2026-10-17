@@ -35,7 +35,10 @@ do
 done
 
 if [[ -z "$PORT" ]]; then
-  fail "请填写设备同步端口"
+  case "${TRIM_SYS_LANGUAGE:-en-US}" in
+    zh|zh-CN|zh-Hans*) fail "请填写设备同步端口" ;;
+    *) fail "Enter a device sync port" ;;
+  esac
 fi
 
 # wizard_lan: localhost (default) | lan. Also accepts 0/1, true/false, bind addresses.

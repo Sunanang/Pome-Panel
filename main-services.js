@@ -1,3 +1,4 @@
+const pomeLocaleMainServices = typeof module === 'object' && module.exports ? require("./localization/runtime") : globalThis.PomeI18n;
 const net = require('net');
 const path = require('path');
 const crypto = require('crypto');
@@ -136,7 +137,7 @@ function createForegroundMediaPermissionCoordinator(defaults = {}) {
 function extractPageTitle(html, fallback) {
   const ogTitle = extractMetaContent(html, 'og:title');
   const titleMatch = String(html || '').match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
-  return cleanTitle(ogTitle || (titleMatch && titleMatch[1]) || fallback) || String(fallback || '未命名链接');
+  return cleanTitle(ogTitle || (titleMatch && titleMatch[1]) || fallback) || String(fallback || pomeLocaleMainServices.t("copy.untitledLink.f4d376"));
 }
 
 function extractFaviconHref(html) {
@@ -326,17 +327,7 @@ function cleanTaskLine(value, maxLength, skipBoilerplate = false) {
   return Array.from(cleaned).slice(0, maxLength).join('');
 }
 
-function taskNotificationIdentity(payload, source = 'task') {
-  const data = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
-  source = notificationDomain.sourceKey(source);
-  const status = notificationDomain.statusKey(data.status, source);
-  const cwd = firstPayloadText(data, ['cwd', 'working_directory', 'working-directory']);
-  const project = cleanTaskLine(
-    firstPayloadText(data, ['project', 'project_name', 'project-name', 'projectName'])
-      || (cwd && (path.isAbsolute(cwd) || path.win32.isAbsolute(cwd)) ? cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : ''),
-    48
-  );
-  const concreteTitle = firstPayloadText(data, [
+const TASK_TITLE_FIELDS = [
     'completionSummary',
     'completion_summary',
     'last_assistant_message',
@@ -357,11 +348,22 @@ function taskNotificationIdentity(payload, source = 'task') {
     'userPrompt',
     'message',
     'title',
-  ]);
-  return {
+  ];
+
+function taskNotificationIdentity(payload, source = 'task') {
+  const data = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+  source = notificationDomain.sourceKey(source);
+  const status = notificationDomain.statusKey(data.status, source);
+  const cwd = firstPayloadText(data, ['cwd', 'working_directory', 'working-directory']);
+  const project = cleanTaskLine(
+    firstPayloadText(data, ['project', 'project_name', 'project-name', 'projectName'])
+      || (cwd && (path.isAbsolute(cwd) || path.win32.isAbsolute(cwd)) ? cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : ''),
+    48
+  );
+  const concreteTitle = firstPayloadText(data, TASK_TITLE_FIELDS);  return {
     project,
     title: notificationDomain.concreteTitle(cleanTaskLine(concreteTitle, 4096, true))
-      || notificationDomain.fallbackTitle(source, status),
+      || notificationDomain.fallbackTitle(source, status, 'zh-CN'),
   };
 }
 
@@ -369,7 +371,7 @@ function taskNotificationContent(payload, source) {
   const identity = taskNotificationIdentity(payload, source);
   const summary = firstPayloadText(payload, ['completionSummary', 'completion_summary', 'last_assistant_message', 'last-assistant-message', 'lastAssistantMessage', 'title']) || identity.title;
   const clean = (value, max) => Array.from(String(value).replace(/[\u202a-\u202e\u2066-\u2069]/g, '').replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, ' ').trim()).slice(0, max).join('');
-  return { ...identity, completionSummary: clean(summary, 4096),
+  return { ...identity, titleIsFallback: !notificationDomain.concreteTitle(cleanTaskLine(firstPayloadText(payload, TASK_TITLE_FIELDS), 4096, true)), completionSummary: clean(summary, 4096),
     sessionTitle: clean(firstPayloadText(payload, ['sessionTitle', 'session_title', 'thread_name']), 256) };
 }
 
@@ -772,7 +774,7 @@ async function controlSodaMusic(action, dependencies = {}, currentPlaying = fals
 }
 
 const SYNC_CREDENTIALS_FILE = 'sync-credentials.json';
-const PAIR_HTTP_CONFIRM_TEXT = '配对码与新设备令牌将以明文 HTTP 传输，可能被窃听或篡改。确认继续？';
+const PAIR_HTTP_CONFIRM_TEXT = pomeLocaleMainServices.t("copy.thePairingCodeAndNewDeviceToken.e54205");
 
 /**
  * Pure helpers for NAS sync deviceToken persistence (safeStorage + 0600 file).

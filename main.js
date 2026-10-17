@@ -16,6 +16,8 @@ const {
   ClipboardItem,
 } = require('electron');
 const WebSocket = require('ws');
+const PomeI18n = require('./localization/runtime');
+let localizationRevision = 0;
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -396,13 +398,13 @@ let taskInboxStore = null;
 let taskInboxFailure = null;
 function reportTaskInboxFailure(error) {
   taskInboxStore = null;
-  taskInboxFailure = { recoverable: error?.code === 'storage_corrupt', filePath: path.join(app.getPath('userData'), 'task-inbox.json'), error: error?.code || 'inbox_save_failed', message: 'AI 完成收件箱无法保存或读取，通知接收已暂停。原文件已保留，请打开收件箱查看并重试。' };
+  taskInboxFailure = { recoverable: error?.code === 'storage_corrupt', filePath: path.join(app.getPath('userData'), 'task-inbox.json'), error: error?.code || 'inbox_save_failed', message: PomeI18n.t("copy.theAiActivityInboxCouldNotBe.a99cb3") };
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('tasks:inbox-error', taskInboxFailure);
 }
 function reportTaskEventFailure(message) {
-  console.warn(`AI 完成事件无法处理：${message}`);
+  console.warn(PomeI18n.t("copy.couldnTProcessTheAiEvent.eed966", { arg1: (message) }));
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('tasks:inbox-error', {
-    error: 'event_rejected', recoverable: false, message: `完成事件无法处理：${message}`,
+    error: 'event_rejected', recoverable: false, message: PomeI18n.t("copy.couldnTProcessTheCompletionEvent.c59da8", { arg1: (message) }),
   });
 }
 function taskInboxState(options) {
@@ -465,6 +467,28 @@ function getWindowDisplay() {
 
 // 沙箱 preload 不能 require 本地模块，能力层只能随 additionalArguments 下发。
 // 只在创建窗口时生效，运行期变化必须走 capabilities:changed。
+function localizationSnapshot() {
+  let languages;
+  try { languages = app.getPreferredSystemLanguages(); } catch { languages = ['en-US']; }
+  if (process.env.TODO_TEST_USER_DATA) languages = [process.env.POME_TEST_LANGUAGE || 'zh-CN'];
+  let formatLocale;
+  try { formatLocale = app.getSystemLocale(); } catch {}
+  return { ...PomeI18n.snapshot(readAppSettings().language, languages, formatLocale), revision: localizationRevision };
+}
+function localizationArgument() {
+  const state = localizationSnapshot();
+  PomeI18n.setState(state);
+  return `--pome-locale=${Buffer.from(JSON.stringify(state)).toString('base64')}`;
+}
+function broadcastLocalization() {
+  const state = localizationSnapshot();
+  PomeI18n.setState(state);
+  for (const target of [mainWindow, notificationWindow]) {
+    if (target && !target.isDestroyed()) target.webContents.send('localization:changed', state);
+  }
+  refreshTrayMenu();
+  return state;
+}
 function capabilitiesArgument() {
   return `--pome-caps=${Buffer.from(JSON.stringify(platformCapabilities), 'utf8').toString('base64')}`;
 }
@@ -736,6 +760,7 @@ function normalizeTaskNotification(payload, source) {
     status: notificationDomain.statusKey(payload.status, source),
     taskId,
     title: identity.title,
+    titleIsFallback: identity.titleIsFallback,
     completionSummary: identity.completionSummary,
     sessionTitle: identity.sessionTitle,
     project: identity.project,
@@ -782,7 +807,7 @@ function enqueueTaskNotification(notification) {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('task-completion:new', accepted.record);
     } catch (error) {
       reportTaskInboxFailure(error);
-      console.warn('AI 完成事件保存失败，未显示成功通知。');
+      console.warn(PomeI18n.t("copy.couldnTSaveTheAiEventNo.4d365d"));
       return 'save_failed';
     }
   }
@@ -807,7 +832,7 @@ function enqueueTaskNotification(notification) {
       ...notification,
       source: 'task',
       taskId: '',
-      title: `另有 ${summaryCount} 个任务已完成`,
+      title: PomeI18n.t("copy.moreTasksCompleted.1ac38a", { arg1: (summaryCount) }),
       project: '',
       isSummary: true,
       summaryCount,
@@ -837,9 +862,9 @@ function fireTodoReminder(todo) {
     source: 'todo',
     status: 'due',
     taskId: String(todo.id || ''),
-    title: String(todo.text || '').trim() || '待办即将截止',
+    title: String(todo.text || '').trim() || PomeI18n.t("copy.taskDueSoon.52facb"),
     project: '',
-    detail: '将在 1 小时内截止',
+    detail: PomeI18n.t("copy.dueWithin1Hour.955b14"),
     deadline,
     completedAt: Date.now(),
   };
@@ -895,9 +920,9 @@ ipcMain.handle('pomodoro:notify', (event, minutes) => {
     eventId: `pomodoro-${completedAt}`,
     taskId: `pomodoro-${completedAt}`,
     source: 'pomodoro',
-    project: '番茄钟',
-    title: '专注完成',
-    body: `${safeMinutes} 分钟专注计时已结束`,
+    project: PomeI18n.t("copy.focusTimer.e7d0e7"),
+    title: PomeI18n.t("copy.focusSessionComplete.66ee96"),
+    body: PomeI18n.t("copy.yourMinuteFocusSessionHasEnded.7f7746", { arg1: (safeMinutes) }),
     completedAt,
   };
   return { ok: true, result: enqueueTaskNotification(notification) };
@@ -956,7 +981,7 @@ function createTaskNotificationWindow() {
       nodeIntegration: false,
       sandbox: true,
       backgroundThrottling: false,
-      additionalArguments: [capabilitiesArgument()],
+      additionalArguments: [capabilitiesArgument(), localizationArgument()],
     },
   });
 
@@ -1166,7 +1191,7 @@ function startTaskNotificationServer() {
     });
     request.on('end', async () => {
       if (bodyTooLarge) {
-        reportTaskEventFailure('事件超过接收大小上限，请检查来源钩子。');
+        reportTaskEventFailure(PomeI18n.t("copy.theEventIsTooLargeCheckThe.fca4d6"));
         sendTaskNotificationResponse(response, 413, { ok: false, error: 'body_too_large' });
         return;
       }
@@ -1175,12 +1200,12 @@ function startTaskNotificationServer() {
         const rawBody = Buffer.concat(chunks).toString('utf8').trim();
         payload = rawBody ? JSON.parse(rawBody) : {};
       } catch (error) {
-        reportTaskEventFailure('事件不是有效 JSON，请检查来源钩子。');
+        reportTaskEventFailure(PomeI18n.t("copy.theEventIsNotValidJsonCheck.13eeda"));
         sendTaskNotificationResponse(response, 400, { ok: false, error: 'invalid_json' });
         return;
       }
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        reportTaskEventFailure('事件内容格式无效，请检查来源钩子。');
+        reportTaskEventFailure(PomeI18n.t("copy.theEventFormatIsInvalidCheckThe.c2a10a"));
         sendTaskNotificationResponse(response, 400, { ok: false, error: 'invalid_payload' });
         return;
       }
@@ -1204,7 +1229,7 @@ function startTaskNotificationServer() {
       }
       const result = enqueueTaskNotification(notification);
       sendTaskNotificationResponse(response, result === 'save_failed' ? 503 : result === 'identity_required' ? 422 : 202,
-        { ok: !['save_failed', 'identity_required'].includes(result), result, ...(result === 'save_failed' ? { error: 'inbox_save_failed' } : result === 'identity_required' ? { error: 'completion_identity_required', message: '请提供 event_id、turn_id 或 completed_at；重试必须沿用同一身份。' } : {}) });
+        { ok: !['save_failed', 'identity_required'].includes(result), result, ...(result === 'save_failed' ? { error: 'inbox_save_failed' } : result === 'identity_required' ? { error: 'completion_identity_required', message: PomeI18n.t("copy.provideEventIdTurnIdOrCompleted.1f7b52") } : {}) });
     });
     request.on('error', () => {
       if (!response.headersSent) sendTaskNotificationResponse(response, 400, { ok: false });
@@ -1312,7 +1337,7 @@ function createWindow() {
       // A startup test can sit under the already-running panel. Keep its
       // hidden renderer scheduled so workspace recovery still finishes.
       backgroundThrottling: !process.env.TODO_TEST_USER_DATA,
-      additionalArguments: [capabilitiesArgument()],
+      additionalArguments: [capabilitiesArgument(), localizationArgument()],
     },
   });
 
@@ -1474,6 +1499,7 @@ function readAppSettings() {
   const panelPosition = normalizePanelPosition(stored.panelPosition);
   return {
     features,
+    language: PomeI18n.preference(stored.language),
     shortcut: isValidPanelShortcut(stored.shortcut) ? stored.shortcut : 'Space',
     defaultTab: normalizeDefaultTabPreference(stored.defaultTab, features),
     panelPosition,
@@ -1568,7 +1594,7 @@ function syncDockMetrics() {
 function publicAppSettings() {
   const settings = readAppSettings();
   const { encryptedCursorToken, encryptedCodexToken, ...publicSettings } = settings;
-  return { ...publicSettings, autoLaunch: isAutoLaunchEnabled() };
+  return { ...publicSettings, localization: localizationSnapshot(), autoLaunch: isAutoLaunchEnabled() };
 }
 
 function saveAppSettings(settings) {
@@ -1632,7 +1658,7 @@ function copyWorkspaceAssets(sourceRoot, targetRoot) {
 async function chooseWorkspaceFolder() {
   if (workspaceSwitching) return false;
   const result = await showOwnedOpenDialog({
-    title: '选择 Pome Panel 数据文件夹',
+    title: PomeI18n.t("copy.chooseThePomePanelDataFolder.961cbe"),
     properties: ['openDirectory', 'createDirectory'],
   });
   const selected = !result.canceled && result.filePaths && result.filePaths[0];
@@ -1646,13 +1672,13 @@ async function chooseWorkspaceFolder() {
       const saved = JSON.parse(fs.readFileSync(existingFile, 'utf8'));
       if (!saved.localStorage || typeof saved.localStorage !== 'object' || Array.isArray(saved.localStorage)) throw new Error('invalid_workspace');
     } catch {
-      dialog.showErrorBox('无法打开数据文件夹', '现有 workspace.json 无法读取，原文件已保留。');
+      dialog.showErrorBox(PomeI18n.t("copy.couldnTOpenTheDataFolder.5d315e"), PomeI18n.t("copy.theExistingWorkspaceJsonCouldNotBe.7706a8"));
       return false;
     }
     const { response } = await dialog.showMessageBox(mainWindow, {
-      type: 'question', message: '打开已有数据文件夹？',
-      detail: '将载入该文件夹的数据。当前数据会保存在原文件夹中。',
-      buttons: ['打开已有数据', '取消'], defaultId: 0, cancelId: 1,
+      type: 'question', message: PomeI18n.t("copy.openTheExistingDataFolder.a356ec"),
+      detail: PomeI18n.t("copy.thisWillLoadDataFromTheSelected.6b9577"),
+      buttons: [PomeI18n.t("copy.openExistingData.235581"), PomeI18n.t("copy.cancel.2cd0f3")], defaultId: 0, cancelId: 1,
     });
     if (response !== 0) return false;
   }
@@ -1670,7 +1696,7 @@ async function chooseWorkspaceFolder() {
     refreshTrayMenu();
     return true;
   } catch (error) {
-    dialog.showErrorBox('无法切换数据文件夹', '保存或迁移数据失败，当前数据文件夹保持不变。');
+    dialog.showErrorBox(PomeI18n.t("copy.couldnTChangeTheDataFolder.149168"), PomeI18n.t("copy.couldnTSaveOrMoveTheData.d02a57"));
     return false;
   } finally { workspaceSwitching = false; }
 }
@@ -1764,9 +1790,9 @@ function mirrorImageDataUrl() {
 
 async function chooseMirrorImage() {
   const result = await showOwnedOpenDialog({
-    title: '替换镜子配图',
+    title: PomeI18n.t("copy.changeMirrorCover.855f71"),
     properties: ['openFile'],
-    filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'heic'] }],
+    filters: [{ name: PomeI18n.t("copy.image.d24c10"), extensions: ['png', 'jpg', 'jpeg', 'webp', 'heic'] }],
   });
   const selected = !result.canceled && result.filePaths && result.filePaths[0];
   if (!selected) return { ok: true, canceled: true };
@@ -1782,7 +1808,7 @@ async function chooseMirrorImage() {
     }
     return { ok: true, canceled: false, dataUrl };
   } catch (error) {
-    await dialog.showMessageBox({ type: 'error', title: '无法替换配图', message: '请选择一张有效且尺寸适中的图片。' });
+    await dialog.showMessageBox({ type: 'error', title: PomeI18n.t("copy.couldnTChangeTheCover.29c48a"), message: PomeI18n.t("copy.chooseAValidImageOfASupported.298e1e") });
     return { ok: false, error: 'invalid_image' };
   }
 }
@@ -1801,15 +1827,15 @@ function refreshTrayMenu() {
   const autoLaunch = isAutoLaunchEnabled();
   const menu = Menu.buildFromTemplate([
     {
-      label: '显示功能',
+      label: PomeI18n.t("copy.visibleFeatures.c10f98"),
       click: showMainPanelFromTray,
     },
     {
-      label: '设置快捷键',
+      label: PomeI18n.t("copy.setShortcut.556e1a"),
       click: () => openRendererPanel('app:record-shortcut'),
     },
     {
-      label: '开机自动启动',
+      label: PomeI18n.t("copy.launchAtLogin.b5d24c"),
       type: 'checkbox',
       checked: autoLaunch,
       click: (item) => {
@@ -1819,15 +1845,15 @@ function refreshTrayMenu() {
     },
     { type: 'separator' },
     {
-      label: '关于',
+      label: PomeI18n.t("copy.about.52d25a"),
       click: () => {
         dialog.showMessageBox({
           type: 'info',
-          title: '关于 Pome Panel',
+          title: PomeI18n.t("copy.aboutPomePanel.f74e41"),
           message: 'Pome Panel',
           detail:
-            `版本 ${app.getVersion()}\n开发者 Lando\n\n贴在屏幕顶部的个人工作台。可以记笔记、管剪贴板、录音、放常用指令，并和飞牛 NAS 同步。`,
-          buttons: ['查看 GitHub', '好'],
+            PomeI18n.t("copy.versionDeveloperLandoADesktopWorkspaceFor.8c62b9", { arg1: (app.getVersion()) }),
+          buttons: [PomeI18n.t("copy.viewOnGithub.f95c40"), PomeI18n.t("copy.ok.f867f3")],
           defaultId: 1,
           cancelId: 1,
           noLink: true,
@@ -1837,7 +1863,7 @@ function refreshTrayMenu() {
       },
     },
     {
-      label: '退出',
+      label: PomeI18n.t("copy.quit.498e1d"),
       accelerator: 'CommandOrControl+Q',
       click: () => app.quit(),
     },
@@ -1972,6 +1998,13 @@ ipcMain.handle('window:set-typing-focus', (event, focused) => {
 });
 
 ipcMain.handle('settings:get', () => publicAppSettings());
+ipcMain.handle('settings:set-language', (event, value) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return { ok: false, error: 'invalid_sender' };
+  if (!['system', 'zh-CN', 'en-US'].includes(value)) return { ok: false, error: 'invalid_language' };
+  if (!saveAppSettings({ ...readAppSettings(), language: value })) return { ok: false, error: 'save_failed' };
+  localizationRevision += 1;
+  return { ok: true, localization: broadcastLocalization() };
+});
 ipcMain.handle('settings:set-feature', (event, payload) => {
   const current = readAppSettings();
   const features = updateFeaturePreference(current.features, payload && payload.featureId, payload && payload.enabled);
@@ -2079,9 +2112,9 @@ function requireWorkspaceOwner(event) {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) throw new Error('workspace_owner_required');
 }
 async function liveBackupStorage() {
-  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('工作区不可用');
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error(PomeI18n.t("copy.workspaceUnavailable.79a9a2"));
   const storage = await mainWindow.webContents.executeJavaScript('window.prepareWorkspaceBackupSnapshot()');
-  if (!persistWorkspaceStorage(storage)) throw new Error('无法保存当前资料');
+  if (!persistWorkspaceStorage(storage)) throw new Error(PomeI18n.t("copy.couldnTSaveTheCurrentData.a81b57"));
   return storage;
 }
 async function backupFingerprint(storage, root) {
@@ -2098,20 +2131,20 @@ async function backupFingerprint(storage, root) {
 async function exportLocalBackup(event) {
   requireWorkspaceOwner(event);
   try {
-    const save = await dialog.showSaveDialog(mainWindow, { title: '导出本机资料备份', defaultPath: `Pome-${new Date().toISOString().slice(0, 10)}.pome-backup.zip`, filters: [{ name: 'Pome 资料备份', extensions: ['zip'] }] });
+    const save = await dialog.showSaveDialog(mainWindow, { title: PomeI18n.t("copy.exportALocalBackup.e19c42"), defaultPath: `Pome-${new Date().toISOString().slice(0, 10)}.pome-backup.zip`, filters: [{ name: PomeI18n.t("copy.pomeDataBackup.52c470"), extensions: ['zip'] }] });
     if (save.canceled) return { ok: false, error: 'cancelled' };
     const storage = await liveBackupStorage();
     const result = await backup.exportWorkspaceBackup({ root: workspaceRoot(), storage, destination: save.filePath, appVersion: app.getVersion() });
     return { ok: true, path: result.path, manifest: result.manifest };
   } catch (error) { return { ok: false, error: error.code || 'backup_failed', message: error.message }; }
 }
-ipcMain.handle('workspace:confirm', async (event, payload) => { requireWorkspaceOwner(event); const result = await dialog.showMessageBox(mainWindow, { type: 'warning', title: String(payload.title || '确认'), message: String(payload.message || ''), detail: String(payload.detail || ''), buttons: ['取消', '确认'], defaultId: 0, cancelId: 0 }); return result.response === 1; });
+ipcMain.handle('workspace:confirm', async (event, payload) => { requireWorkspaceOwner(event); const result = await dialog.showMessageBox(mainWindow, { type: 'warning', title: String(payload.title || PomeI18n.t("copy.confirm.36f33a")), message: String(payload.message || ''), detail: String(payload.detail || ''), buttons: [PomeI18n.t("copy.cancel.2cd0f3"), PomeI18n.t("copy.confirm.36f33a")], defaultId: 0, cancelId: 0 }); return result.response === 1; });
 ipcMain.handle('backup:export', exportLocalBackup);
 ipcMain.handle('backup:preview', async (event) => {
   requireWorkspaceOwner(event);
   let inspected;
   try {
-    const picked = await dialog.showOpenDialog(mainWindow, { title: '选择 Pome 资料备份', properties: ['openFile'], filters: [{ name: 'Pome 资料备份', extensions: ['zip'] }] });
+    const picked = await dialog.showOpenDialog(mainWindow, { title: PomeI18n.t("copy.chooseAPomeDataBackup.57f9a9"), properties: ['openFile'], filters: [{ name: PomeI18n.t("copy.pomeDataBackup.52c470"), extensions: ['zip'] }] });
     if (picked.canceled) return { ok: false, error: 'cancelled' };
     inspected = await backup.inspectWorkspaceBackup(picked.filePaths[0]);
     const root = workspaceRoot(), storage = await liveBackupStorage();
@@ -2125,12 +2158,12 @@ ipcMain.handle('backup:preview', async (event) => {
 ipcMain.handle('backup:restore', async (event, id) => {
   requireWorkspaceOwner(event);
   const preview = backupPreviews.get(id);
-  if (!preview) return { ok: false, error: 'preview_expired', message: '恢复预览已过期，请重新选择并确认备份。' };
+  if (!preview) return { ok: false, error: 'preview_expired', message: PomeI18n.t("copy.theRestorePreviewHasExpiredSelectThe.99445c") };
   let locked = false;
   try {
     const storage = await liveBackupStorage();
     if (Date.now() > preview.expiresAt || workspaceRoot() !== preview.root || JSON.stringify(syncCredentialsStore.getStatus()) !== preview.binding
-      || await backupFingerprint(storage, preview.root) !== preview.fingerprint) throw Object.assign(new Error('资料或配对已变化，恢复预览已过期，请重新预览并确认。'), { code: 'preview_expired' });
+      || await backupFingerprint(storage, preview.root) !== preview.fingerprint) throw Object.assign(new Error(PomeI18n.t("copy.dataOrPairingHasChangedPreviewThe.84ec4b")), { code: 'preview_expired' });
     workspaceSwitching = true; locked = true;
     await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = true');
     const status = syncCredentialsStore.getStatus();
@@ -2138,7 +2171,7 @@ ipcMain.handle('backup:restore', async (event, id) => {
     if (boundTodosSyncTask) await boundTodosSyncTask;
     // Any in-flight sync that settled after the preview invalidates confirmation.
     const latest = await liveBackupStorage();
-    if (await backupFingerprint(latest, preview.root) !== preview.fingerprint) throw Object.assign(new Error('同步完成后资料发生变化，请重新确认恢复预览。'), { code: 'preview_expired' });
+    if (await backupFingerprint(latest, preview.root) !== preview.fingerprint) throw Object.assign(new Error(PomeI18n.t("copy.dataChangedAfterSyncingReviewTheRestore.f56d4d")), { code: 'preview_expired' });
     const snapshots = path.join(app.getPath('userData'), 'workspace-snapshots');
     fs.mkdirSync(snapshots, { recursive: true, mode: 0o700 });
     const snapshotPath = path.join(snapshots, `before-restore-${Date.now()}-${crypto.randomUUID()}.pome-backup.zip`);
@@ -2226,7 +2259,7 @@ ipcMain.handle('tasks:sources-test', async (event, source) => {
   sourceTestTokens.set(token, test);
   try {
     await getAiSourceHooks().runTest(source, { token, port: notificationServer?.address()?.port || TASK_NOTIFICATION_PORT });
-    return test.delivered ? { ok: true, message: '测试通知已送达' } : { ok: false, message: '未收到测试通知，请检查来源配置与本机监听服务。' };
+    return test.delivered ? { ok: true, message: PomeI18n.t("copy.testNotificationDelivered.0895bf") } : { ok: false, message: PomeI18n.t("copy.noTestNotificationReceivedCheckTheSource.5fb147") };
   } catch (error) { return { ok: false, message: error.message }; }
   finally { sourceTestTokens.delete(token); }
 });
@@ -2237,8 +2270,8 @@ ipcMain.handle('tasks:rebuild', async (event) => {
   const filePath = path.join(app.getPath('userData'), 'task-inbox.json');
   const expectedDigest = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
   const backupPath = `${filePath}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomUUID()}`;
-  const choice = await dialog.showMessageBox(mainWindow, { type: 'warning', title: '重建 AI 完成收件箱', buttons: ['取消', '备份损坏文件并重建'], defaultId: 0, cancelId: 0,
-    message: '原有完成记录、已读状态和去重信息可能无法恢复。', detail: `原文件：${filePath}\n备份路径：${backupPath}\n确认后创建空收件箱并恢复通知接收。` });
+  const choice = await dialog.showMessageBox(mainWindow, { type: 'warning', title: PomeI18n.t("copy.rebuildTheAiActivityInbox.e20667"), buttons: [PomeI18n.t("copy.cancel.2cd0f3"), PomeI18n.t("copy.backUpTheDamagedFileAndRebuild.78f0c8")], defaultId: 0, cancelId: 0,
+    message: PomeI18n.t("copy.existingEventsReadStatesAndDeduplicationInformation.ccd85d"), detail: PomeI18n.t("copy.originalFileBackupPathConfirmToCreate.53c342", { arg1: (filePath), arg2: (backupPath) }) });
   if (choice.response !== 1) return { ok: false, canceled: true };
   try {
     const result = rebuildTaskInbox({ filePath, confirmed: true, expectedDigest, backupPath });
@@ -2252,7 +2285,7 @@ ipcMain.handle('tasks:read', (event, id) => { requireWorkspaceOwner(event); retu
 ipcMain.handle('tasks:open-source', async (event, id) => {
   requireWorkspaceOwner(event);
   const record = getTaskInbox().get(String(id || ''));
-  if (!record) return { ok: false, message: '记录不存在。' };
+  if (!record) return { ok: false, message: PomeI18n.t("copy.recordNotFound.0c312b") };
   return platformAdapter.taskApps.open(record);
 });
 
@@ -2344,9 +2377,9 @@ async function enrichLinkMetadata(url, title) {
         messages: [
           {
             role: 'system',
-            content: '你是网址收藏夹整理器。只返回 JSON：{"title":"简洁中文名称","category":"短分类"}。分类应稳定、可复用，不超过 14 个字。',
+            content: 'Organize bookmarks. Follow the language of the page title/content, independently of the interface language. Return only JSON with title (a concise specific name) and category (a stable reusable short category, at most 14 characters, using complete words for English).',
           },
-          { role: 'user', content: `URL: ${url}\n网页标题: ${title}` },
+          { role: 'user', content: `URL: ${url}\nPage title: ${title}` },
         ],
       }),
     });
@@ -2386,7 +2419,7 @@ async function inspectLink(rawUrl) {
       return {
         ok: true,
         url: current.toString(),
-        title: '未命名',
+        title: PomeI18n.t("copy.untitled.67bee6"),
         category: '',
         icon,
         warning: error && error.name === 'AbortError' ? 'timeout' : 'fetch_failed',
@@ -2412,7 +2445,7 @@ async function inspectLink(rawUrl) {
           enrichLinkMetadata(current.toString(), fallback),
           fetchFaviconDataUrl(current.toString(), ''),
         ]);
-        return { ok: true, url: current.toString(), title: smart.title || '未命名', category: smart.category, icon };
+        return { ok: true, url: current.toString(), title: smart.title || PomeI18n.t("copy.untitled.67bee6"), category: smart.category, icon };
       }
       const html = await readResponseText(response);
       const pageTitle = extractPageTitle(html, fallback);
@@ -2423,7 +2456,7 @@ async function inspectLink(rawUrl) {
       return { ok: true, url: current.toString(), title: smart.title, category: smart.category, icon };
     } catch (error) {
       await response.body?.cancel().catch(() => {});
-      return { ok: true, url: current.toString(), title: '未命名', category: '', icon: '',
+      return { ok: true, url: current.toString(), title: PomeI18n.t("copy.untitled.67bee6"), category: '', icon: '',
         warning: controller.signal.aborted ? 'timeout' : 'fetch_failed' };
     } finally { clearTimeout(timeout); }
   }
@@ -2459,10 +2492,10 @@ ipcMain.handle('smart:organize-material', async (event, payload) => {
           {
             role: 'system',
             content: kind === 'note'
-              ? '你是中文笔记命名助手。理解整篇笔记后概括主题，禁止把正文首句直接当标题。只返回 JSON：{"title":"8到18字的具体标题","category":"2到8字的稳定分类"}。'
-              : '你是中文个人资料库整理器。根据内容概括，不要照抄首句。只返回 JSON：{"title":"8到18字的具体名称","category":"2到8字的稳定分类"}。',
+              ? 'Name notes by understanding the entire content; do not copy the first sentence. Use the predominant language of the content, independently of the interface language. Return only JSON with title (a concise, specific title: 8–18 Chinese characters or 3–9 English words, at most 48 characters) and category (a stable short category: 2–8 Chinese characters or 1–3 English words, at most 24 characters).'
+              : 'Organize a personal library by summarizing the content; do not copy the first sentence. Use the predominant language of the content, independently of the interface language. Return only JSON with title (a concise, specific name: 8–18 Chinese characters or 3–9 English words, at most 48 characters) and category (a stable short category: 2–8 Chinese characters or 1–3 English words, at most 24 characters).',
           },
-          { role: 'user', content: kind === 'note' ? `请为以下笔记命名：\n\n${transcript}` : transcript },
+          { role: 'user', content: kind === 'note' ? `Name this note:\n\n${transcript}` : transcript },
         ],
       }),
     });
@@ -2492,14 +2525,14 @@ ipcMain.handle('windows:focus', async (event, windowId) => {
 
 async function activateActiveTaskNotification(eventId = null) {
   const notification = activeTaskNotification;
-  if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return { ok: false, message: '任务提醒已失效' };
-  if (!platformCapabilities.features.windowFocus) return { ok: false, message: '当前无法打开来源软件' };
+  if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return { ok: false, message: PomeI18n.t("copy.thisTaskReminderIsNoLongerAvailable.f287da") };
+  if (!platformCapabilities.features.windowFocus) return { ok: false, message: PomeI18n.t("copy.canTOpenTheSourceAppRight.3c21d3") };
   notification.activationPending = true;
   setTaskNotificationPaused(true);
   let result;
   try { result = await platformAdapter.taskApps.open(notification); }
-  catch { result = { ok: false, message: '打开来源软件失败，请稍后重试。' }; }
-  if (activeTaskNotification !== notification || taskNotificationLeaving) return { ok: false, message: '任务提醒已失效' };
+  catch { result = { ok: false, message: PomeI18n.t("copy.couldnTOpenTheSourceAppTry.180b9d") }; }
+  if (activeTaskNotification !== notification || taskNotificationLeaving) return { ok: false, message: PomeI18n.t("copy.thisTaskReminderIsNoLongerAvailable.f287da") };
   notification.activationPending = false;
   notification.activationFailed = !result.ok;
   if (result.ok) beginTaskNotificationDismiss();
@@ -2861,13 +2894,13 @@ function contentResults() {
 }
 function saveContentResult(names, message, ok) {
   const results = contentResults();
-  for (const name of names) results[name] = { message, ok, at: Date.now() };
+  for (const name of names) results[name] = { message, messageDescriptor: PomeI18n.describeMessage(message), ok, at: Date.now() };
   require('./atomicStorage').writeJsonAtomic(path.join(app.getPath('userData'), 'content-sync-results.json'), results);
 }
 let boundTodosSyncTask = null;
 function runBoundTodosSyncCycle(options = {}) {
   if (workspaceSwitching) return Promise.resolve({ ok: false, error: 'workspace_switching' });
-  if (recoveryStore().read().paused) return Promise.resolve({ ok: false, error: 'sync_paused_after_restore', message: '恢复后同步已暂停，请确认覆盖影响范围。' });
+  if (recoveryStore().read().paused) return Promise.resolve({ ok: false, error: 'sync_paused_after_restore', message: PomeI18n.t("copy.syncIsPausedAfterRestoringReviewWhat.d332d0") });
   if (!boundTodosSyncTask) {
     boundTodosSyncTask = performBoundTodosSyncCycle(options).finally(() => { boundTodosSyncTask = null; });
   }
@@ -2889,7 +2922,7 @@ async function performBoundTodosSyncCycle({ broadcast = true } = {}) {
       maxSupported: MAX_SUPPORTED_SCHEMA_VERSION,
     },
   });
-  saveContentResult(['待办'], result.ok ? '上次同步已确认' : '待同步：'+(result.error || '失败'), result.ok);
+  saveContentResult(['待办'], result.ok ? PomeI18n.t("copy.lastSyncConfirmed.db2b6e") : '待同步：'+(result.error || PomeI18n.t("copy.failed.28384d")), result.ok);
   if (result.error === SCHEMA_UI_STATE_INCOMPATIBLE || result.stopPull || result.stopPush) {
     setSyncSchemaRuntimeFromEvaluation(result);
     broadcastSyncStatus();
@@ -2912,13 +2945,13 @@ async function performBoundTodosSyncCycle({ broadcast = true } = {}) {
     try {
       const workspaceResult = await runBoundWorkspaceSyncCycle();
       const names = ['笔记','链接','常用指令','剪贴板','录音元数据','AI 配置','密钥'];
-      saveContentResult(names, workspaceResult.skipped ? '尚未完成首次资料同步' : workspaceResult.ok ? '上次同步已确认' : '待同步：'+workspaceResult.error, workspaceResult.ok && !workspaceResult.skipped);
-      const labels = { notes: '笔记', links: '链接', commands: '常用指令', clipboardHistory: '剪贴板', recordings: '录音音频', aiSettings: 'AI 配置', secrets: '密钥' };
-      if (workspaceResult.partial) for (const [collection, label] of Object.entries(labels)) { if (!workspaceResult.pendingCollections.includes(collection)) saveContentResult([label], '上次同步已确认', true); }
+      saveContentResult(names, workspaceResult.skipped ? PomeI18n.t("copy.initialDataSyncIsNotComplete.62dc6e") : workspaceResult.ok ? PomeI18n.t("copy.lastSyncConfirmed.db2b6e") : '待同步：'+workspaceResult.error, workspaceResult.ok && !workspaceResult.skipped);
+      const labels = { get notes() { return PomeI18n.t("copy.notes.b778e3"); }, get links() { return PomeI18n.t("copy.links.305378"); }, get commands() { return PomeI18n.t("copy.commands.b85789"); }, get clipboardHistory() { return PomeI18n.t("copy.clipboard.8c10e2"); }, get recordings() { return PomeI18n.t("copy.recordingAudio.a93938"); }, get aiSettings() { return PomeI18n.t("copy.aiConfiguration.4336ed"); }, get secrets() { return PomeI18n.t("copy.credentials.f67bca"); } };
+      if (workspaceResult.partial) for (const [collection, label] of Object.entries(labels)) { if (!workspaceResult.pendingCollections.includes(collection)) saveContentResult([label], PomeI18n.t("copy.lastSyncConfirmed.db2b6e"), true); }
       for (const warning of workspaceResult.warnings || []) { const collection = require('./workspace-sync').collectionForEntityId(warning.entityId); if (labels[collection]) saveContentResult([labels[collection]], '部分资料未传输：'+warning.reason, false); }
-      if (!workspaceResult.ok || workspaceResult.skipped) saveContentResult(['录音音频'], '尚未确认全部音频传输', false);
+      if (!workspaceResult.ok || workspaceResult.skipped) saveContentResult(['录音音频'], PomeI18n.t("copy.notAllAudioTransfersHaveBeenConfirmed.d85e6f"), false);
     } catch (error) {
-      saveContentResult(['笔记','链接','常用指令','剪贴板','录音元数据','录音音频','AI 配置','密钥'], '资料同步失败，待重试', false);
+      saveContentResult(['笔记','链接','常用指令','剪贴板','录音元数据','录音音频','AI 配置','密钥'], PomeI18n.t("copy.dataSyncFailedRetryNeeded.9051f2"), false);
       // 工作区同步失败时待办结果仍然有效，下一轮再试。
     }
   }
@@ -3037,7 +3070,7 @@ async function certificateTrustPrompt(baseUrl) {
     return {
       ok: false,
       error: 'certificate_error',
-      message: '证书错误',
+      message: PomeI18n.t("copy.certificateError.a8275b"),
       certificateError: true,
       needsTrustConfirm: false,
       uiState: 'certificate_error',
@@ -3051,7 +3084,7 @@ async function certificateTrustPrompt(baseUrl) {
     return {
       ok: false,
       error: 'certificate_error',
-      message: '证书错误',
+      message: PomeI18n.t("copy.certificateError.a8275b"),
       certificateError: true,
       needsTrustConfirm: false,
       uiState: 'certificate_error',
@@ -3066,7 +3099,7 @@ async function certificateTrustPrompt(baseUrl) {
     return {
       ok: false,
       error: 'certificate_error',
-      message: '证书错误，且未能读取对端证书，未要求信任',
+      message: PomeI18n.t("copy.couldnTReadTheRemoteCertificateNo.de363c"),
       certificateError: true,
       needsTrustConfirm: false,
       uiState: 'certificate_error',
@@ -3083,8 +3116,8 @@ async function certificateTrustPrompt(baseUrl) {
     ok: false,
     error: changed ? 'certificate_fingerprint_mismatch' : 'certificate_error',
     message: changed
-      ? '这台 NAS 的证书已更换。请核对新指纹后重新确认，之前的信任不会自动沿用。'
-      : '证书不受信任。请核对指纹后确认，仅信任此主机和端口的这一张证书。',
+      ? PomeI18n.t("copy.thisNasCertificateHasChangedVerifyThe.5a4ce6")
+      : PomeI18n.t("copy.theCertificateIsNotTrustedVerifyIts.393764"),
     certificateError: true,
     needsTrustConfirm: true,
     confirmText: CERTIFICATE_TRUST_CONFIRM_TEXT,
@@ -3149,12 +3182,12 @@ function buildNasSyncDashboard() {
     ok: true,
     credentials: publicStatus,
     recovery,
-    contentResults: credStatus.bound ? contentResults() : Object.fromEntries(['待办','笔记','链接','常用指令','剪贴板','录音元数据','录音音频','AI 配置','密钥'].map((name) => [name, { message: '仅本机 · 未配对 NAS' }])),
+    contentResults: credStatus.bound ? contentResults() : Object.fromEntries(['待办','笔记','链接','常用指令','剪贴板','录音元数据','录音音频','AI 配置','密钥'].map((name) => [name, { message: PomeI18n.t("copy.localOnlyNasNotPaired.d36c6c") }])),
     settings: view,
     outboxCount,
     accountId,
     uiState,
-    uiLabel: syncUiStateLabel(uiState),
+    uiLabel: PomeI18n.systemText(syncUiStateLabel(uiState)),
     channelLabel: (view.currentEndpoint && view.currentEndpoint.baseUrl) || '',
     lastSuccessAt: view.lastSuccessAt,
     insecureHttpWarning: view.insecureHttpWarning,
@@ -3189,7 +3222,7 @@ async function probeEndpointHealth(endpoint, token) {
       return {
         ok: false,
         error: 'certificate_error',
-        message: '证书错误',
+        message: PomeI18n.t("copy.certificateError.a8275b"),
         certificateError: true,
         needsTrustConfirm: true,
         transferable: false,
@@ -3266,7 +3299,7 @@ async function withEndpointFailover(runFn) {
         error: result.error === 'certificate_fingerprint_mismatch'
           ? 'certificate_fingerprint_mismatch'
           : 'certificate_error',
-        message: result.message || '证书错误',
+        message: result.message || PomeI18n.t("copy.certificateError.a8275b"),
         certificateError: true,
         needsTrustConfirm: result.needsTrustConfirm !== false,
         fingerprint256: result.fingerprint256 || null,
@@ -3356,22 +3389,22 @@ async function recoveryEntities(storage) {
 }
 async function recoveryRequest(action, body) {
   const result = await fetchBoundSyncJson(`api/v1/recovery/${action}`, body ? { method: 'POST', body, timeoutMs: 60000 } : {});
-  if (!result.ok) throw Object.assign(new Error(result.body?.error || result.error || 'NAS 请求失败'), { code: result.body?.error || result.error });
+  if (!result.ok) throw Object.assign(new Error(result.body?.error || result.error || PomeI18n.t("copy.nasRequestFailed.f539cd")), { code: result.body?.error || result.error });
   return result.body;
 }
 ipcMain.handle('recovery:preview', async (event) => {
   requireWorkspaceOwner(event);
   try {
     const ctx = readBoundSyncContext();
-    if (!ctx.ok) throw new Error('请先配对 NAS');
+    if (!ctx.ok) throw new Error(PomeI18n.t("copy.pairWithANasFirst.c690f2"));
     const paused = recoveryStore().read();
-    if (!paused.paused) throw new Error('同步未暂停');
-    if (paused.uid !== ctx.record.uid || paused.serverId !== ctx.record.serverId || paused.root !== workspaceRoot()) throw new Error('恢复时的工作区或账号已变化，请重新恢复备份');
+    if (!paused.paused) throw new Error(PomeI18n.t("copy.syncIsNotPaused.f6ecc9"));
+    if (paused.uid !== ctx.record.uid || paused.serverId !== ctx.record.serverId || paused.root !== workspaceRoot()) throw new Error(PomeI18n.t("copy.theWorkspaceOrAccountChangedAfterRestoring.cd94a7"));
     const remote = await recoveryRequest('state');
-    if (remote.version !== 1 || JSON.stringify(remote.scope) !== JSON.stringify(RECOVERY_SCOPE) || !Array.isArray(remote.entities)) throw new Error('NAS 不支持可验证、可回退的快照，禁止覆盖');
+    if (remote.version !== 1 || JSON.stringify(remote.scope) !== JSON.stringify(RECOVERY_SCOPE) || !Array.isArray(remote.entities)) throw new Error(PomeI18n.t("copy.thisNasDoesNotSupportVerifiableReversible.77d4c9"));
     const storage = await liveBackupStorage(), entities = await recoveryEntities(storage);
     const local = new Map(entities.map((e) => [e.entityId, e]));
-    if (entities.some((e) => e.collection === 'recordings' && e.payload.audioOmitted && remote.entities.some((r) => (r.entityId === e.entityId && r.hasAudio) || r.entityId.startsWith(`recording-blob:${e.payload.id}:`)))) throw new Error('本机有超限或缺失的音频，而 NAS 上保留完整音频；禁止以不完整音频覆盖，请先保留当前 NAS 版本。');
+    if (entities.some((e) => e.collection === 'recordings' && e.payload.audioOmitted && remote.entities.some((r) => (r.entityId === e.entityId && r.hasAudio) || r.entityId.startsWith(`recording-blob:${e.payload.id}:`)))) throw new Error(PomeI18n.t("copy.localAudioIsMissingOrExceedsThe.09b9f5"));
     const adds = entities.filter((e) => !remote.entities.some((r) => r.entityId === e.entityId));
     const updates = entities.filter((e) => remote.entities.some((r) => r.entityId === e.entityId && r.hash !== recoveryHash(e.payload)));
     const deletes = remote.entities.filter((r) => !local.has(r.entityId));
@@ -3387,7 +3420,7 @@ ipcMain.handle('recovery:preview', async (event) => {
 ipcMain.handle('recovery:execute', async (event, id) => {
   requireWorkspaceOwner(event);
   const preview = recoveryPreviews.get(id);
-  if (!preview) return { ok: false, error: 'preview_expired', message: '请重新预览并确认影响范围。' };
+  if (!preview) return { ok: false, error: 'preview_expired', message: PomeI18n.t("copy.previewAgainAndConfirmTheAffectedData.7cb948") };
   let locked = false;
   try {
     const paused = recoveryStore().read();
@@ -3425,7 +3458,7 @@ ipcMain.handle('recovery:execute', async (event, id) => {
     // A stale server preview needs a new operation, preserving the old snapshot.
     const expired = ['preview_expired', 'recovery_expired', 'recovery_not_found'].includes(error.code || error.message);
     if (expired) { recoveryStore().update({ operationId: crypto.randomUUID(), attemptHash: null }); recoveryPreviews.clear(); }
-    return { ok: false, error: error.code || error.message, message: expired ? '资料、NAS 版本或快照暂存有效期已变化，请重新预览并确认。同步保持暂停。' : `操作失败，同步保持暂停：${error.message}` };
+    return { ok: false, error: error.code || error.message, message: expired ? PomeI18n.t("copy.dataTheNasVersionOrTheStaged.ce138f") : PomeI18n.t("copy.operationFailedSyncRemainsPaused.4b3a47", { arg1: (error.message) }) };
   } finally { if (locked) { workspaceSwitching = false; await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = false').catch(() => {}); } }
 });
 ipcMain.handle('recovery:rollback', async (event, operationId) => {
@@ -3436,7 +3469,7 @@ ipcMain.handle('recovery:rollback', async (event, operationId) => {
     if (boundTodosSyncTask) await boundTodosSyncTask;
     const result = await recoveryRequest('rollback', { operationId });
     broadcastSyncStatus(); return { ok: true, ...result };
-  } catch (error) { return { ok: false, message: `回退失败，同步保持暂停：${error.message}` }; }
+  } catch (error) { return { ok: false, message: PomeI18n.t("copy.rollbackFailedSyncRemainsPaused.377389", { arg1: (error.message) }) }; }
 });
 
 ipcMain.handle('sync:retry', async () => {
@@ -4142,7 +4175,7 @@ async function runBoundWorkspaceSyncCycle() {
   });
   if (pulled.remoteChanges.length) {
     const projected = projectWorkspaceEntities(plan.mergedEntities, { accountKey });
-    if (projected.warnings.some((warning) => ['audio_incomplete','audio_checksum_mismatch'].includes(warning.reason))) return { ok: false, error: '录音音频尚未完整到达或校验失败，保留原音频等待重试', warnings: projected.warnings };
+    if (projected.warnings.some((warning) => ['audio_incomplete','audio_checksum_mismatch'].includes(warning.reason))) return { ok: false, error: PomeI18n.t("copy.audioTransferOrVerificationIsIncompleteOriginal.8c57a5"), warnings: projected.warnings };
     if (pulled.remoteChanges.some((change) => change.collection === 'secrets' && change.op === 'delete')) projected.secretsApplied = true;
     const projection = materializeWorkspaceSnapshot(projected, snapshot);
     const stored = readJsonFile(workspacePath(WORKSPACE_DATA_FILE), {}).localStorage || {};
@@ -4165,7 +4198,7 @@ async function runBoundWorkspaceSyncCycle() {
   commitWorkspacePullPages(ctx.store, ctx.accountId, pulled.pages);
   const audioStates = snapshot.recordings.filter((row) => row && !row.isDraft).map((row) => ({ id: row.id, audioOmitted: row.audioOmitted === true, audioSyncReason: row.audioSyncReason || '' }));
   const omitted = audioStates.filter((row) => row.audioOmitted);
-  saveContentResult(['录音音频'], omitted.length ? `上次同步有 ${omitted.length} 段音频未传输（超限或缺失）` : '上次音频同步已确认', omitted.length === 0);
+  saveContentResult(['录音音频'], omitted.length ? PomeI18n.t("copy.audioRecordingsWereNotTransferredDuringThe.55882c", { arg1: (omitted.length) }) : PomeI18n.t("copy.lastAudioSyncConfirmed.3f7b91"), omitted.length === 0);
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('recordings:sync-state', audioStates);
   return { ok: true, pushed: plan.toPush.length, pulled: pulled.remoteChanges.length, warnings: built.warnings };
 }
@@ -4610,7 +4643,7 @@ function cursorTokenStatus() {
     ok: true,
     configured,
     secureStorage: safeStorage.isEncryptionAvailable(),
-    label: configured ? '已配置手动 Token' : '未配置 · 使用本机登录',
+    label: configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : PomeI18n.t("copy.notConfiguredUsingLocalSignIn.3004c2"),
     state: configured ? 'saved' : 'empty',
   };
 }
@@ -4642,7 +4675,7 @@ function codexTokenStatus() {
   const configured = Boolean(readAppSettings().encryptedCodexToken);
   const invalid = configured && codexUsageService.tokenState().manualTokenInvalid;
   return { ok: true, configured, manualTokenInvalid: invalid, secureStorage: safeStorage.isEncryptionAvailable(),
-    label: invalid ? 'Token 失效' : configured ? '已配置手动 Token' : '未配置手动 Token',
+    label: invalid ? PomeI18n.t("copy.tokenExpired.22c3fe") : configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : PomeI18n.t("copy.noManualTokenConfigured.a2ebce"),
     state: invalid ? 'error' : configured ? 'saved' : 'empty' };
 }
 
@@ -4681,6 +4714,7 @@ function resolveTranscriptionConfig() {
     apiKey: decryptStoredApiKey(settings),
     workspaceId: /^[A-Za-z0-9_-]{0,128}$/.test(workspaceId) ? workspaceId : '',
     region,
+    language: PomeI18n.transcriptionLanguage(settings.transcriptionLanguage),
   };
 }
 
@@ -4693,6 +4727,7 @@ function publicTranscriptionConfig() {
     asrNeedsReentry: Boolean(settings.encryptedApiKey && !config.apiKey),
     workspaceId: config.workspaceId,
     region: config.region,
+    transcriptionLanguage: config.language,
     provider: 'qwen3-asr-flash-realtime',
     secureStorage: safeStorage.isEncryptionAvailable(),
     llmConfigured: Boolean(llmConfig.apiKey),
@@ -4785,7 +4820,7 @@ function handleTranscriptionMessage(session, raw) {
     return;
   }
   if (message.type === 'error' || message.type === 'conversation.item.input_audio_transcription.failed') {
-    const details = message.error && message.error.message || '实时转写服务返回错误';
+    const details = message.error && message.error.message || PomeI18n.t("copy.theLiveTranscriptionServiceReturnedAnError.e9ea2d");
     reconnectTranscription(session, details);
     return;
   }
@@ -4862,7 +4897,7 @@ function connectTranscriptionSocket(session) {
         event_id: transcriptionEventId(), type: 'session.update',
         session: {
           input_audio_format: 'pcm', sample_rate: TRANSCRIPTION_SAMPLE_RATE,
-          input_audio_transcription: { language: 'zh' },
+          input_audio_transcription: { language: session.config.language },
           turn_detection: { type: 'server_vad', threshold: 0, silence_duration_ms: 400 },
         },
       }));
@@ -4891,6 +4926,7 @@ ipcMain.handle('transcription:get-config', () => publicTranscriptionConfig());
 
 ipcMain.handle('transcription:set-config', (event, payload) => {
   const previous = readStoredTranscriptionSettings();
+  if (payload?.transcriptionLanguage != null && !['zh', 'en'].includes(payload.transcriptionLanguage)) return { ok: false, error: 'invalid_language' };
   const region = payload && payload.region === 'singapore' ? 'singapore' : 'beijing';
   const workspaceId = String(payload && payload.workspaceId || '').trim();
   const apiKey = String(payload && payload.apiKey || '').trim();
@@ -4909,6 +4945,7 @@ ipcMain.handle('transcription:set-config', (event, payload) => {
     return { ok: false, error: 'secure_storage_unavailable' };
   }
   const next = {
+    transcriptionLanguage: PomeI18n.transcriptionLanguage(payload?.transcriptionLanguage ?? previous.transcriptionLanguage),
     region,
     workspaceId,
     encryptedApiKey: apiKey
@@ -4928,8 +4965,10 @@ ipcMain.handle('transcription:set-config', (event, payload) => {
   }
 });
 
-ipcMain.handle('transcription:start', (event) => {
-  const config = resolveTranscriptionConfig();
+ipcMain.handle('transcription:start', (event, payload = {}) => {
+  if (payload.language != null && !['zh', 'en'].includes(payload.language)) return { ok: false, error: 'invalid_language' };
+  const resolved = resolveTranscriptionConfig();
+  const config = { ...resolved, language: PomeI18n.transcriptionLanguage(payload.language ?? resolved.language) };
   if (!config.apiKey) return { ok: false, error: 'not_configured' };
   const existing = transcriptionSessions.get(event.sender.id);
   if (existing) closeTranscriptionSession(existing, { ok: false, error: 'replaced' });
@@ -5519,6 +5558,7 @@ function watchActiveSpaceChanges() {
 }
 
 app.whenReady().then(() => {
+  PomeI18n.setState(localizationSnapshot());
   if (process.platform === 'win32') app.setAppUserModelId('com.dynamicpanel.app');
   if (process.platform === 'darwin' && app.dock) {
     app.dock.hide();
@@ -5547,6 +5587,8 @@ app.whenReady().then(() => {
   scheduleTodosSyncCycle();
 
   app.on('activate', () => {
+    localizationRevision += 1;
+    broadcastLocalization();
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }

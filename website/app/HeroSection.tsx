@@ -1,14 +1,18 @@
 "use client";
+import { useSiteLocale } from "./SiteLocale";
+import { siteT } from "./siteI18n";
+
 
 import { motion, useReducedMotion } from "framer-motion";
 import {
   useEffect,
+  useMemo,
   useState,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { assetPath } from "./assetPath.mjs";
-import { DOWNLOAD_URL, MARQUEE_ITEMS, NAV_ITEMS, TAB_ITEMS } from "./landingContent";
+import { DOWNLOAD_URL, getLandingContent } from "./landingContent";
 import { LATEST_RELEASE_API_URL, selectMacDownloadUrl, selectWindowsDownloadUrl } from "./landingDownload.mjs";
 import EchoText from "./reactbits/EchoText/EchoText";
 import Magnet from "./reactbits/Magnet/Magnet";
@@ -29,6 +33,9 @@ const HERO_BOOT_REVEAL_MS = 1100;
 const HERO_BOOT_BREATHING = heroBootBreathingProfile();
 
 export default function HeroSection() {
+  const contentLocale = useSiteLocale();
+  const { MARQUEE_ITEMS, NAV_ITEMS, TAB_ITEMS } = useMemo(() => getLandingContent(contentLocale), [contentLocale]);
+  const locale = useSiteLocale();
   const reducedMotion = useReducedMotion();
   const [panelState, setPanelState] = useState<HeroPanelState>(INITIAL_HERO_PANEL_STATE);
   const [bootPhase, setBootPhase] = useState<HeroBootPhase>("loading");
@@ -52,6 +59,13 @@ export default function HeroSection() {
     }));
     const firstTabVideo = document.createElement("video");
     const videoPromise = new Promise<void>((resolve, reject) => {
+      if (TAB_ITEMS[0].captureKind === "image") {
+        const image = new Image();
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("Failed to preload first tab image"));
+        image.src = TAB_ITEMS[0].capture;
+        return;
+      }
       firstTabVideo.preload = "auto";
       firstTabVideo.muted = true;
       firstTabVideo.playsInline = true;
@@ -80,7 +94,7 @@ export default function HeroSection() {
       firstTabVideo.removeAttribute("src");
       firstTabVideo.load();
     };
-  }, [noMotion]);
+  }, [noMotion, MARQUEE_ITEMS, TAB_ITEMS]);
 
   useEffect(() => {
     if (bootPhase !== "revealing") return;
@@ -156,8 +170,8 @@ export default function HeroSection() {
       >
         <div className="hero-screen">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="hero-screen-wallpaper" src={assetPath("/hero/mac-wallpaper-v2.jpg")} alt="Mac 屏幕山脉壁纸" fetchPriority="high" />
-          <div className="hero-boot-layer" aria-live="polite" aria-label={effectiveBootPhase === "loading" ? "正在加载产品演示" : undefined}>
+          <img className="hero-screen-wallpaper" src={assetPath("/hero/mac-wallpaper-v2.jpg")} alt={siteT(locale, "copy.mountainWallpaperOnMac.63b097")} fetchPriority="high" />
+          <div className="hero-boot-layer" aria-live="polite" aria-label={effectiveBootPhase === "loading" ? siteT(locale, "copy.loadingProductDemo.5530a6") : undefined}>
             <motion.div
               className="hero-boot-window"
               animate={effectiveBootPhase === "loading" && !noMotion
@@ -191,14 +205,14 @@ export default function HeroSection() {
             >
               {/* Product UI is shown only through real screenshots from the running app. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="hero-panel-image hero-panel-image-expanded" src={assetPath("/product-captures/home.jpg")} alt="Pome Panel 真实首页展开态" />
+              <img className="hero-panel-image hero-panel-image-expanded" src={assetPath(locale === "en-US" ? "/product-captures/en/home.jpg" : "/product-captures/home.jpg")} alt={siteT(locale, "copy.pomePanelExpandedHomeView.bd7e81")} />
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="hero-panel-image hero-panel-image-collapsed" src={assetPath("/hero/panel-collapsed.png")} alt="Pome Panel 真实折叠态" />
+              <img className="hero-panel-image hero-panel-image-collapsed" src={assetPath("/hero/panel-collapsed.png")} alt={siteT(locale, "copy.pomePanelCollapsedView.378ce5")} />
               <button
                 className="hero-panel-trigger"
                 type="button"
                 aria-expanded={expanded}
-                aria-label={expanded ? "折叠 Pome Panel" : "展开 Pome Panel"}
+                aria-label={expanded ? siteT(locale, "copy.collapsePomePanel.a046ad") : siteT(locale, "copy.expandPomePanel.07c85a")}
                 aria-disabled={!entranceComplete}
                 onClick={togglePanel}
               />
@@ -222,7 +236,7 @@ export default function HeroSection() {
         initial={noMotion ? false : { opacity: 0, y: -16 }}
         animate={contentVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: -16 }}
         transition={{ duration: 0.5, delay: contentVisible ? 0.12 : 0 }}
-        aria-label="主要导航"
+        aria-label={siteT(locale, "copy.mainNavigation.968608")}
       >
         <a className="brand-lockup" href="#top">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -250,7 +264,7 @@ export default function HeroSection() {
         animate={contentVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
         transition={{ duration: 0.65, delay: contentVisible ? 0.5 : 0, ease: [0.22, 1, 0.36, 1] }}
       >
-        <p>把灵动岛，变成随手可用的工作台</p>
+        <p>{siteT(locale, "copy.turnTheTopOfYourScreenInto.732c9b")}</p>
         <div className="hero-actions">
           <Magnet
             padding={70}
@@ -263,26 +277,22 @@ export default function HeroSection() {
               className="landing-cta landing-cta-primary"
               href={DOWNLOAD_URL}
               aria-busy={downloadPending === 'mac'}
-              aria-label="下载 macOS 版本（Apple Silicon，macOS 13 或更高版本）"
+              aria-label={siteT(locale, "copy.downloadForMacosAppleSiliconMacos13.97880c")}
               data-primary-action
               data-direct-download
               onClick={(event) => startDownload(event, 'mac')}
-            >
-              下载 macOS 版本
-            </a>
+            >{siteT(locale, "copy.downloadForMacos.7a6c82")}</a>
           </Magnet>
           <Magnet padding={70} magnetStrength={6} disabled={noMotion} wrapperClassName="hero-download-magnet" data-magnet="download-windows">
             <a
               className="landing-cta landing-cta-primary"
               href={DOWNLOAD_URL}
               aria-busy={downloadPending === 'windows'}
-              aria-label="下载 Windows 版本（Windows 10/11，x64）"
+              aria-label={siteT(locale, "copy.downloadForWindowsWindows1011X64.2a4c51")}
               data-primary-action
               data-direct-download="windows"
               onClick={(event) => startDownload(event, 'windows')}
-            >
-              下载 Windows 版本
-            </a>
+            >{siteT(locale, "copy.downloadForWindows.4eb3ae")}</a>
           </Magnet>
         </div>
       </motion.div>

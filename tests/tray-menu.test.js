@@ -1,3 +1,4 @@
+const { assertCopy, keyFor } = require('./helpers/localized-copy.cjs');
 'use strict';
 
 const test = require('node:test');
@@ -18,7 +19,7 @@ function trayMenuSource() {
 test('tray menu keeps only the five product items', () => {
   const menu = trayMenuSource();
   for (const label of ['显示功能', '设置快捷键', '开机自动启动', '关于', '退出']) {
-    assert.match(menu, new RegExp(`label: '${label}'`));
+    assertCopy(menu, label);
   }
   assert.doesNotMatch(menu, /API 配置|替换镜子配图|数据文件夹|重置面板位置|显示功能',\s*\n\s*submenu/);
   assert.match(menu, /showMainPanelFromTray/);
@@ -53,9 +54,9 @@ test('the Windows tray and installer use a committed multi-size icon', () => {
 
 test('about dialog names Pome Panel and Lando and opens the current GitHub repo', () => {
   const menu = trayMenuSource();
-  assert.match(menu, /title: '关于 Pome Panel'/);
+  assertCopy(menu, '关于 Pome Panel');
   assert.match(menu, /message: 'Pome Panel'/);
-  assert.match(menu, /开发者 Lando/);
+  assertCopy(menu, '版本 {arg1}\n开发者 Lando\n\n贴在屏幕顶部的个人工作台。可以记笔记、管剪贴板、录音、放常用指令，并和飞牛 NAS 同步。');
   assert.match(menu, /app\.getVersion\(\)/);
   assert.match(menu, /shell\.openExternal\('https:\/\/github\.com\/Sunanang\/Pome-Panel'\)/);
   assert.doesNotMatch(menu, /to-do-panel|todo-panel|Todo Panel/);

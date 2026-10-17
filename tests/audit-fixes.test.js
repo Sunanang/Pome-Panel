@@ -242,7 +242,7 @@ test('link timeout remains active while reading the body after receiving headers
   const source = fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8');
   const start = source.indexOf('async function inspectLink(rawUrl)');
   const end = source.indexOf("ipcMain.handle('links:inspect'", start);
-  const sandbox = { URL, Buffer, AbortController, setTimeout, clearTimeout,
+  const sandbox = { PomeI18n: require('../localization/runtime'), URL, Buffer, AbortController, setTimeout, clearTimeout,
     LINK_FETCH_TIMEOUT_MS: 20, LINK_FETCH_MAX_REDIRECTS: 3,
     validatePublicHttpUrl: async url => new URL(url),
     fetchPublicHttp: async (_url, { signal }) => new Response(new ReadableStream({

@@ -1,3 +1,4 @@
+const { assertCopy, keyFor } = require('./helpers/localized-copy.cjs');
 'use strict';
 
 const test = require('node:test');
@@ -111,7 +112,8 @@ test('retry not_bound is Chinese and is not shown as a raw code', () => {
   const retryHead = retryBlock.slice(0, retryBlock.indexOf('if (settingsNasExportBackup)'));
   assert.match(retryHead, /if \(!nasPairUi\.bound\) return;/);
   assert.doesNotMatch(retryHead, /请先完成配对再同步/);
-  assert.match(retryHead, /describeNasSyncError\(result, '重试失败'\)/);
+  assert.match(retryHead, /describeNasSyncError\(result,/);
+  assertCopy(retryHead, '重试失败');
   assert.doesNotMatch(retryHead, /setNasStatusHint\(\s*\(?result && result\.error\)/);
 });
 
@@ -121,9 +123,10 @@ test('unpaired status hides channel and retry; lost token is one line', () => {
   assert.match(html, /id="settings-nas-sync-retry"[^>]*hidden/);
   assert.match(workspaceJs, /settingsNasStatusMeta\.hidden = !bound/);
   assert.match(workspaceJs, /settingsNasSyncRetry\.hidden = !bound/);
-  assert.match(workspaceJs, /textContent = '未配对'/);
-  assert.match(workspaceJs, /nasSettingsUi\.uiLabel \|\| '已配对'/);
-  assert.match(workspaceJs, /本机曾配置同步地址，但设备令牌已丢失，请重新配对/);
+  assertCopy(workspaceJs, '未配对');
+  assert.match(workspaceJs, /systemText\(nasSettingsUi\.uiLabel\)/);
+  assertCopy(workspaceJs, '已配对');
+  assert.match(workspaceJs, /LOST_DEVICE_TOKEN_HINT/);
   assert.equal(settingsUi.LOST_DEVICE_TOKEN_HINT, '本机曾配置同步地址，但设备令牌已丢失，请重新配对');
   assert.equal(settingsUi.shouldPromptLostDeviceToken({
     bound: false,
@@ -148,11 +151,11 @@ test('unpaired status hides channel and retry; lost token is one line', () => {
 });
 
 test('successful pairing opens sync options once; the sync button can open them again', () => {
-  assert.match(html, /id="settings-nas-sync-open"[^>]*disabled>同步</);
+  assert.match(html, /id="settings-nas-sync-open"[^>]*disabled>[\s\S]*?同步<\/span>/);
   assert.match(html, /id="settings-nas-sync-options"/);
   assert.match(html, /id="settings-nas-sync-options-start"/);
   assert.match(workspaceJs, /function openNasSyncOptions\(\)/);
-  const successAt = workspaceJs.indexOf("setNasSyncHint('配对成功', 'success')");
+  const successAt = workspaceJs.indexOf('setNasSyncHint(pomeLocaleRendererWorkspace.t("' + keyFor('配对成功') + '")');
   assert.ok(successAt > 0);
   const successTail = workspaceJs.slice(successAt, successAt + 280);
   assert.match(successTail, /openNasSyncOptions\(\)/);

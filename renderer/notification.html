@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pome Panel 提醒</title>
+    <title data-i18n="copy.pomePanelNotification.437b56">Pome Panel 提醒</title>
     <link rel="stylesheet" href="./notification.css" />
   </head>
   <body>
@@ -26,7 +26,7 @@
               <span class="notification-trailing">
                 <span id="notification-time" class="notification-time"></span>
                 <span id="notification-queue" class="notification-queue" hidden></span>
-                <button id="notification-close" class="notification-close" type="button" aria-label="关闭任务提醒">
+                <button id="notification-close" class="notification-close" type="button" aria-label="关闭任务提醒" data-i18n-aria-label="copy.dismissTaskNotification.30ec6c">
                   <svg viewBox="0 0 10 10" aria-hidden="true"><use href="./assets/notification/glyphs.svg#close"></use></svg>
                 </button>
               </span>
@@ -36,10 +36,13 @@
             </div>
             <div id="notification-progress" class="notification-progress" aria-hidden="true"><i id="notification-progress-fill"></i></div>
           </div>
-          <button id="notification-open" class="notification-open" type="button" aria-label="打开任务对应窗口"></button>
+          <button id="notification-open" class="notification-open" type="button" aria-label="打开任务对应窗口" data-i18n-aria-label="copy.openTheSourceApp.ce1839"></button>
         </div>
       </div>
     </main>
+    <script src="../localization/resources.js"></script>
+    <script src="../localization/runtime.js"></script>
+    <script src="./localization.js"></script>
     <script src="./notification-domain.js" defer></script>
     <script src="./notification.js" defer></script>
   </body>

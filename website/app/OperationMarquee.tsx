@@ -1,9 +1,10 @@
 "use client";
+import { useSiteLocale } from "./SiteLocale";
 
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import RealProductMedia from "./RealProductMedia";
-import { MARQUEE_ITEMS, type MediaItem } from "./landingContent";
+import { type MediaItem, getLandingContent } from "./landingContent";
 
 function MarqueeRow({ items }: { items: MediaItem[] }) {
   const rowItems = Array.from({ length: 3 }, () => items).flat();
@@ -11,6 +12,8 @@ function MarqueeRow({ items }: { items: MediaItem[] }) {
 }
 
 export default function OperationMarquee() {
+  const contentLocale = useSiteLocale();
+  const { MARQUEE_ITEMS } = getLandingContent(contentLocale);
   const sectionRef = useRef<HTMLElement>(null);
   const reducedMotion = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: sectionRef, offset: ["start end", "end start"] });

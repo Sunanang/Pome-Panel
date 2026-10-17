@@ -186,7 +186,7 @@ test('current-time label follows Design B side, edge flip, night, and HH:MM form
 
 test('mini footer keeps full HH:MM within the ~190px card content width', () => {
   const widget = fs.readFileSync(path.join(__dirname, '../renderer/sun-widget.js'), 'utf8');
-  const miniFootLine = widget.split('\n').find((line) => line.includes('sun-mini-foot'));
+  const miniFootLine = widget.split('\n').find((line) => line.includes('sun-mini-foot'))?.replace(/\\"/g, '"');
   assert.ok(miniFootLine);
   assert.match(miniFootLine, /class="edge edge-rise"/);
   assert.doesNotMatch(miniFootLine, /class="sep"|·/);

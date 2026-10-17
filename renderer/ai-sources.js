@@ -1,14 +1,17 @@
+const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 (function initAiSources() {
   const api = window.notchAPI;
   const labels = { codex: 'Codex', claude: 'Claude Code', cursor: 'Cursor' };
   const icons = { codex: 'assets/inbox/codex.svg', claude: 'assets/inbox/claude.svg', cursor: 'assets/inbox/cursor.svg' };
-  const states = { undetected: '未检测到', disconnected: '未接入', connected: '已接入', error: '配置异常' };
+  const states = { get undetected() { return pomeLocaleRendererAiSources.t("copy.notDetected.156219"); }, get disconnected() { return pomeLocaleRendererAiSources.t("copy.notConnected.af33de"); }, get connected() { return pomeLocaleRendererAiSources.t("copy.connected.fa1876"); }, get error() { return pomeLocaleRendererAiSources.t("copy.configurationError.899d57"); } };
   const list = document.getElementById('settings-ai-sources-list');
   const status = document.getElementById('ai-sources-status');
   const dialog = document.getElementById('ai-source-confirm');
   const dismissKey = 'notch-ai-source-dismissed-v1';
   const restartSources = new Set();
-  const restartMessage = source => `已写入配置，请完全退出并重新打开 ${labels[source]} 后生效`;
+  const restartMessage = source => source === 'claude'
+    ? pomeLocaleRendererAiSources.t('sources.claudeRestart')
+    : pomeLocaleRendererAiSources.t("copy.configurationSavedQuitCompletelyThenReopenIt.507666", { arg1: labels[source] });
   let sources = Object.keys(labels).map(source => ({ source, label: labels[source], state: 'undetected', filePath: '' }));
   let ready = false, busy = false, plan = null, anchor = null, checkedAt = 0;
   let dismissed = [];
@@ -34,15 +37,15 @@
   }
   function render() {
     list.replaceChildren();
-    el('settings-ai-sources-count').textContent = `本机 · ${sources.filter(row => row.state === 'connected').length}/3 已接入`;
+    pomeLocaleRendererAiSources.bind(el('settings-ai-sources-count'), "textContent", () => (pomeLocaleRendererAiSources.t("copy.local3Connected.3ecd96", { arg1: (sources.filter(row => row.state === 'connected').length) })));
     for (const row of sources) {
       const item = document.createElement('div'); item.className = 'ai-source-row'; item.dataset.source = row.source; item.dataset.state = row.state;
       const icon = document.createElement('img'); icon.src = icons[row.source]; icon.alt = ''; icon.className = 'ai-source-icon';
       const copy = document.createElement('div'); copy.className = 'ai-source-copy';
       const heading = document.createElement('div'); const name = document.createElement('strong'); name.textContent = row.label;
       const state = document.createElement('span'); state.className = 'ai-source-state'; state.textContent = states[row.state]; heading.append(name, state);
-      const file = document.createElement('small'); file.textContent = row.filePath || row.message || '等待检测'; file.title = row.filePath;
-      const explanation = document.createElement('small'); explanation.textContent = row.message; explanation.title = row.message;
+      const file = document.createElement('small'); pomeLocaleRendererAiSources.bind(file, "textContent", () => (row.filePath || row.message || pomeLocaleRendererAiSources.t("copy.waitingForDetection.f97f6a"))); file.title = row.filePath;
+      const explanation = document.createElement('small'); explanation.textContent = pomeLocaleRendererAiSources.systemText(row.message); explanation.title = row.message;
       copy.append(heading, file, explanation);
       if (row.state === 'connected' && restartSources.has(row.source)) {
         const hint = document.createElement('small'); hint.className = 'ai-source-restart-hint';
@@ -50,10 +53,10 @@
       }
       const actions = document.createElement('div'); actions.className = 'ai-source-actions';
       if (row.state === 'connected') {
-        if (row.summaryHookMissing) actions.append(makeButton('补全摘要', event => void request(row.source, 'repair', event.currentTarget)));
-        actions.append(makeButton('发送测试', () => void test(row.source)), makeButton('断开', event => void request(row.source, 'disconnect', event.currentTarget)));
+        if (row.summaryHookMissing) actions.append(makeButton(pomeLocaleRendererAiSources.t("copy.addSummaries.29366e"), event => void request(row.source, 'repair', event.currentTarget)));
+        actions.append(makeButton(pomeLocaleRendererAiSources.t("copy.sendTest.a49d32"), () => void test(row.source)), makeButton(pomeLocaleRendererAiSources.t("copy.disconnect.f33ac0"), event => void request(row.source, 'disconnect', event.currentTarget)));
       } else {
-        const connect = makeButton(row.state === 'error' ? '修复' : '一键接入', event => void request(row.source, row.state === 'error' ? 'repair' : 'connect', event.currentTarget));
+        const connect = makeButton(row.state === 'error' ? pomeLocaleRendererAiSources.t("copy.repair.37a693") : pomeLocaleRendererAiSources.t("copy.connect.bc38d3"), event => void request(row.source, row.state === 'error' ? 'repair' : 'connect', event.currentTarget));
         connect.disabled = busy || row.state === 'undetected' || (row.state === 'error' && !row.repairable);
         actions.append(connect);
       }
@@ -65,14 +68,14 @@
     try {
       if (api?.getAiSources) {
         const response = await api.getAiSources();
-        if (!response?.ok) throw new Error(response?.message || '接入状态读取失败');
+        if (!response?.ok) throw new Error(response?.message || pomeLocaleRendererAiSources.t("copy.couldnTReadConnectionStatus.9412ff"));
         sources = response.sources;
         for (const source of restartSources) {
           if (!sources.some(row => row.source === source && row.state === 'connected')) restartSources.delete(source);
         }
       }
       ready = true; checkedAt = Date.now(); render(); announce();
-    } catch (error) { status.textContent = `接入状态暂时无法读取：${error.message}`; }
+    } catch (error) { pomeLocaleRendererAiSources.bind(status, "textContent", () => (pomeLocaleRendererAiSources.t("copy.connectionStatusIsUnavailable.8cc048", { arg1: (error.message) }))); }
   }
   function positionConfirmation() {
     const rect = anchor?.getBoundingClientRect() || el('settings-ai-sources').getBoundingClientRect();
@@ -87,14 +90,14 @@
     busy = true;
     try {
       const result = await api.previewAiSource(source, action);
-      if (!result?.ok) throw new Error(result?.message || '配置预览失败');
+      if (!result?.ok) throw new Error(result?.message || pomeLocaleRendererAiSources.t("copy.couldnTPreviewConfiguration.6158dd"));
       plan = result.preview; anchor = from;
-      el('ai-source-confirm-title').textContent = `${action === 'disconnect' ? '断开' : action === 'repair' ? '修复' : '接入'} ${labels[source]}？`;
+      pomeLocaleRendererAiSources.bind(el('ai-source-confirm-title'), "textContent", () => (`${action === 'disconnect' ? pomeLocaleRendererAiSources.t("copy.disconnect.f33ac0") : action === 'repair' ? pomeLocaleRendererAiSources.t("copy.repair.37a693") : pomeLocaleRendererAiSources.t("copy.connect.f3b392")} ${labels[source]}？`));
       el('ai-source-confirm-file').textContent = plan.filePath;
       el('ai-source-confirm-content').textContent = plan.added;
       el('ai-source-confirm-backup').textContent = plan.backupPath;
-      el('ai-source-confirm-note').textContent = `只修改 Pome 的项，其他配置保留。${plan.message}`;
-      el('ai-source-confirm-apply').textContent = action === 'disconnect' ? '备份并断开' : action === 'repair' ? '备份并修复' : '备份并接入';
+      pomeLocaleRendererAiSources.bind(el('ai-source-confirm-note'), "textContent", () => (pomeLocaleRendererAiSources.t("copy.onlyPomeEntriesWillChangeOtherConfiguration.336c05", { arg1: (plan.message) })));
+      pomeLocaleRendererAiSources.bind(el('ai-source-confirm-apply'), "textContent", () => (action === 'disconnect' ? pomeLocaleRendererAiSources.t("copy.backUpAndDisconnect.6abb4a") : action === 'repair' ? pomeLocaleRendererAiSources.t("copy.backUpAndRepair.9b2ea1") : pomeLocaleRendererAiSources.t("copy.backUpAndConnect.bda493")));
       dialog.showModal(); positionConfirmation();
     } catch (error) { status.textContent = error.message; window.showStatusToast?.(error.message); }
     finally { busy = false; }
@@ -106,12 +109,12 @@
     busy = true; el('ai-source-confirm-apply').disabled = true;
     try {
       const result = await api.applyAiSource(plan.token);
-      if (!result.ok) throw new Error(result.message || '配置更新失败');
+      if (!result.ok) throw new Error(result.message || pomeLocaleRendererAiSources.t("copy.couldnTUpdateConfiguration.73ac0d"));
       const needsRestart = plan.action !== 'disconnect' && !plan.unchanged;
       if (needsRestart) restartSources.add(plan.source);
       else if (plan.action === 'disconnect') restartSources.delete(plan.source);
-      const message = needsRestart ? restartMessage(plan.source) : plan.unchanged ? '配置无需修改' : '来源配置已更新';
-      dismiss(plan.source); status.textContent = `${message}${result.backupPath ? `；备份：${result.backupPath}` : ''}`;
+      const message = needsRestart ? restartMessage(plan.source) : plan.unchanged ? pomeLocaleRendererAiSources.t("copy.noConfigurationChangesNeeded.300b3f") : pomeLocaleRendererAiSources.t("copy.sourceConfigurationUpdated.3181cd");
+      dismiss(plan.source); pomeLocaleRendererAiSources.bind(status, "textContent", () => (`${message}${result.backupPath ? pomeLocaleRendererAiSources.t("copy.backup.9297fd", { arg1: (result.backupPath) }) : ''}`));
       dialog.close(); plan = null; window.showStatusToast?.(message);
     } catch (error) { dialog.close(); plan = null; status.textContent = error.message; window.showStatusToast?.(error.message); }
     finally { busy = false; el('ai-source-confirm-apply').disabled = false; await refresh(); }
@@ -123,13 +126,14 @@
       const result = await api.testAiSource(source || sources.find(row => row.state === 'connected')?.source);
       status.textContent = result.message; window.showStatusToast?.(result.message);
       return result;
-    } catch (error) { status.textContent = `测试通知失败：${error.message}`; window.showStatusToast?.(status.textContent); return { ok: false, message: status.textContent };
+    } catch (error) { pomeLocaleRendererAiSources.bind(status, "textContent", () => (pomeLocaleRendererAiSources.t("copy.testNotificationFailed.e8440c", { arg1: (error.message) }))); window.showStatusToast?.(status.textContent); return { ok: false, message: status.textContent };
     } finally { busy = false; render(); }
   }
   document.addEventListener('notch:tabchange', event => {
     if (event.detail.tab === 'settings' || (event.detail.tab === 'home' && !modeBusy && Date.now() - checkedAt > 30000)) void refresh();
   });
   window.addEventListener('resize', () => { if (dialog.open) positionConfirmation(); });
+  window.addEventListener('pome:language-changed', render);
   window.NotchAiSources = Object.freeze({ refresh, request, test, openSettings, dismiss, icons,
     getState: () => ({ sources: sources.map(row => ({ ...row })), ready, suggestion: sources.find(row => row.state === 'disconnected' && !dismissed.includes(row.source)) }) });
   void refresh();

@@ -1,3 +1,4 @@
+const { assertCopy, keyFor } = require('./helpers/localized-copy.cjs');
 'use strict';
 
 const test = require('node:test');
@@ -142,7 +143,7 @@ test('runMigrationFlow: choice_required then success; no silent history-empty', 
 
 test('workspace/app wire migration readonly gate and IPC (no electron require)', () => {
   assert.match(workspaceJs, /startNasMigration/);
-  assert.match(workspaceJs, /笔记、剪贴板、录音、链接、密钥和待办两边都是空的，已进入同步。/);
+  assertCopy(workspaceJs, '笔记、剪贴板、录音、链接、密钥和待办两边都是空的，已进入同步。');
   assert.doesNotMatch(workspaceJs, /仍只在本机/);
   assert.match(appJs, /getWorkspaceSnapshotForSync/);
   assert.match(workspaceJs, /syncRunMigration/);
@@ -150,7 +151,7 @@ test('workspace/app wire migration readonly gate and IPC (no electron require)',
   assert.match(workspaceJs, /settingsNasMigrationRetry/);
   assert.match(workspaceJs, /migration\.failed\.restore/);
   assert.match(appJs, /__nasTodoReadonly/);
-  assert.match(appJs, /迁移中，稍候/);
+  assertCopy(appJs, '迁移中，稍候');
   assert.doesNotMatch(workspaceJs, /require\(['"]electron['"]\)/);
   const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
   assert.match(preload, /syncRunMigration/);

@@ -1,3 +1,4 @@
+const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 (() => {
   'use strict';
   const D = window.NotchAiUsageDomain;
@@ -33,11 +34,11 @@
     const copy = document.createElement('span'); copy.className = 'ai-footnote-message'; copy.textContent = `${message} · `;
     footnote.append(copy);
     const button = document.createElement('button');
-    button.className = 'ai-inline-settings'; button.type = 'button'; button.textContent = '去设置';
+    button.className = 'ai-inline-settings'; button.type = 'button'; pomeLocaleRendererAiUsage.bind(button, "textContent", () => (pomeLocaleRendererAiUsage.t("copy.openSettings.93112c")));
     button.addEventListener('click', () => openSettings(provider)); footnote.append(button);
   }
   function paintQuota(row, name, remaining) {
-    const label = `${name} 剩余额度`;
+    const label = pomeLocaleRendererAiUsage.t("copy.remainingQuota.68dc7b", { arg1: (name) });
     const value = D.formatPercent(remaining);
     row.dataset.level = D.level(remaining);
     row.title = `${label}：${value}`;
@@ -76,34 +77,34 @@
     const data = state.cursor;
     const invalid = data?.manualTokenInvalid || data?.status === 401 || data?.status === 403;
     const source = byId('ai-cursor-source');
-    source.textContent = invalid ? data?.ok ? 'Token 失效 · 已改用本机' : 'Token 失效'
-      : data?.warning ? '请求失败 · 已改用本机' : data?.authSource === 'manual' || data?.configured && !data?.ok ? '手动 Token' : '本机登录';
+    pomeLocaleRendererAiUsage.bind(source, "textContent", () => (invalid ? data?.ok ? pomeLocaleRendererAiUsage.t("copy.tokenExpiredUsingLocalData.e4b132") : pomeLocaleRendererAiUsage.t("copy.tokenExpired.22c3fe")
+      : data?.warning ? pomeLocaleRendererAiUsage.t("copy.requestFailedUsingLocalData.af9dba") : data?.authSource === 'manual' || data?.configured && !data?.ok ? pomeLocaleRendererAiUsage.t("copy.manualToken.bf90e7") : pomeLocaleRendererAiUsage.t("copy.localSignIn.8c966e")));
     source.classList.toggle('is-error', Boolean(invalid));
     renderQuotaRows('cursor', D.quotaRows(data, 'cursor').map(({ key, name, windowUsage }) => ({
       key, name, windowUsage: data?.ok ? windowUsage : null,
-      help: data?.poolWarnings?.grokBot && key === 'grok' ? data.poolWarnings.grokBot : key === 'grok' ? (date(data?.grokBot?.resetAt) ? `周重置 ${date(data.grokBot.resetAt)}` : '周重置时间未知')
-        : (date(data?.billing?.cycleEnd) ? `账期至 ${date(data.billing.cycleEnd)}` : '账期未知'),
+      help: data?.poolWarnings?.grokBot && key === 'grok' ? data.poolWarnings.grokBot : key === 'grok' ? (date(data?.grokBot?.resetAt) ? pomeLocaleRendererAiUsage.t("copy.weeklyReset.53a8a8", { arg1: (date(data.grokBot.resetAt)) }) : pomeLocaleRendererAiUsage.t("copy.weeklyResetTimeUnknown.3a21cf"))
+        : (date(data?.billing?.cycleEnd) ? pomeLocaleRendererAiUsage.t("copy.billingPeriodEnds.eae9ee", { arg1: (date(data.billing.cycleEnd)) }) : pomeLocaleRendererAiUsage.t("copy.billingPeriodUnknown.dbb002")),
     })));
     const footnote = byId('cursor-usage-footnote');
     footnote.classList.toggle('is-stale', Boolean(data?.stale));
     if (!data?.ok) {
-      if (invalid) errorSettings(footnote, 'Token 已失效，本机登录也不可用', 'cursor');
-      else footnote.textContent = '暂时读不到用量，点刷新重试';
+      if (invalid) errorSettings(footnote, pomeLocaleRendererAiUsage.t("copy.tokenExpiredAndLocalSignInIs.3cc6be"), 'cursor');
+      else pomeLocaleRendererAiUsage.bind(footnote, "textContent", () => (pomeLocaleRendererAiUsage.t("copy.usageUnavailableRefreshToRetry.1ceded")));
       return;
     }
-    footnote.textContent = `${data.stale ? '刷新失败，显示上次数据 · ' : data.cached ? '缓存 · ' : ''}最近刷新 ${D.clock(data.fetchedAt)}`;
+    pomeLocaleRendererAiUsage.bind(footnote, "textContent", () => (pomeLocaleRendererAiUsage.t("copy.lastRefreshed.c4c148", { arg1: (data.stale ? pomeLocaleRendererAiUsage.t("copy.refreshFailedShowingPreviousData.480e57") : data.cached ? pomeLocaleRendererAiUsage.t("copy.cached.00e684") : ''), arg2: (D.clock(data.fetchedAt)) })));
   }
   function paintCodex() {
     const data = state.codex;
     const plan = D.planLabel(data?.plan);
     const fromLocal = data?.authSource === 'local' || !data?.authSource && data?.detected;
-    const sourceLabel = [fromLocal ? '本机 Codex' : '手动 Token', plan].filter(Boolean).join(' · ');
+    const sourceLabel = [fromLocal ? pomeLocaleRendererAiUsage.t("copy.localCodex.bbc04a") : pomeLocaleRendererAiUsage.t("copy.manualToken.bf90e7"), plan].filter(Boolean).join(' · ');
     const source = byId('ai-codex-source');
-    source.textContent = data?.manualTokenInvalid
-      ? fromLocal && data.updatedAt ? 'Token 失效 · 已改用本机' : 'Token 失效' : sourceLabel;
+    pomeLocaleRendererAiUsage.bind(source, "textContent", () => (data?.manualTokenInvalid
+      ? fromLocal && data.updatedAt ? pomeLocaleRendererAiUsage.t("copy.tokenExpiredUsingLocalData.e4b132") : pomeLocaleRendererAiUsage.t("copy.tokenExpired.22c3fe") : sourceLabel));
     source.classList.toggle('is-error', Boolean(data?.manualTokenInvalid));
     const quotaRows = D.quotaRows(data, 'codex');
-    renderQuotaRows('codex', (quotaRows.length ? quotaRows : [{ key: 'primary', name: '额度', windowUsage: null }]).map(({ key, name, windowUsage }) => ({
+    renderQuotaRows('codex', (quotaRows.length ? quotaRows : [{ key: 'primary', name: pomeLocaleRendererAiUsage.t("copy.quota.32ce9f"), windowUsage: null }]).map(({ key, name, windowUsage }) => ({
       key, name, windowUsage: data?.ok ? windowUsage : null, help: D.resetText(windowUsage),
     })));
     const stale = data?.stale || D.quotaRows(data, 'codex').some(row => D.expired(row.windowUsage));
@@ -117,18 +118,18 @@
     miniReset.hidden = foot.classList.contains('is-error');
     miniReset.classList.toggle('is-stale', stale);
     if (data?.manualTokenInvalid) {
-      errorSettings(foot, 'Codex Token 已失效，请重新获取', 'codex');
+      errorSettings(foot, pomeLocaleRendererAiUsage.t("copy.codexTokenExpiredGetANewToken.a45565"), 'codex');
       if (data.updatedAt && tile.dataset.widgetSize !== 'mini') {
-        const time = document.createElement('span'); time.className = 'ai-footnote-time'; time.textContent = ` · 更新于 ${D.clock(data.updatedAt)}`; foot.append(time);
+        const time = document.createElement('span'); time.className = 'ai-footnote-time'; pomeLocaleRendererAiUsage.bind(time, "textContent", () => (pomeLocaleRendererAiUsage.t("copy.updated.ad4d52", { arg1: (D.clock(data.updatedAt)) }))); foot.append(time);
       }
     } else if (data?.remoteError) {
-      foot.textContent = ['暂时无法联网查询', data.updatedAt ? `更新于 ${D.clock(data.updatedAt)}` : ''].filter(Boolean).join(' · ');
-    } else if (!data?.ok) foot.textContent = '暂时无法读取本机 Codex，点刷新重试';
-    else if (!data.updatedAt) foot.textContent = data.configured ? '已配置 Token，暂无用量数据' : '本机 Codex 暂无用量数据';
-    else foot.textContent = `更新于 ${D.clock(data.updatedAt)}`;
+      pomeLocaleRendererAiUsage.bind(foot, "textContent", () => ([pomeLocaleRendererAiUsage.t("copy.onlineUsageIsTemporarilyUnavailable.9b1e18"), data.updatedAt ? pomeLocaleRendererAiUsage.t("copy.updated.7114c0", { arg1: (D.clock(data.updatedAt)) }) : ''].filter(Boolean).join(' · ')));
+    } else if (!data?.ok) pomeLocaleRendererAiUsage.bind(foot, "textContent", () => (pomeLocaleRendererAiUsage.t("copy.localCodexDataIsUnavailableRefreshTo.a5aa7b")));
+    else if (!data.updatedAt) pomeLocaleRendererAiUsage.bind(foot, "textContent", () => (data.configured ? pomeLocaleRendererAiUsage.t("copy.tokenConfiguredNoUsageDataYet.f32418") : pomeLocaleRendererAiUsage.t("copy.noLocalCodexUsageDataYet.f38b07")));
+    else pomeLocaleRendererAiUsage.bind(foot, "textContent", () => (pomeLocaleRendererAiUsage.t("copy.updated.7114c0", { arg1: (D.clock(data.updatedAt)) })));
     const credits = data?.credits;
-    const creditLabel = !credits ? '暂无数据' : credits.unlimited ? '无限' : credits.balance != null ? String(credits.balance) : credits.hasCredits ? '可用' : '无';
-    byId('ai-codex-details').innerHTML = `<div><dt>套餐</dt><dd>${escape(plan || '未知')}</dd></div><div><dt>Credits</dt><dd>${escape(creditLabel)}</dd></div><div><dt>来源</dt><dd>${fromLocal ? '本机会话记录' : '手动 Token'}</dd></div>`;
+    const creditLabel = !credits ? pomeLocaleRendererAiUsage.t("copy.noData.497c85") : credits.unlimited ? pomeLocaleRendererAiUsage.t("copy.unlimited.8651f5") : credits.balance != null ? String(credits.balance) : credits.hasCredits ? pomeLocaleRendererAiUsage.t("copy.available.4d99c9") : pomeLocaleRendererAiUsage.t("copy.none.484d55");
+    byId('ai-codex-details').innerHTML = ("<div><dt><span data-i18n=\"copy.plan.c1cfa1\">" + (pomeLocaleRendererAiUsage.t("copy.plan.c1cfa1")) + "</span></dt><dd>" + (escape(plan || pomeLocaleRendererAiUsage.t("copy.unknown.4d8c1c"))) + "</dd></div><div><dt>Credits</dt><dd>" + (escape(creditLabel)) + "</dd></div><div><dt><span data-i18n=\"copy.source.a488e9\">" + (pomeLocaleRendererAiUsage.t("copy.source.a488e9")) + "</span></dt><dd>" + (fromLocal ? pomeLocaleRendererAiUsage.t("copy.localSessionRecords.45f182") : pomeLocaleRendererAiUsage.t("copy.manualToken.bf90e7")) + "</dd></div>");
   }
   function render() {
     const ids = D.providers(state.cursor, state.codex);
@@ -161,8 +162,8 @@
       const remaining = D.lowestRemaining(state[id], id);
       button.dataset.level = active !== id ? D.level(remaining) : 'ok';
       const name = registry.get(id).label;
-      const hint = button.dataset.level === 'critical' ? ' · 剩余额度紧张' : button.dataset.level === 'warn' ? ' · 剩余额度较少' : '';
-      button.title = `${name} 最少剩余额度：${D.formatPercent(remaining)}${hint}`;
+      const hint = button.dataset.level === 'critical' ? pomeLocaleRendererAiUsage.t("copy.quotaRunningLow.f8e557") : button.dataset.level === 'warn' ? pomeLocaleRendererAiUsage.t("copy.lowRemainingQuota.f5107a") : '';
+      pomeLocaleRendererAiUsage.bind(button, "title", () => (pomeLocaleRendererAiUsage.t("copy.lowestRemainingQuota.775faf", { arg1: (name), arg2: (D.formatPercent(remaining)), arg3: (hint) })));
       button.setAttribute('aria-label', button.title);
     }
     tile.querySelector('.ai-usage-providers').hidden = !ids.length;
@@ -239,6 +240,7 @@
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => refresh({ force: usageVisible() }), D.refreshDelay(state, usageVisible()));
   }
+  window.addEventListener('pome:language-changed', render);
   window.NotchAiUsage = { refresh, openSettings };
   refresh();
 })();

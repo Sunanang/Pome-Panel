@@ -1147,3 +1147,6 @@ body {
   .clip-fav-btn:active,
   .clip-del-btn:active { transform: none; }
 }
+
+[data-language-preference] { max-width: 150px; margin-left: auto; padding: 5px 9px; border: 1px solid var(--hairline); border-radius: 9px; background: var(--surface-1); color: var(--text-1); font: inherit; color-scheme: dark; }
+html[lang="en-US"] .settings-card p { overflow-wrap: anywhere; }

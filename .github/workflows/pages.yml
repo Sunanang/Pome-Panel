@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "website/**"
+      - "localization/**"
+      - "scripts/localization-resources.js"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 

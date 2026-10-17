@@ -1,3 +1,4 @@
+const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 (function exposeNotchSun(root, factory) {
   const SunCalc = typeof module === 'object' && module.exports
     ? require('./vendor/suncalc/suncalc.js')
@@ -8,12 +9,12 @@
 })(typeof window !== 'undefined' ? window : globalThis, function createNotchSun(SunCalc) {
   const EVENT_ORDER = ['dawn', 'sunrise', 'goldenHourEnd', 'goldenHour', 'sunset', 'dusk'];
   const EVENT_META = {
-    dawn: { name: '天亮', lead: '天亮', note: '民用晨光开始', dot: 'blue' },
-    sunrise: { name: '日出', lead: '日出', note: '', dot: 'gold' },
-    goldenHourEnd: { name: '黄金时刻结束', lead: '上午黄金时刻结束', note: '上午', dot: 'day' },
-    goldenHour: { name: '黄金时刻开始', lead: '下午黄金时刻', note: '下午', dot: 'gold' },
-    sunset: { name: '日落', lead: '日落', note: '', dot: 'gold' },
-    dusk: { name: '天黑', lead: '天黑', note: '民用暮光结束', dot: 'blue' },
+    dawn: { name: pomeLocaleRendererSun.t("copy.dawn.436dc0"), lead: pomeLocaleRendererSun.t("copy.dawn.436dc0"), note: pomeLocaleRendererSun.t("copy.civilDawn.2e8b34"), dot: 'blue' },
+    sunrise: { name: pomeLocaleRendererSun.t("copy.sunrise.3ca0d8"), lead: pomeLocaleRendererSun.t("copy.sunrise.3ca0d8"), note: '', dot: 'gold' },
+    goldenHourEnd: { name: pomeLocaleRendererSun.t("copy.goldenHourEnds.4a8311"), lead: pomeLocaleRendererSun.t("copy.morningGoldenHourEnds.a5010f"), note: pomeLocaleRendererSun.t("copy.morning.298336"), dot: 'day' },
+    goldenHour: { name: pomeLocaleRendererSun.t("copy.goldenHourStarts.c51fb0"), lead: pomeLocaleRendererSun.t("copy.afternoonGoldenHour.b6d109"), note: pomeLocaleRendererSun.t("copy.afternoon.af81dc"), dot: 'gold' },
+    sunset: { name: pomeLocaleRendererSun.t("copy.sunset.67995f"), lead: pomeLocaleRendererSun.t("copy.sunset.67995f"), note: '', dot: 'gold' },
+    dusk: { name: pomeLocaleRendererSun.t("copy.dusk.451eb6"), lead: pomeLocaleRendererSun.t("copy.dusk.451eb6"), note: pomeLocaleRendererSun.t("copy.civilDusk.1ee5da"), dot: 'blue' },
   };
   const ARC = {
     mini: { w: 169, h: 26, hy: 19, kUp: 16 / 53, clamp: 20, markerR: 3, sw: 1.6, dots: 0, drop: false, labels: false },
@@ -24,19 +25,19 @@
   // Design B：弧线旁当前时间标签字号（mini 不走弧线，改底部一行）
   const NOW_FS = { mini: 11.5, small: 11.5, medium: 12.5, large: 13 };
   const TZ_SUGGESTIONS = {
-    'Asia/Shanghai': { name: '上海', admin: '中国' },
-    'Asia/Urumqi': { name: '乌鲁木齐', admin: '新疆' },
-    'Asia/Hong_Kong': { name: '香港', admin: '中国' },
-    'Asia/Macau': { name: '澳门', admin: '中国' },
-    'Asia/Taipei': { name: '台北', admin: '台湾' },
-    'Asia/Tokyo': { name: '东京' },
-    'Asia/Seoul': { name: '首尔' },
-    'Europe/London': { name: '伦敦' },
-    'Europe/Paris': { name: '巴黎' },
-    'America/New_York': { name: '纽约' },
-    'America/Los_Angeles': { name: '洛杉矶' },
-    'America/Chicago': { name: '芝加哥' },
-    'Australia/Sydney': { name: '悉尼' },
+    'Asia/Shanghai': { name: pomeLocaleRendererSun.t("copy.shanghai.4906a4"), admin: pomeLocaleRendererSun.t("copy.china.f0e952") },
+    'Asia/Urumqi': { name: pomeLocaleRendererSun.t("copy.urumqi.0b08dc"), admin: pomeLocaleRendererSun.t("copy.xinjiang.8e3e42") },
+    'Asia/Hong_Kong': { name: pomeLocaleRendererSun.t("copy.hongKong.d448d1"), admin: pomeLocaleRendererSun.t("copy.china.f0e952") },
+    'Asia/Macau': { name: pomeLocaleRendererSun.t("copy.macau.7f73b5"), admin: pomeLocaleRendererSun.t("copy.china.f0e952") },
+    'Asia/Taipei': { name: pomeLocaleRendererSun.t("copy.taipei.b44152"), admin: pomeLocaleRendererSun.t("copy.taiwan.33db16") },
+    'Asia/Tokyo': { name: pomeLocaleRendererSun.t("copy.tokyo.95b3ec") },
+    'Asia/Seoul': { name: pomeLocaleRendererSun.t("copy.seoul.76f872") },
+    'Europe/London': { name: pomeLocaleRendererSun.t("copy.london.a6c0db") },
+    'Europe/Paris': { name: pomeLocaleRendererSun.t("copy.paris.089dd4") },
+    'America/New_York': { name: pomeLocaleRendererSun.t("copy.newYork.21f9f8") },
+    'America/Los_Angeles': { name: pomeLocaleRendererSun.t("copy.losAngeles.bd12e7") },
+    'America/Chicago': { name: pomeLocaleRendererSun.t("copy.chicago.6de995") },
+    'Australia/Sydney': { name: pomeLocaleRendererSun.t("copy.sydney.40a5bd") },
   };
 
   function civilParts(date, timeZone) {
@@ -135,7 +136,7 @@
     const digitW = (fs, text) => fs * 0.62 * text.length;
     const labelW = (text) => labelFs * text.length;
     const edge = (label, hm) => labelW(label) + innerGap + digitW(edgeFs, hm);
-    return edge('日出', riseHm) + segmentGap + digitW(nowFs, nowHm) + segmentGap + edge('日落', setHm);
+    return edge(pomeLocaleRendererSun.t("copy.sunrise.3ca0d8"), riseHm) + segmentGap + digitW(nowFs, nowHm) + segmentGap + edge(pomeLocaleRendererSun.t("copy.sunset.67995f"), setHm);
   }
 
   function miniFootFitsCard(input, innerWidth) {
@@ -184,10 +185,10 @@
 
   function durationParts(minutes) {
     const whole = Math.max(0, Math.round(Number(minutes) || 0));
-    if (whole < 60) return [{ n: whole, u: '分钟' }];
+    if (whole < 60) return [{ n: whole, u: pomeLocaleRendererSun.t("copy.minutes.bd957b") }];
     const hours = Math.floor(whole / 60);
     const rest = whole % 60;
-    return rest ? [{ n: hours, u: '小时' }, { n: rest, u: '分' }] : [{ n: hours, u: '小时' }];
+    return rest ? [{ n: hours, u: pomeLocaleRendererSun.t("copy.hours.3b6fef") }, { n: rest, u: pomeLocaleRendererSun.t("copy.min.b6a993") }] : [{ n: hours, u: pomeLocaleRendererSun.t("copy.hours.3b6fef") }];
   }
 
   function durationText(minutes) {
@@ -245,15 +246,15 @@
 
   function eventView(key, date, timeZone, now) {
     if (!(date instanceof Date) || !Number.isFinite(date.getTime())) return null;
-    const meta = EVENT_META[key] || { name: '正午', lead: '正午', note: '', dot: 'day' };
+    const meta = EVENT_META[key] || { name: pomeLocaleRendererSun.t("copy.solarNoon.b4c643"), lead: pomeLocaleRendererSun.t("copy.solarNoon.b4c643"), note: '', dot: 'day' };
     const minute = minuteOfDay(date, timeZone, true);
     const nowStamp = Math.floor(now.getTime() / 60000);
     const eventStamp = Math.round(date.getTime() / 60000);
     return {
       key,
-      name: meta.name,
-      lead: meta.lead,
-      note: meta.note,
+      name: pomeLocaleRendererSun.systemText(meta.name),
+      lead: pomeLocaleRendererSun.systemText(meta.lead),
+      note: pomeLocaleRendererSun.systemText(meta.note),
       dot: meta.dot,
       date,
       minute,
@@ -299,8 +300,8 @@
         next = view && {
           ...view,
           key: 'tomorrowDawn',
-          name: '明早天亮',
-          lead: '明早天亮',
+          name: pomeLocaleRendererSun.t("copy.dawnTomorrow.0a3920"),
+          lead: pomeLocaleRendererSun.t("copy.dawnTomorrow.0a3920"),
         };
       }
     }
@@ -324,16 +325,16 @@
     if (!flags.alwaysUp && !flags.alwaysDown) {
       if (upcoming.length < 3 && tomorrow.dawn) {
         const dawn = eventView('dawn', tomorrow.dawn, timeZone, now);
-        if (dawn) upcoming.push({ ...dawn, key: 'tomorrowDawn', name: '明天天亮', lead: '明早天亮' });
+        if (dawn) upcoming.push({ ...dawn, key: 'tomorrowDawn', name: pomeLocaleRendererSun.t("copy.dawnTomorrow.c3944e"), lead: pomeLocaleRendererSun.t("copy.dawnTomorrow.0a3920") });
       }
       if (upcoming.length < 3 && tomorrow.sunrise) {
         const sunrise = eventView('sunrise', tomorrow.sunrise, timeZone, now);
-        if (sunrise) upcoming.push({ ...sunrise, key: 'tomorrowSunrise', name: '明天日出', lead: '日出' });
+        if (sunrise) upcoming.push({ ...sunrise, key: 'tomorrowSunrise', name: pomeLocaleRendererSun.t("copy.sunriseTomorrow.f333d2"), lead: pomeLocaleRendererSun.t("copy.sunrise.3ca0d8") });
       }
     }
 
     const civil = civilParts(now, timeZone);
-    const weekday = new Intl.DateTimeFormat('zh-CN', { timeZone, weekday: 'short' }).format(now);
+    const weekday = new Intl.DateTimeFormat(pomeLocaleRendererSun.getState().formatLocale, { timeZone, weekday: 'short' }).format(now);
     let start = nowMin - 30;
     let end = nowMin + 30;
     if (marks.dawn != null) start = Math.min(start, marks.dawn - 90);
@@ -384,7 +385,7 @@
         sunrise: tomorrow.sunrise ? formatHM(tomorrow.sunrise, timeZone) : null,
         sunset: tomorrow.sunset ? formatHM(tomorrow.sunset, timeZone) : null,
       },
-      dateLabel: `${civil.month}月${civil.day}日 ${weekday}`,
+      dateLabel: pomeLocaleRendererSun.t("copy.message.e255ee", { arg1: (civil.month), arg2: (civil.day), arg3: (weekday) }),
       sub,
       arc: { start, end, samples },
     };
@@ -428,7 +429,10 @@
 
   function cityLabel(city) {
     if (!city || !city.name) return '';
-    return city.admin ? `${city.name}, ${city.admin}` : String(city.name);
+    const english = pomeLocaleRendererSun.getState().effectiveLocale === 'en-US';
+    const name = english && city.source !== 'manual' ? city.en || city.name : city.name;
+    const admin = english ? city.adminEn || pomeLocaleRendererSun.systemText(city.admin) : city.admin;
+    return admin ? `${name}, ${admin}` : String(name);
   }
 
   function suggestCity(cities, timeZone) {
@@ -436,8 +440,8 @@
     const zone = String(timeZone || '');
     const preferred = TZ_SUGGESTIONS[zone];
     if (preferred) {
-      const match = list.find((city) => city.name === preferred.name && (!preferred.admin || city.admin === preferred.admin))
-        || list.find((city) => city.name === preferred.name);
+      const match = list.find((city) => (city.name === preferred.name || city.en === preferred.name) && (!preferred.admin || city.admin === preferred.admin))
+        || list.find((city) => (city.name === preferred.name || city.en === preferred.name));
       if (match) return match;
     }
     return list.find((city) => city.tz === zone) || null;
@@ -446,16 +450,16 @@
   function parseManualLocation(latText, lngText, name) {
     const lat = Number(String(latText ?? '').trim());
     const lng = Number(String(lngText ?? '').trim());
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90) return { ok: false, error: '纬度需要在 -90 到 90 之间' };
-    if (!Number.isFinite(lng) || lng < -180 || lng > 180) return { ok: false, error: '经度需要在 -180 到 180 之间' };
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) return { ok: false, error: pomeLocaleRendererSun.t("copy.latitudeMustBeBetween90And90.5c13e0") };
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) return { ok: false, error: pomeLocaleRendererSun.t("copy.longitudeMustBeBetween180And180.71c3df") };
     const label = String(name || '').trim().slice(0, 24);
     return {
       ok: true,
       location: {
         source: 'manual',
         id: 'manual',
-        name: label || '自定义位置',
-        admin: '自定义',
+        name: label || pomeLocaleRendererSun.t("copy.customLocation.915d7b"),
+        admin: pomeLocaleRendererSun.t("copy.custom.4eafa9"),
         lat,
         lng,
         tz: null,
@@ -469,6 +473,7 @@
       source: 'city',
       id: city.id,
       name: city.name,
+      en: city.en,
       admin: city.admin,
       lat: city.lat,
       lng: city.lng,

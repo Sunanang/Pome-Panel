@@ -1,4 +1,7 @@
 "use client";
+import { useSiteLocale } from "./SiteLocale";
+import { siteT } from "./siteI18n";
+
 
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
@@ -6,6 +9,7 @@ import { assetPath } from "./assetPath.mjs";
 import Prism from "./reactbits/Prism/Prism";
 
 export default function EndingSection() {
+  const locale = useSiteLocale();
   const sectionRef = useRef<HTMLElement>(null);
   const reducedMotion = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: sectionRef, offset: ["start end", "end end"] });
@@ -39,12 +43,12 @@ export default function EndingSection() {
         >
           {/* This is the real collapsed-state capture from the running product. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={assetPath("/hero/panel-collapsed.png")} alt="Pome Panel 真实折叠态" />
+          <img src={assetPath("/hero/panel-collapsed.png")} alt={siteT(locale, "copy.pomePanelCollapsedView.378ce5")} />
         </motion.div>
 
         <motion.div className="ending-copy">
           <span>BACK TO FLOW</span>
-          <p>需要时展开，用完即收起</p>
+          <p>{siteT(locale, "copy.expandWhenNeededCollapseWhenDone.e2ded7")}</p>
         </motion.div>
 
         <footer><span>macOS 13+ · Windows 10/11 x64 · MIT</span><span>© 2026 Pome Panel</span></footer>

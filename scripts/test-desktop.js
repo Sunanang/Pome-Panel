@@ -14,11 +14,12 @@ function run(executable, args) {
     process.exit(result.status || 1);
   }
 }
+run(process.execPath, ['scripts/localization-resources.js', '--check']);
 run(process.execPath, ['--test', ...fs.readdirSync(path.join(root, 'tests')).filter((name) => name.endsWith('.test.js')).map((name) => `tests/${name}`)]);
 env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-test.log');
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
-for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap', 'sun-home', 'security-recovery', 'notification', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'normal-startup']) {
+for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap', 'sun-home', 'security-recovery', 'notification', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'localization', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   run(require('electron'), [`tests/${file}.electron.js`]);
@@ -30,6 +31,9 @@ for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 
   fs.rmSync(testProfile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
 for (const file of [
+  'scripts/localization-resources.js',
+  'localization/runtime.js',
+  'renderer/localization.js',
   'scripts/check-work-hub-baseline.js',
   'scripts/build-fpk.js',
   'scripts/work-hub-statistics.js',

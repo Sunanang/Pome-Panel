@@ -244,6 +244,19 @@ test('GET /api/v1/device-port reports the live bind, then the saved file', async
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+function resolvePackageCopy(text, locale = 'zh-CN') {
+  const file = fs.readFileSync(path.join(__dirname, '../fnos/i18n', locale), 'utf8');
+  const values = {}; let section = '';
+  for (const line of file.split('\n')) {
+    if (/^\[.*\]$/.test(line)) section = line.slice(1, -1);
+    else { const at = line.indexOf('='); if (at > 0) values[section + '.' + line.slice(0, at)] = JSON.parse(line.slice(at + 1)); }
+  }
+  return text.replace(/\$\{([^}]+)\}/g, (_whole, key) => {
+    assert.ok(Object.hasOwn(values, key), 'Missing package copy: ' + key);
+    return values[key].replace(/\n/g, ' ');
+  });
+}
+
 test('install wizard and package identity use a user-chosen port', () => {
   const root = path.join(__dirname, '..', 'fnos');
   const manifestJson = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
@@ -259,7 +272,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.devicePort.bindField, 'wizard_lan');
   assert.doesNotMatch(JSON.stringify(manifestJson), /Sunanang|Pome Panel Sync/);
 
-  const official = fs.readFileSync(path.join(root, 'manifest'), 'utf8');
+  const official = resolvePackageCopy(fs.readFileSync(path.join(root, 'manifest'), 'utf8'));
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
   assert.match(official, /^distributor=Lando$/m);
@@ -282,7 +295,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   for (const sample of ['1', '5', '80', '45875', '65535']) assert.match(sample, portPattern);
   for (const sample of ['0', '65536', '01234', '99999']) assert.doesNotMatch(sample, portPattern);
   for (const rel of ['wizard/install', 'wizard/config', 'wizard/upgrade']) {
-    const steps = JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8'));
+    const steps = JSON.parse(resolvePackageCopy(fs.readFileSync(path.join(root, rel), 'utf8')));
     const field = steps.flatMap((step) => step.items).find((item) => item.field === 'wizard_port');
     assert.ok(field, rel);
     assert.equal(field.type, 'text');
@@ -311,12 +324,12 @@ test('install wizard and package identity use a user-chosen port', () => {
     assert.match(tips.helpText, /仅本机/, rel);
     assert.match(tips.helpText, /局域网/, rel);
   }
-  const configSteps = JSON.parse(fs.readFileSync(path.join(root, 'wizard/config'), 'utf8'));
+  const configSteps = JSON.parse(resolvePackageCopy(fs.readFileSync(path.join(root, 'wizard/config'), 'utf8')));
   const configTips = configSteps.flatMap((step) => step.items).find((item) => item.type === 'tips');
   assert.match(configTips.helpText, /没填端口时应用也能启用/);
   assert.match(configTips.helpText, /重启/);
   assert.match(configTips.helpText, /局域网/);
-  const upgradeSteps = JSON.parse(fs.readFileSync(path.join(root, 'wizard/upgrade'), 'utf8'));
+  const upgradeSteps = JSON.parse(resolvePackageCopy(fs.readFileSync(path.join(root, 'wizard/upgrade'), 'utf8')));
   const upgradeTips = upgradeSteps.flatMap((step) => step.items).find((item) => item.type === 'tips');
   assert.match(upgradeTips.helpText, /没保存成功/);
   assert.match(upgradeTips.helpText, /应用也会先启用/);
@@ -343,7 +356,7 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(icon256.readUInt32BE(16), 256);
   assert.equal(icon256.readUInt32BE(20), 256);
   assert.ok(icon256.length > 8000);
-  const uninstallSteps = JSON.parse(fs.readFileSync(path.join(root, 'wizard/uninstall'), 'utf8'));
+  const uninstallSteps = JSON.parse(resolvePackageCopy(fs.readFileSync(path.join(root, 'wizard/uninstall'), 'utf8')));
   const radio = uninstallSteps.flatMap((step) => step.items).find((item) => item.field === 'wizard_data_action');
   assert.equal(radio.type, 'radio');
   assert.equal(radio.initValue, 'keep');
@@ -938,7 +951,7 @@ test('install callback saves wizard_port and rejects an empty value', async (t) 
   assert.equal(fs.readFileSync(path.join(data, 'device-bind'), 'utf8').trim(), '127.0.0.1');
   const rejected = await new Promise((resolve) => {
     execFile('bash', [script], {
-      env: { ...process.env, wizard_port: '', TRIM_PKGETC: etc, FNOS_DATA_DIR: data },
+      env: { ...process.env, TRIM_SYS_LANGUAGE: 'zh-CN', wizard_port: '', TRIM_PKGETC: etc, FNOS_DATA_DIR: data },
     }, (err) => resolve(err));
   });
   assert.ok(rejected);

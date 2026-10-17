@@ -1,4 +1,6 @@
 'use strict';
+const pomeLocaleRendererNotification = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
+
 
 const root = document.getElementById('notification-root');
 const shell = document.getElementById('notification-shell');
@@ -18,7 +20,7 @@ const platformName = String(capabilities?.platform || api?.platform || 'darwin')
 if (/^[a-z0-9]+$/.test(platformName)) document.documentElement.dataset.platform = platformName;
 const canFocusWindows = () => capabilities?.features?.windowFocus === true;
 function applyShellLabel() {
-  openButton.setAttribute('aria-label', canFocusWindows() ? '打开任务对应窗口' : '关闭任务提醒');
+  openButton.setAttribute('aria-label', canFocusWindows() ? pomeLocaleRendererNotification.t("copy.openTheSourceApp.ce1839") : pomeLocaleRendererNotification.t("copy.dismissTaskNotification.30ec6c"));
 }
 applyShellLabel();
 api?.onCapabilitiesChanged?.(next => { capabilities = next; applyShellLabel(); });
@@ -96,7 +98,7 @@ function showNotification(payload) {
   const replace = payload?.replace === true && root.classList.contains('is-visible');
   lastHeight = 0;
   titleElement.textContent = notification.title;
-  titleElement.title = [notification.sessionTitle, notification.completionSummary || notification.title].filter(Boolean).join('\n');
+  titleElement.title = [notification.sessionTitle, notification.titleIsFallback ? notification.title : notification.completionSummary || notification.title].filter(Boolean).join('\n');
   sourceElement.textContent = notification.source;
   detailElement.textContent = notification.detail;
   detailElement.hidden = !notification.detail;
@@ -108,7 +110,7 @@ function showNotification(payload) {
     ? `./assets/inbox/${notification.sourceKey}.svg` : `./assets/notification/${notification.sourceKey}.svg`;
   document.getElementById('notification-brand').style.setProperty('--nb-brand', `url("${brandPath}")`);
   document.getElementById('notification-status-glyph').setAttribute('href', `./assets/notification/glyphs.svg#${notification.status}`);
-  document.getElementById('notification-status').setAttribute('aria-label', { completed: '已完成', due: '即将截止', failed: '出错', awaiting: '等待确认' }[notification.status]);
+  document.getElementById('notification-status').setAttribute('aria-label', { completed: pomeLocaleRendererNotification.t("copy.completed.f28461"), due: pomeLocaleRendererNotification.t("copy.dueSoon.ea0afa"), failed: pomeLocaleRendererNotification.t("copy.failed.01ad2b"), awaiting: pomeLocaleRendererNotification.t("copy.awaitingConfirmation.e5d218") }[notification.status]);
   progressElement.hidden = notification.status === 'awaiting';
   progressFill.style.transform = 'scaleX(1)';
   root.hidden = false;
@@ -175,7 +177,7 @@ openButton.addEventListener('click', async () => {
     activating = false;
     if (result !== true && result?.ok !== true) {
       activationError = true;
-      detailElement.textContent = result?.message || '打开来源软件失败，请稍后重试。';
+      pomeLocaleRendererNotification.bind(detailElement, "textContent", () => (result?.message || pomeLocaleRendererNotification.t("copy.couldnTOpenTheSourceAppTry.180b9d")));
       detailElement.title = detailElement.textContent;
       detailElement.hidden = false;
       document.getElementById('notification-separator').hidden = false;
@@ -197,3 +199,11 @@ api?.onTaskNotification?.(showNotification);
 api?.onTaskNotificationQueue?.(setQueueCount);
 api?.onTaskNotificationHide?.(hideNotification);
 api?.onTaskNotificationTiming?.(applyTiming);
+
+window.addEventListener('pome:language-changed', () => {
+  applyShellLabel();
+  if (!currentNotification) return;
+  if (currentNotification.titleIsFallback) { titleElement.textContent = domain.fallbackTitle(currentNotification.sourceKey, currentNotification.status); titleElement.title = [currentNotification.sessionTitle, titleElement.textContent].filter(Boolean).join('\n'); }
+  if (currentNotification.status === 'due' && !activationError) detailElement.textContent = pomeLocaleRendererNotification.t('copy.dueWithin1Hour.955b14');
+  updateTime(); updateHeight();
+});

@@ -1,9 +1,12 @@
 "use client";
+import { useSiteLocale } from "./SiteLocale";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { CAPABILITIES } from "./landingContent";
+import { getLandingContent } from "./landingContent";
 
 export default function CapabilitiesSection() {
+  const contentLocale = useSiteLocale();
+  const { CAPABILITIES } = getLandingContent(contentLocale);
   const reducedMotion = useReducedMotion();
   return (
     <section className="capabilities-section" data-section="capabilities" id="features">

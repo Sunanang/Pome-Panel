@@ -1,3 +1,4 @@
+const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 (function (root, factory) {
   const api = factory(typeof module === 'object' && module.exports ? require('./ai-provider-registry') : root.NotchAiProviders);
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -6,9 +7,9 @@
   'use strict';
   const TAB_KEY = 'notch-ai-usage-tab-v1';
   const FALLBACK = {
-    title: '还没有连接 AI 工具',
-    body: '在本机登录 Cursor，或用过一次 Codex，额度会自动出现在这里；也可以在设置里手动填写 Token。',
-    miniTitle: '未连接 AI 工具', miniBody: 'Cursor、Codex 都未检测到',
+    get title() { return pomeLocaleRendererAiUsageDomain.t("copy.noAiToolsConnectedYet.91c4b3"); },
+    get body() { return pomeLocaleRendererAiUsageDomain.t("copy.signInToCursorLocallyOrUse.3b099a"); },
+    get miniTitle() { return pomeLocaleRendererAiUsageDomain.t("copy.noAiToolsConnected.116356"); }, get miniBody() { return pomeLocaleRendererAiUsageDomain.t("copy.neitherCursorNorCodexWasDetected.243e58"); },
   };
   function available(data) {
     if (!data) return false;
@@ -18,7 +19,7 @@
   function providers(cursor, codex) {
     return registry.providers.map(provider => provider.id).filter((id) => available(id === 'cursor' ? cursor : codex));
   }
-  function title(ids) { return ids.length === 1 ? `${registry.get(ids[0])?.label || ids[0]} 剩余额度` : 'AI 剩余额度'; }
+  function title(ids) { return ids.length === 1 ? pomeLocaleRendererAiUsageDomain.t("copy.remainingQuota.68dc7b", { arg1: (registry.get(ids[0])?.label || ids[0]) }) : pomeLocaleRendererAiUsageDomain.t("copy.aiQuota.faa20c"); }
   function percent(value) {
     if (value == null || typeof value === 'boolean' || typeof value === 'string' && !value.trim()) return null;
     const n = Number(value); return Number.isFinite(n) ? n : null;
@@ -43,37 +44,37 @@
   function clock(value) {
     if (value == null) return '--:--';
     const d = new Date(typeof value === 'number' ? value * 1000 : value);
-    return Number.isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return Number.isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString(pomeLocaleRendererAiUsageDomain.getState().formatLocale, { hour: '2-digit', minute: '2-digit' });
   }
   function expired(window, now = Date.now()) { return window?.resetsAt != null && window.resetsAt * 1000 <= now; }
   function resetText(window, now = Date.now()) {
-    if (window?.resetsAt == null) return '重置时间未知';
+    if (window?.resetsAt == null) return pomeLocaleRendererAiUsageDomain.t("copy.resetTimeUnknown.2446e1");
     const reset = new Date(window.resetsAt * 1000);
-    if (Number.isNaN(reset.getTime())) return '重置时间未知';
+    if (Number.isNaN(reset.getTime())) return pomeLocaleRendererAiUsageDomain.t("copy.resetTimeUnknown.2446e1");
     const today = new Date(now);
     const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
     const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-    const prefix = sameDay(reset, today) ? '' : sameDay(reset, tomorrow) ? '明天 ' : `${reset.getMonth() + 1}/${reset.getDate()} `;
+    const prefix = sameDay(reset, today) ? '' : sameDay(reset, tomorrow) ? pomeLocaleRendererAiUsageDomain.t("copy.tomorrow.1e5e5b") : `${reset.getMonth() + 1}/${reset.getDate()} `;
     const time = `${prefix}${clock(window.resetsAt)}`;
-    return expired(window, now) ? `已过 ${time} 重置 · 待刷新` : `${time} 重置`;
+    return expired(window, now) ? pomeLocaleRendererAiUsageDomain.t("copy.resetAtHasPassedRefreshNeeded.84cb42", { arg1: (time) }) : pomeLocaleRendererAiUsageDomain.t("copy.resets.b9a32b", { arg1: (time) });
   }
-  function windowLabel(window, fallback = '额度') {
+  function windowLabel(window, fallback = pomeLocaleRendererAiUsageDomain.t("copy.quota.32ce9f")) {
     const minutes = percent(window?.windowMinutes);
     if (!(minutes > 0)) return fallback;
-    if (minutes === 10080) return '每周额度';
-    if (minutes === 1440) return '每日额度';
-    if (minutes % 1440 === 0) return `${minutes / 1440} 天额度`;
-    if (minutes % 60 === 0) return `${minutes / 60} 小时额度`;
-    return `${minutes} 分钟额度`;
+    if (minutes === 10080) return pomeLocaleRendererAiUsageDomain.t("copy.weeklyQuota.475811");
+    if (minutes === 1440) return pomeLocaleRendererAiUsageDomain.t("copy.dailyQuota.ddea71");
+    if (minutes % 1440 === 0) return pomeLocaleRendererAiUsageDomain.t("copy.dayQuota.9c5206", { arg1: (minutes / 1440) });
+    if (minutes % 60 === 0) return pomeLocaleRendererAiUsageDomain.t("copy.hourQuota.d2ffb3", { arg1: (minutes / 60) });
+    return pomeLocaleRendererAiUsageDomain.t("copy.minuteQuota.321677", { arg1: (minutes) });
   }
   function quotaRows(data, id) {
     const provider = registry.get(id);
     if (provider?.pools) return provider.pools.map(([key, pool, name]) => ({ key, name, windowUsage: data?.[pool] }));
     if (Array.isArray(data?.windows) && data.windows.length) return data.windows.map((window, index) => ({
-      key: window.id || `window-${index}`, name: [window.label, windowLabel(window)].filter(Boolean).join(' · '), windowUsage: window,
+      key: window.id || `window-${index}`, name: [window.labelIsFallback ? pomeLocaleRendererAiUsageDomain.t("status.OtherQuota.1e9c5f") : window.label, windowLabel(window)].filter(Boolean).join(' · '), windowUsage: window,
     }));
     return ['primary', 'secondary'].filter(key => data?.[key]).map(key => ({ key,
-      name: windowLabel(data[key], key === 'primary' ? '主要额度' : '次要额度'), windowUsage: data[key] }));
+      name: windowLabel(data[key], key === 'primary' ? pomeLocaleRendererAiUsageDomain.t("copy.primaryQuota.b2a098") : pomeLocaleRendererAiUsageDomain.t("copy.secondaryQuota.0a9d1a")), windowUsage: data[key] }));
   }
   // Poll active views normally and once just after a known reset. An unchanged,
   // expired snapshot must not produce a tight retry loop.

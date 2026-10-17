@@ -1,11 +1,12 @@
+const pomeLocaleRendererApp = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 const STORAGE_KEY = 'notch-todo-data';
 const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
 const TODO_CATEGORY_KEY = 'notch-todo-category-names-v1';
 const TODO_CATEGORY_DEFAULTS = {
-  P0: '课程',
-  P1: '自媒体&写作',
+  get P0() { return pomeLocaleRendererApp.t("copy.courses.60db1a"); },
+  get P1() { return pomeLocaleRendererApp.t("copy.mediaWriting.4672dc"); },
   P2: 'Vibe coding',
-  P3: '日常',
+  get P3() { return pomeLocaleRendererApp.t("copy.dailyLife.f648d6"); },
 };
 
 const app = document.getElementById('app');
@@ -211,7 +212,7 @@ function showStatusToast(message, options = {}) {
   statusToastActionHandler = typeof onAction === 'function' ? onAction : null;
   statusToastExpireHandler = typeof onExpire === 'function' ? onExpire : null;
   if (statusToastAction && statusToastActionHandler) {
-    statusToastAction.textContent = actionLabel || '撤销';
+    pomeLocaleRendererApp.bind(statusToastAction, "textContent", () => (actionLabel || pomeLocaleRendererApp.t("copy.undo.926a50")));
     statusToastAction.hidden = false;
   }
   statusToast.classList.add('visible');
@@ -293,7 +294,7 @@ function saveData(data) {
   }
   if (window.__nasTodoReadonly === true) {
     if (typeof showStatusToast === 'function') {
-      showStatusToast('迁移中，稍候', { kind: 'warning' });
+      showStatusToast(pomeLocaleRendererApp.t("copy.migratingPleaseWait.7aed12"), { kind: 'warning' });
     }
     return false;
   }
@@ -329,7 +330,7 @@ function loadTodoCategoryNames() {
 function persistTodoCategoryNames() {
   if (window.__nasTodoReadonly === true) {
     if (typeof showStatusToast === 'function') {
-      showStatusToast('迁移中，稍候', { kind: 'warning' });
+      showStatusToast(pomeLocaleRendererApp.t("copy.migratingPleaseWait.7aed12"), { kind: 'warning' });
     }
     return false;
   }
@@ -347,7 +348,7 @@ function applyTodoCategoryNames() {
     const input = document.querySelector(`.todo-category-name[data-category="${categoryId}"]`);
     const addInput = document.querySelector(`.add-row input[data-priority="${categoryId}"]`);
     if (input) input.value = name;
-    if (addInput) addInput.setAttribute('aria-label', `添加${name}待办`);
+    if (addInput) addInput.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.addATaskTo.efb0ec", { arg1: (name) }));
   });
 }
 if (window.notchAPI && typeof window.notchAPI.scheduleTodoReminders === 'function') {
@@ -402,14 +403,14 @@ function todoItemHtml(priority, item) {
   const safeId = escapeHtml(item.id);
   const safeText = escapeHtml(item.text);
   const deadline = Number.isFinite(Date.parse(String(item.deadline || '')))
-    ? new Intl.DateTimeFormat('zh-CN', {
+    ? new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
       month: 'numeric',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     }).format(new Date(item.deadline))
     : '';
-  const toggleLabel = item.done ? `恢复未完成：${safeText}` : `标记完成：${safeText}`;
+  const toggleLabel = item.done ? pomeLocaleRendererApp.t("copy.markIncomplete.b29b66", { arg1: (safeText) }) : pomeLocaleRendererApp.t("copy.markComplete.56d5a3", { arg1: (safeText) });
   const battery = window.NotchDomain.todoTimeBattery(item, Date.now());
   // 逾期项整条填满红色并只显示一个白色感叹号：剩余 0% 是「快到了」，
   // 逾期是「已经欠账」，两者不能长得一样。
@@ -418,15 +419,9 @@ function todoItemHtml(priority, item) {
     : '';
   const isEditing = editingTodo?.priority === priority && editingTodo?.id === item.id;
   const contentHtml = isEditing
-    ? `<div class="todo-inline-editor"><input class="todo-inline-name" value="${safeText}" maxlength="80" aria-label="修改待办名称" />${batteryHtml}<button class="todo-inline-deadline" type="button" data-action="edit-deadline">${deadline || '日期'}</button><button class="todo-inline-save" type="button" data-action="save-edit" aria-label="保存修改">✓</button></div>`
-    : `<button class="todo-copy" type="button" data-action="edit" title="${safeText}" aria-label="修改：${safeText}"><span class="todo-text">${safeText}</span>${batteryHtml}${deadline ? `<time class="todo-ddl" datetime="${escapeHtml(item.deadline)}">${escapeHtml(deadline)}</time>` : ''}</button>`;
-  return `
-    <li class="todo-item${doneClass}${selectedClass}" data-id="${safeId}" data-priority="${priority}">
-      <button class="checkbox" type="button" data-action="toggle" aria-label="${toggleLabel}" aria-pressed="${item.done}">${checkSvg()}</button>
-      ${contentHtml}
-      <button class="delete" type="button" data-action="delete" aria-label="删除：${safeText}">×</button>
-    </li>
-  `;
+    ? ("<div class=\"todo-inline-editor\"><input class=\"todo-inline-name\" value=\"" + (safeText) + "\" maxlength=\"80\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.editTaskName.44f8a7")) + "\" data-i18n-aria-label=\"copy.editTaskName.44f8a7\" />" + (batteryHtml) + "<button class=\"todo-inline-deadline\" type=\"button\" data-action=\"edit-deadline\">" + (deadline || pomeLocaleRendererApp.t("copy.date.70d0c1")) + "</button><button class=\"todo-inline-save\" type=\"button\" data-action=\"save-edit\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.saveChanges.991bb7")) + "\" data-i18n-aria-label=\"copy.saveChanges.991bb7\">✓</button></div>")
+    : ("<button class=\"todo-copy\" type=\"button\" data-action=\"edit\" title=\"" + (safeText) + "\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.edit.fe62a2", { arg2: (safeText) })) + "\"><span class=\"todo-text\">" + (safeText) + "</span>" + (batteryHtml) + (deadline ? `<time class="todo-ddl" datetime="${escapeHtml(item.deadline)}">${escapeHtml(deadline)}</time>` : '') + "</button>");
+  return ("\n    <li class=\"todo-item" + (doneClass) + (selectedClass) + "\" data-id=\"" + (safeId) + "\" data-priority=\"" + (priority) + "\">\n      <button class=\"checkbox\" type=\"button\" data-action=\"toggle\" aria-label=\"" + (toggleLabel) + "\" aria-pressed=\"" + (item.done) + "\">" + (checkSvg()) + "</button>\n      " + (contentHtml) + "\n      <button class=\"delete\" type=\"button\" data-action=\"delete\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.delete.322a6b", { arg9: (safeText) })) + "\">×</button>\n    </li>\n  ");
 }
 
 function captureTodoPositions(priority) {
@@ -478,8 +473,8 @@ function updateTodoBulkButton(priority) {
   const count = todoSelections[priority]?.size || 0;
   if (!button) return;
   button.hidden = count === 0;
-  button.textContent = '删除';
-  button.setAttribute('aria-label', count ? `删除 ${count} 项` : '删除所选');
+  pomeLocaleRendererApp.bind(button, "textContent", () => (pomeLocaleRendererApp.t("copy.delete.2f9daa")));
+  button.setAttribute('aria-label', count ? pomeLocaleRendererApp.t("copy.deleteItems.0bfa6f", { arg1: (count) }) : pomeLocaleRendererApp.t("copy.deleteSelected.435bf8"));
 }
 
 function updateCount(priority) {
@@ -520,7 +515,7 @@ function flashCheckboxPop(priority, id) {
 
 function addTodo(priority, text, deadline) {
   if (window.__nasTodoReadonly === true) {
-    if (typeof showStatusToast === 'function') showStatusToast('迁移中，稍候', { kind: 'warning' });
+    if (typeof showStatusToast === 'function') showStatusToast(pomeLocaleRendererApp.t("copy.migratingPleaseWait.7aed12"), { kind: 'warning' });
     return false;
   }
   const item = window.NotchDomain.createTodo(text, deadline, generateId(), Date.now());
@@ -597,8 +592,8 @@ function deleteTodo(priority, id) {
     if (nextFocus) nextFocus.focus({ preventScroll: true });
   }
   const summary = removed.text.length > 18 ? `${removed.text.slice(0, 18)}…` : removed.text;
-  showStatusToast(`已删除“${summary}”`, {
-    actionLabel: '撤销',
+  showStatusToast(pomeLocaleRendererApp.t("copy.deleted.ada912", { arg1: (summary) }), {
+    actionLabel: pomeLocaleRendererApp.t("copy.undo.926a50"),
     duration: 5000,
     onAction: () => {
       if (list.some((item) => item.id === removed.id)) return;
@@ -611,7 +606,7 @@ function deleteTodo(priority, id) {
         `.todo-item[data-priority="${priority}"][data-id="${CSS.escape(id)}"] [data-action="toggle"]`
       );
       if (restored) restored.focus({ preventScroll: true });
-      showStatusToast('已撤销删除');
+      showStatusToast(pomeLocaleRendererApp.t("copy.deletionUndone.2e33cb"));
     },
   });
 }
@@ -688,7 +683,7 @@ function syncPanelAccessibility(expanded) {
   }
   if (!notch) return;
   notch.setAttribute('aria-expanded', String(expanded));
-  notch.setAttribute('aria-label', expanded ? '收起 Pome Panel' : '展开 Pome Panel');
+  notch.setAttribute('aria-label', expanded ? pomeLocaleRendererApp.t("copy.collapsePomePanel.b8359e") : pomeLocaleRendererApp.t("copy.expandPomePanel.07c85a"));
   if (expanded && document.activeElement === notch) {
     const activeTabButton = document.querySelector(`.tab[data-tab="${activeTab}"]`);
     if (activeTabButton) activeTabButton.focus({ preventScroll: true });
@@ -1276,12 +1271,12 @@ function renderShortcutRecorderHint() {
   const hint = document.getElementById('shortcut-recorder-hint');
   if (!hint) return;
   const modifiers = window.NotchPlatform.modifierHints(readPlatformCapabilities());
-  hint.textContent = `可直接使用空格；其他按键建议搭配 ${modifiers.join(' / ')}`;
+  pomeLocaleRendererApp.bind(hint, "textContent", () => (pomeLocaleRendererApp.t("copy.useSpaceAloneOrCombineOtherKeys.250962", { arg1: (modifiers.join(' / ')) })));
 }
 
 const SHORTCUT_ERROR_TEXT = {
-  system_reserved: '该组合被系统占用',
-  occupied: '该快捷键已被占用',
+  system_reserved: pomeLocaleRendererApp.t("copy.thisCombinationIsReservedByTheSystem.e04553"),
+  occupied: pomeLocaleRendererApp.t("copy.thisShortcutIsAlreadyInUse.b4a985"),
 };
 
 shortcutRecorder?.addEventListener('keydown', async (event) => {
@@ -1294,11 +1289,11 @@ shortcutRecorder?.addEventListener('keydown', async (event) => {
   }
   const accelerator = keyEventToAccelerator(event);
   if (!accelerator) {
-    if (shortcutRecorderValue) shortcutRecorderValue.textContent = '请按下完整按键组合';
+    if (shortcutRecorderValue) pomeLocaleRendererApp.bind(shortcutRecorderValue, "textContent", () => (pomeLocaleRendererApp.t("copy.pressTheCompleteKeyCombination.2eeecd")));
     return;
   }
   if (accelerator !== 'Space' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-    if (shortcutRecorderValue) shortcutRecorderValue.textContent = '单键仅支持空格';
+    if (shortcutRecorderValue) pomeLocaleRendererApp.bind(shortcutRecorderValue, "textContent", () => (pomeLocaleRendererApp.t("copy.onlySpaceCanBeUsedAlone.9e1bc0")));
     return;
   }
   const display = window.NotchPlatform.formatAccelerator(accelerator, readPlatformCapabilities()) || accelerator;
@@ -1306,11 +1301,11 @@ shortcutRecorder?.addEventListener('keydown', async (event) => {
   const result = await window.notchAPI?.setPanelShortcut?.(accelerator).catch(() => ({ ok: false }));
   if (!result?.ok) {
     if (shortcutRecorderValue) {
-      shortcutRecorderValue.textContent = SHORTCUT_ERROR_TEXT[result?.error] || '无法使用该快捷键';
+      pomeLocaleRendererApp.bind(shortcutRecorderValue, "textContent", () => (SHORTCUT_ERROR_TEXT[result?.error] || pomeLocaleRendererApp.t("copy.thisShortcutCannotBeUsed.711008")));
     }
     return;
   }
-  showStatusToast(`快捷键已设为 ${display}`);
+  showStatusToast(pomeLocaleRendererApp.t("copy.shortcutSetTo.3aeabe", { arg1: (display) }));
   setTimeout(closeShortcutRecorder, 420);
 });
 
@@ -1320,7 +1315,7 @@ function openShortcutRecorder() {
   shortcutRecorderActive = true;
   shortcutRecorder.hidden = false;
   renderShortcutRecorderHint();
-  shortcutRecorderValue.textContent = '等待输入…';
+  pomeLocaleRendererApp.bind(shortcutRecorderValue, "textContent", () => (pomeLocaleRendererApp.t("copy.waitingForInput.3b286f")));
   requestAnimationFrame(() => shortcutRecorder.focus({ preventScroll: true }));
 }
 window.notchAPI?.onRecordShortcut?.(openShortcutRecorder);
@@ -1407,7 +1402,7 @@ function renderTodoCalendar() {
   const now = new Date();
   const days = new Date(todoEditorYear, todoEditorMonthIndex + 1, 0).getDate();
   const firstWeekday = (new Date(todoEditorYear, todoEditorMonthIndex, 1).getDay() + 6) % 7;
-  if (todoEditorMonth) todoEditorMonth.textContent = `${todoEditorYear}年 ${todoEditorMonthIndex + 1}月`;
+  if (todoEditorMonth) pomeLocaleRendererApp.bind(todoEditorMonth, "textContent", () => (pomeLocaleRendererApp.t("copy.message.23b25d", { arg1: (todoEditorYear), arg2: (todoEditorMonthIndex + 1) })));
   todoCalendarGrid.replaceChildren();
   for (let index = 0; index < firstWeekday; index += 1) todoCalendarGrid.append(document.createElement('span'));
   for (let day = 1; day <= days; day += 1) {
@@ -1446,7 +1441,7 @@ function applyTodoEditorSelection(markManual = true) {
   if (!todoEditorContext) return false;
   const deadline = selectedTodoDeadline();
   if (!deadline || Date.parse(deadline) <= Date.now()) {
-    if (todoEditorError) todoEditorError.textContent = '请选择晚于当前时间的截止点';
+    if (todoEditorError) pomeLocaleRendererApp.bind(todoEditorError, "textContent", () => (pomeLocaleRendererApp.t("copy.chooseADeadlineLaterThanNow.c1cc99")));
     return false;
   }
   if (todoEditorError) todoEditorError.textContent = '';
@@ -1461,7 +1456,7 @@ function applyTodoEditorSelection(markManual = true) {
     if (!trigger) return false;
     trigger.dataset.deadline = deadline;
     trigger.dataset.deadlineSource = markManual ? 'manual' : (trigger.dataset.deadlineSource || 'default');
-    trigger.querySelector('span').textContent = new Intl.DateTimeFormat('zh-CN', {
+    trigger.querySelector('span').textContent = new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
       day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
     }).format(new Date(deadline));
     trigger.classList.add('selected');
@@ -1541,7 +1536,7 @@ function applyDefaultTodoDeadline(trigger, now = new Date()) {
   if (trigger.dataset.deadline === deadline && trigger.dataset.deadlineSource === 'default') return;
   trigger.dataset.deadline = deadline;
   trigger.dataset.deadlineSource = 'default';
-  trigger.querySelector('span').textContent = new Intl.DateTimeFormat('zh-CN', {
+  trigger.querySelector('span').textContent = new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
     day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(new Date(deadline));
   trigger.classList.add('selected');
@@ -1579,7 +1574,7 @@ PRIORITIES.forEach((priority) => {
     }
     if (!addTodo(priority, value, deadlineInput.dataset.deadline)) {
       deadlineInput.classList.add('invalid');
-      showStatusToast('截止时间格式不正确');
+      showStatusToast(pomeLocaleRendererApp.t("copy.invalidDeadlineFormat.88c2cb"));
       return;
     }
     input.value = '';
@@ -1669,7 +1664,7 @@ document.querySelectorAll('.todo-bulk-delete[data-bulk-priority]').forEach((butt
     saveData(data);
     renderList(priority);
     updateCount(priority);
-    showStatusToast('已删除所选待办');
+    showStatusToast(pomeLocaleRendererApp.t("copy.selectedTasksDeleted.8f28c4"));
   });
 });
 
@@ -1765,7 +1760,7 @@ function renderPomodoro() {
     pomodoroToggle.innerHTML = pomodoroRunning
       ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h3v10H8zM14 7h3v10h-3z" /></svg>'
       : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5z" /></svg>';
-    pomodoroToggle.setAttribute('aria-label', pomodoroRunning ? '暂停番茄钟' : '开始番茄钟');
+    pomodoroToggle.setAttribute('aria-label', pomodoroRunning ? pomeLocaleRendererApp.t("copy.pauseFocusTimer.c8fdd3") : pomeLocaleRendererApp.t("copy.startFocusTimer.b3da88"));
   }
   if (pomodoroReset) pomodoroReset.hidden = !pomodoroStarted;
   homePomodoro?.setAttribute('data-state', pomodoroRunning ? 'running' : (pomodoroStarted ? 'paused' : 'idle'));
@@ -1810,7 +1805,7 @@ pomodoroToggle?.addEventListener('click', () => {
   if (!pomodoroStarted) {
     commitPomodoroInputs();
     if (pomodoroConfiguredSeconds <= 0) {
-      showStatusToast('请先设置倒计时时间');
+      showStatusToast(pomeLocaleRendererApp.t("copy.setADurationFirst.ca86b2"));
       return;
     }
     pomodoroStarted = true;
@@ -1829,7 +1824,7 @@ pomodoroToggle?.addEventListener('click', () => {
         pomodoroStarted = false;
         clearInterval(pomodoroTimer);
         pomodoroTimer = null;
-        showStatusToast(`${completedMinutes} 分钟专注完成`);
+        showStatusToast(pomeLocaleRendererApp.t("copy.minuteFocusSessionComplete.4a8c00", { arg1: (completedMinutes) }));
         window.notchAPI?.notifyPomodoro?.(completedMinutes).catch(() => {});
       }
       renderPomodoro();
@@ -2227,9 +2222,9 @@ function applyNoteLineFormat(type) {
     const body = line.slice(indentation.length);
     if (shouldRemove) return indentation + body.replace(matcher, '');
     const content = stripNoteBlockPrefix(body) || (
-      type === 'heading' ? '标题' :
-      type === 'task' ? '待办' :
-      type === 'quote' ? '引用' : '项目'
+      type === 'heading' ? pomeLocaleRendererApp.t("copy.heading.c3405f") :
+      type === 'task' ? pomeLocaleRendererApp.t("copy.tasks.52fdbb") :
+      type === 'quote' ? pomeLocaleRendererApp.t("copy.quote.e0ec65") : pomeLocaleRendererApp.t("copy.item.79f326")
     );
     if (type === 'ordered') return indentation + String(orderedIndex++) + '. ' + content;
     if (type === 'heading') return indentation + '# ' + content;
@@ -2258,7 +2253,7 @@ function applyNoteLink() {
   const end = noteInput.selectionEnd;
   const direction = noteInput.selectionDirection;
   const selected = noteInput.value.slice(start, end);
-  const label = selected || '链接文字';
+  const label = selected || pomeLocaleRendererApp.t("copy.linkText.6f64e4");
   const url = 'https://';
   const replacement = '[' + label + '](' + url + ')';
   if (selected) {
@@ -2273,9 +2268,9 @@ let noteComposing = false;
 
 function applyNoteFormat(type) {
   if (!noteInput || noteComposing) return;
-  if (type === 'bold') return wrapNoteSelection('**', '**', '加粗文字');
-  if (type === 'italic') return wrapNoteSelection('*', '*', '斜体文字');
-  if (type === 'code') return wrapNoteSelection('`', '`', '代码');
+  if (type === 'bold') return wrapNoteSelection('**', '**', pomeLocaleRendererApp.t("copy.boldText.eb4d95"));
+  if (type === 'italic') return wrapNoteSelection('*', '*', pomeLocaleRendererApp.t("copy.italicText.1ebce6"));
+  if (type === 'code') return wrapNoteSelection('`', '`', pomeLocaleRendererApp.t("copy.code.e6f04f"));
   if (type === 'link') return applyNoteLink();
   applyNoteLineFormat(type);
 }
@@ -2318,7 +2313,7 @@ function setNoteMode(mode, focusTarget = true) {
   });
   if (noteEditButton) {
     noteEditButton.classList.toggle('active', !isPreview);
-    noteEditButton.textContent = isPreview ? '编辑' : '完成';
+    pomeLocaleRendererApp.bind(noteEditButton, "textContent", () => (isPreview ? pomeLocaleRendererApp.t("copy.edit.051836") : pomeLocaleRendererApp.t("copy.done.c0b3fb")));
     noteEditButton.setAttribute('aria-pressed', String(!isPreview));
   }
 
@@ -2463,7 +2458,7 @@ function loadNoteArchive() {
 let selectedNoteId = '';
 
 function noteArchiveTitle(note) {
-  return String(note && note.title || '').trim() || '未命名笔记';
+  return pomeLocaleRendererApp.noteTitle(note).trim() || pomeLocaleRendererApp.t("copy.untitledNote.b0b0ce");
 }
 
 function noteArchiveExcerpt(note) {
@@ -2472,7 +2467,7 @@ function noteArchiveExcerpt(note) {
 }
 
 function noteArchiveTime(timestamp) {
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
@@ -2538,8 +2533,8 @@ function renderNotesDetail(notes = loadNoteArchive()) {
     empty.className = 'notes-detail-empty';
     const hasArchive = loadNoteArchive().length > 0;
     empty.innerHTML = hasArchive
-      ? '<span class="notes-empty-mark" aria-hidden="true">⌕</span><strong>没有匹配的笔记</strong><p>试试搜索其他关键词。</p>'
-      : '<span class="notes-empty-mark" aria-hidden="true">✎</span><strong>还没有保存的笔记</strong><p>点击「新建」即可开始记录。</p>';
+      ? ("<span class=\"notes-empty-mark\" aria-hidden=\"true\">⌕</span><strong><span data-i18n=\"copy.noMatchingNotes.a187a5\">" + (pomeLocaleRendererApp.t("copy.noMatchingNotes.a187a5")) + "</span></strong><p><span data-i18n=\"copy.tryAnotherSearchTerm.6f0405\">" + (pomeLocaleRendererApp.t("copy.tryAnotherSearchTerm.6f0405")) + "</span></p>")
+      : ("<span class=\"notes-empty-mark\" aria-hidden=\"true\">✎</span><strong><span data-i18n=\"copy.noSavedNotesYet.ddc489\">" + (pomeLocaleRendererApp.t("copy.noSavedNotesYet.ddc489")) + "</span></strong><p><span data-i18n=\"copy.selectNewToStartWriting.a84fff\">" + (pomeLocaleRendererApp.t("copy.selectNewToStartWriting.a84fff")) + "</span></p>");
     notesDetail.append(empty);
     return;
   }
@@ -2557,14 +2552,14 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   title.className = 'notes-detail-title';
   title.dataset.noteId = note.id;
   title.value = String(note.title || '');
-  title.placeholder = '未命名笔记';
+  pomeLocaleRendererApp.bind(title, "placeholder", () => (pomeLocaleRendererApp.t("copy.untitledNote.b0b0ce")));
   title.maxLength = 80;
   title.autocomplete = 'off';
   title.spellcheck = false;
-  title.setAttribute('aria-label', '笔记标题，可直接修改');
+  title.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.noteTitleEditDirectly.abb0d0"));
   const time = document.createElement('time');
   time.className = 'notes-detail-time';
-  time.textContent = `更新于 ${noteArchiveTime(note.updatedAt)}`;
+  pomeLocaleRendererApp.bind(time, "textContent", () => (pomeLocaleRendererApp.t("copy.updated.7114c0", { arg1: (noteArchiveTime(note.updatedAt)) })));
   heading.append(title, time);
   const actions = document.createElement('div');
   actions.className = 'notes-detail-actions';
@@ -2572,10 +2567,10 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   const modeSwitch = document.createElement('div');
   modeSwitch.className = 'note-mode-switch notes-detail-mode-switch';
   modeSwitch.setAttribute('role', 'group');
-  modeSwitch.setAttribute('aria-label', '预览或编辑');
+  modeSwitch.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.previewOrEdit.566766"));
   ;[
-    ['preview', '预览'],
-    ['edit', '编辑'],
+    ['preview', pomeLocaleRendererApp.t("copy.preview.13d61f")],
+    ['edit', pomeLocaleRendererApp.t("copy.edit.051836")],
   ].forEach(([mode, label]) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -2590,8 +2585,8 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   remove.type = 'button';
   remove.className = 'notes-delete';
   remove.dataset.action = 'delete-note';
-  remove.setAttribute('aria-label', '删除笔记');
-  remove.title = '删除笔记';
+  remove.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.deleteNote.07a619"));
+  pomeLocaleRendererApp.bind(remove, "title", () => (pomeLocaleRendererApp.t("copy.deleteNote.07a619")));
   remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h10l1-12"/></svg>';
   actions.append(modeSwitch, remove);
   header.append(heading, actions);
@@ -2604,15 +2599,15 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   editor.className = 'notes-editor';
   editor.dataset.noteId = note.id;
   editor.value = note.content;
-  editor.placeholder = '用 Markdown 写笔记…';
-  editor.setAttribute('aria-label', `编辑笔记：${noteArchiveTitle(note)}`);
+  pomeLocaleRendererApp.bind(editor, "placeholder", () => (pomeLocaleRendererApp.t("copy.writeANoteInMarkdown.6e340b")));
+  editor.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.editNote.097174", { arg1: (noteArchiveTitle(note)) }));
   editor.spellcheck = false;
 
   const preview = document.createElement('div');
   preview.id = 'notes-preview';
   preview.className = 'note-preview notes-preview';
   preview.tabIndex = 0;
-  preview.setAttribute('aria-label', `预览笔记：${noteArchiveTitle(note)}`);
+  preview.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.previewNote.aa5b1d", { arg1: (noteArchiveTitle(note)) }));
   preview.replaceChildren(buildMarkdownPreview(note.content));
 
   const isPreview = notesDetailMode === 'preview';
@@ -2666,7 +2661,7 @@ function updateSavedNotePresentation(note) {
   const detailTitle = notesDetail?.querySelector('.notes-detail-title');
   const detailTime = notesDetail?.querySelector('.notes-detail-time');
   if (detailTitle && document.activeElement !== detailTitle) detailTitle.value = note.title || '';
-  if (detailTime) detailTime.textContent = `已保存 · ${noteArchiveTime(note.updatedAt)}`;
+  if (detailTime) pomeLocaleRendererApp.bind(detailTime, "textContent", () => (pomeLocaleRendererApp.t("copy.saved.983d08", { arg1: (noteArchiveTime(note.updatedAt)) })));
   const row = notesList?.querySelector(`[data-note-id="${CSS.escape(note.id)}"]`);
   if (!row) return;
   const rowTitle = row.querySelector('strong');
@@ -2709,7 +2704,7 @@ function scheduleNotesEditorSave(editor) {
   pendingNotesEditor = editor;
   if (notesSaveTimer) clearTimeout(notesSaveTimer);
   const time = notesDetail?.querySelector('.notes-detail-time');
-  if (time) time.textContent = '正在保存…';
+  if (time) pomeLocaleRendererApp.bind(time, "textContent", () => (pomeLocaleRendererApp.t("copy.saving.6bdb44")));
   notesSaveTimer = setTimeout(() => {
     notesSaveTimer = null;
     const pending = pendingNotesEditor;
@@ -2723,13 +2718,13 @@ function renderNotesLibrary() {
   if (!notesList) return;
   const archive = loadNoteArchive();
   const notes = window.NotchDomain.filterNotes(archive, notesSearch?.value || '');
-  if (notesCount) notesCount.textContent = `${archive.length} 篇`;
+  if (notesCount) pomeLocaleRendererApp.bind(notesCount, "textContent", () => (pomeLocaleRendererApp.t("copy.notes.0b8a21", { arg1: (archive.length) })));
   if (!notes.some((note) => note.id === selectedNoteId)) selectedNoteId = notes[0]?.id || '';
   notesList.replaceChildren();
   if (!notes.length) {
     const empty = document.createElement('div');
     empty.className = 'notes-list-empty';
-    empty.textContent = archive.length ? '没有找到相关笔记' : '保存的笔记会出现在这里';
+    pomeLocaleRendererApp.bind(empty, "textContent", () => (archive.length ? pomeLocaleRendererApp.t("copy.noMatchingNotes.3b7e97") : pomeLocaleRendererApp.t("copy.savedNotesWillAppearHere.d4a4be")));
     notesList.append(empty);
     renderNotesDetail(notes);
     return;
@@ -2754,7 +2749,7 @@ function renderNotesLibrary() {
     const more = document.createElement('button');
     more.type = 'button';
     more.className = 'workspace-button compact';
-    more.textContent = `查看更多（已显示 ${notesVisibleLimit} / ${notes.length}）`;
+    pomeLocaleRendererApp.bind(more, "textContent", () => (pomeLocaleRendererApp.t("copy.showMore.8e8b5f", { arg1: (notesVisibleLimit), arg2: (notes.length) })));
     more.addEventListener('click', () => { notesVisibleLimit += 80; renderNotesLibrary(); });
     notesList.append(more);
   }
@@ -2781,13 +2776,13 @@ notesNewButton?.addEventListener('click', () => {
   requestAnimationFrame(() => {
     notesDetail?.querySelector('#notes-editor')?.focus({ preventScroll: true });
   });
-  showStatusToast('已新建笔记');
+  showStatusToast(pomeLocaleRendererApp.t("copy.noteCreated.246d61"));
 });
 
 noteSaveButton?.addEventListener('click', () => {
   const content = noteInput?.value.trim() || '';
   if (!content) {
-    showStatusToast('先写点内容再存档');
+    showStatusToast(pomeLocaleRendererApp.t("copy.writeSomethingBeforeArchiving.9a3119"));
     return;
   }
   const notes = loadNoteArchive();
@@ -2805,7 +2800,7 @@ noteSaveButton?.addEventListener('click', () => {
   localStorage.setItem(NOTE_KEY, noteInput.value);
   selectedNoteId = activeId;
   renderNotesLibrary();
-  showStatusToast('笔记已保存');
+  showStatusToast(pomeLocaleRendererApp.t("copy.noteSaved.6d1bf9"));
 });
 
 notesList?.addEventListener('click', (event) => {
@@ -2879,7 +2874,7 @@ notesDetail?.addEventListener('click', (event) => {
     }
     selectedNoteId = next[0]?.id || '';
     renderNotesLibrary();
-    showStatusToast('笔记已删除');
+    showStatusToast(pomeLocaleRendererApp.t("copy.noteDeleted.381e47"));
     return;
   }
 });
@@ -2968,7 +2963,7 @@ const HOME_SIZE_DEFAULTS = {
   cursor: 'small',
   sun: 'medium',
 };
-const HOME_SIZE_LABELS = { mini: '迷你', small: '小', medium: '中', large: '大' };
+const HOME_SIZE_LABELS = { get mini() { return pomeLocaleRendererApp.t("copy.mini.43d4ba"); }, get small() { return pomeLocaleRendererApp.t("copy.small.6a7339"); }, get medium() { return pomeLocaleRendererApp.t("copy.medium.a567bd"); }, get large() { return pomeLocaleRendererApp.t("copy.large.7d4ca7"); } };
 const homeBento = document.getElementById('home-bento');
 const homeContextMenu = document.getElementById('home-context-menu');
 const homeTabPanel = document.getElementById('tab-home');
@@ -3686,7 +3681,7 @@ if (homeBento) {
       // 编辑中：右键只调尺寸，不出现编辑项
       editBtn.hidden = homeLayoutEditing;
       editBtn.removeAttribute('aria-pressed');
-      editBtn.textContent = '编辑布局';
+      pomeLocaleRendererApp.bind(editBtn, "textContent", () => (pomeLocaleRendererApp.t("copy.editLayout.c427bd")));
     }
     const size = contextModuleId
       ? (homeSizes[contextModuleId] || HOME_SIZE_DEFAULTS[contextModuleId] || 'medium')
@@ -3775,9 +3770,9 @@ if (homeBento) {
     syncHomeLayoutEditBar();
     syncHomeContextMenu();
     if (!silent && next && !wasEditing) {
-      showStatusToast('已进入编辑：拖动卡片互换位置，完成后点保存');
+      showStatusToast(pomeLocaleRendererApp.t("copy.dragCardsToSwapPositionsThenSave.adf3b9"));
     } else if (!silent && !next && wasEditing) {
-      showStatusToast(action === 'cancel' ? '已取消布局修改' : '布局已保存');
+      showStatusToast(action === 'cancel' ? pomeLocaleRendererApp.t("copy.layoutChangesCanceled.bd25dc") : pomeLocaleRendererApp.t("copy.layoutSaved.76afba"));
     }
   };
   setHomeLayoutEditing(false, { silent: true });
@@ -3959,12 +3954,12 @@ if (homeBento) {
     if (!layout) {
       homeSizes = previousSizes;
       homeWorkingLayout = previousLayout;
-      showStatusToast('当前空间不足，请先缩小其他模块');
+      showStatusToast(pomeLocaleRendererApp.t("copy.notEnoughSpaceMakeAnotherWidgetSmaller.cb3c70"));
       return;
     }
     applyHomeLayout(layout, { reason: 'size' });
     if (!homeLayoutEditing) saveHomeLayout();
-    showStatusToast(`已设为${HOME_SIZE_LABELS[homeSizes[moduleId]]}组件`);
+    showStatusToast(pomeLocaleRendererApp.t("copy.widgetSizeSetTo.f1ae86", { arg1: (HOME_SIZE_LABELS[homeSizes[moduleId]]) }));
   };
 
   homeContextMenu?.addEventListener('click', (event) => {
@@ -4074,8 +4069,8 @@ if (homeBento) {
     });
 
     if (cancelled || !finalTargetId) return;
-    if (swapped) showStatusToast('已互换位置');
-    else showStatusToast('空间不够，无法交换');
+    if (swapped) showStatusToast(pomeLocaleRendererApp.t("copy.positionsSwapped.290b00"));
+    else showStatusToast(pomeLocaleRendererApp.t("copy.notEnoughSpaceToSwap.94e606"));
   };
 
   homeBento.addEventListener('pointerdown', (event) => {
@@ -4300,7 +4295,7 @@ function stopMirror() {
   mirrorStarting = false;
   setMirrorZoom(1);
   homeMirror?.classList.remove('live', 'camera-starting');
-  mirrorStage?.setAttribute('aria-label', '打开实时镜子');
+  mirrorStage?.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.openLiveMirror.108daa"));
   mirrorStage?.setAttribute('aria-pressed', 'false');
   mirrorStage?.removeAttribute('aria-busy');
 }
@@ -4310,7 +4305,7 @@ function stopMirror() {
 async function showMediaPermissionToast(kind) {
   const prompt = await window.notchAPI?.getMediaAccessStatus?.(kind).catch(() => null);
   if (!prompt) {
-    showStatusToast(kind === 'camera' ? '需要摄像头权限才能打开镜子' : '需要麦克风权限');
+    showStatusToast(kind === 'camera' ? pomeLocaleRendererApp.t("copy.cameraPermissionIsNeededToOpenThe.50c6ae") : pomeLocaleRendererApp.t("copy.microphonePermissionRequired.0d9923"));
     return;
   }
   showStatusToast(prompt.message, prompt.canOpenSettings ? {
@@ -4348,7 +4343,7 @@ async function startMirror() {
     await mirrorVideo.play();
     setMirrorZoom(1);
     homeMirror?.classList.add('live');
-    mirrorStage?.setAttribute('aria-label', '关闭实时镜子');
+    mirrorStage?.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.closeLiveMirror.a64be7"));
     mirrorStage?.setAttribute('aria-pressed', 'true');
   } catch (error) {
     stopMirror();
@@ -4356,7 +4351,7 @@ async function startMirror() {
       error.name === 'NotAllowedError' || error.message === 'camera_permission_denied'
     );
     if (denied) await showMediaPermissionToast('camera');
-    else showStatusToast('暂时无法打开摄像头');
+    else showStatusToast(pomeLocaleRendererApp.t("copy.couldnTOpenTheCamera.7e9d5c"));
   } finally {
     mirrorStarting = false;
     homeMirror?.classList.remove('camera-starting');
@@ -4400,7 +4395,7 @@ function renderClipFavs() {
   if (!favEntries.length) {
     clipfavListEl.innerHTML =
       '<button class="clipfav-empty" type="button" data-action="goto-clip">' +
-      '去"剪贴板"Tab 给常用记录加星 →' +
+      pomeLocaleRendererApp.t("copy.starItemsInClipboardToKeepThem.f3311e") +
       '</button>';
     lastRenderedFavsVersion = clipDataVersion; // 空态也标记已渲染
     return;
@@ -4414,12 +4409,12 @@ function renderClipFavs() {
       if (entry.type === 'image') {
         const dataUrl = entry.imagePath ? clipImageCache.get(entry.imagePath) : null;
         const mediaHtml = dataUrl
-          ? `<img class="clipfav-thumb" src="${escapeHtml(dataUrl)}" alt="图片" draggable="false"/>`
-          : `<div class="clipfav-thumb-placeholder">图</div>`;
+          ? ("<img class=\"clipfav-thumb\" src=\"" + (escapeHtml(dataUrl)) + "\" alt=\"" + (pomeLocaleRendererApp.attribute("copy.image.d24c10")) + "\" data-i18n-alt=\"copy.image.d24c10\" draggable=\"false\"/>")
+          : ("<div class=\"clipfav-thumb-placeholder\"><span data-i18n=\"copy.image.801357\">" + (pomeLocaleRendererApp.t("copy.image.801357")) + "</span></div>");
         return (
-          `<div class="clipfav-item clip-type-image" data-id="${safeId}" role="button" tabindex="0" title="图片">` +
+          ("<div class=\"clipfav-item clip-type-image\" data-id=\"" + (safeId) + "\" role=\"button\" tabindex=\"0\" title=\"" + (pomeLocaleRendererApp.attribute("copy.image.d24c10")) + "\" data-i18n-title=\"copy.image.d24c10\">") +
           mediaHtml +
-          `<span class="clipfav-text">图片</span>` +
+          ("<span class=\"clipfav-text\"><span data-i18n=\"copy.image.d24c10\">" + (pomeLocaleRendererApp.t("copy.image.d24c10")) + "</span></span>") +
           `</div>`
         );
       }
@@ -4629,9 +4624,9 @@ async function addClipEntry(raw) {
 function formatClipTime(ts) {
   const now = Date.now();
   const diff = now - ts;
-  if (diff < 60 * 1000) return '刚刚';
-  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`;
-  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)} 小时前`;
+  if (diff < 60 * 1000) return pomeLocaleRendererApp.t("copy.justNow.de6785");
+  if (diff < 60 * 60 * 1000) return pomeLocaleRendererApp.t("copy.minutesAgo.5c5fd5", { arg1: (Math.floor(diff / 60000)) });
+  if (diff < 24 * 60 * 60 * 1000) return pomeLocaleRendererApp.t("copy.hoursAgo.9112fb", { arg1: (Math.floor(diff / 3600000)) });
   const d = new Date(ts);
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
@@ -4639,23 +4634,16 @@ function formatClipTime(ts) {
 function clipEntryHtml(entry, faved) {
   const favClass = faved ? ' faved' : '';
   const star = faved ? starFilledSvg : starOutlineSvg;
-  const favLabel = faved ? '取消收藏' : '收藏';
+  const favLabel = faved ? pomeLocaleRendererApp.t("copy.unstar.dca608") : pomeLocaleRendererApp.t("copy.star.60a535");
   const timeStr = escapeHtml(formatClipTime(entry.timestamp));
   const safeId = escapeHtml(entry.id);
 
   if (entry.type === 'image') {
     const dataUrl = entry.imagePath ? clipImageCache.get(entry.imagePath) : null;
     const thumbHtml = dataUrl
-      ? `<img class="clip-thumb" src="${escapeHtml(dataUrl)}" alt="图片" draggable="false"/>`
-      : `<span class="clip-thumb-placeholder">图片加载中…</span>`;
-    return `<div class="clip-item clip-item-image clip-type-image" data-id="${safeId}">
-  <button class="clip-copy-target" type="button" data-action="copy" aria-label="复制图片">
-    <span class="clip-thumb-wrap">${thumbHtml}</span>
-    <span class="clip-meta"><span class="clip-time">${timeStr}</span></span>
-  </button>
-  <button class="clip-fav-btn${favClass}" type="button" data-action="fav" aria-label="${favLabel}">${star}</button>
-  <button class="clip-del-btn" type="button" data-action="delete" aria-label="删除">×</button>
-</div>`;
+      ? ("<img class=\"clip-thumb\" src=\"" + (escapeHtml(dataUrl)) + "\" alt=\"" + (pomeLocaleRendererApp.attribute("copy.image.d24c10")) + "\" data-i18n-alt=\"copy.image.d24c10\" draggable=\"false\"/>")
+      : ("<span class=\"clip-thumb-placeholder\"><span data-i18n=\"copy.loadingImage.f304d7\">" + (pomeLocaleRendererApp.t("copy.loadingImage.f304d7")) + "</span></span>");
+    return ("<div class=\"clip-item clip-item-image clip-type-image\" data-id=\"" + (safeId) + "\">\n  <button class=\"clip-copy-target\" type=\"button\" data-action=\"copy\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.copyImage.4c2b82")) + "\" data-i18n-aria-label=\"copy.copyImage.4c2b82\">\n    <span class=\"clip-thumb-wrap\">" + (thumbHtml) + "</span>\n    <span class=\"clip-meta\"><span class=\"clip-time\">" + (timeStr) + "</span></span>\n  </button>\n  <button class=\"clip-fav-btn" + (favClass) + "\" type=\"button\" data-action=\"fav\" aria-label=\"" + (favLabel) + "\">" + (star) + "</button>\n  <button class=\"clip-del-btn\" type=\"button\" data-action=\"delete\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.delete.2f9daa")) + "\" data-i18n-aria-label=\"copy.delete.2f9daa\">×</button>\n</div>");
   }
 
   // text | url 条目
@@ -4663,16 +4651,9 @@ function clipEntryHtml(entry, faved) {
   const isUrl = entry.type === 'url' || (entry.text && CLIP_URL_RE.test(entry.text));
   const typeClass = isUrl ? 'clip-type-url' : 'clip-type-text';
   const accessiblePreview = escapeHtml(
-    (entry.text || '').replace(/\s+/g, ' ').trim().slice(0, 80) || '空白内容'
+    (entry.text || '').replace(/\s+/g, ' ').trim().slice(0, 80) || pomeLocaleRendererApp.t("copy.blankContent.09d2d3")
   );
-  return `<div class="clip-item clip-item-text ${typeClass}" data-id="${safeId}">
-  <button class="clip-copy-target" type="button" data-action="copy" aria-label="复制：${accessiblePreview}">
-    <span class="clip-text">${safeText}</span>
-    <span class="clip-meta"><span class="clip-time">${timeStr}</span></span>
-  </button>
-  <button class="clip-fav-btn${favClass}" type="button" data-action="fav" aria-label="${favLabel}">${star}</button>
-  <button class="clip-del-btn" type="button" data-action="delete" aria-label="删除">×</button>
-</div>`;
+  return ("<div class=\"clip-item clip-item-text " + (typeClass) + "\" data-id=\"" + (safeId) + "\">\n  <button class=\"clip-copy-target\" type=\"button\" data-action=\"copy\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.copy.3f65f7", { arg3: (accessiblePreview) })) + "\">\n    <span class=\"clip-text\">" + (safeText) + "</span>\n    <span class=\"clip-meta\"><span class=\"clip-time\">" + (timeStr) + "</span></span>\n  </button>\n  <button class=\"clip-fav-btn" + (favClass) + "\" type=\"button\" data-action=\"fav\" aria-label=\"" + (favLabel) + "\">" + (star) + "</button>\n  <button class=\"clip-del-btn\" type=\"button\" data-action=\"delete\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.delete.2f9daa")) + "\" data-i18n-aria-label=\"copy.delete.2f9daa\">×</button>\n</div>");
 }
 
 function getFilteredClipItems() {
@@ -4697,7 +4678,7 @@ function renderClipList() {
   if (items.length === 0) {
     clipListEl.innerHTML =
       '<div class="clip-empty">' +
-      (clipHistory.length ? '没有符合条件的记录' : '复制点什么，历史会出现在这里') +
+      (clipHistory.length ? pomeLocaleRendererApp.t("copy.noMatchingItems.4659ba") : pomeLocaleRendererApp.t("copy.copySomethingToSeeItsHistoryHere.f0571f")) +
       '</div>';
     lastRenderedClipVersion = clipDataVersion; // 空态也标记已渲染
     return;
@@ -4838,8 +4819,8 @@ function deleteClipEntry(id, focusContext = null) {
   if (focusContext && focusContext.restoreFocus) {
     focusClipControl([focusContext.nextId, focusContext.previousId]);
   }
-  showStatusToast('已删除剪贴记录', {
-    actionLabel: '撤销',
+  showStatusToast(pomeLocaleRendererApp.t("copy.clipboardEntryDeleted.be12bb"), {
+    actionLabel: pomeLocaleRendererApp.t("copy.undo.926a50"),
     duration: 5000,
     onAction: () => {
       if (clipHistory.some((item) => item.id === id)) return;
@@ -4853,7 +4834,7 @@ function deleteClipEntry(id, focusContext = null) {
       renderClipList();
       renderClipFavs();
       focusClipControl([id]);
-      showStatusToast('已撤销删除');
+      showStatusToast(pomeLocaleRendererApp.t("copy.deletionUndone.2e33cb"));
     },
     onExpire: () => {
       if (entry.type !== 'image' || !entry.imagePath) return;
@@ -4869,22 +4850,22 @@ function resetClipClearConfirmation() {
   clipClearArmed = false;
   if (clipClearBtn) {
     clipClearBtn.classList.remove('confirming');
-    clipClearBtn.setAttribute('aria-label', '清空历史');
+    clipClearBtn.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.clearHistory.17ac4a"));
   }
 }
 
 function requestClearClipHistory() {
   if (clipHistory.length === 0) {
-    showStatusToast('剪贴板历史已是空的');
+    showStatusToast(pomeLocaleRendererApp.t("copy.clipboardHistoryIsAlreadyEmpty.d4a211"));
     return;
   }
   if (!clipClearArmed) {
     clipClearArmed = true;
     if (clipClearBtn) {
       clipClearBtn.classList.add('confirming');
-      clipClearBtn.setAttribute('aria-label', `再次点击确认清空 ${clipHistory.length} 条历史`);
+      clipClearBtn.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.clickAgainToClearHistoryEntries.04c46d", { arg1: (clipHistory.length) }));
     }
-    showStatusToast(`再点一次垃圾桶，清空 ${clipHistory.length} 条记录`, {
+    showStatusToast(pomeLocaleRendererApp.t("copy.clickTheBinAgainToClearEntries.8ef455", { arg1: (clipHistory.length) }), {
       duration: 3000,
       onExpire: resetClipClearConfirmation,
     });
@@ -4918,7 +4899,7 @@ function clearClipHistory() {
   }
   renderClipList();
   renderClipFavs();
-  showStatusToast(`已清空 ${removedCount} 条剪贴记录`);
+  showStatusToast(pomeLocaleRendererApp.t("copy.clearedClipboardEntries.e98862", { arg1: (removedCount) }));
 }
 
 async function copyClipEntry(id) {
@@ -4930,19 +4911,19 @@ async function copyClipEntry(id) {
       ? await window.notchAPI.pasteClipboard(entry)
       : { ok: await window.notchAPI.writeClipboard(entry), pasted: false };
     if (!result?.ok) {
-      showStatusToast('复制失败，请重试');
+      showStatusToast(pomeLocaleRendererApp.t("copy.copyFailedTryAgain.86ee28"));
       return false;
     }
     showStatusToast(result.pasted
-      ? '已填入刚才的输入框'
+      ? pomeLocaleRendererApp.t("copy.pastedIntoThePreviousInput.dd7d6e")
       : result.permissionRequired
-        ? '请开启辅助功能权限；内容已复制'
+        ? pomeLocaleRendererApp.t("copy.enableAccessibilityPermissionContentHasBeenCopied.20d80d")
         // Windows：目标以管理员身份运行时 UIPI 会静默吞掉按键，只能请用户手动粘贴（P4-1）。
         : result.reason === 'elevated'
-          ? '已复制；目标窗口以管理员身份运行，请手动粘贴'
-          : entry.type === 'image' ? '图片已复制，可直接粘贴' : '已复制，可直接粘贴');
+          ? pomeLocaleRendererApp.t("copy.copiedTheTargetAppIsRunningAs.e85a67")
+          : entry.type === 'image' ? pomeLocaleRendererApp.t("copy.imageCopiedReadyToPaste.5abf25") : pomeLocaleRendererApp.t("copy.copiedReadyToPaste.afa9e1"));
   } catch (e) {
-    showStatusToast('复制失败，请重试');
+    showStatusToast(pomeLocaleRendererApp.t("copy.copyFailedTryAgain.86ee28"));
     return false;
   }
   // 视觉反馈：800ms 后移除 copied 类
@@ -5075,3 +5056,22 @@ window.prepareWorkspaceBackupSnapshot = () => {
   localStorage.setItem('notch-home-note', noteInput.value);
   return collectLocalStorageSnapshot();
 };
+
+window.addEventListener('pome:language-changed', () => {
+  let savedCategories = {};
+  try { savedCategories = JSON.parse(localStorage.getItem(TODO_CATEGORY_KEY) || '{}') || {}; } catch {}
+  for (const priority of PRIORITIES) {
+    if (savedCategories[priority]) continue; // Saved names are user data, even if they equal an old default.
+    const input = document.querySelector(`.todo-category-name[data-category="${priority}"]`);
+    const previous = todoCategoryNames[priority];
+    todoCategoryNames[priority] = TODO_CATEGORY_DEFAULTS[priority];
+    if (input && input.value === previous) input.value = todoCategoryNames[priority];
+    const addInput = document.querySelector(`.add-row input[data-priority="${priority}"]`);
+    if (addInput) addInput.setAttribute('aria-label', pomeLocaleRendererApp.t('copy.addATaskTo.efb0ec', { arg1: todoCategoryNames[priority] }));
+  }
+  for (const trigger of document.querySelectorAll('.todo-deadline-trigger')) {
+    const deadline = trigger.dataset.deadline;
+    const label = trigger.querySelector('span');
+    if (label && deadline) label.textContent = pomeLocaleRendererApp.date(deadline, { day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+});

@@ -1,0 +1,22 @@
+[nas]
+packageDescription="在飞牛上查看 Pome Panel 工作区，并与桌面配对。界面走统一网关 /app/pome-panel。没配端口时网关仍会启动；配好后默认监听 127.0.0.1，可选局域网 0.0.0.0。"
+packageChangelog="0.9.14：设备同步端口可选局域网监听（0.0.0.0）。默认仅监听 127.0.0.1（仅本机）。应用设置新增监听范围。启动入口仍是 TRIM_APPDEST/server。同步协议仍在 target/packages/sync-protocol。卸载仍可保留或删除数据。"
+
+[wizard]
+allAppDataFilesWillBePermanently_c0cd34="清除所有应用数据文件，此操作不可恢复"
+appData_dcf6f0="数据处理方式"
+chooseWhetherToKeepAppDataKeeping_6bccf1="保留或删除应用设置。仅卸载可保留现有文件以便重装。"
+chooseWhetherToKeepAppData_5596de="请选择是否保留应用数据"
+deleteAllAppDataCannotBeUndone_a440ed="清除所有应用数据文件（不可恢复）!!!"
+deviceSyncPort_cbb969="设备同步端口"
+enterADeviceSyncPort165535_8ca6b1="请填写本机设备同步端口（1 到 65535）并选择监听范围。就算这次没保存成功，应用也会先启用，之后可以在「应用设置」补上端口并重启。内网 IP 同步：选「局域网」，在同一局域网内用 http://NAS内网IP:端口 同步。外网 IP 同步：选「局域网」，并通过路由器端口转发、DDNS 域名等方式，把外网 IP 的端口转到 NAS 的该端口；也可以选「仅本机」，改用 FRP、反向代理、VPN 等方式转发到 127.0.0.1:端口。安全提示：同步端口默认是明文 HTTP，直接暴露到公网有被扫描和访问的风险。外网使用建议加 HTTPS、走 VPN，或用反向代理限制来源，并妥善保管配对码。不要对公网开放不必要的端口。保存后到应用中心重启本应用。"
+enterADeviceSyncPort165535_dbf8f6="请填写本机设备同步端口（1 到 65535）并选择监听范围。内网 IP 同步：选「局域网」，在同一局域网内用 http://NAS内网IP:端口 同步。外网 IP 同步：选「局域网」，并通过路由器端口转发、DDNS 域名等方式，把外网 IP 的端口转到 NAS 的该端口；也可以选「仅本机」，改用 FRP、反向代理、VPN 等方式转发到 127.0.0.1:端口。安全提示：同步端口默认是明文 HTTP，直接暴露到公网有被扫描和访问的风险。外网使用建议加 HTTPS、走 VPN，或用反向代理限制来源，并妥善保管配对码。不要对公网开放不必要的端口。保存后到应用中心重启本应用。"
+enterADeviceSyncPort_68b26e="请填写设备同步端口"
+enterAPortFrom1To65535_6d7fb2="请输入 1 到 65535 之间的端口"
+keepAppData_b04690="保留现有文件"
+keepExistingFilesForUseAfterReinstalling_fd77b2="保留现有文件，重新安装后可以继续使用"
+keepOrDeleteAppData_e141d3="保留或删除应用设置"
+lan0000UseThe_26b760="局域网（0.0.0.0）：同一局域网可用内网 IP 同步，也可以配合外网方式使用。"
+listeningScope_2351e0="监听范围"
+localhost127001AccessibleOnly_c5a67d="仅本机（127.0.0.1）：只有 NAS 本机能访问，适合搭配反向代理或穿透工具，由它们再转发到本机该端口。"
+theAppCanStartWithoutAPort_739ea2="没填端口时应用也能启用，只是桌面还不能同步。请填写本机设备同步端口（1 到 65535）并选择监听范围。内网 IP 同步：选「局域网」，在同一局域网内用 http://NAS内网IP:端口 同步。外网 IP 同步：选「局域网」，并通过路由器端口转发、DDNS 域名等方式，把外网 IP 的端口转到 NAS 的该端口；也可以选「仅本机」，改用 FRP、反向代理、VPN 等方式转发到 127.0.0.1:端口。安全提示：同步端口默认是明文 HTTP，直接暴露到公网有被扫描和访问的风险。外网使用建议加 HTTPS、走 VPN，或用反向代理限制来源，并妥善保管配对码。不要对公网开放不必要的端口。保存后到应用中心重启本应用。"

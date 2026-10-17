@@ -22,7 +22,9 @@
     "build:zip": "electron-builder --mac zip",
     "pack": "electron-builder --dir",
     "make-ico": "node scripts/make-ico.js",
-    "check:work-hub": "node scripts/check-work-hub-baseline.js"
+    "check:work-hub": "node scripts/check-work-hub-baseline.js",
+    "i18n:generate": "node scripts/localization-resources.js",
+    "i18n:check": "node scripts/localization-resources.js --check"
   },
   "devDependencies": {
     "electron": "^44.0.0",
@@ -79,7 +81,11 @@
       "build/pome-panel-icon.ico",
       "build/pome-panel-icon.icns",
       "build/pome-trayTemplate.png",
-      "build/pome-trayTemplate@2x.png"
+      "build/pome-trayTemplate@2x.png",
+      "localization/runtime.js",
+      "localization/resources.js",
+      "localization/locales/en-US.json",
+      "localization/locales/zh-CN.json"
     ],
     "mac": {
       "icon": "build/pome-panel-icon.icns",
@@ -125,7 +131,11 @@
         "build/pome-trayTemplate.png",
         "build/pome-trayTemplate@2x.png",
         "!node_modules/koffi/**",
-        "!node_modules/@koromix/**"
+        "!node_modules/@koromix/**",
+        "localization/runtime.js",
+        "localization/resources.js",
+        "localization/locales/en-US.json",
+        "localization/locales/zh-CN.json"
       ],
       "category": "public.app-category.productivity",
       "minimumSystemVersion": "13.0",
@@ -146,10 +156,15 @@
         "LSUIElement": true,
         "NSHighResolutionCapable": true,
         "CFBundleDisplayName": "Pome Panel",
-        "NSCameraUsageDescription": "Pome Panel 需要使用摄像头来显示「镜子」预览。",
-        "NSMicrophoneUsageDescription": "Pome Panel 需要使用麦克风来录音并生成转写文本。",
-        "NSAppleEventsUsageDescription": "Pome Panel 需要控制「系统事件」来枚举并聚焦当前窗口、发送汽水音乐快捷键。",
-        "NSLocalNetworkUsageDescription": "Pome Panel 需要访问局域网中的飞牛 NAS 以同步数据。"
+        "NSCameraUsageDescription": "Pome Panel uses the camera for the Mirror preview when you open it.",
+        "NSMicrophoneUsageDescription": "Pome Panel uses the microphone to record audio when you start recording. Transcription is optional.",
+        "NSAppleEventsUsageDescription": "Pome Panel uses System Events to list and focus windows and send Soda Music shortcuts.",
+        "NSLocalNetworkUsageDescription": "Pome Panel accesses your NAS on the local network to sync your workspace.",
+        "CFBundleDevelopmentRegion": "en",
+        "CFBundleLocalizations": [
+          "en",
+          "zh-Hans"
+        ]
       }
     },
     "win": {
@@ -172,7 +187,13 @@
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
       "runAfterFinish": false,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": [
+        "en_US",
+        "zh_CN"
+      ],
+      "displayLanguageSelector": false,
+      "multiLanguageInstaller": true
     },
     "dmg": {
       "title": "Pome Panel ${version}",

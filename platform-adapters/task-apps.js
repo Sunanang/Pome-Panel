@@ -1,11 +1,13 @@
 'use strict';
+const pomeLocalePlatformAdaptersTaskApps = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
+
 
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
 
-const LABELS = { codex: 'Codex', cursor: 'Cursor', claude: '终端' };
+const LABELS = { codex: 'Codex', cursor: 'Cursor', get claude() { return pomeLocalePlatformAdaptersTaskApps.t("copy.terminal.e2a76e"); } };
 const APP_NAMES = { codex: ['Codex', 'ChatGPT'], cursor: ['Cursor'], claude: ['Terminal'] };
 const TERMINAL_TABS_JXA = `
 function run() {
@@ -111,21 +113,21 @@ function createTaskApps(platform, options = {}) {
 
   async function open(record) {
     const source = record?.source, label = LABELS[source];
-    if (!label) return { ok: false, error: 'unsupported_source', message: '该记录没有可打开的软件。' };
+    if (!label) return { ok: false, error: 'unsupported_source', message: pomeLocalePlatformAdaptersTaskApps.t("copy.thisRecordHasNoAppToOpen.0ddec0") };
     let cwd;
     try { cwd = source === 'claude' ? validateCwd(record.window?.cwd ?? record.cwd, platform, disk) : null; }
-    catch { return { ok: false, error: 'invalid_cwd', message: '工作目录无效或已不存在，无法打开终端。' }; }
+    catch { return { ok: false, error: 'invalid_cwd', message: pomeLocalePlatformAdaptersTaskApps.t("copy.theWorkingDirectoryIsInvalidOrNo.9c7fb1") }; }
     try {
       if (platform === 'darwin') {
         const bundleId = await macBundle(source);
-        if (!bundleId) return { ok: false, error: 'app_not_installed', message: `未找到 ${label}。` };
+        if (!bundleId) return { ok: false, error: 'app_not_installed', message: pomeLocalePlatformAdaptersTaskApps.t("copy.couldnTFind.9d877a", { arg1: (label) }) };
         // Use argv for the directory; never compose a shell cd command.
         if (source !== 'claude' || !cwd || !await reuseTerminal(cwd)) {
           await run('/usr/bin/open', ['-b', bundleId, ...(cwd ? [cwd] : [])]);
         }
       } else if (platform === 'win32') {
         const files = windowsAppPaths(source, env).filter(exists);
-        if (!files.length) return { ok: false, error: 'app_not_installed', message: `未找到 ${label}。` };
+        if (!files.length) return { ok: false, error: 'app_not_installed', message: pomeLocalePlatformAdaptersTaskApps.t("copy.couldnTFind.9d877a", { arg1: (label) }) };
         let launched = false;
         for (const file of files) {
           const terminal = /[\\/]wt\.exe$/i.test(file);
@@ -140,9 +142,9 @@ function createTaskApps(platform, options = {}) {
           try { await start(file, args); launched = true; break; } catch { /* Try another install or PowerShell. */ }
         }
         if (!launched) throw new Error('launch_failed');
-      } else return { ok: false, error: 'unsupported_platform', message: '当前平台不支持打开来源软件。' };
-      return { ok: true, message: `已打开 ${label}。` };
-    } catch { return { ok: false, error: 'launch_failed', message: `打开 ${label} 失败，请稍后重试。` }; }
+      } else return { ok: false, error: 'unsupported_platform', message: pomeLocalePlatformAdaptersTaskApps.t("copy.openingSourceAppsIsnTSupportedOn.8e7504") };
+      return { ok: true, message: pomeLocalePlatformAdaptersTaskApps.t("copy.opened.f7baf1", { arg1: (label) }) };
+    } catch { return { ok: false, error: 'launch_failed', message: pomeLocalePlatformAdaptersTaskApps.t("copy.couldnTOpenTryAgain.c927f8", { arg1: (label) }) }; }
   }
   return { open };
 }

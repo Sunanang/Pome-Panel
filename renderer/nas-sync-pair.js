@@ -1,4 +1,6 @@
 'use strict';
+const pomeLocaleRendererNasSyncPair = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
+
 
 /**
  * Pure UI helpers for NAS sync pairing (T3).
@@ -6,21 +8,21 @@
  */
 (function initNasSyncPair(global) {
   const PAIR_CODE_RE = /^\d{6}$/;
-  const HTTPS_ON_HTTP_MESSAGE = '该地址说的是 HTTP，不是 HTTPS。请把 Base URL 改为 http://…';
-  const CONNECTION_TIMEOUT_MESSAGE = '连接超时。请逐项检查：① 若 NAS 同步端口是明文 HTTP，请使用 http:// 而不是 https://；② 端口是 Pome Panel Sync 页面上的「设备同步端口」，且端口转发或 frp 等映射到该端口；③ 本机能够访问这台 NAS（优先试局域网 IP）。';
-  const CERTIFICATE_TRUST_CONFIRM_TEXT = '该地址使用自签或不受信证书。确认后只信任这一张证书对应的主机和端口，不会全局关闭证书校验。证书更换后需要重新确认。';
+  const HTTPS_ON_HTTP_MESSAGE = pomeLocaleRendererNasSyncPair.t("copy.thisAddressUsesHttpNotHttpsChange.d61e18");
+  const CONNECTION_TIMEOUT_MESSAGE = pomeLocaleRendererNasSyncPair.t("copy.connectionTimedOutCheckUseHttpFor.6fedf7");
+  const CERTIFICATE_TRUST_CONFIRM_TEXT = pomeLocaleRendererNasSyncPair.t("copy.thisAddressUsesASelfSignedOr.6b4e16");
 
   function formatCertificateTrustBody(details = {}) {
     const lines = [
-      details.confirmText || CERTIFICATE_TRUST_CONFIRM_TEXT,
+      pomeLocaleRendererNasSyncPair.systemText(details.confirmText || CERTIFICATE_TRUST_CONFIRM_TEXT),
       '',
-      `主机：${details.hostKey || '（未知）'}`,
-      `指纹：${details.fingerprint256 || '（未能读取）'}`,
+      pomeLocaleRendererNasSyncPair.t("copy.host.aaea94", { arg1: (details.hostKey || pomeLocaleRendererNasSyncPair.t("copy.unknown.90a49e")) }),
+      pomeLocaleRendererNasSyncPair.t("copy.fingerprint.8897fb", { arg1: (details.fingerprint256 || pomeLocaleRendererNasSyncPair.t("copy.unavailable.56e8dc")) }),
     ];
-    if (details.subjectCN) lines.push(`主题：${details.subjectCN}`);
-    if (details.issuerCN) lines.push(`颁发者：${details.issuerCN}`);
+    if (details.subjectCN) lines.push(pomeLocaleRendererNasSyncPair.t("copy.subject.20d2c4", { arg1: (details.subjectCN) }));
+    if (details.issuerCN) lines.push(pomeLocaleRendererNasSyncPair.t("copy.issuer.b2e481", { arg1: (details.issuerCN) }));
     if (details.validFrom || details.validTo) {
-      lines.push(`有效期：${details.validFrom || '—'} — ${details.validTo || '—'}`);
+      lines.push(pomeLocaleRendererNasSyncPair.t("copy.valid.f363e2", { arg1: (details.validFrom || '—'), arg2: (details.validTo || '—') }));
     }
     return lines.join('\n');
   }
@@ -62,8 +64,8 @@
 
   function validatePairCode(value) {
     const code = normalizePairCode(value);
-    if (!code) return { ok: false, error: 'empty', message: '请输入配对码' };
-    if (!PAIR_CODE_RE.test(code)) return { ok: false, error: 'invalid_format', message: '配对码须为 6 位数字' };
+    if (!code) return { ok: false, error: 'empty', message: pomeLocaleRendererNasSyncPair.t("copy.enterAPairingCode.03ac12") };
+    if (!PAIR_CODE_RE.test(code)) return { ok: false, error: 'invalid_format', message: pomeLocaleRendererNasSyncPair.t("copy.enterA6DigitPairingCode.1468c4") };
     return { ok: true, code };
   }
 
@@ -98,13 +100,13 @@
         next.error = '';
         next.bound = true;
         next.status = action.status || null;
-        next.toast = '配对成功';
+        next.toast = pomeLocaleRendererNasSyncPair.t("copy.pairingSuccessful.b1e2f7");
         next.dialog = null;
         return next;
       case 'failure':
         next.submitting = false;
         next.disabled = false;
-        next.error = action.message || action.error || '配对失败';
+        next.error = action.message || action.error || pomeLocaleRendererNasSyncPair.t("copy.pairingFailed.aea73b");
         next.toast = next.error;
         next.needsTrustConfirm = action.needsTrustConfirm === true;
         if (!next.needsTrustConfirm) next.dialog = null;
@@ -113,10 +115,10 @@
         next.dialog = {
           id: 'pair-http-confirm',
           role: 'dialog',
-          title: '允许明文 HTTP 配对？',
-          body: action.confirmText || '配对码与新设备令牌将以明文传输，可能被窃听或篡改。',
-          confirmLabel: '仍然配对',
-          cancelLabel: '取消',
+          title: pomeLocaleRendererNasSyncPair.t("copy.pairOverUnencryptedHttp.4af466"),
+          body: action.confirmText || pomeLocaleRendererNasSyncPair.t("copy.thePairingCodeAndNewDeviceToken.880a2f"),
+          confirmLabel: pomeLocaleRendererNasSyncPair.t("copy.pairAnyway.cce70a"),
+          cancelLabel: pomeLocaleRendererNasSyncPair.t("copy.cancel.2cd0f3"),
         };
         return next;
       case 'open_cert_trust_confirm':
@@ -124,10 +126,10 @@
           id: 'pair-cert-trust-confirm',
           controlId: 'pair.certificate-trust',
           role: 'dialog',
-          title: '信任此 NAS 证书？',
+          title: pomeLocaleRendererNasSyncPair.t("copy.trustThisNasCertificate.23eb10"),
           body: formatCertificateTrustBody(action),
-          confirmLabel: '仅信任此证书',
-          cancelLabel: '取消',
+          confirmLabel: pomeLocaleRendererNasSyncPair.t("copy.trustThisCertificateOnly.e59a01"),
+          cancelLabel: pomeLocaleRendererNasSyncPair.t("copy.cancel.2cd0f3"),
           fingerprint256: action.fingerprint256 || null,
           hostKey: action.hostKey || null,
         };
@@ -142,10 +144,10 @@
         next.dialog = {
           id: 'pair-reauth-confirm',
           role: 'dialog',
-          title: '吊销令牌并重新配对？',
-          body: '将清除本机设备令牌。确认后需重新输入配对码。',
-          confirmLabel: '确认吊销',
-          cancelLabel: '取消',
+          title: pomeLocaleRendererNasSyncPair.t("copy.revokeTheTokenAndPairAgain.1e8757"),
+          body: pomeLocaleRendererNasSyncPair.t("copy.thisWillClearTheLocalDeviceToken.2507ff"),
+          confirmLabel: pomeLocaleRendererNasSyncPair.t("copy.revokeToken.f16f6a"),
+          cancelLabel: pomeLocaleRendererNasSyncPair.t("copy.cancel.2cd0f3"),
         };
         return next;
       case 'cleared':
@@ -153,7 +155,7 @@
         next.status = null;
         next.devices = [];
         next.dialog = null;
-        next.toast = '已清除绑定';
+        next.toast = pomeLocaleRendererNasSyncPair.t("copy.bindingCleared.0c78d9");
         return next;
       case 'devices':
         next.devices = Array.isArray(action.devices) ? action.devices : [];
@@ -164,10 +166,10 @@
         if (action.status && action.status.schemaIncompatible) {
           next.error = action.status.schemaMessage
             || (action.status.schemaUpgradeTarget === 'desktop'
-              ? '协议不兼容：请升级桌面端 Pome Panel 后再同步'
+              ? pomeLocaleRendererNasSyncPair.t("copy.syncProtocolIncompatibleUpdatePomePanelOn.2d166f")
               : action.status.schemaUpgradeTarget === 'fpk'
-                ? '协议不兼容：请升级 NAS 上的 Pome Panel Sync 应用后再同步'
-                : '协议不兼容：请升级桌面端或 NAS 应用后再同步');
+                ? pomeLocaleRendererNasSyncPair.t("copy.syncProtocolIncompatibleUpdatePomePanelSync.6a4b67")
+                : pomeLocaleRendererNasSyncPair.t("copy.syncProtocolIncompatibleUpdateTheDesktopApp.8bf1e9"));
         }
         return next;
       default:
@@ -207,12 +209,12 @@
     if (!validated.ok) return { ok: false, error: validated.error, message: validated.message };
 
     if (!baseUrl || !String(baseUrl).trim()) {
-      return { ok: false, error: 'empty_base_url', message: '请填写 NAS 地址' };
+      return { ok: false, error: 'empty_base_url', message: pomeLocaleRendererNasSyncPair.t("copy.enterANasAddress.1eab70") };
     }
 
     const policy = await api.syncPairHttpPolicy(baseUrl);
     if (!policy.ok) {
-      return { ok: false, error: policy.error || 'invalid_base_url', message: 'NAS 地址无效' };
+      return { ok: false, error: policy.error || 'invalid_base_url', message: pomeLocaleRendererNasSyncPair.t("copy.invalidNasAddress.4d188b") };
     }
 
     if (shouldPromptHttpConfirm(policy) && !httpConfirmAccepted) {
@@ -239,43 +241,43 @@
         return {
           ok: false,
           error: 'https_on_http',
-          message: HTTPS_ON_HTTP_MESSAGE,
+          message: pomeLocaleRendererNasSyncPair.systemText(HTTPS_ON_HTTP_MESSAGE),
           needsTrustConfirm: false,
           certificateError: false,
           dialog: null,
         };
       }
       const messages = {
-        secure_storage_unavailable: '系统安全存储不可用，拒绝保存明文令牌',
-        http_confirm_required: '需要确认不安全的 HTTP 配对',
-        insecure_http_not_allowed: '未允许明文 HTTP',
-        empty: '请输入配对码',
-        invalid_format: '配对码须为 6 位数字',
-        code_not_found: '配对码无效',
-        code_consumed: '配对码已使用',
-        code_expired: '配对码已过期',
-        certificate_error: '证书不受信任。请核对指纹后确认，仅信任此主机和端口的这一张证书。',
-        certificate_fingerprint_mismatch: '证书指纹已变化，请重新核对后再信任',
-        certificate_fingerprint_required: '缺少要信任的证书指纹',
-        timeout: CONNECTION_TIMEOUT_MESSAGE,
-        remote_closed: '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。',
-        connection_refused: '连不上同步端口。请确认飞牛应用正在运行，并且 FRP 或局域网指向当前的设备同步端口。',
+        secure_storage_unavailable: pomeLocaleRendererNasSyncPair.t("copy.systemSecureStorageIsUnavailableTokensCannot.6333a1"),
+        http_confirm_required: pomeLocaleRendererNasSyncPair.t("copy.confirmInsecureHttpPairingFirst.3a443b"),
+        insecure_http_not_allowed: pomeLocaleRendererNasSyncPair.t("copy.unencryptedHttpIsNotAllowed.86c663"),
+        empty: pomeLocaleRendererNasSyncPair.t("copy.enterAPairingCode.03ac12"),
+        invalid_format: pomeLocaleRendererNasSyncPair.t("copy.enterA6DigitPairingCode.1468c4"),
+        code_not_found: pomeLocaleRendererNasSyncPair.t("copy.invalidPairingCode.752fe0"),
+        code_consumed: pomeLocaleRendererNasSyncPair.t("copy.pairingCodeAlreadyUsed.c6f326"),
+        code_expired: pomeLocaleRendererNasSyncPair.t("copy.pairingCodeExpired.23a951"),
+        certificate_error: pomeLocaleRendererNasSyncPair.t("copy.theCertificateIsNotTrustedVerifyIts.393764"),
+        certificate_fingerprint_mismatch: pomeLocaleRendererNasSyncPair.t("copy.theCertificateFingerprintChangedVerifyItAgain.87032f"),
+        certificate_fingerprint_required: pomeLocaleRendererNasSyncPair.t("copy.theCertificateFingerprintIsMissing.65bd77"),
+        timeout: pomeLocaleRendererNasSyncPair.systemText(CONNECTION_TIMEOUT_MESSAGE),
+        remote_closed: pomeLocaleRendererNasSyncPair.t("copy.theHostWasReachedButTheSync.1bab4e"),
+        connection_refused: pomeLocaleRendererNasSyncPair.t("copy.canTReachTheSyncPortCheck.3a3a3e"),
         schema_incompatible: result.message
           || (result.upgradeTarget === 'desktop'
-            ? '协议不兼容：请升级桌面端 Pome Panel 后再同步'
+            ? pomeLocaleRendererNasSyncPair.t("copy.syncProtocolIncompatibleUpdatePomePanelOn.2d166f")
             : result.upgradeTarget === 'fpk'
-              ? '协议不兼容：请升级 NAS 上的 Pome Panel Sync 应用后再同步'
-              : '协议不兼容：请升级桌面端或 NAS 应用后再同步'),
+              ? pomeLocaleRendererNasSyncPair.t("copy.syncProtocolIncompatibleUpdatePomePanelSync.6a4b67")
+              : pomeLocaleRendererNasSyncPair.t("copy.syncProtocolIncompatibleUpdateTheDesktopApp.8bf1e9")),
       };
       const needsTrustConfirm = shouldOpenCertificateTrustDialog(result);
       const incoming = result.message && /[\u4e00-\u9fff]/.test(result.message) ? result.message : '';
       return {
         ok: false,
         error: result.error,
-        message: incoming || messages[result.error] || result.message || result.error || '配对失败',
+        message: pomeLocaleRendererNasSyncPair.systemText(incoming || messages[result.error] || result.message || result.error || pomeLocaleRendererNasSyncPair.t("copy.pairingFailed.aea73b")),
         needsTrustConfirm,
         certificateError: result.certificateError === true || result.error === 'certificate_error',
-        confirmText: result.confirmText || (needsTrustConfirm ? CERTIFICATE_TRUST_CONFIRM_TEXT : null),
+        confirmText: result.confirmText ? pomeLocaleRendererNasSyncPair.systemText(result.confirmText) : (needsTrustConfirm ? pomeLocaleRendererNasSyncPair.systemText(CERTIFICATE_TRUST_CONFIRM_TEXT) : null),
         fingerprint256: result.fingerprint256 || null,
         subjectCN: result.subjectCN || null,
         issuerCN: result.issuerCN || null,

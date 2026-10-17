@@ -1,3 +1,4 @@
+const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 (function initWorkspace() {
   const Domain = window.NotchDomain;
   if (!Domain) return;
@@ -46,7 +47,7 @@
   }
 
   function formatShortDate(timestamp) {
-    return new Intl.DateTimeFormat('zh-CN', {
+    return new Intl.DateTimeFormat(pomeLocaleRendererWorkspace.getState().formatLocale, {
       month: 'numeric',
       day: 'numeric',
       hour: '2-digit',
@@ -73,15 +74,15 @@
     commandList.replaceChildren();
     if (commandBulkDelete) {
       commandBulkDelete.hidden = commandSelection.size === 0;
-      commandBulkDelete.textContent = '删除';
+      pomeLocaleRendererWorkspace.bind(commandBulkDelete, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.delete.2f9daa")));
       commandBulkDelete.setAttribute('aria-label', commandSelection.size
-        ? `删除 ${commandSelection.size} 项`
-        : '删除所选');
+        ? pomeLocaleRendererWorkspace.t("copy.deleteItems.0bfa6f", { arg1: (commandSelection.size) })
+        : pomeLocaleRendererWorkspace.t("copy.deleteSelected.435bf8"));
     }
     if (!commands.length) {
       const empty = document.createElement('div');
       empty.className = 'command-empty';
-      empty.textContent = '把常用命令、提示词或回复模板放在这里';
+      pomeLocaleRendererWorkspace.bind(empty, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.keepCommandsPromptsOrReplyTemplatesHere.578abb")));
       commandList.appendChild(empty);
       return;
     }
@@ -94,7 +95,7 @@
       textButton.className = 'command-text';
       textButton.type = 'button';
       textButton.dataset.action = 'edit-command';
-      textButton.title = '点击修改';
+      pomeLocaleRendererWorkspace.bind(textButton, "title", () => (pomeLocaleRendererWorkspace.t("copy.clickToEdit.1f705f")));
       textButton.textContent = command.text;
 
       const actions = document.createElement('div');
@@ -103,13 +104,13 @@
       copy.className = 'icon-button';
       copy.type = 'button';
       copy.dataset.action = 'copy-command';
-      copy.setAttribute('aria-label', '复制指令');
+      copy.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.copyCommand.4888b5"));
       copy.innerHTML = COPY_ICON;
       const remove = document.createElement('button');
       remove.className = 'icon-button danger';
       remove.type = 'button';
       remove.dataset.action = 'delete-command';
-      remove.setAttribute('aria-label', '删除指令');
+      remove.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.deleteCommand.ebd35b"));
       remove.innerHTML = DELETE_ICON;
       actions.append(copy, remove);
       row.append(textButton, actions);
@@ -235,10 +236,10 @@
   function updateLinkBulkAction() {
     if (!linkBulkDelete) return;
     linkBulkDelete.hidden = linkSelection.size === 0;
-    linkBulkDelete.textContent = '删除';
+    pomeLocaleRendererWorkspace.bind(linkBulkDelete, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.delete.2f9daa")));
     linkBulkDelete.setAttribute('aria-label', linkSelection.size
-      ? `删除 ${linkSelection.size} 项`
-      : '删除所选');
+      ? pomeLocaleRendererWorkspace.t("copy.deleteItems.0bfa6f", { arg1: (linkSelection.size) })
+      : pomeLocaleRendererWorkspace.t("copy.deleteSelected.435bf8"));
   }
 
   function linkHostname(url) {
@@ -266,7 +267,7 @@
     if (!linkGroups.length) {
       const empty = document.createElement('div');
       empty.className = 'links-empty';
-      empty.innerHTML = '<strong>还没有链接</strong><span>粘贴一个网址，Pome Panel 会读取标题并放进合适的分组。</span>';
+      empty.innerHTML = ("<strong><span data-i18n=\"copy.noLinksYet.ca8a0b\">" + (pomeLocaleRendererWorkspace.t("copy.noLinksYet.ca8a0b")) + "</span></strong><span><span data-i18n=\"copy.pasteAUrlPomePanelWillFetch.fd0731\">" + (pomeLocaleRendererWorkspace.t("copy.pasteAUrlPomePanelWillFetch.fd0731")) + "</span></span>");
       linkGroupsEl.appendChild(empty);
       return;
     }
@@ -282,26 +283,26 @@
       toggle.className = 'group-toggle';
       toggle.type = 'button';
       toggle.dataset.action = 'toggle-group';
-      toggle.setAttribute('aria-label', group.collapsed ? '展开分组' : '折叠分组');
+      toggle.setAttribute('aria-label', group.collapsed ? pomeLocaleRendererWorkspace.t("copy.expandGroup.c105f6") : pomeLocaleRendererWorkspace.t("copy.collapseGroup.7115c1"));
       toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>';
       const name = document.createElement('input');
       name.className = 'group-name-input';
-      name.value = String(group.name || '未命名分组');
+      name.value = String(group.name || pomeLocaleRendererWorkspace.t("copy.untitledGroup.a6a35a"));
       name.dataset.action = 'rename-group';
-      name.setAttribute('aria-label', '分组名称');
+      name.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.groupName.d7e266"));
       const count = document.createElement('span');
       count.className = 'group-count';
       count.textContent = `${Array.isArray(group.links) ? group.links.length : 0}`;
       header.append(toggle, name, count);
-      header.appendChild(createIconButton('add-link-to-group', `在“${group.name || '当前分组'}”中新增链接`, ADD_ICON));
-      header.appendChild(createIconButton('delete-group', '删除分组及其中所有链接', DELETE_ICON, true));
+      header.appendChild(createIconButton('add-link-to-group', pomeLocaleRendererWorkspace.t("copy.addALinkTo.da80a1", { arg1: (group.name || pomeLocaleRendererWorkspace.t("copy.currentGroup.0d64fa")) }), ADD_ICON));
+      header.appendChild(createIconButton('delete-group', pomeLocaleRendererWorkspace.t("copy.deleteThisGroupAndAllItsLinks.ac63b1"), DELETE_ICON, true));
 
       const body = document.createElement('div');
       body.className = 'link-group-body';
       if (addingLinkGroupId === group.id) {
         const addRow = document.createElement('div');
         addRow.className = 'group-link-add';
-        addRow.innerHTML = `<input data-group-link-input type="text" placeholder="粘贴网址并回车，添加到此分组" aria-label="添加链接到${String(group.name || '当前分组').replace(/[<>"&]/g, '')}" autocomplete="off" spellcheck="false"><button type="button" data-action="cancel-group-link-add" aria-label="取消">×</button>`;
+        addRow.innerHTML = ("<input data-group-link-input type=\"text\" placeholder=\"" + (pomeLocaleRendererWorkspace.attribute("copy.pasteAUrlAndPressEnterTo.ca1a76")) + "\" data-i18n-placeholder=\"copy.pasteAUrlAndPressEnterTo.ca1a76\" aria-label=\"" + (pomeLocaleRendererWorkspace.attribute("copy.addALinkTo.2ab212", { arg1: (String(group.name || pomeLocaleRendererWorkspace.t("copy.currentGroup.0d64fa")).replace(/[<>"&]/g, '')) })) + "\" autocomplete=\"off\" spellcheck=\"false\"><button type=\"button\" data-action=\"cancel-group-link-add\" aria-label=\"" + (pomeLocaleRendererWorkspace.attribute("copy.cancel.2cd0f3")) + "\" data-i18n-aria-label=\"copy.cancel.2cd0f3\">×</button>");
         body.appendChild(addRow);
       }
       const list = document.createElement('div');
@@ -333,9 +334,9 @@
         const actions = document.createElement('div');
         actions.className = 'link-actions';
         actions.append(
-          createIconButton('open-link', '打开链接', OPEN_ICON),
-          createIconButton('edit-link', '修改名称', EDIT_ICON),
-          createIconButton('delete-link', '删除链接', DELETE_ICON, true)
+          createIconButton('open-link', pomeLocaleRendererWorkspace.t("copy.openLink.a26394"), OPEN_ICON),
+          createIconButton('edit-link', pomeLocaleRendererWorkspace.t("copy.rename.88f462"), EDIT_ICON),
+          createIconButton('delete-link', pomeLocaleRendererWorkspace.t("copy.deleteLink.e8feb9"), DELETE_ICON, true)
         );
         row.append(mark, open, actions);
         list.appendChild(row);
@@ -350,14 +351,14 @@
   function addLink(rawValue, requestedGroupId = '') {
     const normalized = Domain.normalizeHttpUrl(rawValue);
     if (!normalized) {
-      setLinksStatus('请输入有效的公开网址', 'error');
+      setLinksStatus(pomeLocaleRendererWorkspace.t("copy.enterAValidPublicUrl.d6921d"), 'error');
       return false;
     }
     if (allLinks().some((link) => link.url === normalized)) {
-      setLinksStatus('这个链接已经收藏过了', 'error');
+      setLinksStatus(pomeLocaleRendererWorkspace.t("copy.thisLinkIsAlreadySaved.6e1239"), 'error');
       return false;
     }
-    const link = { id: uid('link'), url: normalized, title: '未命名', icon: '', createdAt: Date.now() };
+    const link = { id: uid('link'), url: normalized, title: pomeLocaleRendererWorkspace.t("copy.untitled.67bee6"), icon: '', createdAt: Date.now() };
     const preferredGroupId = requestedGroupId || Domain.preferredLinkGroupId(linkGroups, normalized);
     const preferredGroup = linkGroups.find((group) => group.id === preferredGroupId);
     if (preferredGroup) {
@@ -369,7 +370,7 @@
     }
     persistLinks();
     renderLinkGroups();
-    setLinksStatus('链接已保存');
+    setLinksStatus(pomeLocaleRendererWorkspace.t("copy.linkSaved.d25676"));
 
     // 保存动作不等待网络或大模型。标题、图标和分组在后台静默补全。
     Promise.resolve(window.notchAPI?.inspectLink?.(normalized)).then((inspected) => {
@@ -385,7 +386,7 @@
       });
       if (!savedLink || !sourceGroup) return;
       savedLink.url = inspected.url || savedLink.url;
-      savedLink.title = inspected.title || savedLink.title || '未命名';
+      pomeLocaleRendererWorkspace.bind(savedLink, "title", () => (inspected.title || savedLink.title || pomeLocaleRendererWorkspace.t("copy.untitled.67bee6")));
       savedLink.icon = inspected.icon || savedLink.icon || '';
       // 手动定向或同站点复用后锁定分组；自动分类只使用可预测的本地规则，
       // 避免模型自由命名生成多个近义分组。
@@ -625,7 +626,7 @@
           linkGroupsEl.classList.add('link-dragging');
           try { row.setPointerCapture(linkDrag.pointerId); } catch (error) {}
           updateLinkDropTarget(linkDrag.startX, linkDrag.startY);
-          setLinksStatus('拖到目标位置后松手');
+          setLinksStatus(pomeLocaleRendererWorkspace.t("copy.releaseAtTheTargetPosition.cb8842"));
         }, LINK_DRAG_HOLD_MS),
       };
     });
@@ -666,7 +667,7 @@
       }
       persistLinks();
       renderLinkGroups();
-      setLinksStatus('链接顺序已更新');
+      setLinksStatus(pomeLocaleRendererWorkspace.t("copy.linkOrderUpdated.840904"));
     });
 
     document.addEventListener('pointercancel', () => cancelLinkDrag());
@@ -689,7 +690,7 @@
     linkSelectionAnchor = null;
     persistLinks();
     renderLinkGroups();
-    setLinksStatus('已删除所选链接');
+    setLinksStatus(pomeLocaleRendererWorkspace.t("copy.selectedLinksDeleted.eaa3ee"));
   });
 
   // ============ 录音与转写 ============
@@ -716,6 +717,8 @@
   const transcriptionApiStatus = document.getElementById('transcription-api-status');
   const transcriptionApiHelp = document.getElementById('transcription-api-help');
   const transcriptionRegion = document.getElementById('transcription-region');
+  const transcriptionLanguage = document.getElementById('transcription-language');
+  let activeRecognitionLanguage = 'zh-CN';
   const transcriptionWorkspace = document.getElementById('transcription-workspace');
   const llmApiKey = document.getElementById('llm-api-key');
   const llmApiStatus = document.getElementById('llm-api-status');
@@ -732,7 +735,7 @@
   const settingsCursorTokenFetch = document.getElementById('settings-cursor-token-fetch');
   const settingsCursorTokenClear = document.getElementById('settings-cursor-token-clear');
   const settingsCursorTokenHint = document.getElementById('settings-cursor-token-hint');
-  let settingsCursorTokenMeta = { configured: false, state: 'empty', label: '未配置 · 使用本机登录' };
+  let settingsCursorTokenMeta = { configured: false, state: 'empty', label: pomeLocaleRendererWorkspace.t("copy.notConfiguredUsingLocalSignIn.3004c2") };
   const settingsNasSyncStatus = document.getElementById('settings-nas-sync-status');
   const settingsNasSyncBaseUrl = document.getElementById('settings-nas-sync-base-url');
   const settingsNasPairCode = document.getElementById('settings-nas-pair-code');
@@ -973,6 +976,7 @@
       llmApiStatus.dataset.state = statuses.llm.state;
     }
     if (transcriptionRegion) transcriptionRegion.value = transcriptionConfig.region || 'beijing';
+    if (transcriptionLanguage) transcriptionLanguage.value = transcriptionConfig.transcriptionLanguage || 'zh';
     if (transcriptionWorkspace) transcriptionWorkspace.value = transcriptionConfig.workspaceId || '';
     if (llmBaseUrl) llmBaseUrl.value = transcriptionConfig.llmBaseUrl || 'https://api.deepseek.com';
     if (llmModel) llmModel.value = transcriptionConfig.llmModel || 'deepseek-v4-flash';
@@ -1005,14 +1009,13 @@
       settingsLlmStatus.dataset.state = summary.llm.state;
     }
     if (settingsCursorTokenStatus) {
-      settingsCursorTokenStatus.textContent = settingsCursorTokenMeta.label || '未配置 · 使用本机登录';
+      pomeLocaleRendererWorkspace.bind(settingsCursorTokenStatus, "textContent", () => (pomeLocaleRendererWorkspace.systemText(settingsCursorTokenMeta.label) || pomeLocaleRendererWorkspace.t("copy.notConfiguredUsingLocalSignIn.3004c2")));
       settingsCursorTokenStatus.dataset.state = settingsCursorTokenMeta.state || 'empty';
     }
     renderNasSyncPanel();
     if (settingsShortcutValue) {
       // 存的是 Electron accelerator，显示要按平台换成 ⌘⌥⌃⇧ 或 Ctrl/Alt/Shift/Win（P2-3）。
-      settingsShortcutValue.textContent =
-        window.NotchPlatform?.formatAccelerator(summary.shortcut, window.notchAPI?.capabilities) || summary.shortcut;
+      settingsShortcutValue.textContent = window.NotchPlatform?.formatAccelerator(summary.shortcut, window.notchAPI?.capabilities) || summary.shortcut;
     }
     if (settingsDefaultTab) {
       const visibleTabs = new Set(Domain.visiblePanelTabs(
@@ -1028,7 +1031,7 @@
     }
     if (settingsWorkspaceKind) settingsWorkspaceKind.textContent = summary.workspaceLabel;
     if (settingsWorkspacePath) {
-      settingsWorkspacePath.textContent = summary.workspacePath || '默认数据目录';
+      pomeLocaleRendererWorkspace.bind(settingsWorkspacePath, "textContent", () => (summary.workspacePath || pomeLocaleRendererWorkspace.t("copy.defaultDataFolder.39ab2a")));
       settingsWorkspacePath.title = summary.workspacePath || '';
     }
     if (settingsAutoLaunch) settingsAutoLaunch.checked = summary.autoLaunch;
@@ -1056,14 +1059,14 @@
         || (moduleId === 'recorder' && recordingActive && input.checked);
     });
     const recorderNote = settingsHomeModuleList?.querySelector('[data-home-module-setting-note="recorder"]');
-    if (recorderNote) recorderNote.textContent = recordingActive ? '录音进行中' : '录音与转写';
+    if (recorderNote) pomeLocaleRendererWorkspace.bind(recorderNote, "textContent", () => (recordingActive ? pomeLocaleRendererWorkspace.t("copy.recordingInProgress.d548e4") : pomeLocaleRendererWorkspace.t("copy.recordingTranscription.376486")));
     const status = document.getElementById('settings-home-module-status');
     if (status) {
-      status.textContent = state?.readOnly
-        ? '安全模式 · 暂不可修改'
+      pomeLocaleRendererWorkspace.bind(status, "textContent", () => (state?.readOnly
+        ? pomeLocaleRendererWorkspace.t("copy.safeModeChangesUnavailable.d3e9bc")
         : state?.persisted === false
-          ? '仅当前会话 · 未能保存'
-          : '隐藏后自动填充 · 至少保留一个';
+          ? pomeLocaleRendererWorkspace.t("copy.thisSessionOnlyCouldnTSave.379370")
+          : pomeLocaleRendererWorkspace.t("copy.hiddenSpacesRefillAutomaticallyKeepAtLeast.be4674")));
       status.dataset.state = state?.readOnly || state?.persisted === false ? 'warning' : 'saved';
     }
   }
@@ -1078,23 +1081,23 @@
     if (status && meta) { meta.textContent = status.label; meta.dataset.state = status.state; }
     if (invalid !== undefined) {
       guide.hidden = !invalid;
-      if (invalid) { meta.textContent = 'Token 失效'; meta.dataset.state = 'error'; }
+      if (invalid) { pomeLocaleRendererWorkspace.bind(meta, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.tokenExpired.22c3fe"))); meta.dataset.state = 'error'; }
       else if (data) {
-        meta.textContent = data.configured ? '已配置手动 Token' : '未配置手动 Token';
+        pomeLocaleRendererWorkspace.bind(meta, "textContent", () => (data.configured ? pomeLocaleRendererWorkspace.t("copy.manualTokenConfigured.4bb854") : pomeLocaleRendererWorkspace.t("copy.noManualTokenConfigured.a2ebce")));
         meta.dataset.state = data.configured ? 'saved' : 'empty';
       }
     }
     if (!data || !D || !local) return;
     const updated = data.updatedAt && new Date(data.updatedAt);
     const today = updated && updated.toDateString() === new Date().toDateString();
-    const recent = updated ? `${today ? '今天' : updated.toLocaleDateString('zh-CN')} ${D.clock(data.updatedAt)}` : '暂无用量记录';
+    const recent = updated ? `${today ? pomeLocaleRendererWorkspace.t("copy.today.d5f5a7") : updated.toLocaleDateString(pomeLocaleRendererWorkspace.getState().formatLocale)} ${D.clock(data.updatedAt)}` : pomeLocaleRendererWorkspace.t("copy.noUsageRecordsYet.bd8649");
     const remote = data.authSource === 'manual';
-    local.textContent = remote ? ['手动 Token', D.planLabel(data.plan), `更新于 ${D.clock(data.updatedAt)}`].filter(Boolean).join(' · ')
-      : data.detected ? ['本机 Codex', D.planLabel(data.plan), `最近一次使用 ${recent}`].filter(Boolean).join(' · ') : '未检测到本机 Codex';
-    percent.textContent = data.updatedAt ? D.quotaRows(data, 'codex').map(({ name, windowUsage }) => `${name.replace(/额度$/, '')} ${D.formatPercent(D.remaining(windowUsage?.percent))}`).join(' · ')
-      + (D.quotaRows(data, 'codex').some(row => D.expired(row.windowUsage)) ? ' · 重置时间已过，待刷新' : '') : '';
-    if (data.remoteError && !invalid) percent.textContent += `${percent.textContent ? ' · ' : ''}暂时无法联网查询`;
-    else if (!data.ok && data.error && !invalid) percent.textContent = '暂时无法读取本机记录，点首页刷新重试';
+    pomeLocaleRendererWorkspace.bind(local, "textContent", () => (remote ? [pomeLocaleRendererWorkspace.t("copy.manualToken.bf90e7"), D.planLabel(data.plan), pomeLocaleRendererWorkspace.t("copy.updated.7114c0", { arg1: (D.clock(data.updatedAt)) })].filter(Boolean).join(' · ')
+      : data.detected ? [pomeLocaleRendererWorkspace.t("copy.localCodex.bbc04a"), D.planLabel(data.plan), pomeLocaleRendererWorkspace.t("copy.lastUsed.03d4d8", { arg1: (recent) })].filter(Boolean).join(' · ') : pomeLocaleRendererWorkspace.t("copy.localCodexNotDetected.89ad92")));
+    pomeLocaleRendererWorkspace.bind(percent, "textContent", () => (data.updatedAt ? D.quotaRows(data, 'codex').map(({ name, windowUsage }) => `${name.replace(/额度$/, '')} ${D.formatPercent(D.remaining(windowUsage?.percent))}`).join(' · ')
+      + (D.quotaRows(data, 'codex').some(row => D.expired(row.windowUsage)) ? pomeLocaleRendererWorkspace.t("copy.resetTimePassedRefreshNeeded.975faa") : '') : ''));
+    if (data.remoteError && !invalid) percent.textContent += pomeLocaleRendererWorkspace.t("copy.onlineUsageIsTemporarilyUnavailable.aa2a7b", { arg1: (percent.textContent ? ' · ' : '') });
+    else if (!data.ok && data.error && !invalid) pomeLocaleRendererWorkspace.bind(percent, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.couldnTReadLocalRecordsRefreshOn.c598b7")));
   }
   document.addEventListener('notch:ai-usage-updated', (event) => renderCodexSettings(event.detail?.codex));
   window.notchAPI?.onCodexTokenChanged?.((status) => {
@@ -1111,30 +1114,30 @@
     const button = document.getElementById('settings-codex-token-fetch');
     const hint = document.getElementById('settings-codex-token-hint');
     hint.className = 'settings-cursor-token-hint';
-    hint.textContent = '正在读取本机 Codex 登录态…';
-    button.textContent = '获取中…';
+    pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.readingLocalCodexSignIn.a06abf")));
+    pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.reading.146da2")));
     setCodexTokenBusy(true);
     try {
       const result = await window.notchAPI.readLocalCodexToken();
       if (!result?.ok || !result.token) {
         const messages = {
-          codex_auth_missing: '未找到可读取的本机 Codex 登录凭证，请登录后重试，或手动填写 Token。',
-          codex_token_missing: '本机 Codex 登录凭证中没有可用 Token，请重新登录后重试。',
-          codex_auth_read_failed: '暂时无法读取 Codex 登录凭证，请稍后重试，或手动填写 Token。',
+          codex_auth_missing: pomeLocaleRendererWorkspace.t("copy.noReadableCodexSignInFoundSign.d77b80"),
+          codex_token_missing: pomeLocaleRendererWorkspace.t("copy.noUsableTokenFoundInLocalCodex.fab797"),
+          codex_auth_read_failed: pomeLocaleRendererWorkspace.t("copy.couldnTReadCodexSignInRetry.5e8c59"),
         };
-        hint.textContent = messages[result?.error] || '获取失败，请重试或手动填写 Token。';
+        pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (messages[result?.error] || pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.129397")));
         hint.classList.add('error');
         return;
       }
       input.value = result.token;
-      hint.textContent = '已填入本机 access token，点击保存后查询实时额度。';
+      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.localAccessTokenFilledInSaveTo.dbcc94")));
       hint.classList.add('success');
     } catch {
-      hint.textContent = '获取失败，请重试或手动填写 Token。';
+      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.129397")));
       hint.classList.add('error');
     } finally {
       setCodexTokenBusy(false);
-      button.textContent = '获取本机 Token';
+      pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.getLocalToken.713114")));
     }
   });
   for (const action of ['save', 'clear']) {
@@ -1142,16 +1145,16 @@
       const input = document.getElementById('settings-codex-token');
       const hint = document.getElementById('settings-codex-token-hint');
       hint.className = 'settings-cursor-token-hint';
-      if (action === 'save' && !input.value.trim()) { hint.textContent = '请先填写 Token，或点清除移除已保存的 Token。'; return; }
+      if (action === 'save' && !input.value.trim()) { pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.enterATokenFirstOrClearThe.1b3ee0"))); return; }
       setCodexTokenBusy(true);
       try {
         const result = action === 'save' ? await window.notchAPI.setCodexToken(input.value) : await window.notchAPI.clearCodexToken();
         if (!result?.ok) throw new Error(result?.error);
         input.value = ''; renderCodexSettings(null, result);
-        hint.textContent = action === 'save' ? '已安全保存，正在查询实时额度。' : '已清除手动 Token。';
+        pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (action === 'save' ? pomeLocaleRendererWorkspace.t("copy.savedSecurelyQueryingLiveQuota.f4cf88") : pomeLocaleRendererWorkspace.t("copy.manualTokenCleared.03619f")));
         hint.classList.add('success');
       } catch (error) {
-        hint.textContent = error.message === 'secure_storage_unavailable' ? '当前系统安全存储不可用，无法保存 Token。' : '操作失败，请重试。';
+        pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (error.message === 'secure_storage_unavailable' ? pomeLocaleRendererWorkspace.t("copy.systemSecureStorageIsUnavailableCanT.3a9217") : pomeLocaleRendererWorkspace.t("copy.operationFailedTryAgain.825cfa")));
         hint.classList.add('error');
       } finally { setCodexTokenBusy(false); }
     });
@@ -1196,11 +1199,11 @@
     if (!transcriptionSettingsBackdrop) return;
     transcriptionSettingsBackdrop.hidden = false;
     transcriptionSettingsNote.classList.remove('error', 'success');
-    transcriptionSettingsNote.textContent = transcriptionConfig.asrNeedsReentry || transcriptionConfig.llmNeedsReentry
-      ? '检测到旧版加密密钥，但升级后无法解密。请重新输入通义百炼与 DeepSeek 两把 API Key。'
+    pomeLocaleRendererWorkspace.bind(transcriptionSettingsNote, "textContent", () => (transcriptionConfig.asrNeedsReentry || transcriptionConfig.llmNeedsReentry
+      ? pomeLocaleRendererWorkspace.t("copy.keysFromAnOlderVersionCouldNot.d775b1")
       : transcriptionConfig.configured || transcriptionConfig.llmConfigured
-        ? '已配置的 API Key 可留空；新输入的密钥会覆盖对应旧值。'
-        : '请分别配置通义百炼实时转写与 DeepSeek 两把 API Key。';
+        ? pomeLocaleRendererWorkspace.t("copy.leaveConfiguredApiKeysBlankToKeep.fc984e")
+        : pomeLocaleRendererWorkspace.t("copy.configureSeparateApiKeysForModelStudio.3e266d")));
     if (transcriptionApiKey) transcriptionApiKey.value = '';
     if (llmApiKey) llmApiKey.value = '';
     updateTranscriptionConfigUi();
@@ -1220,17 +1223,18 @@
       && !llmApiKey.value.trim()
     ) {
       transcriptionSettingsNote.classList.add('error');
-      transcriptionSettingsNote.textContent = '请至少配置一个 API Key。';
+      pomeLocaleRendererWorkspace.bind(transcriptionSettingsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.configureAtLeastOneApiKey.7b9f3f")));
       return;
     }
     transcriptionSettingsSave.disabled = true;
     transcriptionSettingsNote.classList.remove('error');
-    transcriptionSettingsNote.textContent = '正在安全保存…';
+    pomeLocaleRendererWorkspace.bind(transcriptionSettingsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.savingSecurely.1af0c5")));
     let result;
     try {
       result = await window.notchAPI.setTranscriptionConfig({
         apiKey: transcriptionApiKey.value,
         region: transcriptionRegion.value,
+        transcriptionLanguage: transcriptionLanguage.value,
         workspaceId: transcriptionWorkspace.value,
         llmApiKey: llmApiKey.value,
         llmBaseUrl: llmBaseUrl.value,
@@ -1242,13 +1246,13 @@
     transcriptionSettingsSave.disabled = false;
     if (!result || !result.ok) {
       transcriptionSettingsNote.classList.add('error');
-      transcriptionSettingsNote.textContent = result && result.error === 'invalid_workspace'
-        ? 'Workspace ID 格式不正确。'
+      pomeLocaleRendererWorkspace.bind(transcriptionSettingsNote, "textContent", () => (result && result.error === 'invalid_workspace'
+        ? pomeLocaleRendererWorkspace.t("copy.invalidWorkspaceIdFormat.bdcbed")
         : result && result.error === 'invalid_llm_url'
-          ? '大语言模型 Base URL 必须是有效的 HTTPS 地址。'
+          ? pomeLocaleRendererWorkspace.t("copy.theLanguageModelBaseUrlMustBe.ec5f24")
         : result && result.error === 'secure_storage_unavailable'
-          ? '当前系统安全存储不可用，可改用 DASHSCOPE_API_KEY 环境变量。'
-          : '配置保存失败，请重试。';
+          ? pomeLocaleRendererWorkspace.t("copy.systemSecureStorageIsUnavailableYouCan.5d0cf1")
+          : pomeLocaleRendererWorkspace.t("copy.couldnTSaveConfigurationTryAgain.4b6c65")));
       return;
     }
     transcriptionConfig = result;
@@ -1257,10 +1261,10 @@
     updateTranscriptionConfigUi();
     transcriptionSettingsNote.classList.remove('error');
     transcriptionSettingsNote.classList.add('success');
-    transcriptionSettingsNote.textContent = '已安全保存。为保护密钥，输入框不会回显明文；上方状态可确认是否已配置。';
-    transcriptionSettingsSave.textContent = '已保存';
+    pomeLocaleRendererWorkspace.bind(transcriptionSettingsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.savedSecurelyKeysAreNotDisplayedAs.345983")));
+    pomeLocaleRendererWorkspace.bind(transcriptionSettingsSave, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.saved.1bd91a")));
     setTimeout(() => {
-      if (transcriptionSettingsSave) transcriptionSettingsSave.textContent = '保存';
+      if (transcriptionSettingsSave) pomeLocaleRendererWorkspace.bind(transcriptionSettingsSave, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.save.a3030b")));
     }, 1200);
     if (
       transcriptionConfig.configured
@@ -1298,18 +1302,18 @@
   }
 
   function currentRecordingFeedback() {
-    if (recordingStartTask.isPending()) return '等待确认麦克风权限…';
+    if (recordingStartTask.isPending()) return pomeLocaleRendererWorkspace.t("copy.waitingForMicrophonePermission.a87426");
     if (recordingCaptureIssue) return recordingCaptureIssue;
-    if (recordingStatus === 'saving') return '正在保存录音…';
-    if (transcriptionConfig.asrNeedsReentry) return '转写密钥已失效 · 请重新配置 API Key';
-    if (transcriptionStatus === 'browser-error') return '未配置转写 API · 音频仍在录制';
-    if (transcriptionStatus === 'error') return '转写连接失败 · 音频仍在录制';
-    if (transcriptionStatus === 'reconnecting') return '转写中断，正在自动重连 · 音频仍在录制';
-    if (transcriptionStatus === 'connecting') return '正在连接转写服务';
-    if (transcriptionAudioGap) return '断线期间部分转写可能缺失 · 完整音频仍在本机录制';
-    if (recordingStatus === 'paused') return '录音已暂停';
-    if (!transcriptionConfig.configured && !currentRecordingText()) return '未配置转写 API · 音频仍会保存在本机';
-    return '正在录音';
+    if (recordingStatus === 'saving') return pomeLocaleRendererWorkspace.t("copy.savingRecording.f571d6");
+    if (transcriptionConfig.asrNeedsReentry) return pomeLocaleRendererWorkspace.t("copy.transcriptionKeyUnavailableConfigureTheApiKey.855d7e");
+    if (transcriptionStatus === 'browser-error') return pomeLocaleRendererWorkspace.t("copy.transcriptionApiNotConfiguredAudioIsStill.52b6ff");
+    if (transcriptionStatus === 'error') return pomeLocaleRendererWorkspace.t("copy.transcriptionConnectionFailedAudioIsStillRecording.7631f4");
+    if (transcriptionStatus === 'reconnecting') return pomeLocaleRendererWorkspace.t("copy.transcriptionInterruptedReconnectingAudioIsStillRecording.1340ab");
+    if (transcriptionStatus === 'connecting') return pomeLocaleRendererWorkspace.t("copy.connectingToTranscription.3dd686");
+    if (transcriptionAudioGap) return pomeLocaleRendererWorkspace.t("copy.someTranscriptionMayBeMissingDuringDisconnection.6bc0df");
+    if (recordingStatus === 'paused') return pomeLocaleRendererWorkspace.t("copy.recordingPaused.598133");
+    if (!transcriptionConfig.configured && !currentRecordingText()) return pomeLocaleRendererWorkspace.t("copy.transcriptionApiNotConfiguredAudioWillStill.9992d7");
+    return pomeLocaleRendererWorkspace.t("copy.recording.5254d3");
   }
 
   function beginRecordingDraft() {
@@ -1350,7 +1354,7 @@
     const preview = row?.querySelector('[data-recording-preview]');
     const meta = row?.querySelector('[data-recording-meta]');
     if (preview) preview.textContent = text || currentRecordingFeedback();
-    if (meta) meta.textContent = `${recordingStatus === 'saving' ? '保存中' : recordingStatus === 'paused' ? '已暂停' : '录音中'} · ${formatClock(durationMs)}`;
+    if (meta) pomeLocaleRendererWorkspace.bind(meta, "textContent", () => (`${recordingStatus === 'saving' ? pomeLocaleRendererWorkspace.t("copy.saving.a1a172") : recordingStatus === 'paused' ? pomeLocaleRendererWorkspace.t("copy.paused.eb0c32") : pomeLocaleRendererWorkspace.t("copy.recording.e35a14")} · ${formatClock(durationMs)}`));
     if (selectedRecordingId !== draft.id) return;
     const detailState = recordingDetail?.querySelector('[data-recording-live-state]');
     const detailDot = recordingDetail?.querySelector('[data-recording-live-dot]');
@@ -1360,14 +1364,14 @@
     const detailConfigure = recordingDetail?.querySelector('[data-action="configure-transcription"]');
     const detailPause = recordingDetail?.querySelector('.recording-live-pause');
     const detailStop = recordingDetail?.querySelector('.recording-live-stop');
-    if (detailState) detailState.textContent = recordingStatus === 'saving' ? '正在保存' : recordingStatus === 'paused' ? '已暂停' : '正在录音';
+    if (detailState) pomeLocaleRendererWorkspace.bind(detailState, "textContent", () => (recordingStatus === 'saving' ? pomeLocaleRendererWorkspace.t("copy.saving.570d60") : recordingStatus === 'paused' ? pomeLocaleRendererWorkspace.t("copy.paused.eb0c32") : pomeLocaleRendererWorkspace.t("copy.recording.5254d3")));
     if (detailDot) detailDot.dataset.state = recordingStatus;
     if (detailTime) detailTime.textContent = formatClock(durationMs);
     if (detailTranscript && detailTranscript.value !== text) detailTranscript.value = text;
     if (detailFeedback) detailFeedback.textContent = currentRecordingFeedback();
     if (detailConfigure) detailConfigure.hidden = transcriptionConfig.configured && !transcriptionConfig.asrNeedsReentry;
     if (detailPause) {
-      detailPause.textContent = recordingStatus === 'paused' ? '继续' : '暂停';
+      pomeLocaleRendererWorkspace.bind(detailPause, "textContent", () => (recordingStatus === 'paused' ? pomeLocaleRendererWorkspace.t("copy.resume.7c9691") : pomeLocaleRendererWorkspace.t("copy.pause.8d12fc")));
       detailPause.disabled = recordingStatus === 'saving';
     }
     if (detailStop) detailStop.disabled = recordingStatus === 'saving';
@@ -1430,7 +1434,7 @@
     updateRecordingUi();
     let result;
     try {
-      result = await window.notchAPI.startTranscription();
+      result = await window.notchAPI.startTranscription(activeRecognitionLanguage === 'en-US' ? 'en' : 'zh');
     } catch (error) {
       result = { ok: false, error: 'connection_failed' };
     }
@@ -1490,30 +1494,30 @@
     if (homeRecorder) homeRecorder.dataset.state = visualState;
     if (recordingDot) recordingDot.dataset.state = visualState;
     if (recordingStateLabel) {
-      recordingStateLabel.textContent = recordingStartTask.isPending()
-        ? '等待录音权限'
+      pomeLocaleRendererWorkspace.bind(recordingStateLabel, "textContent", () => (recordingStartTask.isPending()
+        ? pomeLocaleRendererWorkspace.t("copy.waitingForRecordingPermission.c1cf11")
         : recordingStatus === 'recording'
-        ? '正在录音'
+        ? pomeLocaleRendererWorkspace.t("copy.recording.5254d3")
         : recordingStatus === 'paused'
-          ? '已暂停'
+          ? pomeLocaleRendererWorkspace.t("copy.paused.eb0c32")
           : recordingStatus === 'saving'
-            ? '正在保存'
-            : '快速录音';
+            ? pomeLocaleRendererWorkspace.t("copy.saving.570d60")
+            : pomeLocaleRendererWorkspace.t("copy.quickRecording.bd31b8")));
     }
     if (recordingTime) recordingTime.textContent = formatClock(recordingActive ? currentDuration() : 0);
     if (recordStart) recordStart.disabled = recordingBusy;
     if (recordPause) {
       recordPause.disabled = !['recording', 'paused'].includes(recordingStatus);
-      recordPause.setAttribute('aria-label', recordingStatus === 'paused' ? '继续录音' : '暂停录音');
+      recordPause.setAttribute('aria-label', recordingStatus === 'paused' ? pomeLocaleRendererWorkspace.t("copy.resumeRecording.dc6dd7") : pomeLocaleRendererWorkspace.t("copy.pauseRecording.5912e7"));
       recordPause.classList.toggle('resume', recordingStatus === 'paused');
     }
     if (recordStop) recordStop.disabled = !['recording', 'paused'].includes(recordingStatus);
     if (recordingNew) {
       recordingNew.disabled = recordingBusy;
-      recordingNew.textContent = recordingBusy ? '录制' : '录音';
+      pomeLocaleRendererWorkspace.bind(recordingNew, "textContent", () => (recordingBusy ? pomeLocaleRendererWorkspace.t("copy.recordings.4b6ef7") : pomeLocaleRendererWorkspace.t("copy.recording.ef2821")));
       recordingNew.setAttribute('aria-label', recordingStartTask.isPending()
-        ? '正在请求麦克风权限'
-        : recordingActive ? '录音进行中' : '开始录音');
+        ? pomeLocaleRendererWorkspace.t("copy.requestingMicrophonePermission.e88281")
+        : recordingActive ? pomeLocaleRendererWorkspace.t("copy.recordingInProgress.d548e4") : pomeLocaleRendererWorkspace.t("copy.startRecording.ee9247"));
     }
     if (liveTranscript && recordingBusy) {
       const text = currentRecordingText();
@@ -1552,7 +1556,7 @@
     }
     if (speechRecognitionBlocked || recordingStatus !== 'recording') return;
     const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-CN';
+    recognition.lang = activeRecognitionLanguage;
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.onresult = (event) => {
@@ -1611,7 +1615,7 @@
       recordingCaptureIssue = '';
       discardRecordingDraft();
       if (liveTranscript) {
-        liveTranscript.textContent = '录音为空 · 请检查麦克风输入';
+        pomeLocaleRendererWorkspace.bind(liveTranscript, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.recordingIsEmptyCheckMicrophoneInput.07d37a")));
         liveTranscript.hidden = false;
       }
       updateRecordingUi();
@@ -1654,15 +1658,15 @@
         }).catch(() => {});
       }
       if (liveTranscript) {
-        liveTranscript.textContent = recording.transcript || (transcriptionConfig.configured
-          ? '录音已保存 · 暂无转写'
-          : '录音已保存 · 请配置转写 API');
+        pomeLocaleRendererWorkspace.bind(liveTranscript, "textContent", () => (recording.transcript || (transcriptionConfig.configured
+          ? pomeLocaleRendererWorkspace.t("copy.recordingSavedNoTranscriptYet.3c475e")
+          : pomeLocaleRendererWorkspace.t("copy.recordingSavedConfigureTheTranscriptionApi.cd1e4e"))));
         liveTranscript.hidden = false;
       }
     } else {
       discardRecordingDraft();
       if (liveTranscript) {
-        liveTranscript.textContent = '录音保存失败，请检查本机存储权限';
+        pomeLocaleRendererWorkspace.bind(liveTranscript, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.couldnTSaveRecordingCheckLocalStorage.5dffb3")));
         liveTranscript.hidden = false;
       }
     }
@@ -1683,7 +1687,7 @@
   async function showMicrophonePermissionHint() {
     if (!liveTranscript) return;
     const prompt = (await window.notchAPI?.getMediaAccessStatus?.('microphone').catch(() => null))
-      || { message: '无法访问麦克风 · 请在系统设置中授权', canOpenSettings: false };
+      || { message: pomeLocaleRendererWorkspace.t("copy.canTAccessTheMicrophoneAllowAccess.9be108"), canOpenSettings: false };
     liveTranscript.replaceChildren();
     liveTranscript.append(prompt.message);
     if (prompt.canOpenSettings) {
@@ -1699,6 +1703,7 @@
 
   async function startRecordingAttempt() {
     if (recordingStatus !== 'idle' || !navigator.mediaDevices || !window.MediaRecorder) return;
+    activeRecognitionLanguage = transcriptionConfig.transcriptionLanguage === 'en' ? 'en-US' : 'zh-CN';
     try {
       if (window.notchAPI && !(await window.notchAPI.ensureMicrophone())) {
         await showMicrophonePermissionHint();
@@ -1713,7 +1718,7 @@
       recordingCaptureIssue = '';
       audioTrack.addEventListener('mute', () => {
         if (!['recording', 'paused'].includes(recordingStatus)) return;
-        recordingCaptureIssue = '麦克风无输入 · 请检查系统音源';
+        recordingCaptureIssue = pomeLocaleRendererWorkspace.t("copy.noMicrophoneInputCheckTheSystemAudio.ef1c9a");
         updateRecordingUi();
       });
       audioTrack.addEventListener('unmute', () => {
@@ -1735,7 +1740,7 @@
         if (event.data && event.data.size) audioChunks.push(event.data);
       };
       mediaRecorder.onerror = () => {
-        recordingCaptureIssue = '录音中断 · 请重新开始';
+        recordingCaptureIssue = pomeLocaleRendererWorkspace.t("copy.recordingInterruptedStartAgain.64de84");
         updateRecordingUi();
       };
       mediaRecorder.onstop = async () => {
@@ -1771,7 +1776,7 @@
       const denied = error && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
       if (denied) await showMicrophonePermissionHint();
       else if (liveTranscript) {
-        liveTranscript.textContent = '无法开始录音 · 请检查麦克风设备';
+        pomeLocaleRendererWorkspace.bind(liveTranscript, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.couldnTStartRecordingCheckTheMicrophone.8c52b6")));
         liveTranscript.hidden = false;
       }
       updateRecordingUi();
@@ -1836,7 +1841,7 @@
 
   function paintNasHint(el, message, kind = '') {
     if (!el) return;
-    el.textContent = message || '';
+    pomeLocaleRendererWorkspace.bind(el, 'textContent', () => pomeLocaleRendererWorkspace.systemText(message || ''));
     el.dataset.kind = kind || '';
   }
 
@@ -1887,7 +1892,7 @@
     if (settingsNasSyncOpen) {
       settingsNasSyncOpen.hidden = false;
       settingsNasSyncOpen.disabled = !bound || busy || paused || nasSettingsUi.schemaIncompatible;
-      settingsNasSyncOpen.title = !bound ? '请先完成配对再同步' : paused ? '同步已暂停' : '';
+      pomeLocaleRendererWorkspace.bind(settingsNasSyncOpen, "title", () => (!bound ? pomeLocaleRendererWorkspace.t("copy.pairThisDeviceBeforeSyncing.5b7d9c") : paused ? pomeLocaleRendererWorkspace.t("copy.syncPaused.b6b537") : ''));
     }
     if (settingsNasSyncRetry) {
       settingsNasSyncRetry.hidden = !bound;
@@ -1899,8 +1904,8 @@
     const lastTime = lastAt ? new Date(lastAt) : null;
     const hasLastTime = bound && lastTime && Number.isFinite(lastTime.getTime());
     if (settingsNasLastSync) {
-      settingsNasLastSync.textContent = hasLastTime ? lastTime.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : '—';
-      settingsNasLastSync.title = hasLastTime ? lastTime.toLocaleString() : '';
+      settingsNasLastSync.textContent = hasLastTime ? lastTime.toLocaleTimeString(pomeLocaleRendererWorkspace.getState().formatLocale, { hour:'2-digit', minute:'2-digit' }) : '—';
+      settingsNasLastSync.title = hasLastTime ? lastTime.toLocaleString(pomeLocaleRendererWorkspace.getState().formatLocale) : '';
     }
     document.getElementById('settings-nas-last-sync-wrap').hidden = !hasLastTime;
     document.getElementById('settings-nas-recovery').hidden = !paused;
@@ -1909,7 +1914,7 @@
     document.getElementById('settings-nas-rollback').disabled = !bound || busy;
     document.getElementById('settings-nas-secret-hint').hidden = !paused;
     document.getElementById('settings-nas-migration-banner').hidden = !(nasMigrationUi.bannerVisible || migrating);
-    document.getElementById('settings-nas-migration-banner').textContent = nasMigrationUi.bannerText || '迁移中，稍候';
+    pomeLocaleRendererWorkspace.bind(document.getElementById('settings-nas-migration-banner'), "textContent", () => (nasMigrationUi.bannerText || pomeLocaleRendererWorkspace.t("copy.migratingPleaseWait.7aed12")));
     const failed = nasMigrationUi.phase === 'failed' || nasSettingsUi.uiState === 'migration_failed';
     if (settingsNasMigrationActions) settingsNasMigrationActions.hidden = !bound || !(failed || nasMigrationUi.lastMigrationId);
     if (settingsNasMigrationRetry) settingsNasMigrationRetry.hidden = !failed;
@@ -1941,11 +1946,11 @@
       const label = document.createElement('label'); label.className = 'settings-nas-http-toggle settings-feature-grid';
       label.dataset.controlId = 'endpoint.allowInsecureHttp';
       const copy = document.createElement('span');
-      const title = document.createElement('b'); title.textContent = '允许明文 HTTP（不安全）';
+      const title = document.createElement('b'); pomeLocaleRendererWorkspace.bind(title, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.allowUnencryptedHttpInsecure.324adf")));
       const address = document.createElement('small'); address.textContent = ep.baseUrl;
       copy.append(title, address);
       const input = document.createElement('input'); input.type = 'checkbox'; input.dataset.nasHttpToggle = ep.endpointId;
-      input.setAttribute('aria-label', '允许明文 HTTP'); input.checked = Boolean(ep.allowInsecureHttp); input.disabled = nasSettingsUi.busy;
+      input.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.allowUnencryptedHttp.2a5751")); input.checked = Boolean(ep.allowInsecureHttp); input.disabled = nasSettingsUi.busy;
       const decoration = document.createElement('i'); decoration.setAttribute('aria-hidden', 'true');
       label.append(copy, input, decoration); settingsNasEndpointList.append(label);
     }
@@ -1958,7 +1963,7 @@
       const name = document.createElement('strong'); name.textContent = row.name;
       const message = document.createElement('span'); message.textContent = row.message;
       const time = document.createElement('time'); time.textContent = `· ${row.time}`;
-      if (row.at) { time.dateTime = new Date(row.at).toISOString(); time.title = new Date(row.at).toLocaleString(); }
+      if (row.at) { time.dateTime = new Date(row.at).toISOString(); time.title = new Date(row.at).toLocaleString(pomeLocaleRendererWorkspace.getState().formatLocale); }
       item.append(name, message, time); root.append(item);
     }
   }
@@ -1983,30 +1988,30 @@
         schemaIncompatible,
         endpoints: nasSettingsUi.view && nasSettingsUi.view.endpoints,
       });
-    const lostTokenCopy = (window.NasSyncSettings && window.NasSyncSettings.LOST_DEVICE_TOKEN_HINT)
-      || '本机曾配置同步地址，但设备令牌已丢失，请重新配对';
+    const lostTokenCopy = pomeLocaleRendererWorkspace.systemText((window.NasSyncSettings && window.NasSyncSettings.LOST_DEVICE_TOKEN_HINT)
+      || pomeLocaleRendererWorkspace.t("copy.thisDeviceHasASavedSyncAddress.fc3a23"));
     if (settingsNasSyncStatus) {
       const paused = Boolean(nasSettingsUi.recovery?.paused || status?.recovery?.paused);
       if (nasPairUi.submitting) {
-        settingsNasSyncStatus.textContent = '正在配对…';
+        pomeLocaleRendererWorkspace.bind(settingsNasSyncStatus, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.pairing.f55f93")));
         settingsNasSyncStatus.dataset.state = 'syncing';
       } else if (paused) {
-        settingsNasSyncStatus.textContent = '同步已暂停';
+        pomeLocaleRendererWorkspace.bind(settingsNasSyncStatus, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.syncPaused.b6b537")));
         settingsNasSyncStatus.dataset.state = 'warning';
       } else if (nasMigrationUi.readonly || uiState === 'migrating') {
-        settingsNasSyncStatus.textContent = '迁移中，稍候';
+        pomeLocaleRendererWorkspace.bind(settingsNasSyncStatus, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.migratingPleaseWait.7aed12")));
         settingsNasSyncStatus.dataset.state = 'syncing';
       } else if (hardError || uiState === 'needs_reauth') {
-        settingsNasSyncStatus.textContent = nasSettingsUi.uiLabel || '出错';
+        pomeLocaleRendererWorkspace.bind(settingsNasSyncStatus, "textContent", () => (pomeLocaleRendererWorkspace.systemText(nasSettingsUi.uiLabel) || pomeLocaleRendererWorkspace.t("copy.failed.01ad2b")));
         settingsNasSyncStatus.dataset.state = hardError ? 'error' : 'warning';
       } else if (lostToken) {
-        settingsNasSyncStatus.textContent = '出错';
+        pomeLocaleRendererWorkspace.bind(settingsNasSyncStatus, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.failed.01ad2b")));
         settingsNasSyncStatus.dataset.state = 'error';
       } else if (!bound) {
-        settingsNasSyncStatus.textContent = '未配对';
+        pomeLocaleRendererWorkspace.bind(settingsNasSyncStatus, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.notPaired.af18b2")));
         settingsNasSyncStatus.dataset.state = 'empty';
       } else {
-        settingsNasSyncStatus.textContent = nasSettingsUi.uiState === 'unbound' ? '已配对' : nasSettingsUi.uiLabel || '已配对';
+        pomeLocaleRendererWorkspace.bind(settingsNasSyncStatus, "textContent", () => (nasSettingsUi.uiState === 'unbound' ? pomeLocaleRendererWorkspace.t("copy.paired.841d07") : pomeLocaleRendererWorkspace.systemText(nasSettingsUi.uiLabel) || pomeLocaleRendererWorkspace.t("copy.paired.841d07")));
         settingsNasSyncStatus.dataset.state = uiState === 'offline_pending' ? 'warning' : uiState === 'syncing' ? 'syncing' : status?.insecureBound ? 'insecure' : 'bound';
       }
       if (schemaIncompatible) {
@@ -2021,7 +2026,7 @@
           delete settingsNasStatusHint.dataset.schemaHint;
         }
         if (nasSettingsUi.view?.lastError && settingsNasStatusHint?.dataset.kind !== 'error') {
-          setNasStatusHint(describeNasSyncError({ error: nasSettingsUi.view.lastError.code, message: nasSettingsUi.view.lastError.message }, '操作失败'), 'error');
+          setNasStatusHint(describeNasSyncError({ error: nasSettingsUi.view.lastError.code, message: nasSettingsUi.view.lastError.message }, pomeLocaleRendererWorkspace.t("copy.operationFailed.0c3b4c")), 'error');
         }
       }
     }
@@ -2038,7 +2043,7 @@
     if (settingsNasPairReauth) settingsNasPairReauth.hidden = !bound;
     if (settingsNasPairSubmit) {
       settingsNasPairSubmit.disabled = Boolean(nasPairUi.submitting) || bound;
-      settingsNasPairSubmit.textContent = nasPairUi.submitting ? '正在配对…' : lostToken ? '重新配对' : '配对';
+      pomeLocaleRendererWorkspace.bind(settingsNasPairSubmit, "textContent", () => (nasPairUi.submitting ? pomeLocaleRendererWorkspace.t("copy.pairing.f55f93") : lostToken ? pomeLocaleRendererWorkspace.t("copy.pairAgain.206b73") : pomeLocaleRendererWorkspace.t("copy.pair.7c5cc4")));
     }
     if (settingsNasPairCode) {
       settingsNasPairCode.disabled = Boolean(nasPairUi.submitting) || bound;
@@ -2061,13 +2066,13 @@
 
   function openNasDialog(dialog) {
     if (!settingsNasDialogRoot || !dialog) return Promise.resolve({ confirmed: false });
-    if (settingsNasDialogTitle) settingsNasDialogTitle.textContent = dialog.title || '确认';
+    if (settingsNasDialogTitle) pomeLocaleRendererWorkspace.bind(settingsNasDialogTitle, "textContent", () => (dialog.title || pomeLocaleRendererWorkspace.t("copy.confirm.36f33a")));
     if (settingsNasDialogBody) {
       settingsNasDialogBody.textContent = dialog.body || '';
       settingsNasDialogBody.style.whiteSpace = 'pre-line';
     }
-    if (settingsNasDialogConfirm) settingsNasDialogConfirm.textContent = dialog.confirmLabel || '确认';
-    if (settingsNasDialogCancel) settingsNasDialogCancel.textContent = dialog.cancelLabel || '取消';
+    if (settingsNasDialogConfirm) pomeLocaleRendererWorkspace.bind(settingsNasDialogConfirm, "textContent", () => (dialog.confirmLabel || pomeLocaleRendererWorkspace.t("copy.confirm.36f33a")));
+    if (settingsNasDialogCancel) pomeLocaleRendererWorkspace.bind(settingsNasDialogCancel, "textContent", () => (dialog.cancelLabel || pomeLocaleRendererWorkspace.t("copy.cancel.2cd0f3")));
     if (settingsNasDialogAlt) {
       if (dialog.altLabel) {
         settingsNasDialogAlt.hidden = false;
@@ -2108,13 +2113,13 @@
     window.__nasTodoReadonly = window.NasSyncMigration.isReadonly(nasMigrationUi);
     if (todoMigrationBanner) {
       todoMigrationBanner.hidden = !nasMigrationUi.bannerVisible;
-      todoMigrationBanner.textContent = nasMigrationUi.bannerText || '迁移中，稍候';
+      pomeLocaleRendererWorkspace.bind(todoMigrationBanner, "textContent", () => (nasMigrationUi.bannerText || pomeLocaleRendererWorkspace.t("copy.migratingPleaseWait.7aed12")));
     }
     if (tabTodo) {
       tabTodo.classList.toggle('is-migration-readonly', Boolean(nasMigrationUi.readonly));
     }
     renderNasSyncPanel();
-    if (nasMigrationUi.phase === 'failed') setNasSyncHint(nasMigrationUi.error || '迁移失败', 'error');
+    if (nasMigrationUi.phase === 'failed') setNasSyncHint(nasMigrationUi.error || pomeLocaleRendererWorkspace.t("copy.migrationFailed.35cda8"), 'error');
     if (nasMigrationUi.toast && typeof showStatusToast === 'function') {
       showStatusToast(nasMigrationUi.toast);
     }
@@ -2137,7 +2142,7 @@
       return;
     }
     if (!nasPairUi.bound) {
-      setNasSyncHint('请先完成配对', 'warning');
+      setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.completePairingFirst.f1ab55"), 'warning');
       return;
     }
     const localTodosJson = typeof window.getLocalTodosForSync === 'function'
@@ -2152,9 +2157,9 @@
     if (!classified || !classified.ok) {
       applyNasMigrationUi({
         type: 'failed',
-        message: (classified && classified.error) || '无法判定迁移状态',
+        message: (classified && classified.error) || pomeLocaleRendererWorkspace.t("copy.couldnTDetermineMigrationState.4d2f3f"),
       });
-      setNasSyncHint('迁移判定失败', 'error');
+      setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.couldnTDetermineMigrationState.0c1a8f"), 'error');
       return;
     }
 
@@ -2169,7 +2174,7 @@
         if (!picked.choice && dialog.choiceCancel == null) {
           applyNasMigrationUi({ type: 'close_dialog' });
           applyNasMigrationUi({ type: 'reset' });
-          setNasSyncHint('已取消迁移', 'warning');
+          setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.migrationCanceled.faddad"), 'warning');
           return;
         }
       }
@@ -2183,7 +2188,7 @@
       } else {
         applyNasMigrationUi({ type: 'close_dialog' });
         applyNasMigrationUi({ type: 'reset' });
-        setNasSyncHint('已取消迁移', 'warning');
+        setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.migrationCanceled.faddad"), 'warning');
         return;
       }
       closeNasDialog(true, resolvedChoice);
@@ -2201,11 +2206,11 @@
       applyNasMigrationUi({
         type: 'failed',
         error: result && result.error,
-        message: (result && result.message) || (result && result.error) || '迁移失败',
+        message: (result && result.message) || (result && result.error) || pomeLocaleRendererWorkspace.t("copy.migrationFailed.35cda8"),
         migrationId: result && result.migrationId,
       });
       setNasSyncHint(
-        result && result.error === 'cas_conflict' ? '对端已变更，请重试判定' : '迁移失败',
+        result && result.error === 'cas_conflict' ? pomeLocaleRendererWorkspace.t("copy.theRemoteSideChangedCheckAgain.0f1ab5") : pomeLocaleRendererWorkspace.t("copy.migrationFailed.35cda8"),
         'error',
       );
       return;
@@ -2226,10 +2231,10 @@
 
     if (result.skipped) {
       applyNasMigrationUi({ type: 'skipped' });
-      setNasSyncHint('笔记、剪贴板、录音、链接、密钥和待办两边都是空的，已进入同步。', 'warning');
+      setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.bothSidesHaveNoNotesClipboardEntries.a2654b"), 'warning');
     } else {
       applyNasMigrationUi({ type: 'done', migrationId: result.migrationId });
-      setNasSyncHint(isRetry ? '迁移重试成功' : '迁移完成', 'success');
+      setNasSyncHint(isRetry ? pomeLocaleRendererWorkspace.t("copy.migrationRetrySuccessful.96c9a0") : pomeLocaleRendererWorkspace.t("copy.migrationComplete.920d63"), 'success');
     }
   }
 
@@ -2239,7 +2244,7 @@
       const status = await window.notchAPI.syncGetStatus();
       applyNasPairUi({ type: 'set_status', status });
       const hint = document.getElementById('credentials-sync-hint');
-      if (hint) hint.textContent = status.bound ? (status.recovery?.paused ? '本机加密保存；NAS 同步已暂停。普通资料备份不包含密钥。' : '本机加密保存；密钥通过 NAS 加密同步。普通资料备份不包含密钥。') : '本机加密保存；未配对 NAS。普通资料备份不包含密钥。';
+      if (hint) pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (status.bound ? (status.recovery?.paused ? pomeLocaleRendererWorkspace.t("copy.encryptedOnThisDeviceNasSyncPaused.386405") : pomeLocaleRendererWorkspace.t("copy.encryptedOnThisDeviceCredentialsSyncEncrypted.5db69f")) : pomeLocaleRendererWorkspace.t("copy.encryptedOnThisDeviceNasNotPaired.53018e")));
       if (status && status.bound && status.baseUrl && settingsNasSyncBaseUrl && !settingsNasSyncBaseUrl.value) {
         settingsNasSyncBaseUrl.value = status.baseUrl;
       }
@@ -2266,7 +2271,7 @@
         }
       }
     } catch (error) {
-      setNasStatusHint(describeNasSyncError(error, '操作失败'), 'error');
+      setNasStatusHint(describeNasSyncError(error, pomeLocaleRendererWorkspace.t("copy.operationFailed.0c3b4c")), 'error');
     }
   }
 
@@ -2279,7 +2284,7 @@
     const code = settingsNasPairCode?.value || '';
     const baseUrl = settingsNasSyncBaseUrl?.value || '';
     applyNasPairUi({ type: 'submit_start' });
-    setNasSyncHint('正在配对…');
+    setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.pairing.f55f93"));
 
     const policy = await window.notchAPI.syncPairHttpPolicy(baseUrl);
     if (window.NasSyncPair.shouldPromptHttpConfirm(policy) && !httpConfirmAccepted) {
@@ -2290,7 +2295,7 @@
       const decision = await openNasDialog(nasPairUi.dialog);
       if (!decision.confirmed) {
         applyNasPairUi({ type: 'close_dialog' });
-        setNasSyncHint('已取消不安全 HTTP 配对', 'warning');
+        setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.insecureHttpPairingCanceled.2925b0"), 'warning');
         return;
       }
       closeNasDialog(true);
@@ -2325,10 +2330,10 @@
           applyNasPairUi({ type: 'close_dialog' });
           applyNasPairUi({
             type: 'failure',
-            message: '已取消信任证书',
+            message: pomeLocaleRendererWorkspace.t("copy.certificateTrustCanceled.0276e8"),
             needsTrustConfirm: false,
           });
-          setNasSyncHint('已取消信任证书', 'warning');
+          setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.certificateTrustCanceled.0276e8"), 'warning');
           return;
         }
         closeNasDialog(true);
@@ -2344,12 +2349,12 @@
         message: result.message,
         needsTrustConfirm: askTrust,
       });
-      setNasSyncHint(result.message || '配对失败', 'error');
+      setNasSyncHint(result.message || pomeLocaleRendererWorkspace.t("copy.pairingFailed.aea73b"), 'error');
       return;
     }
     applyNasPairUi({ type: 'success', status: result.status });
     if (settingsNasPairCode) settingsNasPairCode.value = '';
-    setNasSyncHint('配对成功', 'success');
+    setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.pairingSuccessful.b1e2f7"), 'success');
     await refreshNasSyncStatus();
     // One shot per successful pair. Launch and later syncs do not reopen this.
     openNasSyncOptions();
@@ -2369,26 +2374,26 @@
   if (settingsCursorTokenFetch) settingsCursorTokenFetch.addEventListener('click', async () => {
     if (!window.notchAPI?.readLocalCursorToken || !settingsCursorToken) return;
     setCursorTokenBusy(true);
-    settingsCursorTokenFetch.textContent = '获取中…';
-    setCursorTokenHint('正在读取本机 Cursor 登录态…');
+    pomeLocaleRendererWorkspace.bind(settingsCursorTokenFetch, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.reading.146da2")));
+    setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.readingLocalCursorSignIn.153fb0"));
     try {
       const result = await window.notchAPI.readLocalCursorToken();
       if (!result?.ok || !result.token) {
         const messages = {
-          cursor_db_missing: '未找到本机 Cursor 数据，请先安装 Cursor 并登录。',
-          cursor_token_missing: '本机 Cursor 尚未登录，请登录后重试。',
-          cursor_db_read_failed: '暂时无法读取 Cursor 登录态，请稍后重试，或手动粘贴 Token。',
+          cursor_db_missing: pomeLocaleRendererWorkspace.t("copy.noLocalCursorDataFoundInstallCursor.f5b341"),
+          cursor_token_missing: pomeLocaleRendererWorkspace.t("copy.cursorIsnTSignedInLocallySign.45a8a8"),
+          cursor_db_read_failed: pomeLocaleRendererWorkspace.t("copy.couldnTReadCursorSignInRetry.6bf381"),
         };
-        setCursorTokenHint(messages[result?.error] || '获取失败，请重试或手动粘贴 Token。', 'error');
+        setCursorTokenHint(messages[result?.error] || pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.8c7624"), 'error');
         return;
       }
       settingsCursorToken.value = result.token;
-      setCursorTokenHint('已填入本机 Token，点击保存后生效；已配对 NAS 时会加密同步。', 'success');
+      setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.localTokenFilledInSaveToApply.aa9c1a"), 'success');
     } catch (error) {
-      setCursorTokenHint('获取失败，请重试或手动粘贴 Token。', 'error');
+      setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.8c7624"), 'error');
     } finally {
       setCursorTokenBusy(false);
-      settingsCursorTokenFetch.textContent = '获取本机 Token';
+      pomeLocaleRendererWorkspace.bind(settingsCursorTokenFetch, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.getLocalToken.713114")));
     }
   });
 
@@ -2396,11 +2401,11 @@
     if (!window.notchAPI || typeof window.notchAPI.setCursorToken !== 'function') return;
     const token = settingsCursorToken?.value || '';
     if (!String(token).trim()) {
-      setCursorTokenHint('请先获取或粘贴 Token，或点清除移除已保存的 Token。', 'error');
+      setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.getOrPasteATokenFirstOr.f2f57e"), 'error');
       return;
     }
     setCursorTokenBusy(true);
-    setCursorTokenHint('正在安全保存…');
+    setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.savingSecurely.1af0c5"));
     let result;
     try {
       result = await window.notchAPI.setCursorToken(token);
@@ -2411,8 +2416,8 @@
     if (!result || !result.ok) {
       setCursorTokenHint(
         result && result.error === 'secure_storage_unavailable'
-          ? '当前系统安全存储不可用，无法保存 Token。'
-          : 'Token 保存失败，请重试。',
+          ? pomeLocaleRendererWorkspace.t("copy.systemSecureStorageIsUnavailableCanT.3a9217")
+          : pomeLocaleRendererWorkspace.t("copy.couldnTSaveTheTokenRetry.69484f"),
         'error'
       );
       return;
@@ -2420,7 +2425,7 @@
     settingsCursorTokenMeta = result;
     if (settingsCursorToken) settingsCursorToken.value = '';
     renderSettingsPanel();
-    setCursorTokenHint('已安全保存，已配对 NAS 时会加密同步；失效后自动回退本机登录态。', 'success');
+    setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.savedSecurelyAndSyncedEncryptedWhenPaired.ec564d"), 'success');
   });
 
   if (settingsCursorTokenClear) settingsCursorTokenClear.addEventListener('click', async () => {
@@ -2434,13 +2439,13 @@
     }
     setCursorTokenBusy(false);
     if (!result || !result.ok) {
-      setCursorTokenHint('清除失败，请重试。', 'error');
+      setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.couldnTClearTheTokenRetry.3cb9ef"), 'error');
       return;
     }
     settingsCursorTokenMeta = result;
     if (settingsCursorToken) settingsCursorToken.value = '';
     renderSettingsPanel();
-    setCursorTokenHint('已清除保存的 Token，将使用本机登录态；清除操作也会随 NAS 同步。', 'success');
+    setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.savedTokenClearedLocalSignInWill.da9bd9"), 'success');
   });
 
   if (settingsNasPairCode) {
@@ -2471,10 +2476,10 @@
       const cleared = await window.notchAPI.syncClearBinding();
       if (cleared && cleared.ok) {
         applyNasPairUi({ type: 'cleared' });
-        setNasSyncHint('已清除绑定，可重新配对', 'success');
+        setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.bindingClearedYouCanPairAgain.9814e6"), 'success');
         await refreshNasSyncStatus();
       } else {
-        setNasSyncHint('清除失败', 'error');
+        setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.couldnTClearBinding.2952f4"), 'error');
       }
     });
   }
@@ -2489,16 +2494,16 @@
       if (!decision.confirmed) return;
       closeNasDialog(true);
       const removed = await window.notchAPI.syncDeleteEndpoint({ endpointId: backup.endpointId });
-      if (!removed?.ok) { setNasEndpointHint(describeNasSyncError(removed, '操作失败'), 'error'); return; }
+      if (!removed?.ok) { setNasEndpointHint(describeNasSyncError(removed, pomeLocaleRendererWorkspace.t("copy.operationFailed.0c3b4c")), 'error'); return; }
       nasBackupDraftDirty = false;
       await refreshNasSyncStatus();
       return;
     }
     const check = window.NasSyncSettings.validateBaseUrlDraft(baseUrl);
-    if (!check.ok) { setNasEndpointHint(check.message || 'URL 无效', 'error'); return; }
+    if (!check.ok) { setNasEndpointHint(check.message || pomeLocaleRendererWorkspace.t("copy.invalidUrl.d92df2"), 'error'); return; }
     const duplicate = (nasSettingsUi.view?.endpoints || []).some(ep => ep.endpointId !== backup?.endpointId
       && window.NasSyncSettings.connectionEndpoints({ endpoints: [ep] }, { baseUrl: check.baseUrl }).primary);
-    if (duplicate) { setNasEndpointHint(describeNasSyncError({ error: 'duplicate_endpoint' }, '操作失败'), 'error'); return; }
+    if (duplicate) { setNasEndpointHint(describeNasSyncError({ error: 'duplicate_endpoint' }, pomeLocaleRendererWorkspace.t("copy.operationFailed.0c3b4c")), 'error'); return; }
     const url = new URL(check.baseUrl);
     const needsHttp = url.protocol === 'http:' && !['localhost','127.0.0.1','[::1]'].includes(url.hostname)
       && !(backup?.baseUrl === check.baseUrl && backup.allowInsecureHttp);
@@ -2511,14 +2516,14 @@
     try {
       const result = backup ? await window.notchAPI.syncUpdateEndpoint({ endpointId: backup.endpointId, baseUrl: check.baseUrl })
         : await window.NasSyncSettings.runAddEndpoint({ api: window.notchAPI, baseUrl: check.baseUrl, kind: 'custom', priority: (Number(primary?.priority) || 0) + 1 });
-      if (!result?.ok) { setNasEndpointHint(describeNasSyncError(result, '操作失败'), 'error'); return; }
+      if (!result?.ok) { setNasEndpointHint(describeNasSyncError(result, pomeLocaleRendererWorkspace.t("copy.operationFailed.0c3b4c")), 'error'); return; }
       if (needsHttp) {
         const http = await window.NasSyncSettings.runToggleHttp({ api: window.notchAPI, endpointId: result.endpoint.endpointId, enable: true, httpConfirmAccepted: true });
-        if (!http?.ok) { setNasEndpointHint(describeNasSyncError(http, 'HTTP 开关更新失败'), 'error'); return; }
+        if (!http?.ok) { setNasEndpointHint(describeNasSyncError(http, pomeLocaleRendererWorkspace.t("copy.couldnTUpdateTheHttpSetting.dbb1de")), 'error'); return; }
       }
       nasBackupDraftDirty = false;
-      setNasEndpointHint(needsHttp ? '已允许明文 HTTP（持续警告）' : '已保存', needsHttp ? 'warning' : 'success');
-    } catch (error) { setNasEndpointHint(describeNasSyncError(error, '操作失败'), 'error'); }
+      setNasEndpointHint(needsHttp ? pomeLocaleRendererWorkspace.t("copy.unencryptedHttpAllowedWarningRemains.a047a3") : pomeLocaleRendererWorkspace.t("copy.saved.1bd91a"), needsHttp ? 'warning' : 'success');
+    } catch (error) { setNasEndpointHint(describeNasSyncError(error, pomeLocaleRendererWorkspace.t("copy.operationFailed.0c3b4c")), 'error'); }
     finally { applyNasSettingsUi({ type: 'idle' }); await refreshNasSyncStatus(); }
   }
 
@@ -2567,34 +2572,34 @@
         setNasStatusHint(
           httpsOnHttp
             ? (result.message || window.NasSyncPair.HTTPS_ON_HTTP_MESSAGE)
-            : describeNasSyncError(result, '重试失败'),
+            : describeNasSyncError(result, pomeLocaleRendererWorkspace.t("copy.retryFailed.26a643")),
           unbound ? 'warning' : 'error',
         );
       } else {
-        setNasStatusHint('已重试同步', 'success');
+        setNasStatusHint(pomeLocaleRendererWorkspace.t("copy.syncRetried.d5c1fd"), 'success');
       }
       await refreshNasSyncStatus();
     });
   }
   document.getElementById('settings-nas-recovery').addEventListener('click', async () => {
     const preview = await window.notchAPI.recoveryPreview();
-    if (!preview.ok) { setNasStatusHint(preview.message || '无法预览', 'error'); return; }
-    const confirmed = await window.notchAPI.confirm({ title: '用本机覆盖 NAS', message: '确认此影响范围后覆盖？', detail: `新增 ${preview.adds.length}、修改 ${preview.updates.length}、删除 ${preview.deletes.length}。\n删除条目：${(preview.deleteLabels || preview.deletes).join('、') || '无'}\n范围：待办、笔记、链接、指令、剪贴板、录音。密钥和 AI 配置保留。其他配对设备后续同步会接收这些变化。暂停期间的新修改已纳入。执行前会保存可验证、可回退的 NAS 快照；失败时禁止覆盖。` });
+    if (!preview.ok) { setNasStatusHint(preview.message || pomeLocaleRendererWorkspace.t("copy.previewUnavailable.b825cc"), 'error'); return; }
+    const confirmed = await window.notchAPI.confirm({ title: pomeLocaleRendererWorkspace.t("copy.replaceNasDataWithLocalData.2a31fb"), message: pomeLocaleRendererWorkspace.t("copy.overwriteThisDataAfterReviewingTheImpact.b62dd1"), detail: pomeLocaleRendererWorkspace.t("copy.addChangeDeleteDeletedItemsIncludesTasks.ca3b5f", { arg1: (preview.adds.length), arg2: (preview.updates.length), arg3: (preview.deletes.length), arg4: ((preview.deleteLabels || preview.deletes).join('、') || pomeLocaleRendererWorkspace.t("copy.none.484d55")) }) });
     if (!confirmed) return;
     const result = await window.notchAPI.recoveryExecute(preview.previewId);
-    setNasStatusHint(result.ok ? '覆盖已验证成功，同步已恢复' : result.message || '执行失败，同步保持暂停', result.ok ? 'success' : 'error');
+    setNasStatusHint(result.ok ? pomeLocaleRendererWorkspace.t("copy.overwriteVerifiedSyncResumed.da48e7") : result.message || pomeLocaleRendererWorkspace.t("copy.operationFailedSyncRemainsPaused.aff63e"), result.ok ? 'success' : 'error');
     await refreshNasSyncStatus();
   });
   document.getElementById('settings-nas-rollback').addEventListener('click', async () => {
     const status = await window.notchAPI.syncGetStatus();
-    const confirmed = await window.notchAPI.confirm({ title: '回退 NAS 快照', message: '回退最近一次覆盖前的普通资料？', detail: '仅当 NAS 自覆盖后没有发生新变化时可以回退。回退会产生新的服务器版本，同步保持暂停，需重新确认后续影响。' });
+    const confirmed = await window.notchAPI.confirm({ title: pomeLocaleRendererWorkspace.t("copy.restoreNasSnapshot.1ce868"), message: pomeLocaleRendererWorkspace.t("copy.restoreOrdinaryDataFromBeforeTheLast.252e58"), detail: pomeLocaleRendererWorkspace.t("copy.rollbackIsAvailableOnlyIfTheNas.a5665f") });
     if (!confirmed) return;
     const result = await window.notchAPI.recoveryRollback(status.recovery.operationId);
-    setNasStatusHint(result.ok ? 'NAS 已回退，同步保持暂停' : result.message || '回退失败', result.ok ? 'success' : 'error');
+    setNasStatusHint(result.ok ? pomeLocaleRendererWorkspace.t("copy.nasRolledBackSyncRemainsPaused.7e5880") : result.message || pomeLocaleRendererWorkspace.t("copy.rollbackFailed.577da4"), result.ok ? 'success' : 'error');
     await refreshNasSyncStatus();
   });
   function describeBackupCounts(counts) {
-    return `待办 ${Object.values(counts.todos || {}).reduce((n, v) => n + v, 0)} 条、分类名 ${counts.categoryNames || 0} 个；笔记 ${counts.notes?.archive || 0} 篇及首页速记；链接 ${counts.links?.items || 0} 个（${counts.links?.groups || 0} 组）；指令 ${counts.commands || 0} 条；剪贴板 ${counts.clipboard?.history || 0} 条、收藏 ${counts.clipboard?.favorites || 0} 条；录音 ${counts.recordings || 0} 段。`;
+    return pomeLocaleRendererWorkspace.t("copy.tasksCategoryNamesNotesPlusHomeNote.e0512a", { arg1: (Object.values(counts.todos || {}).reduce((n, v) => n + v, 0)), arg2: (counts.categoryNames || 0), arg3: (counts.notes?.archive || 0), arg4: (counts.links?.items || 0), arg5: (counts.links?.groups || 0), arg6: (counts.commands || 0), arg7: (counts.clipboard?.history || 0), arg8: (counts.clipboard?.favorites || 0), arg9: (counts.recordings || 0) });
   }
   if (settingsNasExportBackup) {
     settingsNasExportBackup.addEventListener('click', async () => {
@@ -2602,22 +2607,22 @@
       const result = await window.notchAPI.syncExportTodosBackup();
       if (!result || !result.ok) {
         if (result && result.error === 'cancelled') return;
-        setNasStatusHint(result?.message || '导出失败', 'error');
+        setNasStatusHint(result?.message || pomeLocaleRendererWorkspace.t("copy.exportFailed.6e4445"), 'error');
         return;
       }
-      setNasStatusHint('备份已导出', 'success');
-      if (typeof showStatusToast === 'function') showStatusToast('本机资料备份已导出（不含密钥与 AI Key）');
+      setNasStatusHint(pomeLocaleRendererWorkspace.t("copy.backupExported.ad4578"), 'success');
+      if (typeof showStatusToast === 'function') showStatusToast(pomeLocaleRendererWorkspace.t("copy.localBackupExportedCredentialsAndAiKeys.27df18"));
     });
   }
   if (settingsNasRestoreBackup) {
     settingsNasRestoreBackup.addEventListener('click', async () => {
       const preview = await window.notchAPI.backupPreview();
-      if (!preview.ok) { if (preview.error !== 'cancelled') setNasStatusHint(preview.message || '校验失败', 'error'); return; }
-      const detail = `当前资料：${describeBackupCounts(preview.currentCounts)}\n备份资料：${describeBackupCounts(preview.manifest.collections)}\n将替换普通资料及媒体，保留本机密钥、AI Key、布局与设置。恢复前自动保存可恢复快照。${preview.paired ? '恢复后暂停 NAS 同步，需要重新确认覆盖影响。' : ''}`;
-      const confirmed = await window.notchAPI.confirm({ title: '确认恢复资料', message: '备份已校验，确认替换当前普通资料？', detail });
+      if (!preview.ok) { if (preview.error !== 'cancelled') setNasStatusHint(preview.message || pomeLocaleRendererWorkspace.t("copy.verificationFailed.a096c1"), 'error'); return; }
+      const detail = pomeLocaleRendererWorkspace.t("copy.currentDataBackupDataOrdinaryDataAnd.847c9a", { arg1: (describeBackupCounts(preview.currentCounts)), arg2: (describeBackupCounts(preview.manifest.collections)), arg3: (preview.paired ? pomeLocaleRendererWorkspace.t("copy.nasSyncWillPauseAfterRestoringReview.3d4ccd") : '') });
+      const confirmed = await window.notchAPI.confirm({ title: pomeLocaleRendererWorkspace.t("copy.restoreData.07c6e3"), message: pomeLocaleRendererWorkspace.t("copy.backupVerifiedReplaceTheCurrentOrdinaryData.814111"), detail });
       if (!confirmed) return;
       const result = await window.notchAPI.backupRestore(preview.previewId);
-      if (!result.ok) setNasStatusHint(result.message || '恢复失败', 'error');
+      if (!result.ok) setNasStatusHint(result.message || pomeLocaleRendererWorkspace.t("copy.restoreFailed.89281a"), 'error');
     });
   }
   if (settingsNasEndpointList) {
@@ -2645,12 +2650,12 @@
       });
       if (!result || !result.ok) {
         target.checked = !enable;
-        setNasEndpointHint(describeNasSyncError(result, 'HTTP 开关更新失败'), 'error');
+        setNasEndpointHint(describeNasSyncError(result, pomeLocaleRendererWorkspace.t("copy.couldnTUpdateTheHttpSetting.dbb1de")), 'error');
         return;
       }
       if (result.policyMessage) setNasEndpointHint(result.policyMessage, 'warning');
-      else if (!enable) setNasEndpointHint('已停用：需改为 HTTPS 或重新开启开关', 'warning');
-      else setNasEndpointHint('已允许明文 HTTP（持续警告）', 'warning');
+      else if (!enable) setNasEndpointHint(pomeLocaleRendererWorkspace.t("copy.disabledUseHttpsOrAllowHttpAgain.a88ecf"), 'warning');
+      else setNasEndpointHint(pomeLocaleRendererWorkspace.t("copy.unencryptedHttpAllowedWarningRemains.a047a3"), 'warning');
       await refreshNasSyncStatus();
     });
   }
@@ -2708,12 +2713,12 @@
       if (!window.notchAPI || typeof window.notchAPI.syncRestoreMigrationBackup !== 'function') return;
       const restored = await window.notchAPI.syncRestoreMigrationBackup({ confirmed: true });
       if (!restored || !restored.ok) {
-        setNasSyncHint(describeNasSyncError(restored, '恢复失败'), 'error');
+        setNasSyncHint(describeNasSyncError(restored, pomeLocaleRendererWorkspace.t("copy.restoreFailed.89281a")), 'error');
         return;
       }
       if (restored.projectionJson) applyMigrationProjection(restored.projectionJson);
       applyNasMigrationUi({ type: 'reset' });
-      setNasSyncHint('已恢复迁移备份', 'success');
+      setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.migrationBackupRestored.752850"), 'success');
     });
   }
   if (window.notchAPI && typeof window.notchAPI.onSyncMigrationSession === 'function') {
@@ -2726,7 +2731,7 @@
       if (session.phase === 'failed') {
         applyNasMigrationUi({
           type: 'failed',
-          message: session.lastError || '迁移失败',
+          message: session.lastError || pomeLocaleRendererWorkspace.t("copy.migrationFailed.35cda8"),
           migrationId: session.migrationId,
         });
       }
@@ -2737,7 +2742,7 @@
     window.notchAPI.onSyncStatus((status) => {
       applyNasPairUi({ type: 'set_status', status });
       const hint = document.getElementById('credentials-sync-hint');
-      if (hint) hint.textContent = status.bound ? (status.recovery?.paused ? '本机加密保存；NAS 同步已暂停。普通资料备份不包含密钥。' : '本机加密保存；密钥通过 NAS 加密同步。普通资料备份不包含密钥。') : '本机加密保存；未配对 NAS。普通资料备份不包含密钥。';
+      if (hint) pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (status.bound ? (status.recovery?.paused ? pomeLocaleRendererWorkspace.t("copy.encryptedOnThisDeviceNasSyncPaused.386405") : pomeLocaleRendererWorkspace.t("copy.encryptedOnThisDeviceCredentialsSyncEncrypted.5db69f")) : pomeLocaleRendererWorkspace.t("copy.encryptedOnThisDeviceNasNotPaired.53018e")));
       if (status && status.schemaIncompatible && status.schemaMessage) {
         setNasStatusHint(status.schemaMessage, 'error');
       }
@@ -2779,12 +2784,12 @@
     input.disabled = false;
     if (!result?.ok) {
       input.checked = !input.checked;
-      setSettingsNote('功能显示设置保存失败，请重试。', true);
+      setSettingsNote(pomeLocaleRendererWorkspace.t("copy.couldnTSaveFeatureVisibilityRetry.73f979"), true);
       return;
     }
     settingsAppSettings = result.settings || settingsAppSettings;
     renderSettingsPanel();
-    setSettingsNote('显示功能已更新。');
+    setSettingsNote(pomeLocaleRendererWorkspace.t("copy.featureVisibilityUpdated.ae777d"));
   });
   settingsHomeModuleList?.addEventListener('change', async (event) => {
     const input = event.target.closest('input[data-settings-home-module]');
@@ -2797,23 +2802,23 @@
     renderHomeModuleSettings();
     if (!result?.ok) {
       const message = result?.error === 'at_least_one_required'
-        ? '首页至少保留一个组件'
+        ? pomeLocaleRendererWorkspace.t("copy.keepAtLeastOneHomeWidget.fddd04")
         : result?.error === 'recording_active'
-          ? '录音进行中，暂时不能隐藏快速录音'
+          ? pomeLocaleRendererWorkspace.t("copy.recordingInProgressQuickRecordingCannotBe.ce9c08")
           : result?.error === 'layout_read_only'
-            ? '首页布局已进入安全模式，本次会话不能修改组件'
+            ? pomeLocaleRendererWorkspace.t("copy.homeLayoutIsInSafeModeWidgets.8dcefc")
             : result?.error === 'layout_invalid'
-              ? '新布局校验失败，原布局已保留'
+              ? pomeLocaleRendererWorkspace.t("copy.newLayoutVerificationFailedOriginalLayoutPreserved.dedc5e")
               : result?.error === 'dom_apply_failed'
-                ? '布局应用失败，原布局已恢复'
-                : '首页组件设置未更新';
+                ? pomeLocaleRendererWorkspace.t("copy.couldnTApplyLayoutOriginalLayoutRestored.ec29ab")
+                : pomeLocaleRendererWorkspace.t("copy.homeWidgetSettingsWereNotUpdated.080c41");
       if (typeof showStatusToast === 'function') showStatusToast(message);
       return;
     }
     if (result.changed === false) return;
     const message = result.persisted === false
-      ? '布局已更新，仅当前会话生效，设置未能保存'
-      : input.checked ? '首页组件已恢复' : '首页组件已隐藏';
+      ? pomeLocaleRendererWorkspace.t("copy.layoutUpdatedForThisSessionOnlySettings.5c6c52")
+      : input.checked ? pomeLocaleRendererWorkspace.t("copy.homeWidgetRestored.3f535c") : pomeLocaleRendererWorkspace.t("copy.homeWidgetHidden.9f7a16");
     if (typeof showStatusToast === 'function') showStatusToast(message);
   });
   settingsMirrorChoose?.addEventListener('click', async () => {
@@ -2823,11 +2828,11 @@
     settingsMirrorChoose.disabled = false;
     if (result?.canceled) return;
     if (!result?.ok) {
-      setSettingsNote('镜子配图替换失败。', true);
+      setSettingsNote(pomeLocaleRendererWorkspace.t("copy.couldnTReplaceTheMirrorCover.12da67"), true);
       return;
     }
     applySettingsMirrorCover(result.dataUrl);
-    setSettingsNote('首页镜子配图已更新。');
+    setSettingsNote(pomeLocaleRendererWorkspace.t("copy.homeMirrorCoverUpdated.483fa0"));
   });
   settingsShortcutChange?.addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('notch:record-shortcut'));
@@ -2838,10 +2843,10 @@
     const ok = await window.notchAPI.resetPanelPosition().catch(() => false);
     settingsResetPanelPosition.disabled = false;
     if (!ok) {
-      setSettingsNote('重置面板位置失败，请重试。', true);
+      setSettingsNote(pomeLocaleRendererWorkspace.t("copy.couldnTResetThePanelPositionRetry.894379"), true);
       return;
     }
-    setSettingsNote('面板已回到顶部中间。收起后可再次拖动。');
+    setSettingsNote(pomeLocaleRendererWorkspace.t("copy.panelReturnedToTopCenterDragIt.2fe79c"));
   });
   settingsDefaultTab?.addEventListener('change', async () => {
     if (!window.notchAPI?.setDefaultTab) return;
@@ -2851,22 +2856,22 @@
     settingsDefaultTab.disabled = false;
     if (!result?.ok) {
       settingsDefaultTab.value = previous;
-      setSettingsNote('默认展开页保存失败，请重试。', true);
+      setSettingsNote(pomeLocaleRendererWorkspace.t("copy.couldnTSaveTheDefaultPageRetry.41033a"), true);
       return;
     }
     settingsAppSettings = result.settings || settingsAppSettings;
     renderSettingsPanel();
-    setSettingsNote(`下次唤出将默认显示${settingsDefaultTab.selectedOptions[0]?.textContent || '所选页面'}。`);
+    setSettingsNote(pomeLocaleRendererWorkspace.t("copy.willOpenByDefaultNextTime.c23641", { arg1: (settingsDefaultTab.selectedOptions[0]?.textContent || pomeLocaleRendererWorkspace.t("copy.selectedPage.8b9214")) }));
   });
   settingsWorkspaceOpen?.addEventListener('click', () => {
-    window.notchAPI?.openWorkspace?.().catch(() => setSettingsNote('无法打开数据文件夹。', true));
+    window.notchAPI?.openWorkspace?.().catch(() => setSettingsNote(pomeLocaleRendererWorkspace.t("copy.couldnTOpenTheDataFolder.62ebad"), true));
   });
   settingsWorkspaceChoose?.addEventListener('click', async () => {
     const changed = await window.notchAPI?.chooseWorkspace?.().catch(() => false);
     if (!changed) return;
     settingsWorkspace = await window.notchAPI?.getWorkspace?.().catch(() => settingsWorkspace);
     renderSettingsPanel();
-    setSettingsNote('数据文件夹已更新。');
+    setSettingsNote(pomeLocaleRendererWorkspace.t("copy.dataFolderUpdated.d34906"));
   });
   settingsAutoLaunch?.addEventListener('change', async () => {
     if (!window.notchAPI?.setAutoLaunch) return;
@@ -2875,12 +2880,12 @@
     settingsAutoLaunch.disabled = false;
     if (!result?.ok) {
       settingsAutoLaunch.checked = !settingsAutoLaunch.checked;
-      setSettingsNote('开机启动设置失败。', true);
+      setSettingsNote(pomeLocaleRendererWorkspace.t("copy.couldnTChangeLaunchAtLoginSettings.6452b6"), true);
       return;
     }
     settingsAutoLaunch.checked = result.autoLaunch === true;
     if (settingsAppSettings) settingsAppSettings.autoLaunch = result.autoLaunch === true;
-    setSettingsNote(result.autoLaunch ? '已开启开机自动启动。' : '已关闭开机自动启动。');
+    setSettingsNote(result.autoLaunch ? pomeLocaleRendererWorkspace.t("copy.launchAtLoginEnabled.61caec") : pomeLocaleRendererWorkspace.t("copy.launchAtLoginDisabled.ced994"));
   });
   settingsWinNative?.addEventListener('change', async () => {
     if (!window.notchAPI?.setWinNative) return;
@@ -2889,19 +2894,19 @@
     settingsWinNative.disabled = false;
     if (!result?.ok) {
       settingsWinNative.checked = !settingsWinNative.checked;
-      setSettingsNote('原生能力开关保存失败。', true);
+      setSettingsNote(pomeLocaleRendererWorkspace.t("copy.couldnTSaveNativeCapabilitySettings.795324"), true);
       return;
     }
     settingsWinNative.checked = result.winNative === true;
     if (settingsAppSettings) settingsAppSettings.winNative = result.winNative === true;
     if (!result.winNative) {
-      setSettingsNote('已关闭 Windows 原生能力');
+      setSettingsNote(pomeLocaleRendererWorkspace.t("copy.windowsNativeCapabilitiesDisabled.a1c03b"));
     } else if (result.nativeAvailable === true) {
-      setSettingsNote('已开启 Windows 原生能力 · 首页「当前窗口」与自动粘贴可用');
+      setSettingsNote(pomeLocaleRendererWorkspace.t("copy.windowsNativeCapabilitiesEnabledCurrentWindowsAnd.f8de73"));
     } else {
       setSettingsNote(result.nativeReason === 'disabled_by_env'
-        ? '已保存开关，但环境变量 POME_DISABLE_WIN_NATIVE=1 禁止加载原生模块'
-        : '已保存开关，但原生模块加载失败 · 可能被安全软件拦截，当前窗口与自动粘贴仍不可用', true);
+        ? pomeLocaleRendererWorkspace.t("copy.preferenceSavedButPomeDisableWinNative.875d44")
+        : pomeLocaleRendererWorkspace.t("copy.preferenceSavedButNativeModulesFailedTo.66be3f"), true);
     }
   });
   window.notchAPI?.onAppSettingsChanged?.((settings) => {
@@ -2915,7 +2920,7 @@
     if (!window.notchAPI || !recording.audioPath) return;
     const result = await window.notchAPI.readRecording(recording.audioPath);
     if (!result || selectedRecordingId !== recording.id || !container.isConnected) {
-      container.textContent = '音频文件不可用';
+      pomeLocaleRendererWorkspace.bind(container, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.audioFileUnavailable.d7ce80")));
       return;
     }
     if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
@@ -2934,7 +2939,7 @@
     if (!recording) {
       const empty = document.createElement('div');
       empty.className = 'recording-detail-empty';
-      empty.textContent = '完成一次录音后，音频和转写文本会保存在这里。';
+      pomeLocaleRendererWorkspace.bind(empty, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.recordAudioToSaveItAndIts.ace3b5")));
       recordingDetail.appendChild(empty);
       return;
     }
@@ -2957,20 +2962,20 @@
       const liveAudio = document.createElement('div');
       liveAudio.className = 'recording-live-audio';
       const liveAudioTitle = document.createElement('strong');
-      liveAudioTitle.textContent = '音频正在本机录制';
+      pomeLocaleRendererWorkspace.bind(liveAudioTitle, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.audioIsRecordingLocally.ff0874")));
       const liveAudioHint = document.createElement('span');
-      liveAudioHint.textContent = '结束后会自动保存并出现播放器';
+      pomeLocaleRendererWorkspace.bind(liveAudioHint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.aPlayerWillAppearAfterFinishingAnd.c0bdd1")));
       const liveControls = document.createElement('div');
       liveControls.className = 'recording-live-controls';
       const pause = document.createElement('button');
       pause.type = 'button';
       pause.className = 'workspace-button compact recording-live-pause';
-      pause.textContent = recordingStatus === 'paused' ? '继续' : '暂停';
+      pomeLocaleRendererWorkspace.bind(pause, "textContent", () => (recordingStatus === 'paused' ? pomeLocaleRendererWorkspace.t("copy.resume.7c9691") : pomeLocaleRendererWorkspace.t("copy.pause.8d12fc")));
       pause.addEventListener('click', togglePauseRecording);
       const stop = document.createElement('button');
       stop.type = 'button';
       stop.className = 'workspace-button compact primary recording-live-stop';
-      stop.textContent = '结束并保存';
+      pomeLocaleRendererWorkspace.bind(stop, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.finishAndSave.b8c8a0")));
       stop.addEventListener('click', stopRecording);
       liveControls.append(pause, stop);
       liveAudio.append(liveAudioTitle, liveAudioHint, liveControls);
@@ -2979,12 +2984,12 @@
       transcriptHead.className = 'recording-transcript-head';
       const transcriptLabel = document.createElement('span');
       transcriptLabel.className = 'tile-label';
-      transcriptLabel.textContent = '实时转写';
+      pomeLocaleRendererWorkspace.bind(transcriptLabel, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.liveTranscription.2b6904")));
       const configure = document.createElement('button');
       configure.type = 'button';
       configure.className = 'workspace-button compact recording-live-configure';
       configure.dataset.action = 'configure-transcription';
-      configure.textContent = '配置 API';
+      pomeLocaleRendererWorkspace.bind(configure, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.configureApi.9bfe1b")));
       configure.addEventListener('click', openTranscriptionSettings);
       transcriptHead.append(transcriptLabel, configure);
 
@@ -2992,8 +2997,8 @@
       transcript.className = 'recording-transcript-editor recording-live-transcript';
       transcript.readOnly = true;
       transcript.dataset.recordingLiveTranscript = '';
-      transcript.placeholder = '开始说话后，转写内容会出现在这里。';
-      transcript.setAttribute('aria-label', '实时转写文本');
+      pomeLocaleRendererWorkspace.bind(transcript, "placeholder", () => (pomeLocaleRendererWorkspace.t("copy.startSpeakingToSeeTheTranscriptHere.833551")));
+      transcript.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.liveTranscript.792bc7"));
       const feedback = document.createElement('p');
       feedback.className = 'recording-live-feedback';
       feedback.dataset.recordingLiveFeedback = '';
@@ -3007,36 +3012,36 @@
     const title = document.createElement('input');
     title.className = 'recording-title-input';
     title.value = recording.title;
-    title.setAttribute('aria-label', '录音名称');
+    title.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.recordingName.90bfdb"));
     const meta = document.createElement('span');
-    meta.textContent = `${recording.category || '未分类'} · ${formatShortDate(recording.createdAt)} · ${formatClock(recording.durationMs)}`;
+    pomeLocaleRendererWorkspace.bind(meta, "textContent", () => (`${recording.category || pomeLocaleRendererWorkspace.t("copy.uncategorized.54b89f")} · ${formatShortDate(recording.createdAt)} · ${formatClock(recording.durationMs)}`));
     header.append(title, meta);
     const syncHint = document.createElement('p');
     syncHint.className = 'settings-nas-sync-hint';
-    syncHint.textContent = recording.audioSyncReason === 'audio_too_large' ? '转写与元数据可同步；音频超过 6 MiB，仅保存在本机。' : recording.audioOmitted ? '转写与元数据可同步；音频缺失或未传输。' : '音频保存在本机；具体传输结果见设置 → NAS 同步。';
+    pomeLocaleRendererWorkspace.bind(syncHint, "textContent", () => (recording.audioSyncReason === 'audio_too_large' ? pomeLocaleRendererWorkspace.t("copy.transcriptAndMetadataCanSyncAudioExceeds.d804a0") : recording.audioOmitted ? pomeLocaleRendererWorkspace.t("copy.transcriptAndMetadataCanSyncAudioIs.9eca76") : pomeLocaleRendererWorkspace.t("copy.audioIsSavedLocallyCheckSettingsNas.a1edd9")));
 
     const audioWrap = document.createElement('div');
     audioWrap.className = 'recording-audio';
-    audioWrap.textContent = '正在读取音频…';
+    pomeLocaleRendererWorkspace.bind(audioWrap, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.loadingAudio.fb0408")));
 
     const transcriptHead = document.createElement('div');
     transcriptHead.className = 'recording-transcript-head';
     const label = document.createElement('span');
     label.className = 'tile-label';
-    label.textContent = '转写文本';
+    pomeLocaleRendererWorkspace.bind(label, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.transcript.50c1cf")));
     const actions = document.createElement('div');
     actions.append(
-      createIconButton('copy-recording', '复制转写文本', COPY_ICON),
-      createIconButton('reveal-recording', '在文件夹中显示', OPEN_ICON),
-      createIconButton('delete-recording', '删除录音', DELETE_ICON, true)
+      createIconButton('copy-recording', pomeLocaleRendererWorkspace.t("copy.copyTranscript.75548a"), COPY_ICON),
+      createIconButton('reveal-recording', pomeLocaleRendererWorkspace.t("copy.showInFolder.037c31"), OPEN_ICON),
+      createIconButton('delete-recording', pomeLocaleRendererWorkspace.t("copy.deleteRecording.56133d"), DELETE_ICON, true)
     );
     transcriptHead.append(label, actions);
 
     const transcript = document.createElement('textarea');
     transcript.className = 'recording-transcript-editor';
     transcript.value = recording.transcript;
-    transcript.placeholder = '当前环境没有生成实时转写。你仍可播放音频，或在这里补充文字。';
-    transcript.setAttribute('aria-label', '录音转写文本');
+    pomeLocaleRendererWorkspace.bind(transcript, "placeholder", () => (pomeLocaleRendererWorkspace.t("copy.noLiveTranscriptWasGeneratedYouCan.5e3a1b")));
+    transcript.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.recordingTranscript.0ad282"));
     recordingDetail.append(header, syncHint, audioWrap, transcriptHead, transcript);
 
     title.addEventListener('change', () => {
@@ -3090,15 +3095,15 @@
     recordingList.replaceChildren();
     if (recordingBulkDelete) {
       recordingBulkDelete.hidden = recordingSelection.size === 0;
-      recordingBulkDelete.textContent = '删除';
+      pomeLocaleRendererWorkspace.bind(recordingBulkDelete, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.delete.2f9daa")));
       recordingBulkDelete.setAttribute('aria-label', recordingSelection.size
-        ? `删除 ${recordingSelection.size} 项`
-        : '删除所选');
+        ? pomeLocaleRendererWorkspace.t("copy.deleteItems.0bfa6f", { arg1: (recordingSelection.size) })
+        : pomeLocaleRendererWorkspace.t("copy.deleteSelected.435bf8"));
     }
     if (!recordings.length) {
       const empty = document.createElement('div');
       empty.className = 'recording-list-empty';
-      empty.textContent = '还没有录音';
+      pomeLocaleRendererWorkspace.bind(empty, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.noRecordingsYet.d8f480")));
       recordingList.appendChild(empty);
       return;
     }
@@ -3109,21 +3114,21 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'recording-item-main';
-      button.setAttribute('aria-label', `打开录音：${recording.title}`);
+      button.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.openRecording.537c31", { arg1: (recording.title) }));
       const title = document.createElement('strong');
       title.textContent = recording.title;
       const preview = document.createElement('span');
       preview.dataset.recordingPreview = '';
-      preview.textContent = recording.isDraft ? (currentRecordingText() || currentRecordingFeedback()) : (recording.transcript || '仅音频 · 暂无转写');
+      pomeLocaleRendererWorkspace.bind(preview, "textContent", () => (recording.isDraft ? (currentRecordingText() || currentRecordingFeedback()) : (recording.transcript || pomeLocaleRendererWorkspace.t("copy.audioOnlyNoTranscriptYet.a03d79"))));
       const meta = document.createElement('time');
       meta.dataset.recordingMeta = '';
-      meta.textContent = recording.isDraft
-        ? `${recordingStatus === 'saving' ? '保存中' : recordingStatus === 'paused' ? '已暂停' : '录音中'} · ${formatClock(recording.durationMs)}`
-        : `${formatShortDate(recording.createdAt)} · ${formatClock(recording.durationMs)}`;
+      pomeLocaleRendererWorkspace.bind(meta, "textContent", () => (recording.isDraft
+        ? `${recordingStatus === 'saving' ? pomeLocaleRendererWorkspace.t("copy.saving.a1a172") : recordingStatus === 'paused' ? pomeLocaleRendererWorkspace.t("copy.paused.eb0c32") : pomeLocaleRendererWorkspace.t("copy.recording.e35a14")} · ${formatClock(recording.durationMs)}`
+        : `${formatShortDate(recording.createdAt)} · ${formatClock(recording.durationMs)}`));
       button.append(title, preview, meta);
       row.append(button);
       if (!recording.isDraft) {
-        const remove = createIconButton('delete-recording-item', `删除录音：${recording.title}`, DELETE_ICON, true);
+        const remove = createIconButton('delete-recording-item', pomeLocaleRendererWorkspace.t("copy.deleteRecording.611aa8", { arg1: (recording.title) }), DELETE_ICON, true);
         remove.classList.add('recording-item-delete');
         row.append(remove);
       }
@@ -3132,7 +3137,7 @@
   }
 
   function renderRecordings() {
-    if (recordingCount) recordingCount.textContent = `${recordings.length} 条`;
+    if (recordingCount) pomeLocaleRendererWorkspace.bind(recordingCount, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.items.1d26a0", { arg1: (recordings.length) })));
     renderRecordingList();
     renderRecordingDetail();
   }
@@ -3238,9 +3243,9 @@
       const empty = document.createElement('div');
       empty.className = 'window-empty permission';
       const heading = document.createElement('strong');
-      heading.textContent = '当前窗口暂不可用';
+      pomeLocaleRendererWorkspace.bind(heading, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.currentWindowsUnavailable.d6a9a7")));
       const hint = document.createElement('span');
-      hint.textContent = '请在设置页开启「Windows 原生能力 · 实验功能」后重试。';
+      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.enableWindowsNativeCapabilitiesExperimentalInSettings.c7cda7")));
       empty.append(heading, hint);
       windowList.appendChild(empty);
       return;
@@ -3252,16 +3257,16 @@
       // 「屏幕录制」决定能不能读到窗口标题，「辅助功能」决定能不能枚举和聚焦窗口。
       // 缺屏幕录制时系统既不报错也不弹提示，所以只能由这里告诉用户。
       const screenRecording = error === 'screen_recording_permission_required';
-      const title = screenRecording ? '需要“屏幕录制”权限' : '需要“辅助功能”权限';
-      const pane = screenRecording ? '屏幕录制与系统录音' : '辅助功能';
+      const title = screenRecording ? pomeLocaleRendererWorkspace.t("copy.screenRecordingPermissionRequired.039981") : pomeLocaleRendererWorkspace.t("copy.accessibilityPermissionRequired.d0e69c");
+      const pane = screenRecording ? pomeLocaleRendererWorkspace.t("copy.screenSystemAudioRecording.83f384") : pomeLocaleRendererWorkspace.t("copy.accessibility.b8f88a");
       const heading = document.createElement('strong');
       heading.textContent = title;
       const hint = document.createElement('span');
-      hint.textContent = `系统设置 → 隐私与安全性 → ${pane}，允许 Pome Panel 后重试。`;
+      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.systemSettingsPrivacySecurityAllowPomePanel.fe568f", { arg1: (pane) })));
       const action = document.createElement('button');
       action.type = 'button';
       action.className = 'window-permission-open';
-      action.textContent = '打开系统设置';
+      pomeLocaleRendererWorkspace.bind(action, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.openSystemSettings.0407db")));
       action.addEventListener('click', () => {
         if (window.notchAPI && typeof window.notchAPI.openPrivacySettings === 'function') {
           window.notchAPI.openPrivacySettings(screenRecording ? 'screen-recording' : 'accessibility');
@@ -3276,17 +3281,17 @@
     );
     if (windowsHidden) {
       windowsHidden.hidden = hiddenWindows.size === 0;
-      windowsHidden.textContent = '隐藏';
-      windowsHidden.setAttribute('aria-label', `恢复已隐藏的 ${hiddenWindows.size} 个窗口`);
+      pomeLocaleRendererWorkspace.bind(windowsHidden, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.hide.145219")));
+      windowsHidden.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.restoreHiddenWindows.3bacb0", { arg1: (hiddenWindows.size) }));
     }
     if (!visibleWindows.length) {
       const empty = document.createElement('div');
       empty.className = 'window-empty';
-      empty.textContent = windowsLoading
-        ? '正在读取当前窗口…'
+      pomeLocaleRendererWorkspace.bind(empty, "textContent", () => (windowsLoading
+        ? pomeLocaleRendererWorkspace.t("copy.readingCurrentWindows.7a1554")
         : hiddenWindows.size
-          ? '窗口均已隐藏 · 点击上方恢复'
-          : '没有读取到可切换窗口';
+          ? pomeLocaleRendererWorkspace.t("copy.allWindowsHiddenRestoreThemAbove.5d9517")
+          : pomeLocaleRendererWorkspace.t("copy.noSwitchableWindowsFound.4aee12")));
       windowList.appendChild(empty);
       return;
     }
@@ -3295,7 +3300,7 @@
       button.className = 'window-item';
       button.type = 'button';
       button.dataset.id = windowInfo.id;
-      button.title = `${windowInfo.displayName}\n${windowInfo.title}\n长按后拖出卡片可隐藏`;
+      pomeLocaleRendererWorkspace.bind(button, "title", () => (pomeLocaleRendererWorkspace.t("copy.pressAndHoldThenDragOutsideThe.8d9a71", { arg1: (windowInfo.displayName), arg2: (windowInfo.title) })));
       const mark = document.createElement('span');
       mark.className = 'window-app-mark';
       if (windowInfo.icon) {
@@ -3440,7 +3445,7 @@
     if (!homeMusic || !musicPlayToggle) return;
     homeMusic.classList.toggle('music-playing', musicPlaying);
     musicPlayToggle.dataset.musicAction = musicPlaying ? 'pause' : 'play';
-    musicPlayToggle.setAttribute('aria-label', musicPlaying ? '暂停' : '播放');
+    musicPlayToggle.setAttribute('aria-label', musicPlaying ? pomeLocaleRendererWorkspace.t("copy.pause.8d12fc") : pomeLocaleRendererWorkspace.t("copy.play.c33961"));
     musicPlayToggle.innerHTML = musicPlaying
       ? '<svg viewBox="0 0 24 24"><path d="M8 7h3v10H8zM14 7h3v10h-3z" /></svg>'
       : '<svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5z" /></svg>';
@@ -3462,8 +3467,8 @@
       image.alt = '';
       musicArtwork.appendChild(image);
     }
-    if (musicTitle) musicTitle.textContent = status && status.installed ? '汽水音乐' : '未安装汽水音乐';
-    if (musicStatus) musicStatus.textContent = status && status.running ? (musicPlaying ? '正在播放' : '已连接') : status && status.installed ? '轻触即播' : '需要本地客户端';
+    if (musicTitle) pomeLocaleRendererWorkspace.bind(musicTitle, "textContent", () => (status && status.installed ? pomeLocaleRendererWorkspace.t("copy.sodaMusic.f8cff8") : pomeLocaleRendererWorkspace.t("copy.sodaMusicIsnTInstalled.874f9a")));
+    if (musicStatus) pomeLocaleRendererWorkspace.bind(musicStatus, "textContent", () => (status && status.running ? (musicPlaying ? pomeLocaleRendererWorkspace.t("copy.playing.e6666b") : pomeLocaleRendererWorkspace.t("copy.connected.5be032")) : status && status.installed ? pomeLocaleRendererWorkspace.t("copy.tapToPlay.48ee2b") : pomeLocaleRendererWorkspace.t("copy.localAppRequired.06b808")));
   }
 
   homeMusic?.addEventListener('click', async (event) => {
@@ -3479,22 +3484,22 @@
     if (!result || !result.ok) {
       const needsSession = result && ['no_active_session', 'soda_session_inactive'].includes(result.error);
       const needsPermission = result && result.error === 'accessibility_permission_required';
-      if (musicStatus) musicStatus.textContent = result && result.error === 'not_installed'
-        ? '需要本地客户端'
-        : needsPermission ? '需要辅助功能权限'
-          : needsSession ? '请先点播放' : '控制暂不可用';
+      if (musicStatus) pomeLocaleRendererWorkspace.bind(musicStatus, "textContent", () => (result && result.error === 'not_installed'
+        ? pomeLocaleRendererWorkspace.t("copy.localAppRequired.06b808")
+        : needsPermission ? pomeLocaleRendererWorkspace.t("copy.accessibilityPermissionRequired.914807")
+          : needsSession ? pomeLocaleRendererWorkspace.t("copy.pressPlayFirst.7194f0") : pomeLocaleRendererWorkspace.t("copy.controlsUnavailable.1279c0")));
       if (typeof showStatusToast === 'function') {
         showStatusToast(result && result.error === 'not_installed'
-          ? '未安装汽水音乐'
-          : needsPermission ? '请在系统设置中允许 Pome Panel 使用辅助功能'
-            : needsSession ? '请先点击播放，再使用切歌控制' : '汽水音乐控制暂不可用');
+          ? pomeLocaleRendererWorkspace.t("copy.sodaMusicIsnTInstalled.874f9a")
+          : needsPermission ? pomeLocaleRendererWorkspace.t("copy.allowPomePanelInSystemSettingsAccessibility.a9647f")
+            : needsSession ? pomeLocaleRendererWorkspace.t("copy.pressPlayBeforeUsingTrackControls.b5e463") : pomeLocaleRendererWorkspace.t("copy.sodaMusicControlsUnavailable.6b9043"));
       }
     } else {
       if (typeof result.playing === 'boolean') musicPlaying = result.playing;
       else if (action === 'play') musicPlaying = true;
       else if (action === 'pause') musicPlaying = false;
       renderMusicPlaybackState();
-      if (musicStatus) musicStatus.textContent = action === 'next' ? '下一首' : action === 'previous' ? '上一首' : musicPlaying ? '正在播放' : '已暂停';
+      if (musicStatus) pomeLocaleRendererWorkspace.bind(musicStatus, "textContent", () => (action === 'next' ? pomeLocaleRendererWorkspace.t("copy.nextTrack.486e42") : action === 'previous' ? pomeLocaleRendererWorkspace.t("copy.previousTrack.8c7479") : musicPlaying ? pomeLocaleRendererWorkspace.t("copy.playing.e6666b") : pomeLocaleRendererWorkspace.t("copy.paused.eb0c32")));
     }
     setTimeout(refreshMusicStatus, 500);
   });
@@ -3520,10 +3525,10 @@
   function updateCredentialBulkAction() {
     if (!credentialBulkDelete) return;
     credentialBulkDelete.hidden = credentialSelection.size === 0;
-    credentialBulkDelete.textContent = '删除';
+    pomeLocaleRendererWorkspace.bind(credentialBulkDelete, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.delete.2f9daa")));
     credentialBulkDelete.setAttribute('aria-label', credentialSelection.size
-      ? `删除 ${credentialSelection.size} 项`
-      : '删除所选');
+      ? pomeLocaleRendererWorkspace.t("copy.deleteItems.0bfa6f", { arg1: (credentialSelection.size) })
+      : pomeLocaleRendererWorkspace.t("copy.deleteSelected.435bf8"));
   }
 
   function animateCredentialExpansion(originRect) {
@@ -3546,17 +3551,17 @@
 
   function renderCredentials() {
     const visibleCredentials = Domain.filterCredentials(credentials, credentialSearch?.value || '');
-    if (credentialCount) credentialCount.textContent = credentialSearch?.value.trim()
-      ? `${visibleCredentials.length} / ${credentials.length} 项`
-      : `${credentials.length} 项`;
+    if (credentialCount) pomeLocaleRendererWorkspace.bind(credentialCount, "textContent", () => (credentialSearch?.value.trim()
+      ? pomeLocaleRendererWorkspace.t("copy.items.ab715f", { arg1: (visibleCredentials.length), arg2: (credentials.length) })
+      : pomeLocaleRendererWorkspace.t("copy.items.5b6b44", { arg1: (credentials.length) })));
     if (!credentialList) return;
     credentialList.replaceChildren();
     if (!visibleCredentials.length) {
       const empty = document.createElement('div');
       empty.className = 'credential-empty';
       empty.innerHTML = credentials.length
-        ? '<strong>没有匹配的密钥</strong><span>可按名称或账号继续检索</span>'
-        : '<strong>还没有保存密钥</strong><span>账号与密码会加密保存在本机</span>';
+        ? ("<strong><span data-i18n=\"copy.noMatchingCredentials.071998\">" + (pomeLocaleRendererWorkspace.t("copy.noMatchingCredentials.071998")) + "</span></strong><span><span data-i18n=\"copy.searchByNameOrAccount.a5bd89\">" + (pomeLocaleRendererWorkspace.t("copy.searchByNameOrAccount.a5bd89")) + "</span></span>")
+        : ("<strong><span data-i18n=\"copy.noSavedCredentialsYet.8bcc78\">" + (pomeLocaleRendererWorkspace.t("copy.noSavedCredentialsYet.8bcc78")) + "</span></strong><span><span data-i18n=\"copy.accountsAndPasswordsAreEncryptedOnThis.60f62e\">" + (pomeLocaleRendererWorkspace.t("copy.accountsAndPasswordsAreEncryptedOnThis.60f62e")) + "</span></span>");
       credentialList.appendChild(empty);
       updateCredentialBulkAction();
       return;
@@ -3566,13 +3571,7 @@
         const form = document.createElement('form');
         form.className = 'credential-item editing';
         form.dataset.id = credential.id;
-        form.innerHTML = `
-          <div class="credential-edit-head"><strong>修改密钥</strong><span>回车保存</span></div>
-          <label><span>服务</span><input name="service" maxlength="80" autocomplete="off" /></label>
-          <label><span>账号</span><input name="account" maxlength="320" autocomplete="off" /></label>
-          <label><span>密码</span><span class="credential-password-field"><input name="password" type="password" maxlength="4096" autocomplete="off" spellcheck="false" /><button type="button" data-credential-reveal aria-pressed="false">显示</button></span></label>
-          <div class="credential-edit-actions"><button type="button" data-credential-cancel>取消</button><button type="submit">保存</button></div>
-        `;
+        form.innerHTML = ("\n          <div class=\"credential-edit-head\"><strong><span data-i18n=\"copy.editCredential.3c8db5\">" + (pomeLocaleRendererWorkspace.t("copy.editCredential.3c8db5")) + "</span></strong><span><span data-i18n=\"copy.pressEnterToSave.c1c0ad\">" + (pomeLocaleRendererWorkspace.t("copy.pressEnterToSave.c1c0ad")) + "</span></span></div>\n          <label><span><span data-i18n=\"copy.service.ec309a\">" + (pomeLocaleRendererWorkspace.t("copy.service.ec309a")) + "</span></span><input name=\"service\" maxlength=\"80\" autocomplete=\"off\" /></label>\n          <label><span><span data-i18n=\"copy.account.311bb3\">" + (pomeLocaleRendererWorkspace.t("copy.account.311bb3")) + "</span></span><input name=\"account\" maxlength=\"320\" autocomplete=\"off\" /></label>\n          <label><span><span data-i18n=\"copy.password.a621ab\">" + (pomeLocaleRendererWorkspace.t("copy.password.a621ab")) + "</span></span><span class=\"credential-password-field\"><input name=\"password\" type=\"password\" maxlength=\"4096\" autocomplete=\"off\" spellcheck=\"false\" /><button type=\"button\" data-credential-reveal aria-pressed=\"false\"><span data-i18n=\"copy.show.4e1449\">" + (pomeLocaleRendererWorkspace.t("copy.show.4e1449")) + "</span></button></span></label>\n          <div class=\"credential-edit-actions\"><button type=\"button\" data-credential-cancel><span data-i18n=\"copy.cancel.2cd0f3\">" + (pomeLocaleRendererWorkspace.t("copy.cancel.2cd0f3")) + "</span></button><button type=\"submit\"><span data-i18n=\"copy.save.a3030b\">" + (pomeLocaleRendererWorkspace.t("copy.save.a3030b")) + "</span></button></div>\n        ");
         form.elements.service.value = editingCredential.service || '';
         form.elements.account.value = editingCredential.account || '';
         form.elements.password.value = editingCredential.password || '';
@@ -3597,13 +3596,13 @@
       const accountCopy = document.createElement('button');
       accountCopy.type = 'button';
       accountCopy.dataset.credentialCopy = 'account';
-      accountCopy.textContent = '账号';
-      accountCopy.setAttribute('aria-label', '复制账号');
+      pomeLocaleRendererWorkspace.bind(accountCopy, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.account.311bb3")));
+      accountCopy.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.copyAccount.800564"));
       const passwordCopy = document.createElement('button');
       passwordCopy.type = 'button';
       passwordCopy.dataset.credentialCopy = 'password';
-      passwordCopy.textContent = '密码';
-      passwordCopy.setAttribute('aria-label', '复制密码');
+      pomeLocaleRendererWorkspace.bind(passwordCopy, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.password.a621ab")));
+      passwordCopy.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.copyPassword.c49aca"));
       const deleteAction = Domain.credentialRowAction({ requestedAction: 'delete' });
       const remove = document.createElement('button');
       remove.type = 'button';
@@ -3623,7 +3622,7 @@
     try { result = await window.notchAPI.listCredentials(); } catch (error) { result = null; }
     credentials = result && Array.isArray(result.items) ? result.items : [];
     if (credentialsNote && result && !result.secureStorage) {
-      credentialsNote.textContent = '当前系统安全存储不可用，暂时无法保存密码。';
+      pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.systemSecureStorageIsUnavailableCanT.b21216")));
       credentialsNote.classList.add('error');
     }
     renderCredentials();
@@ -3638,7 +3637,7 @@
     };
     if (!payload.service.trim() || !payload.account.trim() || !payload.password) {
       if (credentialsNote) {
-        credentialsNote.textContent = '请完整填写软件、账号和密码。';
+        pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.enterTheServiceAccountAndPassword.7e80f6")));
         credentialsNote.classList.add('error');
       }
       return;
@@ -3648,7 +3647,7 @@
     credentialSave.disabled = false;
     if (!result || !result.ok) {
       if (credentialsNote) {
-        credentialsNote.textContent = '加密保存失败，请确认系统钥匙串可用。';
+        pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.couldnTEncryptAndSaveCheckThat.deaa02")));
         credentialsNote.classList.add('error');
       }
       return;
@@ -3658,11 +3657,11 @@
     if (credentialPassword) {
       credentialPassword.value = '';
       credentialPassword.type = 'password';
-      const reveal = credentialPassword.parentElement?.querySelector('[data-credential-reveal]'); if (reveal) { reveal.textContent = '显示'; reveal.setAttribute('aria-pressed','false'); }
-      credentialPassword.placeholder = '保存后才会加密';
+      const reveal = credentialPassword.parentElement?.querySelector('[data-credential-reveal]'); if (reveal) { pomeLocaleRendererWorkspace.bind(reveal, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.show.4e1449"))); reveal.setAttribute('aria-pressed','false'); }
+      pomeLocaleRendererWorkspace.bind(credentialPassword, "placeholder", () => (pomeLocaleRendererWorkspace.t("copy.encryptedAfterSaving.61e9e1")));
     }
     if (credentialsNote) {
-      credentialsNote.textContent = '已使用系统安全存储加密保存。';
+      pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.encryptedAndSavedUsingSystemSecureStorage.2208fb")));
       credentialsNote.classList.remove('error');
     }
     await loadCredentials();
@@ -3677,11 +3676,11 @@
     if (!input) return;
     const visible = input.type === 'password';
     input.type = visible ? 'text' : 'password';
-    reveal.textContent = visible ? '隐藏' : '显示';
+    pomeLocaleRendererWorkspace.bind(reveal, "textContent", () => (visible ? pomeLocaleRendererWorkspace.t("copy.hide.145219") : pomeLocaleRendererWorkspace.t("copy.show.4e1449")));
     reveal.setAttribute('aria-pressed', String(visible));
   });
   credentialSearch?.addEventListener('input', renderCredentials);
-  document.addEventListener('notch:will-collapse', () => { document.querySelectorAll('.credential-password-field input').forEach((input) => { input.type = 'password'; }); document.querySelectorAll('[data-credential-reveal]').forEach((button) => { button.textContent = '显示'; button.setAttribute('aria-pressed','false'); }); });
+  document.addEventListener('notch:will-collapse', () => { document.querySelectorAll('.credential-password-field input').forEach((input) => { input.type = 'password'; }); document.querySelectorAll('[data-credential-reveal]').forEach((button) => { pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.show.4e1449"))); button.setAttribute('aria-pressed','false'); }); });
   document.addEventListener('notch:tabchange', (event) => { if (event.detail?.tab !== 'credentials') document.querySelectorAll('.credential-password-field input').forEach((input) => { input.type = 'password'; }); });
   [credentialService, credentialAccount, credentialPassword].forEach((input) => {
     input?.addEventListener('keydown', (event) => {
@@ -3716,7 +3715,7 @@
       if (!result?.ok) {
         if (deleteButton) deleteButton.disabled = false;
         if (credentialsNote) {
-          credentialsNote.textContent = '删除失败，请稍后重试。';
+          pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.deleteFailedTryAgainLater.782a6b")));
           credentialsNote.classList.add('error');
         }
         return;
@@ -3728,14 +3727,14 @@
       }
       await loadCredentials();
       if (credentialsNote) {
-        credentialsNote.textContent = '密钥已删除。';
+        pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.credentialDeleted.84abf3")));
         credentialsNote.classList.remove('error');
       }
       return;
     }
     if (action.type === 'copy') {
       const copied = await window.notchAPI.copyCredential(row.dataset.id, action.field).catch(() => false);
-      if (credentialsNote) credentialsNote.textContent = copied ? `${copyField === 'password' ? '密码' : '账号'}已复制` : '复制失败';
+      if (credentialsNote) pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (copied ? pomeLocaleRendererWorkspace.t("copy.copied.f39f6e", { arg1: (copyField === 'password' ? pomeLocaleRendererWorkspace.t("copy.password.a621ab") : pomeLocaleRendererWorkspace.t("copy.account.311bb3")) }) : pomeLocaleRendererWorkspace.t("copy.copyFailed.753d8b")));
       return;
     }
     if (action.type === 'edit') {
@@ -3747,7 +3746,7 @@
       renderCredentials();
       animateCredentialExpansion(originRect);
       if (credentialsNote) {
-        credentialsNote.textContent = '已展开当前密钥，回车即可保存。';
+        pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.credentialOpenedForEditingPressEnterTo.d012cd")));
         credentialsNote.classList.remove('error');
       }
       credentialList.querySelector('.credential-item.editing input[name="service"]')?.focus();
@@ -3903,6 +3902,14 @@
   refreshMusicStatus();
   loadCredentials();
 
+  window.addEventListener('pome:language-changed', () => {
+    // These renderers do not repopulate the API form or recreate recordings.
+    renderSettingsPanel();
+    renderHomeModuleSettings();
+    const status = Domain.apiCredentialStatuses(transcriptionConfig);
+    if (transcriptionApiStatus) transcriptionApiStatus.textContent = status.transcription.label;
+    if (llmApiStatus) llmApiStatus.textContent = status.llm.label;
+  });
   window.NotchWorkspace = {
     refreshWindows,
     startRecording,

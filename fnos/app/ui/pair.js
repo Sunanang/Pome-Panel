@@ -1,4 +1,6 @@
 'use strict';
+const pomeLocaleFnosAppUiPair = typeof module === 'object' && module.exports ? require("../../../localization/runtime") : globalThis.PomeI18n;
+
 
 /**
  * FPK Web pair UI — gatewayPrefix-aware paths, /me session, CSRF, countdown, devices.
@@ -23,21 +25,21 @@
   const DEFAULT_FETCH_TIMEOUT_MS = 12_000;
 
   const ERROR_COPY = Object.freeze({
-    unauthenticated: '未检测到飞牛登录会话，请在飞牛已登录状态下打开本页',
-    gateway_session_required: '未检测到飞牛登录会话，请在飞牛已登录状态下打开本页',
-    pair_start_gateway_only: '请从飞牛应用入口打开配对页，勿使用设备同步端口',
-    csrf_missing: '安全校验失败（缺少 CSRF），请刷新后重试',
-    csrf_invalid: '安全校验失败（CSRF 无效），请刷新后重试',
-    csrf_expired: '安全校验已过期，请重新生成',
-    csrf_uid_mismatch: '安全校验与当前用户不匹配，请重新登录飞牛后重试',
-    origin_missing: '浏览器未提供来源信息，请从飞牛应用内打开本页',
-    origin_rejected: '来源校验失败，请从飞牛应用内打开本页',
-    code_must_not_be_in_url: '请求不合法，请使用页面按钮生成配对码',
-    network_error: '网络请求失败，请检查应用是否已启动后重试',
-    timeout: '请求超时，请确认应用已启动并重试',
-    invalid_response: '服务器返回无法解析，请升级应用或稍后重试',
-    empty_pairing_code: '服务器未返回配对码，请重试或覆盖安装最新版本',
-    me_unavailable_on_device_port: '设备同步端口无网关会话，请从飞牛应用入口打开',
+    get unauthenticated() { return pomeLocaleFnosAppUiPair.t("copy.noNasSignInSessionDetectedOpen.fa00e9"); },
+    get gateway_session_required() { return pomeLocaleFnosAppUiPair.t("copy.noNasSignInSessionDetectedOpen.fa00e9"); },
+    get pair_start_gateway_only() { return pomeLocaleFnosAppUiPair.t("copy.openPairingFromTheNasAppEntry.8d19ba"); },
+    get csrf_missing() { return pomeLocaleFnosAppUiPair.t("copy.securityCheckFailedCsrfMissingRefreshAnd.2fdbdd"); },
+    get csrf_invalid() { return pomeLocaleFnosAppUiPair.t("copy.securityCheckFailedInvalidCsrfRefreshAnd.4e816f"); },
+    get csrf_expired() { return pomeLocaleFnosAppUiPair.t("copy.securityCheckExpiredGenerateAgain.d1ecc0"); },
+    get csrf_uid_mismatch() { return pomeLocaleFnosAppUiPair.t("copy.securityCheckDoesNotMatchTheCurrent.fcbf62"); },
+    get origin_missing() { return pomeLocaleFnosAppUiPair.t("copy.theBrowserDidNotProvideOriginInformation.e7fd62"); },
+    get origin_rejected() { return pomeLocaleFnosAppUiPair.t("copy.originVerificationFailedOpenThisPageFrom.9a938b"); },
+    get code_must_not_be_in_url() { return pomeLocaleFnosAppUiPair.t("copy.invalidRequestUseThePageButtonTo.0c95a8"); },
+    get network_error() { return pomeLocaleFnosAppUiPair.t("copy.networkRequestFailedCheckThatTheApp.eedb3a"); },
+    get timeout() { return pomeLocaleFnosAppUiPair.t("copy.requestTimedOutCheckThatTheApp.c2946e"); },
+    get invalid_response() { return pomeLocaleFnosAppUiPair.t("copy.couldnTParseTheServerResponseUpdate.149dec"); },
+    get empty_pairing_code() { return pomeLocaleFnosAppUiPair.t("copy.theServerDidNotReturnAPairing.b5bf20"); },
+    get me_unavailable_on_device_port() { return pomeLocaleFnosAppUiPair.t("copy.theDeviceSyncPortHasNoGateway.b92d8a"); },
   });
 
   function resolveApiPrefix(pathname, metaPrefix) {
@@ -60,11 +62,11 @@
 
   function formatRemaining(ms) {
     if (ms == null || Number.isNaN(ms)) return '';
-    if (ms <= 0) return '已过期';
+    if (ms <= 0) return pomeLocaleFnosAppUiPair.t("copy.expired.2fe0e3");
     const totalSec = Math.ceil(ms / 1000);
     const m = Math.floor(totalSec / 60);
     const s = totalSec % 60;
-    return `剩余 ${m}:${String(s).padStart(2, '0')}`;
+    return pomeLocaleFnosAppUiPair.t("copy.remaining.22c42b", { arg1: (m), arg2: (String(s).padStart(2, '0')) });
   }
 
   function humanError(codeOrMessage, fallback) {
@@ -74,7 +76,7 @@
     const key = String(codeOrMessage);
     if (ERROR_COPY[key]) return ERROR_COPY[key];
     // Never surface raw /api paths in status copy.
-    if (/\/api\/v1\//i.test(key)) return fallback || '操作失败，请重试';
+    if (/\/api\/v1\//i.test(key)) return fallback || pomeLocaleFnosAppUiPair.t("copy.operationFailedRetry.e113c7");
     return key;
   }
 
@@ -88,34 +90,34 @@
       const frpTarget = (state && state.frpTarget)
         || `127.0.0.1:${n}`;
       const lanHint = lanEnabled
-        ? `已开启局域网监听（${host || '0.0.0.0'}）。同一 Wi‑Fi 下 Mac 同步地址可用 http://NAS内网IP:${n}。`
-        : '当前仅监听本机，只有 NAS 本机能访问该端口。要在同一局域网用内网 IP 同步，请在应用设置把监听范围改为「局域网」并重启；要在外网使用，请通过端口转发、FRP、反向代理或 VPN 等方式转发到本机该端口，并注意做好访问保护。';
+        ? pomeLocaleFnosAppUiPair.t("copy.lanListeningEnabledOnTheSameWi.7e6131", { arg1: (host || '0.0.0.0'), arg2: (n) })
+        : pomeLocaleFnosAppUiPair.t("copy.thisPortListensOnLocalhostOnlyFor.c4d3bd");
       return {
         value: String(n),
-        hint: `这是安装时填写的固定端口。${lanHint}内网 IP 用 http://NAS内网IP:${n}；外网通过端口转发、DDNS、FRP、反向代理或 VPN 转发到该端口。不要填成 NAS:34931，除非安装时填的就是 34931。同步端口默认是明文 HTTP，直接暴露到公网有被扫描和访问的风险。`,
+        hint: pomeLocaleFnosAppUiPair.t("copy.thisIsTheFixedPortSetDuring.24c02b", { arg1: (lanHint), arg2: (n) }),
         copyText: frpTarget,
         available: true,
       };
     }
     if (state && state.source === 'unconfigured') {
       return {
-        value: '未配置',
-        hint: '尚未配置设备同步端口。请打开飞牛「应用设置」，填写 1 到 65535 的端口，然后重启本应用。',
+        value: pomeLocaleFnosAppUiPair.t("copy.notConfigured.80a57e"),
+        hint: pomeLocaleFnosAppUiPair.t("copy.noDeviceSyncPortConfiguredOpenNas.b24272"),
         copyText: '',
         available: false,
       };
     }
     if (state && state.enabled === false) {
       return {
-        value: '未开启',
-        hint: '设备同步端口未开启，本机没有在听。请在飞牛安装向导或应用设置中填写端口后重启。',
+        value: pomeLocaleFnosAppUiPair.t("copy.disabled.3cffa9"),
+        hint: pomeLocaleFnosAppUiPair.t("copy.theDeviceSyncPortIsnTListening.2d3b0f"),
         copyText: '',
         available: false,
       };
     }
     return {
-      value: '未配置',
-      hint: '尚未配置设备同步端口。请在飞牛安装向导或应用设置里填写，然后重启应用。',
+      value: pomeLocaleFnosAppUiPair.t("copy.notConfigured.80a57e"),
+      hint: pomeLocaleFnosAppUiPair.t("copy.noDeviceSyncPortConfiguredSetIt.ccf131"),
       copyText: '',
       available: false,
     };
@@ -167,7 +169,7 @@
 
     function setStatus(text, kind) {
       if (!els.status) return;
-      els.status.textContent = text || '';
+      pomeLocaleFnosAppUiPair.bind(els.status, 'textContent', () => pomeLocaleFnosAppUiPair.systemText(text || ''));
       if (kind) els.status.setAttribute('data-kind', kind);
       else els.status.removeAttribute('data-kind');
     }
@@ -175,16 +177,18 @@
     function setSessionPill(state, text) {
       if (!els.sessionPill) return;
       els.sessionPill.dataset.state = state || 'unknown';
-      els.sessionPill.textContent = text || '';
+      pomeLocaleFnosAppUiPair.bind(els.sessionPill, 'textContent', () => pomeLocaleFnosAppUiPair.systemText(text || ''));
     }
 
     function setPairingEnabled(ok) {
       if (els.startBtn) els.startBtn.disabled = !ok;
       if (!els.sessionNote) return;
-      els.sessionNote.textContent = ok
-        ? '沿用飞牛当前登录，无需在本应用再次登录。'
-        : '未检测到飞牛登录。请先登录飞牛后再打开本应用，配对已停用。';
+      pomeLocaleFnosAppUiPair.bind(els.sessionNote, "textContent", () => (ok
+        ? pomeLocaleFnosAppUiPair.t("copy.usesYourCurrentNasSignInNo.efe799")
+        : pomeLocaleFnosAppUiPair.t("copy.noNasSignInDetectedSignIn.ab79a9")));
     }
+
+    win?.addEventListener?.('pome:language-changed', () => { if (expiresAt != null) tickExpiry(); });
 
     function clearExpiryTimer() {
       if (expiryTimer) {
@@ -199,7 +203,7 @@
       els.expiry.textContent = formatRemaining(left);
       if (left <= 0) {
         clearExpiryTimer();
-        setStatus('配对码已过期，请重新生成', 'warning');
+        setStatus(pomeLocaleFnosAppUiPair.t("copy.pairingCodeExpiredGenerateAnother.5ea6f3"), 'warning');
       }
     }
 
@@ -272,22 +276,22 @@
         const { res, body } = await fetchJson('/api/v1/me');
         if (!res.ok) {
           sessionUser = null;
-          setSessionPill('error', '未登录');
+          setSessionPill('error', pomeLocaleFnosAppUiPair.t("copy.notSignedIn.c1f658"));
           setPairingEnabled(false);
           setStatus(humanError(body.error, ERROR_COPY.gateway_session_required), 'error');
           return { ok: false, error: body.error || 'gateway_session_required' };
         }
         sessionUser = {
           uid: body.uid,
-          username: body.username || body.uid || '已登录',
+          username: body.username || body.uid || pomeLocaleFnosAppUiPair.t("copy.signedIn.0a01ee"),
         };
-        const label = body.username ? `已登录 · ${body.username}` : '已登录';
+        const label = body.username ? pomeLocaleFnosAppUiPair.t("copy.signedIn.a28816", { arg1: (body.username) }) : pomeLocaleFnosAppUiPair.t("copy.signedIn.0a01ee");
         setSessionPill('ok', label);
         setPairingEnabled(true);
         return { ok: true, user: sessionUser };
       } catch (err) {
         sessionUser = null;
-        setSessionPill('error', '会话失败');
+        setSessionPill('error', pomeLocaleFnosAppUiPair.t("copy.sessionError.d23da9"));
         setPairingEnabled(false);
         setStatus(humanError(err.code || err.message, ERROR_COPY.network_error), 'error');
         return { ok: false, error: err.code || 'network_error' };
@@ -299,20 +303,20 @@
         const { res, body } = await fetchJson('/api/v1/pair/csrf');
         if (!res.ok) {
           csrfToken = '';
-          if (!sessionUser) setSessionPill('error', '未登录');
-          setStatus(humanError(body.error, '无法获取安全校验（需飞牛登录）'), 'error');
+          if (!sessionUser) setSessionPill('error', pomeLocaleFnosAppUiPair.t("copy.notSignedIn.c1f658"));
+          setStatus(humanError(body.error, pomeLocaleFnosAppUiPair.t("copy.couldnTObtainSecurityVerificationNasSign.9ac321")), 'error');
           return false;
         }
         csrfToken = body.csrfToken || '';
         if (!csrfToken) {
-          setStatus(humanError('invalid_response', '未拿到安全校验令牌，请刷新重试'), 'error');
+          setStatus(humanError('invalid_response', pomeLocaleFnosAppUiPair.t("copy.noSecurityTokenReceivedRefreshAndRetry.7d6509")), 'error');
           return false;
         }
-        if (!sessionUser) setSessionPill('ok', '已登录');
+        if (!sessionUser) setSessionPill('ok', pomeLocaleFnosAppUiPair.t("copy.signedIn.0a01ee"));
         return true;
       } catch (err) {
         csrfToken = '';
-        setSessionPill('error', '会话失败');
+        setSessionPill('error', pomeLocaleFnosAppUiPair.t("copy.sessionError.d23da9"));
         setStatus(humanError(err.code || err.message), 'error');
         return false;
       }
@@ -321,7 +325,7 @@
     async function startPair() {
       if (els.startBtn) els.startBtn.disabled = true;
       try {
-        setStatus('正在生成配对码…', '');
+        setStatus(pomeLocaleFnosAppUiPair.t("copy.generatingPairingCode.23cabe"), '');
         const session = await checkSession();
         if (!session.ok) {
           hidePairingCode();
@@ -343,7 +347,7 @@
         csrfToken = '';
         if (!res.ok) {
           hidePairingCode();
-          setStatus(humanError(body.error, `生成失败（${res.status}）`), 'error');
+          setStatus(humanError(body.error, pomeLocaleFnosAppUiPair.t("copy.generationFailed.a5e77d", { arg1: (res.status) })), 'error');
           return null;
         }
         const code = extractPairingCode(body);
@@ -353,11 +357,11 @@
           return null;
         }
         showPairingCode(code, body.expiresAt);
-        setStatus('配对码已生成（仅显示一次）', 'ok');
+        setStatus(pomeLocaleFnosAppUiPair.t("copy.pairingCodeGeneratedShownOnceOnly.8cb3f3"), 'ok');
         return { ...body, pairingCode: code };
       } catch (err) {
         hidePairingCode();
-        setStatus(humanError(err.code || err.message, `生成失败：${err.message || '未知错误'}`), 'error');
+        setStatus(humanError(err.code || err.message, pomeLocaleFnosAppUiPair.t("copy.generationFailed.65b4b0", { arg1: (err.message || pomeLocaleFnosAppUiPair.t("copy.unknownError.13a466")) })), 'error');
         return null;
       } finally {
         if (els.startBtn) els.startBtn.disabled = !sessionUser;
@@ -367,10 +371,10 @@
     function applyDevicePortCopy(port, host, state) {
       const copy = formatDevicePortCopy(port, host, state);
       if (els.portValue) {
-        els.portValue.textContent = copy.value;
+        pomeLocaleFnosAppUiPair.bind(els.portValue, 'textContent', () => formatDevicePortCopy(port, host, state).value);
         els.portValue.copyText = copy.copyText || '';
       }
-      if (els.portHint) els.portHint.textContent = copy.hint;
+      if (els.portHint) pomeLocaleFnosAppUiPair.bind(els.portHint, 'textContent', () => formatDevicePortCopy(port, host, state).hint);
       if (els.portCopy) {
         els.portCopy.hidden = !copy.available;
         els.portCopy.copyText = copy.copyText || '';
@@ -387,14 +391,15 @@
       try {
         if (clipboard && typeof clipboard.writeText === 'function') {
           await clipboard.writeText(text);
-          if (els.portCopy) els.portCopy.textContent = '已复制';
+          if (els.portCopy) pomeLocaleFnosAppUiPair.bind(els.portCopy, "textContent", () => (pomeLocaleFnosAppUiPair.t("copy.copied.8f6f8d")));
           return { ok: true, text };
         }
       } catch {
         /* fall through */
       }
       if (els.portHint) {
-        els.portHint.textContent = `请手动复制 ${text}。${els.portHint.textContent || ''}`;
+        const previousHint = els.portHint.textContent || '';
+        pomeLocaleFnosAppUiPair.bind(els.portHint, "textContent", () => pomeLocaleFnosAppUiPair.t("copy.copyManually.2acfcb", { arg1: text, arg2: pomeLocaleFnosAppUiPair.systemText(previousHint) }));
       }
       return { ok: false, text };
     }
@@ -434,7 +439,7 @@
         if (!res.ok) {
           if (els.empty) {
             els.empty.hidden = false;
-            els.empty.textContent = humanError(body.error, '无法加载设备列表（需飞牛登录）');
+            pomeLocaleFnosAppUiPair.bind(els.empty, "textContent", () => (humanError(body.error, pomeLocaleFnosAppUiPair.t("copy.couldnTLoadDevicesNasSignIn.3e92f4"))));
             els.empty.setAttribute('data-kind', 'error');
           }
           return { ok: false, devices: [], error: body.error };
@@ -442,23 +447,23 @@
         const devices = (body && body.devices) || [];
         if (els.empty) {
           els.empty.hidden = devices.length > 0;
-          els.empty.textContent = '尚无设备。桌面配对成功后显示；不安全绑定会标注。';
+          pomeLocaleFnosAppUiPair.bind(els.empty, "textContent", () => (pomeLocaleFnosAppUiPair.t("copy.noDevicesYetPairedDesktopDevicesAppear.b75284")));
           els.empty.removeAttribute('data-kind');
         }
         for (const device of devices) {
           const li = doc.createElement('li');
           const label = doc.createElement('span');
-          label.textContent = device.name || device.deviceId || '设备';
+          pomeLocaleFnosAppUiPair.bind(label, "textContent", () => (device.name || device.deviceId || pomeLocaleFnosAppUiPair.t("copy.devices.e15064")));
           if (device.insecureBound) {
             const badge = doc.createElement('span');
             badge.className = 'settings-nas-device-badge';
-            badge.textContent = '不安全绑定 / HTTP';
+            pomeLocaleFnosAppUiPair.bind(badge, "textContent", () => (pomeLocaleFnosAppUiPair.t("copy.insecurePairingHttp.83e6cd")));
             label.appendChild(badge);
           }
           const btn = doc.createElement('button');
           btn.type = 'button';
           btn.className = 'workspace-button compact';
-          btn.textContent = '吊销';
+          pomeLocaleFnosAppUiPair.bind(btn, "textContent", () => (pomeLocaleFnosAppUiPair.t("copy.revoke.d8c68b")));
           btn.setAttribute('data-control-id', 'fnos.devices.revoke');
           btn.addEventListener('click', () => {
             void revokeDevice(device.deviceId);
@@ -471,7 +476,7 @@
       } catch (err) {
         if (els.empty) {
           els.empty.hidden = false;
-          els.empty.textContent = humanError(err.code || err.message, '无法加载设备列表');
+          pomeLocaleFnosAppUiPair.bind(els.empty, "textContent", () => (humanError(err.code || err.message, pomeLocaleFnosAppUiPair.t("copy.couldnTLoadDevices.c84dca"))));
           els.empty.setAttribute('data-kind', 'error');
         }
         return { ok: false, devices: [], error: err.code || 'network_error' };
@@ -481,7 +486,7 @@
     async function revokeDevice(deviceId) {
       if (!deviceId) return;
       if (win && typeof win.confirm === 'function') {
-        if (!win.confirm('确认吊销该设备令牌？')) return;
+        if (!win.confirm(pomeLocaleFnosAppUiPair.t("copy.revokeThisDeviceToken.ff516a"))) return;
       }
       try {
         await refreshCsrf();
@@ -497,29 +502,29 @@
         );
         csrfToken = '';
         if (!res.ok) {
-          setStatus(humanError(body.error, '吊销失败'), 'error');
+          setStatus(humanError(body.error, pomeLocaleFnosAppUiPair.t("copy.revocationFailed.eb0d97")), 'error');
           return;
         }
-        setStatus('设备已吊销', 'ok');
+        setStatus(pomeLocaleFnosAppUiPair.t("copy.deviceRevoked.8de9da"), 'ok');
         await loadDevices();
       } catch (err) {
-        setStatus(humanError(err.code || err.message, '吊销失败'), 'error');
+        setStatus(humanError(err.code || err.message, pomeLocaleFnosAppUiPair.t("copy.revocationFailed.eb0d97")), 'error');
       }
     }
 
     async function refreshAll() {
       if (els.refreshBtn) els.refreshBtn.disabled = true;
       try {
-        setStatus('刷新中…', '');
+        setStatus(pomeLocaleFnosAppUiPair.t("copy.refreshing.7f3c83"), '');
         await loadDevicePort();
         const session = await checkSession();
         const devices = await loadDevices();
         if (session.ok && devices.ok) {
-          setStatus('已刷新设备列表与会话', 'ok');
+          setStatus(pomeLocaleFnosAppUiPair.t("copy.devicesAndSessionRefreshed.a45377"), 'ok');
         } else if (!session.ok) {
-          setStatus(humanError(session.error, '刷新失败：需在飞牛已登录下打开'), 'error');
+          setStatus(humanError(session.error, pomeLocaleFnosAppUiPair.t("copy.refreshFailedOpenWhileSignedInTo.00ca08")), 'error');
         } else {
-          setStatus(humanError(devices.error, '设备列表刷新失败'), 'error');
+          setStatus(humanError(devices.error, pomeLocaleFnosAppUiPair.t("copy.couldnTRefreshDevices.dbd455")), 'error');
         }
         return { sessionOk: session.ok, csrfOk: session.ok, devices };
       } finally {
@@ -551,13 +556,13 @@
 
     async function init() {
       bind();
-      setSessionPill('unknown', '检测会话…');
+      setSessionPill('unknown', pomeLocaleFnosAppUiPair.t("copy.checkingSession.8667ba"));
       try {
         await loadDevicePort();
         await checkSession();
         await loadDevices();
       } catch (err) {
-        setSessionPill('error', '会话失败');
+        setSessionPill('error', pomeLocaleFnosAppUiPair.t("copy.sessionError.d23da9"));
         setStatus(humanError(err && (err.code || err.message)), 'error');
       }
     }

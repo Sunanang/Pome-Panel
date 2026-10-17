@@ -26,7 +26,7 @@ function parseRemoteUsage(body, now = Date.now()) {
   for (const [index, extra] of (Array.isArray(body?.additional_rate_limits) ? body.additional_rate_limits.slice(0, 16) : []).entries()) {
     for (const key of ['primary', 'secondary']) {
       const value = windowUsage(extra?.rate_limit?.[`${key}_window`]);
-      if (value) windows.push({ ...value, id: `extra-${index}-${key}`, label: String(extra.limit_name || extra.metered_feature || '其他额度').slice(0, 80) });
+      if (value) windows.push({ ...value, id: `extra-${index}-${key}`, label: String(extra.limit_name || extra.metered_feature || '其他额度').slice(0, 80), labelIsFallback: !extra.limit_name && !extra.metered_feature });
     }
   }
   if (windows.length) {

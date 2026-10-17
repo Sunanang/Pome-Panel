@@ -40,7 +40,7 @@ async function run(c){
  await js(`document.getElementById('ai-source-confirm-cancel').click()`);assert.equal(fs.readFileSync(config,'utf8'),original);
  assert.equal(await js(`document.querySelectorAll('.ai-source-restart-hint').length`),0,'cancelled preview must not ask to restart');
  async function assertRestartSources(expected){
-  assert.deepEqual(await js(`Array.from(document.querySelectorAll('.ai-source-restart-hint'),hint=>({source:hint.closest('.ai-source-row').dataset.source,text:hint.textContent}))`),expected.map(source=>({source,text:`已写入配置，请完全退出并重新打开 ${{codex:'Codex',claude:'Claude Code',cursor:'Cursor'}[source]} 后生效`})));
+  assert.deepEqual(await js(`Array.from(document.querySelectorAll('.ai-source-restart-hint'),hint=>({source:hint.closest('.ai-source-row').dataset.source,text:hint.textContent}))`),expected.map(source=>({source,text:source==='claude'?'已写入配置，请退出 Claude Code 并重新启动后生效':`已写入配置，请完全退出并重新打开 ${{codex:'Codex',claude:'Claude Code',cursor:'Cursor'}[source]} 后生效`})));
  }
  // Simulate a failed apply using only the isolated fixture configuration.
  await js(`NotchAiSources.request('cursor')`);await until(`document.getElementById('ai-source-confirm').open`);

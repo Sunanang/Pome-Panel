@@ -7568,3 +7568,11 @@ html[data-liquid-glass='1'] .tile.home-inbox[data-source-state='error'] { backgr
 
 .home-cursor .ai-quota-row .cursor-usage-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-cursor .cursor-usage-rows[data-dynamic='true'] .ai-quota-row { flex-shrink: 0; }
+
+/* Language controls share the existing settings surface and typography. */
+.settings-language-card { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+.settings-language-card select { min-width: 140px; max-width: 60%; height: 30px; padding: 0 10px; border: 1px solid var(--hairline); border-radius: 9px; background: var(--surface-1); color: var(--text-1); font: inherit; color-scheme: dark; }
+html[lang="en-US"] .settings-nas-recovery-actions { flex-wrap: wrap; }
+html[lang="en-US"] .settings-nas-recovery-actions .workspace-button { max-width: 100%; white-space: normal; line-height: 1.45; text-align: left; }
+html[lang="en-US"] .settings-nas-content-row { grid-template-columns: minmax(88px, auto) minmax(0, 1fr) auto; }
+html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }

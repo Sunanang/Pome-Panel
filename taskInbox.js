@@ -87,6 +87,7 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     const parsedCompletedAt = typeof rawCompletedAt === 'string' && !/^\d+(\.\d+)?$/.test(rawCompletedAt) ? Date.parse(rawCompletedAt) : Number(rawCompletedAt);
     const record = {
       id: randomUUID(), completionEventId: stableId, source: input.source, status: statusKey(input.status, input.source), taskId, title, project,
+      titleIsFallback: input.titleIsFallback === true,
       sessionTitle: clean(input.sessionTitle, 256), completionSummary: clean(input.completionSummary || input.title, 4096),
       receivedAt: ts, completedAt: Number.isFinite(parsedCompletedAt) && parsedCompletedAt > 0 ? parsedCompletedAt : ts, readAt: null,
       window: input.window && typeof input.window === 'object' ? {
