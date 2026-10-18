@@ -102,6 +102,8 @@ test('time-expired confirmation refuses writing even if file is unchanged',async
 test('installed Claude and Cursor shell commands run with spaces and apostrophes in application path',async t=>{
  const {home}=fixture(t),appDir=path.join(home,"Pome Panel's app");fs.mkdirSync(path.join(appDir,'scripts'),{recursive:true});for(const source of ['claude','cursor'])fs.copyFileSync(path.join(__dirname,'../scripts',source+'-notify.js'),path.join(appDir,'scripts',source+'-notify.js'));
  fs.copyFileSync(path.join(__dirname,'../scripts/pome-hook-runtime.ps1'),path.join(appDir,'scripts/pome-hook-runtime.ps1'));
+ fs.copyFileSync(path.join(__dirname,'../scripts/claude-attention.js'),path.join(appDir,'scripts/claude-attention.js'));
+ fs.copyFileSync(path.join(__dirname,'../aiEventPolicy.js'),path.join(appDir,'aiEventPolicy.js'));
  const service=createAiSourceHooks({homeDir:home,appDir,runtimeCheck:()=>true}),received=[];
  const server=http.createServer((req,res)=>{let b='';req.on('data',c=>b+=c);req.on('end',()=>{received.push(JSON.parse(b));res.end('{}');});});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  for(const source of ['claude','cursor']){

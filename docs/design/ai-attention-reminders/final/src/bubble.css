@@ -1,0 +1,149 @@
+/* Pome Panel · 任务提醒气泡 — 设计稿样式（可直接迁移到 renderer/notification.css）
+   字体：项目字体栈优先；在 Linux 渲染机上用 Inter ≈ SF Pro，Noto Sans SC ≈ PingFang SC 近似。 */
+@font-face { font-family: 'PomeLatin'; src: url('fonts/Inter-VF.ttf') format('truetype'); font-weight: 100 900; }
+@font-face { font-family: 'PomeCJK'; src: url('fonts/NotoSansSC-VF.ttf') format('truetype'); font-weight: 100 900; }
+
+:root {
+  /* —— 几何 —— */
+  --nb-window-w: 400px;          /* 原生窗口宽度（不变） */
+  --nb-shoulder: 8px;            /* 岛体与屏幕顶边相接的反向圆角 */
+  --nb-body-w: 384px;            /* 岛体可见宽度 = 400 - 2×8 */
+  --nb-cap-h: 32px;              /* 刘海帽高 = notch-safe-height（运行时取菜单栏高度） */
+  --nb-notch-w: 200px;           /* 折叠态宽度 = 物理刘海宽度 */
+  --nb-pad-top: 10px;
+  --nb-pad-x: 16px;
+  --nb-pad-bottom: 14px;         /* 含倒计时条区域 */
+  --nb-gap-icon: 12px;
+  --nb-icon: 32px;
+  --nb-icon-mark: 18px;
+  --nb-badge: 14px;
+  --nb-badge-ring: 2px;
+  --nb-badge-glyph: 8px;
+  --nb-bar-h: 2px;
+  --nb-bar-bottom: 6px;
+  --nb-radius-body: 18px;        /* = --r-tile */
+  --nb-radius-icon: 9px;
+  --nb-radius-notch: 10px;       /* = --r-notch */
+  --nb-radius-win: 16px;         /* = --r-panel */
+
+  /* —— 颜色 —— */
+  --nb-cap: #000000;
+  --nb-surface-top: #0B0B0C;
+  --nb-surface-bottom: #141416;
+  --nb-hairline: rgba(255,255,255,.08);
+  --nb-tile-top: #242426;
+  --nb-tile-bottom: #18181A;
+  --nb-mark: #EDEDED;
+  --nb-text-1: #F5F5F5;
+  --nb-text-2: #A1A1A1;
+  --nb-text-3: #707070;
+  --nb-text-4: #4A4A4A;
+  --nb-chip-bg: rgba(255,255,255,.08);
+  --nb-bar-track: rgba(255,255,255,.07);
+  --nb-bar-fill: rgba(255,255,255,.38);
+  /* 唯一的强调色：只出现在状态角标上 */
+  --nb-accent-done: #30D978;     /* = --accent-green */
+  --nb-accent-todo: #FF9352;     /* = --accent-orange */
+  --nb-accent-error: #FF5F57;    /* = --p0 */
+  --nb-accent-ask: #438CFF;      /* = --accent-blue */
+
+  /* —— 字体 —— */
+  --nb-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI',
+    'PomeLatin', 'PingFang SC', 'Microsoft YaHei', 'PomeCJK', sans-serif;
+  --nb-fs-title: 13.5px; --nb-lh-title: 18px; --nb-fw-title: 600; --nb-ls-title: -0.08px;
+  --nb-fs-sub: 11px;     --nb-lh-sub: 16px;   --nb-fw-sub: 500;
+  --nb-fs-time: 11px;    --nb-fw-time: 500;
+  --nb-fs-queue: 10px;   --nb-fw-queue: 600;  --nb-queue-h: 16px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #0a0a0b; font-family: var(--nb-font);
+  -webkit-font-smoothing: antialiased; color: var(--nb-text-1); }
+
+/* ================= 岛体（macOS） ================= */
+.island { position: relative; width: var(--nb-body-w); color: var(--nb-text-1); }
+.island .shape {
+  position: relative;
+  border-radius: 0 0 var(--nb-radius-body) var(--nb-radius-body);
+  background: linear-gradient(180deg, var(--nb-cap) 0, var(--nb-cap) var(--nb-cap-h),
+              var(--nb-surface-top) calc(var(--nb-cap-h) + 14px), var(--nb-surface-bottom) 100%);
+  box-shadow: 0 14px 36px rgba(0,0,0,.42), 0 2px 8px rgba(0,0,0,.28);
+}
+/* 只在帽体以下出现的发丝描边：顶部与刘海无缝 */
+.island .shape::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  padding: 1px;
+  background: linear-gradient(180deg, transparent 0, transparent calc(var(--nb-cap-h) + 4px), var(--nb-hairline) calc(var(--nb-cap-h) + 26px), rgba(255,255,255,.10) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+}
+.island .shoulder { position: absolute; top: 0; width: var(--nb-shoulder); height: var(--nb-shoulder); }
+.island .shoulder.l { left: calc(var(--nb-shoulder) * -1);
+  background: radial-gradient(circle at 0 100%, transparent calc(var(--nb-shoulder) - .5px), var(--nb-cap) var(--nb-shoulder)); }
+.island .shoulder.r { right: calc(var(--nb-shoulder) * -1);
+  background: radial-gradient(circle at 100% 100%, transparent calc(var(--nb-shoulder) - .5px), var(--nb-cap) var(--nb-shoulder)); }
+.island .cap { height: var(--nb-cap-h); }
+
+.body {
+  position: relative;
+  display: grid; grid-template-columns: var(--nb-icon) minmax(0,1fr); column-gap: var(--nb-gap-icon);
+  align-items: center;
+  padding: var(--nb-pad-top) var(--nb-pad-x) var(--nb-pad-bottom);
+}
+
+/* 图标：中性方块 + 白色品牌标记；强调色只在角标 */
+.icon { position: relative; width: var(--nb-icon); height: var(--nb-icon); border-radius: var(--nb-radius-icon);
+  background: linear-gradient(180deg, var(--nb-tile-top), var(--nb-tile-bottom));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1px 0 rgba(255,255,255,.09);
+  display: grid; place-items: center; color: var(--nb-mark); }
+.icon > svg.mark { width: var(--nb-icon-mark); height: var(--nb-icon-mark); }
+.badge { position: absolute; right: -3px; bottom: -3px; width: var(--nb-badge); height: var(--nb-badge);
+  border-radius: 999px; display: grid; place-items: center; color: #000;
+  box-shadow: 0 0 0 var(--nb-badge-ring) var(--nb-ring, #0E0E10); }
+.badge svg { width: var(--nb-badge-glyph); height: var(--nb-badge-glyph); }
+.badge.done  { background: var(--nb-accent-done); }
+.badge.todo  { background: var(--nb-accent-todo); }
+.badge.error { background: var(--nb-accent-error); color: #fff; }
+.badge.ask   { background: var(--nb-accent-ask); color: #fff; }
+
+.copy { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) auto; column-gap: 10px; row-gap: 2px; }
+.title { font-size: var(--nb-fs-title); line-height: var(--nb-lh-title); font-weight: var(--nb-fw-title);
+  letter-spacing: var(--nb-ls-title); color: var(--nb-text-1);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-all; }
+.title.one { -webkit-line-clamp: 1; }
+.trail { align-self: start; height: var(--nb-lh-title); display: flex; align-items: center; gap: 6px;
+  font-size: var(--nb-fs-time); font-weight: var(--nb-fw-time); color: var(--nb-text-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.queue { height: var(--nb-queue-h); min-width: 22px; padding: 0 5px; border-radius: 999px; background: var(--nb-chip-bg);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+  color: var(--nb-text-2); font-size: var(--nb-fs-queue); font-weight: var(--nb-fw-queue); line-height: var(--nb-queue-h);
+  text-align: center; letter-spacing: .1px; }
+.close { width: 18px; height: 18px; border-radius: 999px; background: rgba(255,255,255,.12); display: none; place-items: center; color: var(--nb-text-1); }
+.close svg { width: 8px; height: 8px; }
+.sub { grid-column: 1 / -1; font-size: var(--nb-fs-sub); line-height: var(--nb-lh-sub); font-weight: var(--nb-fw-sub);
+  color: var(--nb-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub .sep { color: var(--nb-text-4); margin: 0 5px; font-weight: 700; }
+.sub .proj { color: var(--nb-text-3); }
+
+/* 倒计时条：中性白，自右向左收缩 */
+.bar { position: absolute; left: var(--nb-pad-x); right: var(--nb-pad-x); bottom: var(--nb-bar-bottom);
+  height: var(--nb-bar-h); border-radius: 999px; background: var(--nb-bar-track); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: inherit; background: var(--nb-bar-fill); }
+
+/* 悬停：倒计时暂停（条变暗冻结）、轻微提亮、时间换成 × */
+.is-hover .shape { background: linear-gradient(180deg, var(--nb-cap) 0, var(--nb-cap) var(--nb-cap-h),
+              #121214 calc(var(--nb-cap-h) + 14px), #1B1B1E 100%); }
+.is-hover .shape::after { background: linear-gradient(180deg, transparent 0, transparent calc(var(--nb-cap-h) + 4px), rgba(255,255,255,.12) calc(var(--nb-cap-h) + 26px), rgba(255,255,255,.16) 100%); }
+.is-hover .bar i { background: rgba(255,255,255,.16); }
+.is-hover .time { display: none; }
+.is-hover .close { display: grid; }
+.is-hover { --nb-ring: #151517; }
+
+/* ================= Windows 卡片 ================= */
+.wincard { position: relative; width: var(--nb-body-w); border-radius: var(--nb-radius-win);
+  background: linear-gradient(180deg, rgba(30,30,33,.97), rgba(22,22,24,.97));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), inset 0 1px 0 rgba(255,255,255,.06),
+              0 10px 28px rgba(0,0,0,.34), 0 2px 6px rgba(0,0,0,.22);
+  --nb-ring: #1C1C1F; }
+.wincard .body { padding: 12px 16px 16px; }
+.wincard .bar { bottom: 7px; }

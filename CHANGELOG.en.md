@@ -6,6 +6,13 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+### AI attention reminders
+
+- Added separate pending input, choice and approval requests with the final blue B design: 400×146 on macOS and a 384×114 Windows card. Existing completion sizes remain intact. Waiting has no countdown; competing requests use 8-second slots with hover pause and preserved completion time.
+- Resolutions match source, surface, session, turn and request. Closing or returning to an app never answers a request; pending entries remain available in Home and Settings. Restart/disconnect requires reconfirmation.
+- Added validated v2 events, safe summaries before persistence, out-of-order tombstones, atomic storage and confirmed backup repair. Exact Codex empty suggestions/exclude envelopes are filtered; a common projection hides historical noise without deleting original records or deduplication identities.
+- Claude setup previews include observation-only hooks and preserve other configuration and permission decisions. Capabilities remain partial pending live verification; permission notifications may be delayed about 6 seconds and lack request IDs. Codex desktop and Cursor IDE waiting observers are not enabled. Fixtures do not establish live-client support.
+
 ### Chinese and English
 
 - Added shared Chinese/English resources across desktop, NAS pages, native dialogs, tray, notifications, AI modules, safety/recovery prompts and website. First launch follows the system language, with English fallback; manual language preferences stay local.

@@ -19,7 +19,7 @@ run(process.execPath, ['--test', ...fs.readdirSync(path.join(root, 'tests')).fil
 env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-test.log');
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
-for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap', 'sun-home', 'security-recovery', 'notification', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'localization', 'normal-startup']) {
+for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap', 'sun-home', 'security-recovery', 'notification', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'localization', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   run(require('electron'), [`tests/${file}.electron.js`]);
@@ -42,6 +42,12 @@ for (const file of [
   'atomicStorage.js',
   'taskInbox.js',
   'aiSourceHooks.js',
+  'aiEventPolicy.js',
+  'aiAttentionStore.js',
+  'aiNotificationScheduler.js',
+  'claudeAttentionAdapter.js',
+  'scripts/claude-attention.js',
+  'renderer/ai-attention.js',
   'renderer/ai-sources.js',
   'scripts/cursor-notify.js',
   'workspaceBackup.js',

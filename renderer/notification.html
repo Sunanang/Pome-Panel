@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title data-i18n="copy.pomePanelNotification.437b56">Pome Panel 提醒</title>
     <link rel="stylesheet" href="./notification.css" />
+    <link rel="stylesheet" href="./attention-reminder.css" />
   </head>
   <body>
     <main id="notification-root" class="notification-root" aria-live="polite" aria-atomic="true" hidden>
@@ -14,6 +15,18 @@
         <span class="shoulder right" aria-hidden="true"></span>
         <div class="notification-shape">
           <div class="notification-cap" aria-hidden="true"></div>
+          <div class="attention-seam" aria-hidden="true" hidden></div>
+          <div id="attention-content" class="attention-content" hidden>
+            <div class="attention-header">
+              <span class="attention-chip"><i class="attention-dot" aria-hidden="true"></i><span id="attention-label"></span></span>
+              <span class="attention-source"><img id="attention-brand" class="attention-brand" alt="" /><span id="attention-source"></span><span id="attention-project" class="attention-project"></span></span>
+              <span class="attention-trailing"><time id="attention-time"></time><span id="attention-queue" class="notification-queue" hidden><svg class="attention-pause" viewBox="0 0 8 8" aria-hidden="true"><use href="./assets/notification/glyphs.svg#pause"></use></svg><span id="attention-queue-count"></span></span>
+                <button id="attention-close" class="notification-close" type="button" aria-label="隐藏这次提醒" data-i18n-aria-label="attention.hide"><svg viewBox="0 0 10 10" aria-hidden="true"><use href="./assets/notification/glyphs.svg#close"></use></svg></button>
+              </span>
+            </div>
+            <div id="attention-title" class="attention-title"></div>
+            <div class="attention-footer"><button id="attention-action" class="attention-action" type="button"><span id="attention-action-label"></span><span class="attention-arrow" aria-hidden="true">↗</span></button><span id="attention-hint" class="attention-hint"></span></div>
+          </div>
           <div class="notification-content">
             <span class="notification-icon" aria-hidden="true">
               <span id="notification-brand" class="notification-brand"></span>

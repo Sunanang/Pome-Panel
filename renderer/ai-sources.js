@@ -47,12 +47,31 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       const file = document.createElement('small'); pomeLocaleRendererAiSources.bind(file, "textContent", () => (row.filePath || row.message || pomeLocaleRendererAiSources.t("copy.waitingForDetection.f97f6a"))); file.title = row.filePath;
       const explanation = document.createElement('small'); explanation.textContent = pomeLocaleRendererAiSources.systemText(row.message); explanation.title = row.message;
       copy.append(heading, file, explanation);
+      if (row.state === 'connected') {
+        const capability = document.createElement('small'); capability.className = 'ai-source-capability';
+        capability.textContent = pomeLocaleRendererAiSources.t(row.attentionHookMissing ? 'attention.hooksMissing' : row.source === 'claude' ? 'attention.partialClaude' : 'attention.unsupported');
+        capability.title = capability.textContent;
+        copy.append(capability);
+      }
+      if (row.attentionCapabilities) {
+        const details = document.createElement('details'); details.className = 'ai-source-capabilities';
+        const summary = document.createElement('summary'); summary.textContent = pomeLocaleRendererAiSources.t('attention.capabilities'); details.append(summary);
+        const labels = { completion: 'completionLabel', input: 'input', select: 'choice', approve: 'authorization', autoResolve: 'autoResolveLabel' };
+        for (const [key, label] of Object.entries(labels)) {
+          const line = document.createElement('small');
+          line.textContent = `${pomeLocaleRendererAiSources.t(`attention.${label}`)} · ${pomeLocaleRendererAiSources.t(`attention.capability.${row.attentionCapabilities[key] || 'unsupported'}`)}`;
+          details.append(line);
+        }
+        const surface = document.createElement('small'); surface.textContent = `${row.attentionCapabilities.surface} · ${pomeLocaleRendererAiSources.t('attention.versionUnverified')}`; details.append(surface);
+        copy.append(details);
+      }
       if (row.state === 'connected' && restartSources.has(row.source)) {
         const hint = document.createElement('small'); hint.className = 'ai-source-restart-hint';
         hint.textContent = restartMessage(row.source); copy.append(hint);
       }
       const actions = document.createElement('div'); actions.className = 'ai-source-actions';
       if (row.state === 'connected') {
+        if (row.attentionHookMissing) actions.append(makeButton(pomeLocaleRendererAiSources.t('attention.repairHooks'), event => void request(row.source, 'repair', event.currentTarget)));
         if (row.summaryHookMissing) actions.append(makeButton(pomeLocaleRendererAiSources.t("copy.addSummaries.29366e"), event => void request(row.source, 'repair', event.currentTarget)));
         actions.append(makeButton(pomeLocaleRendererAiSources.t("copy.sendTest.a49d32"), () => void test(row.source)), makeButton(pomeLocaleRendererAiSources.t("copy.disconnect.f33ac0"), event => void request(row.source, 'disconnect', event.currentTarget)));
       } else {

@@ -123,6 +123,11 @@ contextBridge.exposeInMainWorld('notchAPI', {
   onTaskInboxError: (cb) => subscribe('tasks:inbox-error', (_event, error) => cb(error)),
   rebuildTaskInbox: () => ipcRenderer.invoke('tasks:rebuild'),
   getTaskInbox: (options) => ipcRenderer.invoke('tasks:inbox', options || {}),
+  getAiAttention: () => ipcRenderer.invoke('ai-attention:list'),
+  showAiAttention: key => ipcRenderer.invoke('ai-attention:show', key),
+  openAiAttention: key => ipcRenderer.invoke('ai-attention:open', key),
+  rebuildAiAttention: () => ipcRenderer.invoke('ai-attention:rebuild'),
+  onAiAttentionChanged: cb => subscribe('ai-attention:changed', () => cb()),
   markTaskRead: (id) => ipcRenderer.invoke('tasks:read', id),
   openTaskSource: (id) => ipcRenderer.invoke('tasks:open-source', id),
   getAiSources: () => ipcRenderer.invoke('tasks:sources'),
@@ -187,8 +192,8 @@ contextBridge.exposeInMainWorld('notchAPI', {
     ipcRenderer.send('task-notification:dismissed', eventId),
   activateTaskNotification: (eventId) =>
     ipcRenderer.invoke('task-notification:activate', eventId),
-  taskNotificationHover: (paused) =>
-    ipcRenderer.send('task-notification:hover', paused === true),
+  taskNotificationHover: (paused, eventId) =>
+    ipcRenderer.send('task-notification:hover', { paused: paused === true, eventId }),
   syncGetStatus: () => ipcRenderer.invoke('sync:get-status'),
   syncGetDashboard: () => ipcRenderer.invoke('sync:get-dashboard'),
   syncListEndpoints: () => ipcRenderer.invoke('sync:list-endpoints'),

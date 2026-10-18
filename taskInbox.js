@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const { statusKey } = require('./renderer/notification-domain');
 const { randomUUID, createHash } = require('node:crypto');
 const { readJsonStrict, writeJsonAtomic, writeAtomic } = require('./atomicStorage');
+const { visibleCompletion } = require('./aiEventPolicy');
 
 const READ_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const SOURCES = new Set(['codex', 'claude', 'cursor']);
@@ -104,9 +105,10 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     prune();
     offset = Math.max(0, Math.trunc(Number(offset) || 0));
     limit = Math.max(1, Math.min(100, Math.trunc(Number(limit) || 20)));
-    return { items: structuredClone(state.records.slice(offset, offset + limit)),
-      total: state.records.length, unread: state.records.filter((r) => r.readAt === null).length,
-      offset, hasMore: offset + limit < state.records.length, retentionLabel: RETENTION_LABEL };
+    const visible = state.records.filter(visibleCompletion);
+    return { items: structuredClone(visible.slice(offset, offset + limit)),
+      total: visible.length, unread: visible.filter((r) => r.readAt === null).length,
+      offset, hasMore: offset + limit < visible.length, retentionLabel: RETENTION_LABEL };
   }
   function markRead(id) {
     checkDisk();

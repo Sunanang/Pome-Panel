@@ -42,6 +42,17 @@ const pomeLocaleRendererNotificationDomain = typeof module === 'object' && modul
       ? value.queueCount ?? value.pendingCount ?? value.pending ?? value.count : value;
     return Math.min(99, Math.max(0, Math.floor(Number(raw) || 0)));
   }
+  function attentionKind(value) {
+    return ['input', 'choice', 'authorization'].includes(value) ? value : null;
+  }
+  function attentionCopy(kind, source, canFocus = true) {
+    const t = (key, params) => pomeLocaleRendererNotificationDomain.t(`attention.${key}`, params);
+    return {
+      label: t(kind),
+      action: canFocus ? t(`return.${kind}`, { source }) : t('return.manual'),
+      hint: canFocus ? t('hint', { source }) : t('hint.manual'),
+    };
+  }
   function normalize(payload, now = Date.now()) {
     const data = payload && typeof payload === 'object' ? payload : { title: typeof payload === 'string' ? payload : '' };
     const source = sourceKey(data.source || data.provider || data.agent || data.app || data.type);
@@ -50,6 +61,9 @@ const pomeLocaleRendererNotificationDomain = typeof module === 'object' && modul
     const project = text([data.project, data.projectName, data.workspace]);
     return {
       sourceKey: source, source: sources[source], status, project,
+      attentionKind: status === 'awaiting' ? attentionKind(data.attentionKind) : null,
+      commandPreview: data.commandPreview === 'npm install' ? data.commandPreview : null,
+      attentionTitleKey: ['attention.commandMasked', 'attention.sensitive', 'attention.generic'].includes(data.attentionTitleKey) ? data.attentionTitleKey : null,
       titleIsFallback: data.titleIsFallback === true || !concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])),
       title: data.titleIsFallback === true ? fallbackTitle(source, status) : concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])) || fallbackTitle(source, status),
       completionSummary: text([data.completionSummary, data.completion_summary, data.title]).slice(0, 4096),
@@ -60,5 +74,5 @@ const pomeLocaleRendererNotificationDomain = typeof module === 'object' && modul
       queueCount: queueCount(data.queueCount ?? data.pendingCount ?? data.pending),
     };
   }
-  return { sourceKey, statusKey, fallbackTitle, concreteTitle, eventTime, relativeTime, queueCount, normalize };
+  return { sourceKey, statusKey, fallbackTitle, concreteTitle, eventTime, relativeTime, queueCount, attentionKind, attentionCopy, normalize };
 });

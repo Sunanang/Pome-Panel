@@ -1,0 +1,45 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="bubble.css"><link rel="stylesheet" href="attn.css">
+<style>
+.scene { position: relative; overflow: hidden; }
+.wall { position: absolute; inset: -60px; filter: blur(26px) saturate(1.05); }
+.wall.mac { background:
+   radial-gradient(38% 70% at 18% 30%, #3b4a7a 0, transparent 70%),
+   radial-gradient(34% 80% at 52% 110%, #c77a5b 0, transparent 70%),
+   radial-gradient(40% 90% at 88% 20%, #2f6b72 0, transparent 70%),
+   radial-gradient(30% 60% at 70% 80%, #6a4a86 0, transparent 70%),
+   linear-gradient(180deg, #1d2236, #2a2433); }
+.wall.win { background:
+   radial-gradient(40% 90% at 50% 120%, #2f7cf0 0, transparent 70%),
+   radial-gradient(30% 70% at 30% 60%, #1b4fb3 0, transparent 70%),
+   radial-gradient(35% 80% at 75% 55%, #4a6fd6 0, transparent 70%),
+   linear-gradient(180deg, #0c1d3d, #12306a); }
+.grain { position: absolute; inset: 0; opacity: .06; mix-blend-mode: overlay;
+   background-image: repeating-radial-gradient(circle at 13% 27%, #fff 0 .5px, transparent .5px 2px); }
+.menubar { position: absolute; left: 0; right: 0; top: 0; height: 32px; display: flex; align-items: center; justify-content: space-between;
+   padding: 0 14px 0 18px; background: rgba(18,18,26,.32); backdrop-filter: blur(24px) saturate(1.4);
+   color: rgba(255,255,255,.92); font-size: 13px; font-weight: 500; letter-spacing: -.1px; }
+.menubar .l, .menubar .r { display: flex; align-items: center; gap: 18px; }
+.menubar .app { font-weight: 700; }
+.menubar .logo { width: 13px; height: 13px; border-radius: 4px; background: rgba(255,255,255,.88); }
+.menubar svg { height: 14px; display: block; }
+.notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 200px; height: 32px; background: #000;
+   border-radius: 0 0 10px 10px; }
+.notch::before, .notch::after { content: ''; position: absolute; top: 0; width: 6px; height: 6px; }
+.notch::before { left: -6px; background: radial-gradient(circle at 0 100%, transparent 5.5px, #000 6px); }
+.notch::after { right: -6px; background: radial-gradient(circle at 100% 100%, transparent 5.5px, #000 6px); }
+.anchor { position: absolute; top: 0; left: 50%; transform: translateX(-50%); }
+.anchor.win { top: 10px; }
+.caption { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; display: flex; align-items: center; justify-content: space-between;
+   padding: 0 16px; background: #0b0b0c; border-top: 1px solid rgba(255,255,255,.06); color: #8a8a8a; font-size: 11px; font-weight: 500; }
+.caption b { color: #e8e8e8; font-weight: 600; margin-right: 8px; }
+.caption .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); color: #d0d0d0; font-size: 10px; }
+.caption .ph { color: #5f5f5f; }
+ html,body{width:960px;height:220px;overflow:hidden}</style></head><body><div class="scene" style="width:960px;height:220px"><div style="position:absolute;left:0;right:0;top:0;bottom:30px;overflow:hidden">
+<div class="wall mac"></div><div class="grain"></div><div class="menubar"><div class="l"><span class="logo"></span><span class="app">Pome Panel</span><span>文件</span><span>编辑</span><span>窗口</span></div>
+    <div class="r"><svg viewBox="0 0 26 13" fill="none"><rect x=".7" y=".7" width="22" height="11.6" rx="3.2" stroke="currentColor" stroke-opacity=".5" stroke-width="1.2"/><rect x="2.6" y="2.6" width="15" height="7.8" rx="1.6" fill="currentColor"/><path d="M24.4 4.6v3.8" stroke="currentColor" stroke-opacity=".5" stroke-width="1.4" stroke-linecap="round"/></svg><svg viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 5a11 11 0 0 1 15 0"/><path d="M4 7.8a7.2 7.2 0 0 1 10 0"/><path d="M6.6 10.5a3.4 3.4 0 0 1 4.8 0"/></svg><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4.3"/><path d="m9.3 9.3 3 3"/></svg><span>10月16日 周五 17:31</span></div></div>
+<div class="anchor"><div class="isl-b " style=""><span class="shoulder l"></span><span class="shoulder r"></span>
+      <div class="shape"><div class="cap"></div><div class="seam"></div><div class="b-body"><div class="b-row1"><span class="b-chip"><span class="b-dot"></span>等待授权</span>
+        <span class="b-src"><svg class="mark" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" fill="#D97757" fill-rule="nonzero"></path></svg>Claude<span class="sep">·</span><span class="proj">Pome-Panel</span></span><span class="b-spacer"></span>
+        <span class="b-trail">刚刚</span></div>
+      <div class="b-title">允许运行 npm install 安装依赖吗？</div>
+      <div class="b-foot"><span class="b-cta">去 Claude 授权<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7 7 3M4.2 3H7v2.8"/></svg></span><span class="b-hint">在 Claude 中处理后自动收起</span></div></div></div></div></div></div><div class="caption"><span><b>auth-claude.png</b>定稿 B · 等待授权 · Claude · macOS</span><span class="ph">无倒计时 · 不自动消失 · 点击主体或按钮返回来源 · × 只隐藏</span></div></div></body></html>

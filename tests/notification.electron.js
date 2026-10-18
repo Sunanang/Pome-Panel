@@ -39,7 +39,7 @@ const evaluate = (win, source) => win.webContents.executeJavaScript(source);
 async function send(source, payload) {
   const response = await fetch(`http://127.0.0.1:${port}/notify/${source}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ event_id: `notification-fixture-${++sequence}`, ...payload }),
+    body: JSON.stringify({ type: source === 'codex' ? 'agent-turn-complete' : 'Stop', event_id: `notification-fixture-${++sequence}`, ...payload }),
   });
   assert.equal(response.status, 202, await response.text());
 }

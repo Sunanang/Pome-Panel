@@ -21,8 +21,8 @@ if (/^[a-z0-9]+$/.test(platformName)) document.documentElement.dataset.platform 
 const canFocusWindows = () => capabilities?.features?.windowFocus === true;
 function applyShellLabel() {
   openButton.setAttribute('aria-label', canFocusWindows() ? pomeLocaleRendererNotification.t("copy.openTheSourceApp.ce1839") : pomeLocaleRendererNotification.t("copy.dismissTaskNotification.30ec6c"));
+  if (currentNotification?.attentionKind) renderAttention();
 }
-applyShellLabel();
 api?.onCapabilitiesChanged?.(next => { capabilities = next; applyShellLabel(); });
 
 const HIDE_FALLBACK_MS = 420;
@@ -40,10 +40,12 @@ let lastHeight = 0;
 let keepShell = false;
 let activationError = false;
 let activating = false;
+applyShellLabel();
 
 function updateHeight() {
   if (!currentNotification || !isVisible || isHiding) return;
-  const height = cssNumber('--nb-base-height', 92) + (titleElement.offsetHeight > 18 ? 18 : 0);
+  const height = currentNotification.attentionKind ? cssNumber('--at-window-height', 146)
+    : cssNumber('--nb-base-height', 92) + (titleElement.offsetHeight > 18 ? 18 : 0);
   document.documentElement.style.setProperty('--nb-window-h', `${height}px`);
   if (height === lastHeight) return;
   lastHeight = height;
@@ -53,12 +55,15 @@ function setQueueCount(value) {
   const count = domain.queueCount(value);
   queueElement.textContent = `+${count}`;
   queueElement.hidden = count === 0;
+  const attentionQueue = document.getElementById('attention-queue');
+  document.getElementById('attention-queue-count').textContent = `+${count}`; attentionQueue.hidden = count === 0;
   updateHeight();
 }
 function updateTime() {
   if (!currentNotification) return;
   const text = domain.relativeTime(currentNotification.occurredAt);
   if (timeElement.textContent !== text) { timeElement.textContent = text; updateHeight(); }
+  document.getElementById('attention-time').textContent = text;
 }
 function renderProgress() {
   cancelAnimationFrame(progressFrame);
@@ -76,7 +81,7 @@ function reportHover(hovering) {
   if (isHovering === hovering) return;
   isHovering = hovering;
   shell.classList.toggle('is-hover', hovering);
-  api?.taskNotificationHover?.(hovering);
+  api?.taskNotificationHover?.(hovering, currentNotification?.eventId);
   updateHeight();
 }
 function stopTickers() {
@@ -89,6 +94,10 @@ function showNotification(payload) {
   clearTimeout(hideFallback);
   currentNotification = domain.normalize(payload);
   const notification = currentNotification;
+  document.documentElement.dataset.attention = String(Boolean(notification.attentionKind));
+  shell.classList.toggle('is-attention', Boolean(notification.attentionKind));
+  document.getElementById('attention-content').hidden = !notification.attentionKind;
+  shell.querySelector('.attention-seam').hidden = !notification.attentionKind;
   isVisible = true;
   activationError = false;
   activating = false;
@@ -109,6 +118,8 @@ function showNotification(payload) {
   const brandPath = ['codex','claude','cursor'].includes(notification.sourceKey)
     ? `./assets/inbox/${notification.sourceKey}.svg` : `./assets/notification/${notification.sourceKey}.svg`;
   document.getElementById('notification-brand').style.setProperty('--nb-brand', `url("${brandPath}")`);
+  document.getElementById('attention-brand').src = brandPath;
+  if (notification.attentionKind) renderAttention();
   document.getElementById('notification-status-glyph').setAttribute('href', `./assets/notification/glyphs.svg#${notification.status}`);
   document.getElementById('notification-status').setAttribute('aria-label', { completed: pomeLocaleRendererNotification.t("copy.completed.f28461"), due: pomeLocaleRendererNotification.t("copy.dueSoon.ea0afa"), failed: pomeLocaleRendererNotification.t("copy.failed.01ad2b"), awaiting: pomeLocaleRendererNotification.t("copy.awaitingConfirmation.e5d218") }[notification.status]);
   progressElement.hidden = notification.status === 'awaiting';
@@ -130,7 +141,7 @@ function showNotification(payload) {
       api?.taskNotificationShown?.(notification.eventId);
       reportHover(shell.matches(':hover'));
       // A reused window may still be under the pointer when the next item appears.
-      api?.taskNotificationHover?.(isHovering);
+      api?.taskNotificationHover?.(isHovering, notification.eventId);
     }, reduce ? 120 : replace ? 180 : cssNumber('--nb-enter-ms', 300));
   }));
   timeTicker = setInterval(updateTime, 1000);
@@ -165,8 +176,31 @@ function dismissNotification() {
   else hideNotification(currentNotification.eventId);
 }
 shell.addEventListener('pointerenter', () => reportHover(true));
-shell.addEventListener('pointerleave', () => { if (!activationError) reportHover(false); });
-openButton.addEventListener('click', async () => {
+shell.addEventListener('pointerleave', () => { if (!activationError && !shell.matches(':focus-within')) reportHover(false); });
+shell.addEventListener('focusin', () => reportHover(true));
+shell.addEventListener('focusout', () => { if (!activationError && !shell.matches(':hover') && !shell.matches(':focus-within')) reportHover(false); });
+function renderAttention() {
+  const notification = currentNotification;
+  if (notification.attentionTitleKey) notification.title = pomeLocaleRendererNotification.t(notification.attentionTitleKey, { command: notification.commandPreview });
+  const copy = domain.attentionCopy(notification.attentionKind, notification.source, canFocusWindows());
+  document.getElementById('attention-label').textContent = copy.label;
+  document.getElementById('attention-source').textContent = notification.source;
+  const project = document.getElementById('attention-project');
+  project.textContent = notification.project; project.hidden = !notification.project;
+  const title = document.getElementById('attention-title'); title.textContent = notification.title; title.title = notification.title;
+  if (notification.commandPreview) {
+    const marker = `${notification.commandPreview} ••••`, parts = notification.title.split(marker);
+    if (parts.length === 2) {
+      const command = document.createElement('span'); command.className = 'attention-command'; command.textContent = `${notification.commandPreview} `;
+      const mask = document.createElement('span'); mask.className = 'attention-command-mask'; mask.textContent = '••••'; command.append(mask);
+      title.replaceChildren(document.createTextNode(parts[0]), command, document.createTextNode(parts[1]));
+    }
+  }
+  document.getElementById('attention-action-label').textContent = copy.action;
+  document.getElementById('attention-action').classList.toggle('is-manual', !canFocusWindows());
+  document.getElementById('attention-hint').textContent = copy.hint;
+}
+async function activateNotification() {
   if (!isVisible || isHiding || activating) return;
   const eventId = currentNotification.eventId;
   if (canFocusWindows() && api?.activateTaskNotification) {
@@ -182,12 +216,22 @@ openButton.addEventListener('click', async () => {
       detailElement.hidden = false;
       document.getElementById('notification-separator').hidden = false;
       shell.classList.add('has-activation-error');
+      if (currentNotification.attentionKind) document.getElementById('attention-hint').textContent = detailElement.textContent;
       reportHover(true);
       return;
     }
+    if (currentNotification.attentionKind) {
+      activationError = false;
+      shell.classList.remove('has-activation-error');
+      renderAttention();
+      api?.taskNotificationHover?.(isHovering, eventId);
+    }
   }
-  if (currentNotification?.eventId === eventId) dismissNotification();
-});
+  if (currentNotification?.eventId === eventId && (!currentNotification.attentionKind || !canFocusWindows())) dismissNotification();
+}
+openButton.addEventListener('click', activateNotification);
+document.getElementById('attention-action').addEventListener('click', event => { event.stopPropagation(); void activateNotification(); });
+document.getElementById('attention-close').addEventListener('click', event => { event.stopPropagation(); dismissNotification(); });
 closeButton.addEventListener('click', event => { event.stopPropagation(); dismissNotification(); });
 shell.addEventListener('keydown', event => {
   if (event.key === 'Escape' && currentNotification?.status !== 'awaiting') { event.preventDefault(); dismissNotification(); }
@@ -203,6 +247,7 @@ api?.onTaskNotificationTiming?.(applyTiming);
 window.addEventListener('pome:language-changed', () => {
   applyShellLabel();
   if (!currentNotification) return;
+  if (currentNotification.attentionKind) renderAttention();
   if (currentNotification.titleIsFallback) { titleElement.textContent = domain.fallbackTitle(currentNotification.sourceKey, currentNotification.status); titleElement.title = [currentNotification.sessionTitle, titleElement.textContent].filter(Boolean).join('\n'); }
   if (currentNotification.status === 'due' && !activationError) detailElement.textContent = pomeLocaleRendererNotification.t('copy.dueWithin1Hour.955b14');
   updateTime(); updateHeight();

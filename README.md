@@ -129,6 +129,18 @@ curl -X POST http://127.0.0.1:43821/notify/codex \
 
 仓库提供 [Codex](scripts/codex-notify.js)、[Claude Code](scripts/claude-notify.js)、[Cursor](scripts/cursor-notify.js) 转发脚本。Claude 云端会话（`CLAUDE_CODE_REMOTE=true`）不会转发。
 
+### AI 待操作提醒（开发版）
+
+新的 v2 事件在同一回环接收地址上区分完成与等待输入、选择、授权。macOS 等待气泡采用 B 蓝色定稿（400×146，顶部 32px 黑区），Windows 为 384×114 顶部卡片。完成气泡保持原尺寸。等待摘要单行显示；敏感参数在落盘前隐藏，完整安全摘要在「设置 → AI 完成来源 → 待处理」查看。来源图标与状态独立。
+
+等待没有倒计时；单条常驻，有竞争时按 8 秒时隙与完成通知公平轮换。悬停暂停，完成计时继续原剩余时间。点击主体/按钮仅返回来源，× 只隐藏这次提醒，均不算已回答。来源的匹配解决、取消或继续事件撤销请求，不额外弹已回答。首页 AI 完成组件有待处理入口；隐藏首页组件后仍可从设置访问，恢复被隐藏的提醒。Windows 原生能力关闭时提示「请返回来源软件」，点击仅隐藏，不加载 koffi。
+
+等待状态只保存于本机 userData 下的 `ai-attention.json`，不进入完成历史、LocalStorage 或 NAS。身份包含来源、客户端 surface、会话、回合、请求；乱序解决事件留短期 tombstone。重启/断开后保留入口并标为需确认，不自动重弹或按超时宣布完成。存储损坏/外部修改会拒收，设置中可确认后先备份原文件再重建。
+
+Claude 的一键接入/修复会预览并追加专用观察 hook（PreToolUse、PostToolUse、PostToolUseFailure、Notification、UserPromptSubmit、Stop、SessionEnd），stdout 为空，不回答、不授权。旧 Stop-only 接入提示「等待提醒需补全」。AskUserQuestion 关联精确 tool-use ID；`idle_prompt` 不提醒；没有稳定请求 ID 的授权/表单仅在明确的继续或结束边界收敛，不用无关工具返回猜解决。授权 Notification 可能约 6 秒后触发。当前缺少 Claude Code 实机验收，能力为 partial；Codex 桌面端与 Cursor IDE 的等待事件未验证，未启用 watcher/bridge，不承诺覆盖现有弹框。详情见 [事件方案](docs/plans/2026-10-18-ai-notification-events.md) 和 [实施与验收记录](docs/plans/2026-10-18-ai-attention-implementation.md)。
+
+Codex 完成输出中，整条文本（可含一层 JSON 围栏）恰为 `{"suggestions":[]}` 或 `{"exclude":[]}` 时忽略；普通 JSON 与含 JSON 的自然语言结果保留。旧同形记录只在分页、总数、未读和最新条目的统一投影中隐藏，不批量删除。旧 notify 无已核实的用户意图证据，因此用户刻意要求输出该精确空数组对象时也可能命中此窄规则；未经验证的 `final:true` 不绕过过滤。
+
 ## Windows 上的几件事
 
 全新安装首次打开首页时，日出日落默认显示，可用组件会重新排布并填满首页网格；未改动的旧 Windows 默认布局也会自动修复。Mac 默认布局与用户自定义的组件显隐、尺寸和位置不变。两端的城市选择气泡会避开面板边界，搜索列表较长时在气泡内滚动，自定义位置表单保持可操作；收起面板后立即关闭，下次展开需手动点击位置按钮重新打开。

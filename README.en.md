@@ -84,6 +84,18 @@ The connector uses Electron's bundled Node runtime rather than relying on PATH. 
 
 **Send test** uses the same forwarding and receiver path but creates no history, unread count or real completion bubble. Empty states distinguish unconnected, waiting for the first record and broken connections. Initial detection can be dismissed locally with Later. Scripts: [Codex](scripts/codex-notify.js), [Claude Code](scripts/claude-notify.js), [Cursor](scripts/cursor-notify.js).
 
+### AI attention reminders (development)
+
+Validated v2 events use the same loopback endpoints and keep input, choice and approval requests separate from completion history. The final blue B design uses a 400×146 macOS window with a 32px black cap and a 384×114 Windows card. Existing completion sizes are preserved. Safe question summaries fit one line; Settings → AI completion sources → Pending shows the complete safe summary. Sensitive content is hidden before persistence.
+
+A sole request stays visible without a countdown. Competing requests and completions rotate fairly with 8-second waiting slots, hover pause and preserved completion time. Body/button clicks return to the source; × only hides this display. Neither resolves the request. A matching source resolution, continuation or cancellation removes it without another notification. Pending entries remain in Home and Settings; hidden bubbles can be shown again. With Windows native capabilities off, clicking only hides and prompts a manual return.
+
+State is local in userData/ai-attention.json, outside LocalStorage, completed unread counts and NAS sync. Source, surface, session, turn and request identities prevent unrelated resolutions; short-lived tombstones suppress late delivery. Restart or source disconnect marks requests unverified without replay. Storage errors reject delivery and provide a confirmed backup-and-rebuild action in Settings.
+
+Claude setup/repair previews observation-only PreToolUse, PostToolUse, PostToolUseFailure, Notification, UserPromptSubmit, Stop and SessionEnd hooks, retaining unrelated entries. The hooks output no decisions or answers. AskUserQuestion uses tool-use identity; idle_prompt is ignored. Permission/form notifications without request IDs settle only at explicit continuation/end boundaries, not unrelated tool results. Permission notifications may be delayed about 6 seconds. Live Claude verification is outstanding (partial capability). Codex desktop and Cursor IDE waiting observers are unverified and disabled; fixtures do not establish support for existing dialogs. See the [implementation and acceptance record](docs/plans/2026-10-18-ai-attention-implementation.md).
+
+Entire Codex responses that exactly match an empty suggestions/exclude object (optionally JSON-fenced) are filtered. Other JSON and natural-language results survive. The same projection hides historical noise consistently across pagination, totals and unread counts while preserving disk records and dedupe identities. Legacy notify cannot establish a verified explicit user request for this exact JSON, so an intentional same-shaped empty result can still match this narrow rule; an unverified final:true flag cannot override it.
+
 ## AI quota
 
 Only detected providers or providers with a configured token appear. With both Codex and Cursor, mini/small remember the selected provider locally; the initial choice has the lowest remaining quota. Medium places providers side by side; large stacks them. Layout retains the existing `cursor` module ID.

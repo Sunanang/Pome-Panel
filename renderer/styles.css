@@ -7576,3 +7576,13 @@ html[lang="en-US"] .settings-nas-recovery-actions { flex-wrap: wrap; }
 html[lang="en-US"] .settings-nas-recovery-actions .workspace-button { max-width: 100%; white-space: normal; line-height: 1.45; text-align: left; }
 html[lang="en-US"] .settings-nas-content-row { grid-template-columns: minmax(88px, auto) minmax(0, 1fr) auto; }
 html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
+/* Pending requests remain accessible even with the home inbox hidden. */
+.ai-attention-section { margin-top: 12px; display: grid; gap: 8px; }
+#ai-attention-list { display: grid; gap: 8px; max-height: 180px; overflow-y: auto; }
+.ai-attention-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; }
+.ai-attention-row > div:first-child { min-width: 0; display: grid; gap: 3px; }
+.ai-attention-row small,.ai-attention-status { color: var(--text-2, #A1A1A1); font-size: 11px; overflow-wrap: anywhere; }
+.ai-attention-actions { display: flex; gap: 6px; flex: none; }
+.ai-source-capabilities { margin-top: 3px; color: var(--text-3); font-size: var(--fs-caption); }
+.ai-source-capabilities summary { cursor: pointer; }
+.ai-attention-entry { margin: 4px 12px; border: 0; border-radius: 6px; padding: 5px 8px; background: rgba(67,140,255,.13); color: #8DB8FF; font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
