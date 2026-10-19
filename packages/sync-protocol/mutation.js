@@ -2,6 +2,7 @@
 
 const { SCHEMA_VERSION, isPositiveInt, isNonNegativeInt } = require('./schema');
 const { assertP0Collection } = require('./collections');
+const { normalizeSyncedCompletion } = require('./ai-completions');
 
 const MUTATION_OPS = Object.freeze(['upsert', 'delete']);
 
@@ -84,6 +85,13 @@ function validateMutation(input, options = {}) {
   }
   if (input.op === 'delete' && Object.keys(input.payload).length !== 0) {
     return { ok: false, reason: 'mutation_delete_payload_must_be_empty', field: 'payload' };
+  }
+  if (input.collection === 'aiCompletions' || input.entityId.startsWith('completion:')) {
+    const row = input.op === 'upsert' ? normalizeSyncedCompletion(input.payload) : null;
+    if (input.collection !== 'aiCompletions' || !/^completion:[a-f0-9]{64}$/.test(input.entityId)
+      || (input.op === 'upsert' && (!row || input.entityId !== `completion:${row.id}`))) {
+      return { ok: false, reason: 'invalid_ai_completion', field: 'payload' };
+    }
   }
   if (!isNonEmptyString(input.clientMutationId)) {
     return { ok: false, reason: 'mutation_client_mutation_id_invalid', field: 'clientMutationId' };

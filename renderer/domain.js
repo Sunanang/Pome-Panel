@@ -174,13 +174,23 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
     ));
   }
 
-  function prependClipboardHistory(history, entry, maxEntries = 100) {
+  function trimClipboardHistory(history, favorites = [], maxEntries = 100) {
     const limit = Math.max(1, Math.floor(Number(maxEntries) || 100));
-    const next = [entry, ...(Array.isArray(history) ? history : [])];
-    return {
-      history: next.slice(0, limit),
-      evicted: next.slice(limit),
-    };
+    const favoriteIds = new Set(Array.isArray(favorites) ? favorites : []);
+    const rows = (Array.isArray(history) ? history : []).filter(row => row && typeof row === 'object').sort((left, right) =>
+      (Number(right.timestamp) || 0) - (Number(left.timestamp) || 0)
+      || (String(left.id) < String(right.id) ? -1 : String(left.id) > String(right.id) ? 1 : 0));
+    const kept = [], evicted = [];
+    let ordinary = 0;
+    for (const row of rows) {
+      if (favoriteIds.has(row.id) || ordinary++ < limit) kept.push(row);
+      else evicted.push(row);
+    }
+    return { history: kept, evicted };
+  }
+
+  function prependClipboardHistory(history, entry, maxEntries = 100, favorites = []) {
+    return trimClipboardHistory([entry, ...(Array.isArray(history) ? history : [])], favorites, maxEntries);
   }
 
   function createCommand(text, id, createdAt) {
@@ -1331,6 +1341,7 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
     moveLinkToPosition,
     renameGroup,
     prependClipboardHistory,
+    trimClipboardHistory,
     createExclusiveAsyncTask,
     createCommand,
     createRecording,

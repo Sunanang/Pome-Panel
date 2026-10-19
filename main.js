@@ -28,7 +28,7 @@ const { createTaskInbox, completionEventId, rebuildTaskInbox } = require('./task
 const { createAiSourceHooks } = require('./aiSourceHooks');
 const { classifyAiEvent } = require('./aiEventPolicy');
 const { createAiAttentionStore, rebuildAiAttention } = require('./aiAttentionStore');
-const { createAiNotificationScheduler } = require('./aiNotificationScheduler');
+const { createAiNotificationScheduler, countQueuedNotifications } = require('./aiNotificationScheduler');
 const { createClaudeAttentionAdapter } = require('./claudeAttentionAdapter');
 const claudeAttentionAdapter = createClaudeAttentionAdapter();
 let aiSourceHooks;
@@ -100,6 +100,7 @@ const {
   SCHEMA_UI_STATE_INCOMPATIBLE,
   MIN_SUPPORTED_SCHEMA_VERSION,
   MAX_SUPPORTED_SCHEMA_VERSION,
+  completionSyncKey,
 } = require('./packages/sync-protocol');
 const { openSyncStore, resolveSyncDbPath } = require('./sync-store');
 const {
@@ -312,7 +313,6 @@ const COLLAPSED_WIDTH = 200;
 const TAB_SIZES = platformPolicy.layout.tabSizes();
 const COLLAPSE_WATCHDOG_MS = 650;
 
-const CLIP_MAX_ITEMS = 100;
 const CLIP_POLL_INTERVAL_MS = 500;
 // 大图从系统 ClipboardItem 复制到进程仍有固定成本；图片探测降到 3 秒一次，
 // 文本继续保持 500ms 响应，不影响日常文字剪贴体验。
@@ -809,11 +809,13 @@ function normalizeTaskNotification(payload, source) {
 }
 
 function getPendingTaskNotificationCount() {
-  if (activeTaskNotification?.attentionKey) return getAiAttention().list().filter(row => row.state === 'pending' && row.key !== activeTaskNotification.attentionKey).length;
-  return taskNotificationQueue.reduce(
-    (total, item) => total + (item.summaryCount || 1),
-    0
-  );
+  let attentionRows = [];
+  try { attentionRows = getAiAttention().list(); } catch { /* corrupt storage is reported elsewhere */ }
+  return countQueuedNotifications({
+    attentionRows,
+    completions: taskNotificationQueue,
+    activeAttentionKey: activeTaskNotification?.attentionKey || null,
+  });
 }
 
 function sendTaskNotificationQueueCount() {
@@ -1273,13 +1275,20 @@ function startTaskNotificationServer() {
         const snapshot = claudeAttentionAdapter.snapshot();
         try {
           const events = claudeAttentionAdapter.observe(payload);
-          for (const event of events) {
+          const checkedEvents = events.map(event => {
             const checked = classifyAiEvent(event, source);
-            if (checked.event) getAiAttention().apply(checked.event);
-          }
+            if (!checked.event) throw new Error('invalid_claude_observation');
+            return checked.event;
+          });
+          if (checkedEvents.length) getAiAttention().applyBatch(checkedEvents);
           if (events.length) refreshAttentionNotifications();
           sendTaskNotificationResponse(response, 202, { ok: true, result: events.length ? 'accepted' : 'ignored' });
-        } catch (error) { claudeAttentionAdapter.restore(snapshot); reportTaskEventFailure(PomeI18n.t('attention.storageError')); sendTaskNotificationResponse(response, 503, { ok: false, error: error.code || 'attention_save_failed' }); }
+        } catch (error) {
+          if (!error.attentionBatchCommitted) claudeAttentionAdapter.restore(snapshot);
+          else { try { refreshAttentionNotifications(); } catch {} }
+          reportTaskEventFailure(PomeI18n.t('attention.storageError'));
+          sendTaskNotificationResponse(response, 503, { ok: false, error: error.code || 'attention_save_failed' });
+        }
         return;
       }
       const policy = classifyAiEvent(payload, source);
@@ -2167,6 +2176,12 @@ function normalizePortableStorage(storage) {
       }));
     } catch (error) {}
   }
+  try {
+    const history = JSON.parse(portable['notch-clip-history']);
+    const favorites = parseJsonArray(portable['notch-clip-favorites']);
+    if (Array.isArray(history)) portable['notch-clip-history'] = JSON.stringify(
+      require('./renderer/domain').trimClipboardHistory(history, favorites).history);
+  } catch (error) {}
   return portable;
 }
 
@@ -3068,14 +3083,14 @@ async function performBoundTodosSyncCycle({ broadcast = true } = {}) {
   if (result.ok) {
     try {
       const workspaceResult = await runBoundWorkspaceSyncCycle();
-      const names = ['笔记','链接','常用指令','剪贴板','录音元数据','AI 配置','密钥'];
+      const names = ['笔记','链接','常用指令','剪贴板','AI 完成','录音元数据','AI 配置','密钥'];
       saveContentResult(names, workspaceResult.skipped ? PomeI18n.t("copy.initialDataSyncIsNotComplete.62dc6e") : workspaceResult.ok ? PomeI18n.t("copy.lastSyncConfirmed.db2b6e") : '待同步：'+workspaceResult.error, workspaceResult.ok && !workspaceResult.skipped);
-      const labels = { get notes() { return PomeI18n.t("copy.notes.b778e3"); }, get links() { return PomeI18n.t("copy.links.305378"); }, get commands() { return PomeI18n.t("copy.commands.b85789"); }, get clipboardHistory() { return PomeI18n.t("copy.clipboard.8c10e2"); }, get recordings() { return PomeI18n.t("copy.recordingAudio.a93938"); }, get aiSettings() { return PomeI18n.t("copy.aiConfiguration.4336ed"); }, get secrets() { return PomeI18n.t("copy.credentials.f67bca"); } };
+      const labels = { get notes() { return PomeI18n.t("copy.notes.b778e3"); }, get links() { return PomeI18n.t("copy.links.305378"); }, get commands() { return PomeI18n.t("copy.commands.b85789"); }, get clipboardHistory() { return PomeI18n.t("copy.clipboard.8c10e2"); }, get aiCompletions() { return PomeI18n.t("sync.aiCompletions"); }, get recordings() { return PomeI18n.t("copy.recordingAudio.a93938"); }, get aiSettings() { return PomeI18n.t("copy.aiConfiguration.4336ed"); }, get secrets() { return PomeI18n.t("copy.credentials.f67bca"); } };
       if (workspaceResult.partial) for (const [collection, label] of Object.entries(labels)) { if (!workspaceResult.pendingCollections.includes(collection)) saveContentResult([label], PomeI18n.t("copy.lastSyncConfirmed.db2b6e"), true); }
       for (const warning of workspaceResult.warnings || []) { const collection = require('./workspace-sync').collectionForEntityId(warning.entityId); if (labels[collection]) saveContentResult([labels[collection]], '部分资料未传输：'+warning.reason, false); }
       if (!workspaceResult.ok || workspaceResult.skipped) saveContentResult(['录音音频'], PomeI18n.t("copy.notAllAudioTransfersHaveBeenConfirmed.d85e6f"), false);
     } catch (error) {
-      saveContentResult(['笔记','链接','常用指令','剪贴板','录音元数据','录音音频','AI 配置','密钥'], PomeI18n.t("copy.dataSyncFailedRetryNeeded.9051f2"), false);
+      saveContentResult(['笔记','链接','常用指令','剪贴板','AI 完成','录音元数据','录音音频','AI 配置','密钥'], PomeI18n.t("copy.dataSyncFailedRetryNeeded.9051f2"), false);
       // 工作区同步失败时待办结果仍然有效，下一轮再试。
     }
   }
@@ -3306,7 +3321,7 @@ function buildNasSyncDashboard() {
     ok: true,
     credentials: publicStatus,
     recovery,
-    contentResults: credStatus.bound ? contentResults() : Object.fromEntries(['待办','笔记','链接','常用指令','剪贴板','录音元数据','录音音频','AI 配置','密钥'].map((name) => [name, { message: PomeI18n.t("copy.localOnlyNasNotPaired.d36c6c") }])),
+    contentResults: credStatus.bound ? contentResults() : Object.fromEntries(['待办','笔记','链接','常用指令','剪贴板','AI 完成','录音元数据','录音音频','AI 配置','密钥'].map((name) => [name, { message: PomeI18n.t("copy.localOnlyNasNotPaired.d36c6c") }])),
     settings: view,
     outboxCount,
     accountId,
@@ -3573,8 +3588,11 @@ ipcMain.handle('recovery:execute', async (event, id) => {
     const ctx = readBoundSyncContext();
     const replaced = ctx.store.replaceTodosFromEntities(ctx.accountId, preview.entities.filter((e) => e.collection === 'todos'), result.serverRev);
     if (!replaced.ok) throw new Error('local_sync_store_failed');
-    if (!writeWorkspaceIndex(Object.fromEntries(preview.entities.filter((e) => e.collection !== 'todos').map((e) => [e.entityId, entityHash(e)])))) throw new Error('workspace_index_save_failed');
-    seedWorkspacePullCursors(ctx.store, ctx.accountId, result.serverRev);
+    const completionIndex = Object.fromEntries(Object.entries(readWorkspaceIndex()).filter(([id]) => collectionForEntityId(id) === 'aiCompletions'));
+    if (!writeWorkspaceIndex({ ...completionIndex, ...Object.fromEntries(preview.entities.filter((e) => e.collection !== 'todos').map((e) => [e.entityId, entityHash(e)])) })) throw new Error('workspace_index_save_failed');
+    // Ordinary backups exclude AI history. Do not skip its pending remote changes
+    // or discard its baseline while recovering unrelated workspace collections.
+    seedWorkspacePullCursors(ctx.store, ctx.accountId, result.serverRev, WORKSPACE_COLLECTIONS.filter(collection => collection !== 'aiCompletions'));
     recoveryStore().complete(operationId);
     recoveryPreviews.delete(id); broadcastSyncStatus();
     return { ok: true, ...result };
@@ -4058,7 +4076,7 @@ function recordingAudioForSync(row) {
   } catch { return { audioBase64: '', audioOmitted: true, audioSyncReason: 'audio_missing' }; }
 }
 
-function assembleWorkspaceSnapshot(rendererSnapshot) {
+function assembleWorkspaceSnapshot(rendererSnapshot, { includeAiCompletions = false } = {}) {
   const snap = rendererSnapshot && typeof rendererSnapshot === 'object' ? rendererSnapshot : {};
   const notes = snap.notes && typeof snap.notes === 'object' ? snap.notes : {};
   const clipboard = snap.clipboard && typeof snap.clipboard === 'object' ? snap.clipboard : {};
@@ -4072,6 +4090,7 @@ function assembleWorkspaceSnapshot(rendererSnapshot) {
   const cursorSettings = readAppSettings();
   const cursorToken = decryptStoredSecret(cursorSettings.encryptedCursorToken).trim();
   return {
+    ...(includeAiCompletions ? { aiCompletions: getTaskInbox().snapshotForSync() } : {}),
     notes: {
       home: typeof notes.home === 'string' ? notes.home : (readWorkspaceBagValue('notch-home-note') || ''),
       archive: Array.isArray(notes.archive) ? notes.archive : parseJsonArray(readWorkspaceBagValue('notch-note-archive-v1')),
@@ -4210,12 +4229,24 @@ function materializeWorkspaceSnapshot(projected, previousSnapshot) {
   if (projected.aiApplied && snapshot.aiSettings) {
     writeSyncedAiSettings(snapshot.aiSettings);
   }
+  if (Array.isArray(snapshot.aiCompletions)) {
+    try {
+      // A native completion can arrive while first-bind migration waits on NAS.
+      // The authority choice covers the previewed history, not these new events.
+      const before = new Set((previous.aiCompletions || []).map(completionSyncKey));
+      const arrived = getTaskInbox().snapshotForSync().filter(row => !before.has(completionSyncKey(row)));
+      getTaskInbox().replaceFromSync([...snapshot.aiCompletions, ...arrived]);
+    }
+    catch (error) { reportTaskInboxFailure(error); throw error; }
+    renderer.aiCompletions = true;
+  }
   return renderer;
 }
 
 function broadcastWorkspaceProjection(projection) {
   if (!projection || !mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('sync:workspace-projection', projection);
+  if (projection.aiCompletions) mainWindow.webContents.send('tasks:inbox-changed');
 }
 
 async function ensureAccountSyncKey(record) {
@@ -4249,7 +4280,17 @@ async function pushWorkspaceMutations(record, entities, { baseServerRev = 0 } = 
   return require('./workspace-sync').pushWorkspaceEntities({ entities, deviceId: record.deviceId, baseServerRev, pushMutations: transport.pushMutations });
 }
 
+async function checkCompletionSyncSupport() {
+  const response = await fetchBoundSyncJson('api/v1/sync/state?collection=aiCompletions');
+  if (!response.ok && ['collection_not_enabled', 'collection_unknown'].includes(response.body?.error || response.error)) {
+    return { ...response, error: PomeI18n.t('sync.aiCompletionsUpgrade') };
+  }
+  return response;
+}
+
 async function pullWorkspaceChanges(ctx) {
+  const support = await checkCompletionSyncSupport();
+  if (!support.ok) return support;
   const transport = createTodosSyncTransport(ctx.record);
   return pullWorkspacePages({ store: ctx.store, accountId: ctx.accountId, pullPage: transport.pullPage });
 }
@@ -4259,10 +4300,10 @@ async function pullWorkspaceChanges(ctx) {
  * over from an earlier pairing may point past a restarted NAS change log, which
  * would silently skip every later change.
  */
-function seedWorkspacePullCursors(store, accountId, serverRev) {
+function seedWorkspacePullCursors(store, accountId, serverRev, collections = WORKSPACE_COLLECTIONS) {
   const rev = Number(serverRev);
   if (!store || !Number.isInteger(rev) || rev < 0) return;
-  for (const collection of WORKSPACE_COLLECTIONS) {
+  for (const collection of collections) {
     store.applyPullPage({
       accountId,
       collection,
@@ -4284,7 +4325,7 @@ async function runBoundWorkspaceSyncCycle() {
   // Read after the network round trip so edits made while pulling are included.
   const rendererSnapshot = await readRendererWorkspaceSnapshot();
   if (!rendererSnapshot) return { ok: false, error: 'workspace_unavailable' };
-  const snapshot = assembleWorkspaceSnapshot(rendererSnapshot);
+  const snapshot = assembleWorkspaceSnapshot(rendererSnapshot, { includeAiCompletions: true });
   const built = buildWorkspaceEntities(snapshot, { accountKey });
   const index = readWorkspaceIndex();
   for (const full of pulled.fullCollections || []) {
@@ -4349,7 +4390,7 @@ function classifyBoundWorkspace(localTodosJson, rendererWorkspace, nasState) {
       decision: classifyFromLocalAndNas(String(localTodosJson || ''), nasState),
     };
   }
-  const snapshot = assembleWorkspaceSnapshot(rendererWorkspace);
+  const snapshot = assembleWorkspaceSnapshot(rendererWorkspace, { includeAiCompletions: true });
   const counts = countWorkspaceContent(snapshot, { todoLive: local.live });
   return {
     local,
@@ -4386,6 +4427,8 @@ function latestWorkspaceChanges(changes) {
 ipcMain.handle('sync:classify-migration', async (event, payload = {}) => {
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
+  const support = await checkCompletionSyncSupport();
+  if (!support.ok) return support;
   const selected = resolveMigrationLocalTodos(payload.localTodosJson);
   const localTodosJson = selected.raw;
   const local = parseLocalTodosStrict(
@@ -4408,6 +4451,8 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
   if (recoveryStore().read().paused) return { ok: false, error: 'sync_paused_after_restore' };
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
+  const support = await checkCompletionSyncSupport();
+  if (!support.ok) return support;
 
   const localTodosJson = resolveMigrationLocalTodos(payload.localTodosJson).raw;
   const classify = await fetchBoundSyncJson('api/v1/sync/state?collection=todos');

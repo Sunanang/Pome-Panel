@@ -8,6 +8,18 @@ require('../cursor-usage').readAuthToken = () => ({ ok: false });
 require('../cursor-usage').fetchCursorUsage = async () => ({ ok: false });
 require('../codex-usage').readCodexUsage = async () => ({ ok: true, detected: false });
 require('../codex-auth').readLocalCodexToken = async () => ({ ok: false });
+const attentionStorage = require('../aiAttentionStore'), createAttention = attentionStorage.createAiAttentionStore;
+let attentionWriteFailure = null, attentionWrites = 0;
+const attentionDisk = Object.create(fs);
+attentionDisk.renameSync = (from, to) => {
+  if (to === path.join(profile, 'ai-attention.json')) {
+    attentionWrites++;
+    if (attentionWriteFailure === 'before') throw new Error('fixture_write_before_rename');
+    fs.renameSync(from, to);
+    if (attentionWriteFailure === 'after') throw new Error('fixture_write_after_rename');
+  } else fs.renameSync(from, to);
+};
+attentionStorage.createAiAttentionStore = options => createAttention({ ...options, disk: attentionDisk });
 const adapters = require('../platform-adapters'), original = adapters.loadAdapter;
 let activations = 0, launchFailure = false;
 adapters.loadAdapter = (...args) => {
@@ -18,6 +30,13 @@ process.env.POME_TEST_NOTIFICATIONS = '1';
 const output = process.env.POME_ATTENTION_SCREENSHOTS || path.join(__dirname, '../dist.noindex/ai-attention-design');
 fs.mkdirSync(output, { recursive: true });
 const errors = []; let port, started = false, sequence = 0;
+const shownDisplays = new Set();
+ipcMain.on('task-notification:shown', (_event, eventId) => shownDisplays.add(eventId));
+const hoverEvents = [];
+ipcMain.on('task-notification:hover', (_event, value) => {
+  hoverEvents.push({ at: Date.now(), ...value });
+  if (hoverEvents.length > 30) hoverEvents.shift();
+});
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const evaluate = (win, script) => win.webContents.executeJavaScript(script);
 const mainEval = script => mainContents.executeJavaScript(script);
@@ -42,7 +61,12 @@ async function send(payload) {
 async function resolve(payload) { return send({ ...payload, kind: 'attention.resolved', eventId: payload.eventId + '-resolved', reason: 'answered', sequence: payload.sequence + 1 }); }
 async function shown(title) {
   await until(async () => { const win = window(); return win && await evaluate(win, `isVisible && !isHiding && currentNotification?.title === ${JSON.stringify(title)}`); }, title);
-  const win = window(); await delay(500); await evaluate(win, 'reportHover(false)'); return win;
+  const win = window();
+  const id = await evaluate(win, 'currentNotification.eventId');
+  // Entry synchronizes native hover with the new generation. Wait for that
+  // acknowledgement before setting the fixture's hover state.
+  await until(() => shownDisplays.has(id), `entry acknowledged: ${title}`);
+  await evaluate(win, 'reportHover(false)'); return win;
 }
 const pending = () => mainEval('window.notchAPI.getAiAttention()');
 async function capture(win, name) { fs.writeFileSync(path.join(output, `${name}.png`), (await win.webContents.capturePage()).toPNG()); }
@@ -109,6 +133,11 @@ async function run() {
   let rows = (await pending()).items; assert.equal(rows.length, 1); assert.equal(rows[0].hidden, true); assert.equal(rows[0].state, 'pending');
   await until(async () => await mainEval('!document.querySelector(".ai-attention-entry").hidden && document.querySelectorAll(".ai-attention-row").length === 1'), 'pending UI survives hiding');
   assert.equal((await send(hidden)).result, 'duplicate'); await delay(200); assert(!window()?.isVisible());
+  const visibleAfterHide = event('select', 'cursor', { question: '隐藏项不计入排队' });
+  await send(visibleAfterHide); const visibleWindow = await shown(visibleAfterHide.question);
+  assert.equal(await evaluate(visibleWindow, 'document.getElementById("attention-queue").hidden'), true);
+  assert.equal((await pending()).items.length, 2, 'hidden request remains in pending list');
+  await resolve(visibleAfterHide); await delay(650);
   await mainEval(`window.notchAPI.showAiAttention(${JSON.stringify(rows[0].key)})`); await shown(hidden.question);
   assert.notEqual(await evaluate(window(), 'currentNotification.eventId'), hiddenId, 'every display has a fresh generation');
   await resolve(hidden); await delay(650);
@@ -130,7 +159,15 @@ async function run() {
   await evaluate(win, `window.notchAPI.taskNotificationHover(true, ${JSON.stringify(oldId)})`); await delay(100);
   assert.equal(await evaluate(win, 'timing.paused'), true, 'waiting has no countdown even while scheduling slots');
   const after = await evaluate(win, 'currentNotification.eventId');
-  await delay(8300); assert.notEqual(await evaluate(win, 'currentNotification.eventId'), after, 'stale hover cannot stop current rotation');
+  // Rotation includes an 8s slot plus the outgoing animation/IPC fallback.
+  // Observe the next display generation instead of racing it at exactly 8.3s.
+  try {
+    await until(async () => await evaluate(win, 'currentNotification.eventId') !== after, 'stale hover cannot stop current rotation', 12000);
+  } catch (error) {
+    console.error('Rotation state:', await evaluate(win, '({id:currentNotification.eventId,title:currentNotification.title,isHovering,hover:shell.matches(":hover"),focus:shell.matches(":focus-within"),isVisible,isHiding,timing})'));
+    console.error('Recent hover events:', hoverEvents);
+    throw error;
+  }
   const selected = (await pending()).items.find(row => row.event.question === b.question);
   await mainEval(`notchAPI.showAiAttention(${JSON.stringify(selected.key)})`); await shown(b.question);
   await resolve(a); await resolve(b); await delay(650);
@@ -140,10 +177,13 @@ async function run() {
   await evaluate(completionWindow, 'reportHover(true)');
   const newer = event('input', 'claude', { question: '新等待优先' }); await send(newer); await delay(200);
   assert.equal(await evaluate(completionWindow, 'currentNotification.title'), '普通完成仍展示');
+  assert.equal(await evaluate(completionWindow, 'document.getElementById("notification-queue").textContent'), '+1',
+    'completion bubble +N includes a waiting request that will show next');
   await evaluate(completionWindow, 'reportHover(false)'); await shown(newer.question); await resolve(newer);
   const resumed = await shown('普通完成仍展示'); assert.equal(await evaluate(resumed, 'progressElement.hidden'), false);
   await evaluate(resumed, 'document.getElementById("notification-close").click()'); await delay(650);
   await previewWindows();
+  await verifyClaudeObservations();
   const attentionPath = path.join(profile, 'ai-attention.json'); fs.writeFileSync(attentionPath, '{corrupt fixture');
   assert.equal((await pending()).ok, false);
   const { dialog } = require('electron'), originalDialog = dialog.showMessageBox;
@@ -156,6 +196,43 @@ async function run() {
     assert.equal(fs.readFileSync(repaired.backupPath, 'utf8'), '{corrupt fixture'); assert.deepEqual((await pending()).items, []);
   } finally { dialog.showMessageBox = originalDialog; }
   assert.deepEqual(errors, []);
+}
+async function verifyClaudeObservations() {
+  const { observation } = require('../scripts/claude-attention');
+  const post = async (payload, status = 202) => {
+    const response = await fetch(`http://127.0.0.1:${port}/notify/claude`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const body = await response.json(); assert.equal(response.status,status,JSON.stringify(body)); return body;
+  };
+  const base = {session_id:'claude-batch-test',prompt_id:'p',hook_event_name:'Notification',notification_type:'permission_prompt'};
+  const first = observation({...base,message:'Allow npm install --token=PRIVATE_ONE'});
+  const second = observation({...base,message:'Allow npm install --token=PRIVATE_TWO'});
+  await post(first); await post(second); await post(first);
+  let rows = (await pending()).items.filter(row => row.event.sessionId===base.session_id);
+  assert.equal(rows.length,2);assert.notEqual(rows[0].event.requestId,rows[1].event.requestId);
+  assert(rows.every(row => row.event.commandPreview==='npm install'));
+  const file = path.join(profile,'ai-attention.json'), before = fs.readFileSync(file);
+  const stop = observation({...base,hook_event_name:'Stop'});
+  let writes = attentionWrites;
+  attentionWriteFailure = 'before';
+  await post(stop,503);
+  attentionWriteFailure = null;
+  assert.equal(attentionWrites,writes+1);assert.deepEqual(fs.readFileSync(file),before);
+  assert.equal((await pending()).items.filter(row => row.event.sessionId===base.session_id).length,2);
+  writes = attentionWrites;
+  await post(stop);
+  assert.equal(attentionWrites,writes+1);assert.equal((await pending()).items.length,0);
+  // A fresh invocation of the same command is a new request after continuation.
+  await post(observation({...base,message:'Allow npm install --token=PRIVATE_ONE'}));
+  assert.equal((await pending()).items.length,1);
+  attentionWriteFailure = 'after';
+  await post(stop,503);
+  attentionWriteFailure = null;
+  assert.equal((await pending()).items.length,0);
+  writes = attentionWrites;
+  await post(stop);assert.equal(attentionWrites,writes,'adapter must not roll back an already committed batch');
+  assert(!fs.readFileSync(file,'utf8').includes('PRIVATE_ONE'));
+  assert(!fs.readFileSync(file,'utf8').includes('PRIVATE_TWO'));
+  await delay(650);
 }
 async function previewWindows() {
   for (const focus of [true, false]) {

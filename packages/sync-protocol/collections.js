@@ -3,7 +3,7 @@
 /**
  * Sync collection names.
  * Workspace sync covers todos, notes, links, commands, clipboard, recordings,
- * AI settings, and the secrets vault. `homeLayout` stays unwired.
+ * AI completion history, AI settings, and the secrets vault. `homeLayout` stays unwired.
  */
 const COLLECTIONS = Object.freeze({
   TODOS: 'todos',
@@ -12,6 +12,7 @@ const COLLECTIONS = Object.freeze({
   COMMANDS: 'commands',
   HOME_LAYOUT: 'homeLayout',
   CLIPBOARD_HISTORY: 'clipboardHistory',
+  AI_COMPLETIONS: 'aiCompletions',
   RECORDINGS: 'recordings',
   AI_SETTINGS: 'aiSettings',
   SECRETS: 'secrets',
@@ -24,6 +25,7 @@ const P0_ENABLED_COLLECTIONS = Object.freeze([
   COLLECTIONS.LINKS,
   COLLECTIONS.COMMANDS,
   COLLECTIONS.CLIPBOARD_HISTORY,
+  COLLECTIONS.AI_COMPLETIONS,
   COLLECTIONS.RECORDINGS,
   COLLECTIONS.AI_SETTINGS,
   COLLECTIONS.SECRETS,

@@ -15,7 +15,46 @@ const {
   dedupeWorkspaceSnapshot,
   hashesForEntities,
   AUDIO_CHUNK_RAW,
+  workspaceProjectionToStorage,
 } = require('../workspace-sync');
+
+test('clipboard export, NAS projection and storage enforce 100 ordinary rows plus all favorites', () => {
+  const history = Array.from({length:150}, (_, i) => ({id:`c-${i}`,type:'text',text:`copy ${i}`,timestamp:i}));
+  const favorites = history.slice(0, 20).map(row => row.id);
+  const snapshot = {clipboard:{history,favorites}};
+  const built = buildWorkspaceEntities(snapshot).entities;
+  assert.equal(built.filter(row => row.entityId !== 'clip:favorites').length, 120);
+  const remote = history.map(row => ({entityId:`clip:${row.id}`,collection:'clipboardHistory',payload:row}));
+  remote.push({entityId:'clip:favorites',collection:'clipboardHistory',payload:{ids:favorites}});
+  const projected = projectWorkspaceEntities(remote).snapshot.clipboard;
+  assert.equal(projected.history.length, 120);
+  assert.equal(projected.history[0].id, 'c-149');
+  assert.ok(favorites.every(id => projected.history.some(row => row.id === id)));
+  const storage = workspaceProjectionToStorage({}, snapshot);
+  assert.deepEqual(JSON.parse(storage['notch-clip-history']), projected.history.map(({imageBase64,mimeType,...row}) => row));
+  assert.deepEqual(JSON.parse(storage['notch-clip-favorites']), favorites);
+});
+
+test('merged NAS clipboard overflow sends deletes and converges without resurrecting evicted rows', () => {
+  const clip = i => ({entityId:`clip:c-${i}`,collection:'clipboardHistory',op:'upsert',payload:{id:`c-${i}`,type:'text',text:`copy ${i}`,timestamp:i}});
+  const local = Array.from({length:90}, (_, i) => clip(i));
+  const remote = Array.from({length:150}, (_, i) => clip(i));
+  remote.push({entityId:'clip:favorites',collection:'clipboardHistory',op:'upsert',payload:{ids:['c-0','c-1']}});
+  const plan = planWorkspaceSync({index:hashesForEntities(local),localEntities:local,remoteChanges:remote});
+  const deletes = plan.toPush.filter(row => row.op === 'delete');
+  assert.equal(deletes.length, 48);
+  assert.ok(deletes.every(row => +row.entityId.slice('clip:c-'.length) >= 2 && +row.entityId.slice('clip:c-'.length) < 50));
+  assert.equal(plan.mergedEntities.length, 103); // 100 ordinary, 2 favorites, favorites metadata
+  const server = new Map(remote.map(row => [row.entityId,row]));
+  for (const row of plan.toPush) row.op === 'delete' ? server.delete(row.entityId) : server.set(row.entityId,row);
+  assert.equal(server.size, 103);
+  const next = planWorkspaceSync({index:plan.nextIndex,localEntities:plan.mergedEntities,remoteChanges:[...server.values(),...deletes]});
+  assert.deepEqual(next.toPush, []);
+  assert.equal(next.mergedEntities.length, 103);
+  // A failed delete keeps the remote baseline so the next cycle retries it.
+  const retry = planWorkspaceSync({index:plan.appliedIndex,localEntities:plan.mergedEntities,remoteChanges:[]});
+  assert.deepEqual(new Set(retry.toPush.map(row => row.entityId)), new Set(deletes.map(row => row.entityId)));
+});
 
 const SECRET = 'super-secret-value';
 

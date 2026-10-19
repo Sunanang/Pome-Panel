@@ -272,6 +272,7 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     showFailure(error); window.showStatusToast?.(failure.recoverable ? pomeLocaleRendererTaskInbox.t("copy.theInboxIsDamagedBackItUp.c1d086") : pomeLocaleRendererTaskInbox.t("copy.couldnTReadTheInboxReceivingIs.2db66f"));
   });
   api?.onTaskCompletion?.(() => void refresh());
+  api?.onTaskInboxChanged?.(() => void refresh());
   setInterval(() => { if (!tile.hidden && document.querySelector('.tab.active')?.dataset.tab === 'home' && document.getElementById('app').classList.contains('expanded')) paint(); },60000);
   requestAnimationFrame(positionIndicator);
   window.addEventListener('pome:language-changed', () => { paintSignature = ''; paint(); });

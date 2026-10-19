@@ -13,7 +13,8 @@ const {
   isTokenExpired,
   publicDeviceRow,
 } = require('./pairing');
-const SYNC_COLLECTIONS = ['todos', 'notes', 'links', 'commands', 'clipboardHistory', 'recordings', 'aiSettings', 'secrets'];
+const { normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory } = require('../packages/sync-protocol');
+const SYNC_COLLECTIONS = ['todos', 'notes', 'links', 'commands', 'clipboardHistory', 'aiCompletions', 'recordings', 'aiSettings', 'secrets'];
 const DAY = 86400000;
 const { createCsrfStore } = require('./csrf');
 
@@ -22,6 +23,7 @@ const WORKSPACE_ENTITY_PREFIXES = [
   ['link:', 'links'],
   ['command:', 'commands'],
   ['clip:', 'clipboardHistory'],
+  ['completion:', 'aiCompletions'],
   ['recording-blob:', 'recordings'],
   ['recording:', 'recordings'],
   ['secret:', 'secrets'],
@@ -383,9 +385,24 @@ function createMemoryStore(options = {}) {
       }
       const existing = b.live.get(m.entityId);
       const tombstone = b.tombstones.get(m.entityId);
+      if (m.collection === 'aiCompletions' && tombstone && m.op !== 'delete') {
+        // Echo the deletion at a fresh revision: even a client that already
+        // passed the original tombstone must remove its newly stale local copy.
+        const serverRev = ++b.serverRev, at = nowFn();
+        b.tombstones.set(m.entityId, { ...tombstone, serverRev });
+        b.changeLog.push({ serverRev, at, entityId: m.entityId, collection: 'aiCompletions', op: 'delete', clientMutationId: m.clientMutationId, deviceId: deviceId || m.deviceId });
+        applied.push({ clientMutationId: m.clientMutationId, status: 'duplicate', serverRev });
+        b.mutationResults.set(key, { serverRev, at });
+        continue;
+      }
       if (m.collection === 'notes' && tombstone && tombstone.serverRev > (Number(m.baseServerRev) || 0) && m.op !== 'delete') { applied.push({ clientMutationId: m.clientMutationId, status: 'conflict', serverRev: tombstone.serverRev }); continue; }
       if (m.collection === 'notes' && existing && existing.serverRev > (Number(m.baseServerRev) || 0) && m.op !== 'delete' && JSON.stringify(existing.payload) !== JSON.stringify(m.payload)) {
         applied.push({ clientMutationId: m.clientMutationId, status: 'conflict', serverRev: existing.serverRev }); continue;
+      }
+      let payload = m.payload || {};
+      if (m.collection === 'aiCompletions' && m.op !== 'delete') {
+        payload = existing ? mergeSyncedCompletions(existing.payload, payload) : normalizeSyncedCompletion(payload);
+        if (!payload || m.entityId !== `completion:${payload.id}`) throw new Error('invalid_ai_completion');
       }
       b.serverRev += 1;
       const rev = b.serverRev;
@@ -397,7 +414,7 @@ function createMemoryStore(options = {}) {
         b.live.set(m.entityId, {
           entityId: m.entityId,
           collection: m.collection || 'todos',
-          payload: m.payload || {},
+          payload,
           serverRev: rev,
           updatedAt: nowFn(),
           deviceId: deviceId || m.deviceId,
@@ -414,6 +431,17 @@ function createMemoryStore(options = {}) {
       });
       applied.push({ clientMutationId: m.clientMutationId, status: 'applied', serverRev: rev });
       b.mutationResults.set(key, { serverRev: rev, at: nowFn() });
+    }
+    if (mutations.some(m => m.collection === 'aiCompletions')) {
+      const completions = [...b.live.values()].filter(row => changeCollection(row) === 'aiCompletions');
+      const kept = new Set(trimCompletionHistory(completions.map(row => row.payload)).map(row => `completion:${row.id}`));
+      for (const row of completions) {
+        if (kept.has(row.entityId)) continue;
+        const serverRev = ++b.serverRev, at = nowFn();
+        b.live.delete(row.entityId);
+        b.tombstones.set(row.entityId, { entityId: row.entityId, serverRev, deletedAt: at });
+        b.changeLog.push({ serverRev, at, entityId: row.entityId, collection: 'aiCompletions', op: 'delete', clientMutationId: `capacity-${crypto.randomUUID()}`, deviceId: 'server' });
+      }
     }
     return { applied, serverRev: b.serverRev };
   }

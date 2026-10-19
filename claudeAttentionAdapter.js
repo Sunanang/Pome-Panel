@@ -1,6 +1,6 @@
 'use strict';
 const { randomUUID } = require('node:crypto');
-const { safeQuestion, hash } = require('./aiEventPolicy');
+const { hash } = require('./aiEventPolicy');
 // Receives only the minimal observation copy from claude-attention.js. No tool
 // response, command, answer, environment or permission decision crosses here.
 function createClaudeAttentionAdapter() {
@@ -42,11 +42,14 @@ function createClaudeAttentionAdapter() {
     }
     if (signal === 'Notification' && ['permission_prompt', 'elicitation_dialog'].includes(payload.notification_type)) {
       const action = payload.notification_type === 'permission_prompt' ? 'approve' : 'input';
-      const fingerprint = hash([payload.notification_type, safeQuestion(payload.question).question]);
-      const existing = [...session.requests.entries()].find(([, request]) => request.fingerprint === fingerprint);
-      const requestId = existing?.[0] || `notification:${randomUUID()}`;
-      session.requests.set(requestId, { type: 'notification', fingerprint });
-      return [make('attention.required', { requestId, action, question: payload.question, sensitive: payload.sensitive, project: payload.project })];
+      // Sanitized text cannot identify requests: permission text is intentionally
+      // empty. Prefer a native identity, then the forwarding observation identity.
+      const identityField = ['request_id', 'notification_id', 'observation_id']
+        .find(key => typeof payload[key] === 'string' && payload[key]);
+      const requestId = `notification:${hash([payload.notification_type, identityField || 'invocation', identityField ? payload[identityField] : randomUUID()])}`;
+      session.requests.set(requestId, { type: 'notification' });
+      return [make('attention.required', { requestId, action, question: payload.question, sensitive: payload.sensitive,
+        commandPreview: action === 'approve' && payload.commandPreview === 'npm install' ? 'npm install' : undefined, project: payload.project })];
     }
     return [];
   }

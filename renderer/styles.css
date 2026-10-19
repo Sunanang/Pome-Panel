@@ -7504,6 +7504,7 @@ html[data-liquid-glass='1'] .tile.home-inbox.inbox-highlight { border-color:colo
 
 
 /* Local completion sources: the settings column keeps its existing scroll. */
+.ai-source-scope { margin: 8px 0 0; color: var(--text-2); font-size: var(--fs-caption); line-height: 1.45; }
 .ai-source-list { margin-top:12px; }
 .ai-source-row { display:flex; align-items:center; gap:9px; padding:10px 0; min-width:0; }
 .ai-source-row + .ai-source-row { border-top:1px solid var(--hairline-soft); }

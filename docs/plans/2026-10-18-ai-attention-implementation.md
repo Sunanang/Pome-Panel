@@ -2,6 +2,15 @@
 
 日期：2026-10-18；基线 dev / aa44fef / 0.11.0。只在 dev 实施，本次不推送、不打包、不发布。技术输入为同目录的 ai-notification-events 方案；视觉以 [B 蓝色定稿](../design/ai-attention-reminders/final/README.md) 和本次用户指令为准，替代方案中的 R1/R2、176px 与 6 秒设计：采用 macOS 400×146、Windows 384×114、等待时隙 8 秒。
 
+## 2026-10-19 修复补记
+
+- Claude Notification 不再以脱敏正文计算请求身份。优先使用原生 request_id / notification_id，否则转发器为每次 hook 调用生成 observation_id；同一观察在当前回合的重投合并，新调用即使命令相同也有独立请求。无原生 ID 时无法可靠识别来源重复触发，能力继续为 partial。
+- 等待气泡的 +N 排除 hidden 请求，与调度器可展示集合一致。完成和等待的计数口径继续分别代表各自队列。
+- Claude 一次观察生成的多个事件先在副本中归约，再一次原子提交；提交前失败恢复 adapter 快照。若改名已成功但后续持久化操作报错，读回完整结果并保留已提交 adapter 状态，同时向调用方报告失败，避免内存与磁盘分裂。
+- 固定 npm install 脱敏预览支持中英文前缀，Claude 转发器只传白名单标签，不传完整命令或参数。
+- 新增回归覆盖不同授权、同命令再次请求、同观察重投、隐藏计数、中英脱敏、批量校验失败、改名前后写盘错误与 HTTP 重试。专项 Node 67 项通过，实际隔离 Electron / HTTP 专项通过。最终完整 `npm test`：708 项 Node 测试，707 通过、1 项 Windows 专属跳过；20 个 Electron 场景、2 次进程重启和全部语法检查通过。Codex/Cursor 等待监听未因此升级为支持，Claude 真机验收缺口仍保留。
+- 轮换集成测试改为等待真实入场回报与展示代际变化，避免固定延时和入场后的原生悬停同步竞争；保留限时断言和失败状态记录，产品时隙未调整。
+
 ## 已实现
 
 - `aiEventPolicy.js`：v2 envelope 校验，分离会话/回合/请求身份；输入、选择、授权映射独立于来源。未知 kind/action/reason 拒收；子代理、云端和非终态不进入完成链。旧 Codex 空 suggestions/exclude 的完整对象窄规则过滤，不能用未经验证的 final:true 绕过。

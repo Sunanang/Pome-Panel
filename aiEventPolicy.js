@@ -14,13 +14,17 @@ function knownControlEnvelope(text) {
     return keys.length === 1 && ['suggestions', 'exclude'].includes(keys[0]) && Array.isArray(value[keys[0]]) && !value[keys[0]].length;
   } catch { return false; }
 }
+function safeCommandPreview(value) {
+  const text = clean(value, 4096);
+  return /^(?:(?:允许运行|allow(?:\s+running)?|run|execute|approve(?:\s+running)?)\s+)?`?npm install(?:\s|$)/i.test(text) ? 'npm install' : undefined;
+}
 function safeQuestion(value, action) {
   const text = clean(value, 4096);
   // Never try to parse a shell command or preserve an opaque secret-bearing tail.
   const sensitive = /(?:bearer\s+\S+|(?:password|passwd|token|secret|api[_-]?key|authorization|credential|私钥|密码|密钥)\s*[=: ]|https?:\/\/[^\s/@]+:[^\s/@]+@|-----BEGIN [^-]*PRIVATE KEY|\b(?:sk|ghp|github_pat)-[\w-]{12,}|\b[A-Z][A-Z0-9_]{2,}=\S+)/i.test(text);
   // A fixed, non-parameter command label may be shown beside the mask. Nothing
   // after the allowlisted head is retained or interpreted as shell syntax.
-  const commandPreview = sensitive && action === 'approve' && /^(?:允许运行\s+)?`?npm install(?:\s|$)/.test(text) ? 'npm install' : undefined;
+  const commandPreview = sensitive && action === 'approve' ? safeCommandPreview(text) : undefined;
   return { question: sensitive ? '' : clean(text), sensitive, action, commandPreview };
 }
 function classifyAiEvent(payload, source) {
@@ -49,7 +53,7 @@ function classifyAiEvent(payload, source) {
       schemaVersion: 2, source, kind: payload.kind, eventId: clean(payload.eventId, 320),
       sessionId: clean(payload.sessionId, 320), turnId: clean(payload.turnId, 320), requestId: clean(payload.requestId, 320),
       action: ACTIONS.has(payload.action) ? payload.action : undefined, question: payload.sensitive === true ? '' : safe.question, sensitive: payload.sensitive === true || safe.sensitive,
-      commandPreview: safe.commandPreview,
+      commandPreview: safe.commandPreview || (payload.sensitive === true && payload.action === 'approve' && payload.commandPreview === 'npm install' ? 'npm install' : undefined),
       project: safeQuestion(payload.project).question, occurredAt: payload.occurredAt, sequence: payload.sequence,
       reason: payload.reason, evidence: Object.fromEntries(['adapter', 'surface', 'providerVersion', 'signal'].map(key => [key, clean(evidence[key], 120)])),
     };
@@ -77,4 +81,4 @@ function classifyAiEvent(payload, source) {
 }
 const visibleCompletion = record => !(record.source === 'codex' && knownControlEnvelope(record.completionSummary || record.title));
 const requestKey = event => hash([event.source, event.evidence.surface, event.sessionId, event.turnId, event.requestId]);
-module.exports = { classifyAiEvent, knownControlEnvelope, visibleCompletion, safeQuestion, requestKey, hash };
+module.exports = { classifyAiEvent, knownControlEnvelope, visibleCompletion, safeQuestion, safeCommandPreview, requestKey, hash };

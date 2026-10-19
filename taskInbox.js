@@ -5,11 +5,11 @@ const { statusKey } = require('./renderer/notification-domain');
 const { randomUUID, createHash } = require('node:crypto');
 const { readJsonStrict, writeJsonAtomic, writeAtomic } = require('./atomicStorage');
 const { visibleCompletion } = require('./aiEventPolicy');
+const { AI_COMPLETION_LIMIT, completionSyncKey, normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory } = require('./packages/sync-protocol/ai-completions');
 
-const READ_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_RECORDS = AI_COMPLETION_LIMIT;
 const SOURCES = new Set(['codex', 'claude', 'cursor']);
 const HISTORICAL_SOURCES = new Set([...SOURCES, 'gpt']);
-const RETENTION_LABEL = '默认显示最近 20 条，可查看更多；已读记录保留 30 天，未读记录不自动清理；事件去重信息随记录保留。';
 const clean = (value, max) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 
 // Explicit identities survive retries. Legacy payloads without an event identity
@@ -65,11 +65,10 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
   function commit(next) { checkDisk(); writeJsonAtomic(filePath, next, disk); state = next; lastDiskVersion = diskVersion(); lastDiskDigest = digest(`${JSON.stringify(next)}\n`); }
   function prune() {
     checkDisk();
-    const ts = now();
-    const records = state.records.filter((r) => r.readAt === null || ts - r.readAt < READ_RETENTION_MS);
+    const records = trimCompletionHistory(state.records);
     const ids = new Set(records.map(row => row.id));
     const dedupe = Object.fromEntries(Object.entries(state.dedupe).filter(([, row]) => ids.has(row.id) && row.stable === true));
-    if (records.length !== state.records.length || Object.keys(dedupe).length !== Object.keys(state.dedupe).length) {
+    if (records.some((row, index) => row.id !== state.records[index]?.id) || records.length !== state.records.length || Object.keys(dedupe).length !== Object.keys(state.dedupe).length) {
       commit({ ...state, records, dedupe });
     }
   }
@@ -96,11 +95,14 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
         bundleId: clean(input.window.bundleId, 240) || null, cwd: clean(input.window.cwd, 4096) || null,
       } : null,
     };
-    commit({ version: 1, records: [record, ...state.records],
-      dedupe: { ...state.dedupe, [key]: { id: record.id, at: ts, stable: true } } });
+    const records = trimCompletionHistory([record, ...state.records]);
+    const ids = new Set(records.map(row => row.id));
+    const dedupe = Object.fromEntries(Object.entries({ ...state.dedupe, [key]: { id: record.id, at: ts, stable: true } })
+      .filter(([, row]) => ids.has(row.id)));
+    commit({ version: 1, records, dedupe });
     return { ok: true, duplicate: false, record: { ...record } };
   }
-  function get(id) { const row = state.records.find((r) => r.id === id); return row ? structuredClone(row) : null; }
+  function get(id) { prune(); const row = state.records.find((r) => r.id === id); return row ? structuredClone(row) : null; }
   function list({ offset = 0, limit = 20 } = {}) {
     prune();
     offset = Math.max(0, Math.trunc(Number(offset) || 0));
@@ -108,7 +110,7 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     const visible = state.records.filter(visibleCompletion);
     return { items: structuredClone(visible.slice(offset, offset + limit)),
       total: visible.length, unread: visible.filter((r) => r.readAt === null).length,
-      offset, hasMore: offset + limit < visible.length, retentionLabel: RETENTION_LABEL };
+      offset, hasMore: offset + limit < visible.length };
   }
   function markRead(id) {
     checkDisk();
@@ -119,7 +121,31 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     }
     return { ok: true, record: get(id) };
   }
-  return { accept, get, list, markRead };
+  function snapshotForSync() { prune(); return structuredClone(state.records); }
+  function replaceFromSync(rows) {
+    prune();
+    if (!Array.isArray(rows)) throw new Error('invalid_ai_completion_history');
+    const local = new Map(state.records.map(row => [completionSyncKey(row), row]));
+    const merged = new Map();
+    for (const row of rows) {
+      let normalized = normalizeSyncedCompletion(row);
+      if (!normalized) throw new Error('invalid_ai_completion_history');
+      const prior = local.get(normalized.id);
+      if (prior) normalized = mergeSyncedCompletions(prior, normalized);
+      if (merged.has(normalized.id)) normalized = mergeSyncedCompletions(merged.get(normalized.id), normalized);
+      merged.set(normalized.id, normalized);
+    }
+    const records = trimCompletionHistory([...merged.values()]).map(row => {
+      const prior = local.get(row.id);
+      return { ...row, id: prior?.id || row.id, window: prior?.window || null };
+    });
+    const dedupe = Object.fromEntries(records.map(row => [`event:${row.completionEventId}`, { id: row.id, at: row.receivedAt, stable: true }]));
+    const next = { version: 1, records, dedupe };
+    if (JSON.stringify(next) !== JSON.stringify(state)) commit(next);
+    return { ok: true, total: records.length };
+  }
+  prune();
+  return { accept, get, list, markRead, snapshotForSync, replaceFromSync };
 }
 
-module.exports = { completionEventId, rebuildTaskInbox, createTaskInbox, READ_RETENTION_MS, RETENTION_LABEL };
+module.exports = { completionEventId, rebuildTaskInbox, createTaskInbox, MAX_RECORDS };

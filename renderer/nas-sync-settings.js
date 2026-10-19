@@ -282,7 +282,7 @@ const pomeLocaleRendererNasSyncSettings = typeof module === 'object' && module.e
   }
 
   function contentResultRows(results, bound) {
-    const names = ['待办', '笔记', '链接', '常用指令', '剪贴板', '录音元数据', '录音音频', 'AI 配置', '密钥'];
+    const names = ['待办', '笔记', '链接', '常用指令', '剪贴板', 'AI 完成', '录音元数据', '录音音频', 'AI 配置', '密钥'];
     for (const name of Object.keys(results || {})) if (!names.includes(name)) names.push(name);
     return names.map(name => {
       const row = bound ? results?.[name] : null;

@@ -23,7 +23,8 @@ function createAiAttentionStore({ filePath, now = Date.now, disk = fs } = {}) {
   // A restarted observer has no evidence that a former request is still waiting.
   if (state.records.some(row => row.state === 'pending')) commit({ ...state, records: state.records.map(row => row.state === 'pending' ? { ...row, state: 'unverified' } : row) });
   const sameTurn = (a, b) => a.source === b.source && a.evidence.surface === b.evidence.surface && a.sessionId === b.sessionId && a.turnId === b.turnId;
-  function apply(event) {
+  function reduceEvent(state, event) {
+    const unchanged = () => ({ next: state, result: { duplicate: true, changed: false } });
     const ts = now(), key = requestKey(event);
     let records = state.records.filter(row => pending(row) || ts - row.lastSeenAt < TOMBSTONE_MS);
     let turns = state.turns.filter(row => ts - row.at < TOMBSTONE_MS);
@@ -32,28 +33,49 @@ function createAiAttentionStore({ filePath, now = Date.now, disk = fs } = {}) {
     if (event.kind === 'attention.required') {
       // A resolved identity is final, regardless of delivery order or wall clock.
       if (row && !pending(row) || boundary && boundary.event.kind !== 'turn.started'
-        && (event.sequence === undefined || boundary.event.sequence === undefined || event.sequence <= boundary.event.sequence)) return { duplicate: true, changed: false };
-      if (row && event.sequence !== undefined && row.event.sequence !== undefined && event.sequence < row.event.sequence) return { duplicate: true, changed: false };
+        && (event.sequence === undefined || boundary.event.sequence === undefined || event.sequence <= boundary.event.sequence)) return unchanged();
+      if (row && event.sequence !== undefined && row.event.sequence !== undefined && event.sequence < row.event.sequence) return unchanged();
       const duplicate = Boolean(row);
       const next = row ? { ...row, state: 'pending', lastSeenAt: ts, event } : { key, event, state: 'pending', hidden: false, viewed: false, firstSeenAt: ts, lastSeenAt: ts };
       records = row ? records.map(record => record.key === key ? next : record) : [...records, next];
-      commit({ version: 1, records, turns }); return { duplicate, changed: true, record: structuredClone(next) };
+      return { next: { version: 1, records, turns }, result: { duplicate, changed: true, record: structuredClone(next) } };
     }
     if (event.kind === 'attention.resolved') {
-      if (row && !pending(row)) return { duplicate: true, changed: false };
-      if (row && event.sequence !== undefined && row.event.sequence !== undefined && event.sequence < row.event.sequence) return { duplicate: true, changed: false };
+      if (row && !pending(row)) return unchanged();
+      if (row && event.sequence !== undefined && row.event.sequence !== undefined && event.sequence < row.event.sequence) return unchanged();
       const next = { ...(row || { key, firstSeenAt: ts, hidden: true }), event, state: event.reason === 'cancelled' ? 'cancelled' : 'resolved', lastSeenAt: ts };
       records = row ? records.map(record => record.key === key ? next : record) : [...records, next];
     } else {
-      if (!['turn.started', 'turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.kind)) return { changed: false };
-      if (boundary && event.sequence !== undefined && boundary.event.sequence !== undefined && event.sequence <= boundary.event.sequence) return { duplicate: true, changed: false };
+      if (!['turn.started', 'turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.kind)) return { next: state, result: { changed: false } };
+      if (boundary && event.sequence !== undefined && boundary.event.sequence !== undefined && event.sequence <= boundary.event.sequence) return unchanged();
       turns = turns.filter(turn => !sameTurn(turn.event, event)); turns.push({ event, at: ts });
       records = records.map(record => pending(record) && sameTurn(record.event, event)
         && (event.sequence === undefined || record.event.sequence === undefined || event.sequence >= record.event.sequence)
         ? { ...record, state: event.kind === 'turn.cancelled' ? 'cancelled' : 'resolved', lastSeenAt: ts } : record);
     }
-    commit({ version: 1, records, turns }); return { changed: true };
+    return { next: { version: 1, records, turns }, result: { changed: true } };
   }
+  function applyBatch(events) {
+    let next = state;
+    const results = [];
+    for (const event of events) {
+      if (classifyAiEvent(event, event?.source).category === 'invalid') throw new Error('invalid_attention_event');
+      const reduced = reduceEvent(next, event);
+      next = reduced.next; results.push(reduced.result);
+    }
+    if (next !== state) {
+      try { commit(next); }
+      catch (error) {
+        // Rename may have succeeded before a directory fsync failed. Keep the
+        // adapter consistent with the whole batch actually visible on disk.
+        const serialized = `${JSON.stringify(next)}\n`;
+        try { if (bytes() === serialized) { state = next; saved = serialized; error.attentionBatchCommitted = true; } } catch {}
+        throw error;
+      }
+    }
+    return results;
+  }
+  const apply = event => applyBatch([event])[0];
   function display(key, hidden) {
     const row = state.records.find(record => record.key === key && pending(record));
     if (!row) return { ok: false, error: 'not_found' };
@@ -65,7 +87,7 @@ function createAiAttentionStore({ filePath, now = Date.now, disk = fs } = {}) {
     return structuredClone(state.records.filter(pending));
   };
   const get = key => list().find(record => record.key === key) || null;
-  return { apply, list, get, display, disconnect(source) {
+  return { apply, applyBatch, list, get, display, disconnect(source) {
     commit({ ...state, records: state.records.map(row => row.event.source === source && row.state === 'pending' ? { ...row, state: 'unverified' } : row) });
   } };
 }

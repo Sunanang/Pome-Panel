@@ -1,6 +1,9 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {app,dialog}=require('electron');const profile=process.env.TODO_TEST_USER_DATA;
+const {normalizeSyncedCompletion}=require('../packages/sync-protocol');
+const {openSyncStore}=require('../sync-store');
+require('../taskInbox').createTaskInbox({filePath:path.join(profile,'task-inbox.json')}).accept({source:'codex',eventId:'recovery-kept-completion',title:'保留完成历史'});
 app.commandLine.appendSwitch('user-data-dir',profile);if(process.platform==='darwin')app.commandLine.appendSwitch('use-mock-keychain');
 require('../cursor-usage').readAuthToken=()=>({ok:false,error:'fixture_missing'});require('../cursor-usage').fetchCursorUsage=async()=>({ok:false,error:'fixture_offline'});require('../codex-usage').readCodexUsage=async()=>({ok:true,detected:false});require('../codex-auth').readLocalCodexToken=async()=>({ok:false,error:'fixture_missing'});
 const {createPersistentStore}=require('../fnos/app/server/persistentStore');let store=createPersistentStore({filePath:path.join(profile,'nas.bin'),serverId:'nas-fixture'});
@@ -21,6 +24,10 @@ async function run(c){
  const pair=await c.executeJavaScript(`window.notchAPI.syncPairClaim({baseUrl:${JSON.stringify(baseUrl)},pairingCode:${JSON.stringify(pairingCode)}})`);assert.equal(pair.ok,true,JSON.stringify(pair));
  phase='migration';
  const migration=await c.executeJavaScript(`window.notchAPI.syncRunMigration({localTodosJson:localStorage.getItem('notch-todo-data'),workspace:getWorkspaceSnapshotForSync()})`);assert.equal(migration.ok,true,JSON.stringify(migration));
+ const indexFile=path.join(profile,'sync-workspace-index.json');
+ const completionIndex=()=>Object.fromEntries(Object.entries(JSON.parse(fs.readFileSync(indexFile)).hashes).filter(([id])=>id.startsWith('completion:')));
+ const completionCursor=()=>{const db=openSyncStore(path.join(profile,'sync.db'));try{return db.getPullCursor('u','aiCompletions').cursor;}finally{db.close();}};
+ const initialCompletionIndex=completionIndex(),initialCompletionCursor=completionCursor();assert.equal(Object.keys(initialCompletionIndex).length,1);assert.notEqual(initialCompletionCursor,null);
  store.applyPush('u',[{collection:'notes',entityId:'note:nas-only',op:'upsert',payload:{kind:'archive',id:'nas-only',title:'NAS 独有',content:'必须预览删除'},clientMutationId:'nas-only',deviceId:'other',baseServerRev:store.bucket('u').serverRev}],{deviceId:'other'});
  phase='restore preview';
  const preview=await c.executeJavaScript('window.notchAPI.backupPreview()');assert.equal(preview.ok,true,JSON.stringify(preview));
@@ -29,6 +36,8 @@ async function run(c){
  await until(c,ready);
  phase='paused sync';
  let status=await c.executeJavaScript('window.notchAPI.syncGetStatus()');assert.equal(status.recovery.paused,true);
+ const pendingCompletion=normalizeSyncedCompletion({id:'during-pause',source:'cursor',receivedAt:Date.now(),readAt:null,title:'暂停期间的远端完成'});
+ store.applyPush('u',[{collection:'aiCompletions',entityId:`completion:${pendingCompletion.id}`,op:'upsert',payload:pendingCompletion,clientMutationId:'completion-during-pause',deviceId:'other',baseServerRev:store.bucket('u').serverRev}],{deviceId:'other'});
  const rev=store.bucket('u').serverRev;const retry=await c.executeJavaScript('window.notchAPI.syncRetry()');assert.equal(retry.error,'sync_paused_after_restore');assert.equal(store.bucket('u').serverRev,rev);
  // Persisted pause survives renderer reinitialization and prevents SQLite overriding restored notes/todos.
  phase='renderer reload';
@@ -48,6 +57,7 @@ async function run(c){
  const fresh=await c.executeJavaScript('window.notchAPI.recoveryPreview()');assert.equal(fresh.ok,true,JSON.stringify(fresh));
  phase='verified recovery';
  const covered=await c.executeJavaScript(`window.notchAPI.recoveryExecute(${JSON.stringify(fresh.previewId)})`);assert.equal(covered.ok,true,JSON.stringify(covered));assert.equal(store.bucket('u').live.has('note:nas-only'),false);assert.equal(store.bucket('u').live.get('note:home').payload.markdown,'# 暂停期间新修改');
+ assert.deepEqual(completionIndex(),initialCompletionIndex);assert.equal(completionCursor(),initialCompletionCursor);assert(store.bucket('u').live.has(`completion:${pendingCompletion.id}`));
  status=await c.executeJavaScript('window.notchAPI.syncGetStatus()');assert.equal(status.recovery.paused,false);
  const operationId=status.recovery.operationId;const restarted=createPersistentStore({filePath:path.join(profile,'nas.bin'),serverId:'nas-fixture'});assert.equal(restarted.recovery.get('u',operationId,pair.status.deviceId).status,'committed');
  phase='recovery rollback';

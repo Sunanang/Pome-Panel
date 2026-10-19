@@ -4,7 +4,8 @@
 // Claude can run a tool and never answer a question on the user's behalf.
 const http = require('node:http');
 const path = require('node:path');
-const { safeQuestion } = require('../aiEventPolicy');
+const { randomUUID } = require('node:crypto');
+const { safeQuestion, safeCommandPreview } = require('../aiEventPolicy');
 function observation(payload) {
   if (!payload || payload.agent_id || payload.isSidechain || String(process.env.CLAUDE_CODE_REMOTE).toLowerCase() === 'true') return null;
   const allowed = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'UserPromptSubmit', 'Stop', 'SessionEnd'];
@@ -32,6 +33,13 @@ function observation(payload) {
     tool_use_id: typeof payload.tool_use_id === 'string' ? payload.tool_use_id.slice(0,320) : undefined,
     tool_name: payload.tool_name === 'AskUserQuestion' ? 'AskUserQuestion' : undefined,
     notification_type: payload.notification_type, action, question, sensitive,
+    // One hook invocation is one observation. Re-delivering this observation
+    // keeps its identity; another invocation (even identical text) gets a new one.
+    observation_id: randomUUID(),
+    notification_id: typeof payload.notification_id === 'string' ? payload.notification_id.slice(0,320) : undefined,
+    request_id: typeof payload.request_id === 'string' ? payload.request_id.slice(0,320) : undefined,
+    commandPreview: payload.hook_event_name === 'Notification' && payload.notification_type === 'permission_prompt'
+      ? safeCommandPreview(payload.message) : undefined,
     project: typeof payload.cwd === 'string' ? safeQuestion(path.basename(payload.cwd)).question : '',
   };
 }

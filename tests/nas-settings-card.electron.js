@@ -65,7 +65,7 @@ async function run(c) {
   async function emit(label) { c.send('sync:status', handlers['sync:get-status']()); await until(`document.getElementById('settings-nas-sync-status').textContent==='${label}'`); await sleep(50); }
   async function capture(name) { await js(`document.getElementById('settings-nas-sync-card').scrollIntoView({block:'start'})`); await sleep(300); fs.writeFileSync(path.join(artifacts, name + '.png'), (await c.capturePage()).toPNG()); }
   await until('!!window.NotchWorkspace'); await js(`setMode(true)`); await sleep(650); await js(`setActiveTab('settings')`);
-  await until(`document.getElementById('settings-nas-content-results').children.length===9`);
+  await until(`document.getElementById('settings-nas-content-results').children.length===10`);
   const placement = await js(`(()=>({left:!!document.querySelector('.settings-column-primary #settings-nas-sync-card'),right:!!document.querySelector('.settings-column-secondary #settings-nas-sync-card'),cards:document.querySelectorAll('#settings-nas-sync-card').length,before:document.getElementById('settings-nas-sync-card').previousElementSibling.classList.contains('settings-mirror-card'),after:document.getElementById('settings-nas-sync-card').nextElementSibling.classList.contains('settings-device-card')}))()`);
   assert.deepEqual(placement, { left: false, right: true, cards: 1, before: true, after: true });
   assert.equal(await js(`document.getElementById('settings-nas-advanced').open || document.getElementById('settings-nas-details').open`), false);
@@ -82,7 +82,7 @@ async function run(c) {
   await js(`document.getElementById('settings-nas-sync-options-cancel').click()`);
   credentials = { bound: true, baseUrl: primary.baseUrl, recovery: { paused: false } };
   settings = { endpoints: [primary, backup], currentEndpointId: backup.endpointId, currentEndpoint: backup, lastSuccessAt: 1700007200000 };
-  contents = Object.fromEntries(['待办', '笔记', '链接', '常用指令', '剪贴板', '录音元数据', '录音音频', 'AI 配置', '密钥'].map((name, index) => [name, { message: '上次同步已确认', at: 1700000000000 + index * 3600000 }]));
+  contents = Object.fromEntries(['待办', '笔记', '链接', '常用指令', '剪贴板', 'AI 完成', '录音元数据', '录音音频', 'AI 配置', '密钥'].map((name, index) => [name, { message: '上次同步已确认', at: 1700000000000 + index * 3600000 }]));
   await emit('已同步');
   await until(`document.querySelector('[data-content-type="待办"] time').dateTime==='${new Date(contents.待办.at).toISOString()}'`);
   assert.equal(await js(`document.getElementById('settings-nas-sync-base-url').value`), primary.baseUrl);

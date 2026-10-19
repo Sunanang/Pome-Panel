@@ -202,7 +202,7 @@
                 <p class="home-inbox-status" id="task-inbox-status" role="status" aria-live="polite"></p>
                 <button class="workspace-button compact" type="button" id="task-inbox-rebuild" hidden><span data-i18n="copy.backUpTheDamagedFileAndRebuild.78f0c8">备份损坏文件并重建</span></button>
                 <div class="home-inbox-list" id="task-inbox-list" aria-label="最近 AI 完成记录" data-i18n-aria-label="copy.recentAiEvents.0ea57b"></div>
-                <footer class="home-inbox-footer"><small class="home-inbox-retention" title="已读首次标记后保留 30 天，未读记录及其去重信息不自动清理" data-i18n-title="copy.readRecordsAreKeptFor30Days.4ca002"><span data-i18n="copy.readRecordsKeptFor30Days.00f073">已读保留 30 天</span></small><nav class="home-inbox-pagination" id="home-inbox-pagination" aria-label="完成记录分页" hidden data-i18n-aria-label="copy.aiActivityPagination.db5716"></nav></footer>
+                <footer class="home-inbox-footer"><small class="home-inbox-retention" title="仅保留最新 100 条完成记录，超出后自动清理最早记录（含未读）及其去重信息" data-i18n-title="inbox.retentionDetail"><span data-i18n="inbox.retention">保留最新 100 条</span></small><nav class="home-inbox-pagination" id="home-inbox-pagination" aria-label="完成记录分页" hidden data-i18n-aria-label="copy.aiActivityPagination.db5716"></nav></footer>
               </section>
               <section class="tile home-windows" data-home-module="windows" data-widget-size="medium">
                 <div class="tile-head">
@@ -487,6 +487,7 @@
                     <div><span class="tile-label"><span data-i18n="copy.aiFeatures.1b6636">智能能力</span></span><strong id="settings-ai-sources-title"><span data-i18n="copy.aiActivitySources.2f54cf">AI 完成来源</span></strong></div>
                     <small id="settings-ai-sources-count"><span data-i18n="copy.local03Connected.f9026e">本机 · 0/3 已接入</span></small>
                   </div>
+                  <p class="ai-source-scope"><span data-i18n="attention.scopeSummary">三家均可接完成提醒。等待输入/选择/授权目前主要覆盖 Claude（受限）；Codex 与 Cursor 尚未启用等待监听，不会用猜测或轮询冒充。</span></p>
                   <div id="settings-ai-sources-list" class="ai-source-list"></div>
                   <p><span data-i18n="copy.onlyLocalToolConfigurationIsChangedWith.f4a095">仅修改本机工具配置；先在同目录备份。断开只移除 Pome 的项。</span></p>
                   <p id="ai-sources-status" role="status" aria-live="polite"></p>
@@ -534,7 +535,7 @@
                     <div class="transcription-settings-heading">
                       <strong id="settings-nas-sync-options-title"><span data-i18n="copy.syncOptions.5f1aa7">同步选项</span></strong>
                     </div>
-                    <p class="transcription-settings-note" id="settings-nas-sync-options-body"><span data-i18n="copy.syncTasksNotesClipboardRecordingsLinksCommands.5ce0d0">开始后会同步待办、笔记、剪贴板、录音、链接、常用指令、AI 配置和密钥。两边都有内容时，再选择以本机或飞牛为准。</span></p>
+                    <p class="transcription-settings-note" id="settings-nas-sync-options-body"><span data-i18n="copy.syncTasksNotesClipboardRecordingsLinksCommands.5ce0d0">开始后会同步待办、笔记、剪贴板、录音、链接、常用指令、AI 完成记录、AI 配置和密钥。两边都有内容时，再选择以本机或飞牛为准。</span></p>
                     <div class="transcription-settings-actions">
                       <button class="workspace-button compact" id="settings-nas-sync-options-cancel" type="button"><span data-i18n="copy.later.9d2ca2">稍后</span></button>
                       <button class="workspace-button compact primary" id="settings-nas-sync-options-start" type="button" data-control-id="settings.nas-sync.options.start"><span data-i18n="copy.startSyncing.8dabf1">开始同步</span></button>

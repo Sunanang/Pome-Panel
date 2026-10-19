@@ -91,7 +91,8 @@ test('old sync results translate without duplicate rows or invented per-type tim
   const old = { '待办': { message: '上次同步已确认', at: 1700000000000, ok: true }, '录音音频': { message: '尚未确认全部音频传输', ok: false } };
   const before = JSON.stringify(old); L.setState(L.snapshot('en-US'));
   const rows = nas.contentResultRows(old, true);
-  assert.equal(rows.length, 9);
+  assert.equal(rows.length, 10);
+  assert.equal(rows.find(row => row.name === 'AI completions').at, null);
   assert.equal(rows[0].name, 'Tasks'); assert.equal(rows[0].message, 'Last sync confirmed');
   assert.equal(rows[0].at, old['待办'].at);
   const audio = rows.find(row => row.name === 'Recording audio');

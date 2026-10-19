@@ -52,6 +52,7 @@ const {
   applyGeneratedNoteTitle,
   apiCredentialStatuses,
   prependClipboardHistory,
+  trimClipboardHistory,
   createExclusiveAsyncTask,
 } = domain;
 
@@ -136,6 +137,32 @@ test('clipboard history evicts only entries beyond its capacity', () => {
 
   assert.deepEqual(result.history.map((entry) => entry.id), ['new', 'first']);
   assert.deepEqual(result.evicted.map((entry) => entry.id), ['older-image']);
+});
+
+test('clipboard retains unlimited favorites plus the latest 100 ordinary rows, regardless of input order', () => {
+  const history = Array.from({ length: 250 }, (_, i) => ({ id: `row-${i}`, timestamp: i }));
+  const favorites = history.slice(0, 120).map(row => row.id);
+  const before = structuredClone(history);
+  const forward = trimClipboardHistory(history, favorites);
+  const reverse = trimClipboardHistory(history.slice().reverse(), favorites);
+  assert.deepEqual(forward, reverse);
+  assert.deepEqual(history, before);
+  assert.equal(forward.history.length, 220);
+  assert.equal(forward.evicted.length, 30);
+  assert.equal(forward.history[0].id, 'row-249');
+  assert.ok(favorites.every(id => forward.history.some(row => row.id === id)));
+  assert.ok(forward.evicted.every(row => row.timestamp >= 120 && row.timestamp < 150));
+  const next = prependClipboardHistory(forward.history, {id:'new',timestamp:251}, 100, favorites);
+  assert.equal(next.history.length, 220);
+  assert.deepEqual(next.evicted.map(row => row.id), ['row-150']);
+  const unfavored = trimClipboardHistory(next.history, favorites.filter(id => id !== 'row-0'));
+  assert.deepEqual(unfavored.evicted.map(row => row.id), ['row-0']);
+});
+
+test('equal clipboard timestamps have a deterministic order on all merge inputs', () => {
+  const history = [{id:'b',timestamp:1}, {id:'a',timestamp:1}, {id:'c',timestamp:1}];
+  assert.deepEqual(trimClipboardHistory(history, [], 2).history.map(row => row.id), ['a','b']);
+  assert.deepEqual(trimClipboardHistory(history.reverse(), [], 2).history.map(row => row.id), ['a','b']);
 });
 
 test('normalizeHttpUrl adds https and removes URL credentials', () => {

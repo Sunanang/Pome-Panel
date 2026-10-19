@@ -6,8 +6,15 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+### History retention
+
+- Clipboard history consistently retains the latest 100 ordinary records. Favorites are exempt and retained indefinitely; removing a favorite restores the ordinary limit. Local copies, load, restore and NAS merges share trimming, propagate overflow deletes and preserve referenced images.
+- AI completion history retains the latest 100 records, including unread records, and removes evicted deduplication data. Startup also trims existing history, replacing read-based 30-day expiry. Completion history and read marks now sync through the NAS using source/stable-event identities. Desktop and NAS share trimming and eviction tombstones; imports do not replay notifications. Native window/directory metadata stays local. Older NAS companions require an update.
+
 ### AI attention reminders
 
+- Bubble `+N` now counts every remaining waiting and completion item after the current one; hidden waiting requests stay excluded. Settings and docs state that completion reminders work for all three sources, waiting actions currently cover Claude (partial), and Codex/Cursor waiting observers are off without inventing waiting states. Removed the unused Chinese `retentionLabel` API field; UI retention copy stays on i18n keys.
+- Fixed distinct Claude approvals collapsing after redaction. Native or per-invocation observation IDs separate retries from new requests. Hidden requests no longer count in waiting +N; batch resolution uses one atomic write and handles post-rename errors. Fixed command previews now support English prefixes.
 - Added separate pending input, choice and approval requests with the final blue B design: 400×146 on macOS and a 384×114 Windows card. Existing completion sizes remain intact. Waiting has no countdown; competing requests use 8-second slots with hover pause and preserved completion time.
 - Resolutions match source, surface, session, turn and request. Closing or returning to an app never answers a request; pending entries remain available in Home and Settings. Restart/disconnect requires reconfirmation.
 - Added validated v2 events, safe summaries before persistence, out-of-order tombstones, atomic storage and confirmed backup repair. Exact Codex empty suggestions/exclude envelopes are filtered; a common projection hides historical noise without deleting original records or deduplication identities.

@@ -188,6 +188,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
     subscribe('task-notification:hide', (event, eventId) => cb(eventId)),
   onTaskCompletion: (cb) =>
     subscribe('task-completion:new', (event, notification) => cb(notification)),
+  onTaskInboxChanged: (cb) => subscribe('tasks:inbox-changed', () => cb()),
   taskNotificationDismissed: (eventId) =>
     ipcRenderer.send('task-notification:dismissed', eventId),
   activateTaskNotification: (eventId) =>

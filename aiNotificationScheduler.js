@@ -1,6 +1,21 @@
 'use strict';
 // The main process owns window animations; this module owns fair selection and
 // preserves a completion's actual remaining display time across preemption.
+
+// +N counts everything that will still be shown after the current item:
+// other visible pending attention requests plus the completion FIFO.
+function countQueuedNotifications({
+  attentionRows = [],
+  completions = [],
+  activeAttentionKey = null,
+} = {}) {
+  const attention = attentionRows.filter((row) => (
+    row.state === 'pending' && !row.hidden && row.key !== activeAttentionKey
+  )).length;
+  const completion = completions.reduce((total, item) => total + (item.summaryCount || 1), 0);
+  return attention + completion;
+}
+
 function createAiNotificationScheduler({ completions = [], now = Date.now, slotMs = 8000 } = {}) {
   let attention = new Map(), lastAttentionKey = null, lastKind = 'completion', preferAttention = false, selectedKey = null;
   function sync(records, toNotification) {
@@ -34,4 +49,4 @@ function createAiNotificationScheduler({ completions = [], now = Date.now, slotM
     remaining: (budgetMs, startedAt) => Math.max(0, budgetMs - Math.max(0, now() - startedAt)),
   };
 }
-module.exports = { createAiNotificationScheduler };
+module.exports = { createAiNotificationScheduler, countQueuedNotifications };

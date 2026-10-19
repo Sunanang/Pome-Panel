@@ -63,7 +63,7 @@ async function run(c) {
   bound = true; state = 'synced';
   c.send('sync:status', { bound, recovery: { paused } });
   await until('document.getElementById("settings-nas-content-results").textContent.includes("Last sync confirmed")');
-  assert.equal(await js('document.getElementById("settings-nas-content-results").children.length'), 9);
+  assert.equal(await js('document.getElementById("settings-nas-content-results").children.length'), 10);
   paused = true; c.send('sync:status', { bound, recovery: { paused } });
   await until('!document.getElementById("settings-nas-recovery").hidden && document.getElementById("settings-nas-sync-status").textContent === "Sync paused"');
   await sleep(120);

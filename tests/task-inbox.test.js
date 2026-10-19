@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createTaskInbox, READ_RETENTION_MS } = require('../taskInbox');
+const { createTaskInbox, MAX_RECORDS } = require('../taskInbox');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pome-inbox-'));
@@ -37,19 +37,49 @@ test('dedupe and first read timestamp persist, but a later genuine event is acce
   assert.equal(inbox.list().total, 2);
   assert.equal(inbox.list().unread, 1);
 });
-test('cleanup removes expired read events and never drops old unread events', (t) => {
+test('capacity evicts the oldest read and unread records and their dedupe keys', (t) => {
   const filePath = fixture(t);
   let clock = 10000;
-  const inbox = createTaskInbox({ filePath, now: () => clock });
-  const read = inbox.accept({ completedAt: 1, source: 'cursor', taskId: 'read' }).record;
-  inbox.accept({ completedAt: 1, source: 'cursor', taskId: 'unread' });
+  const inbox = createTaskInbox({ filePath, now: () => clock++ });
+  const read = inbox.accept({ source: 'cursor', eventId: 'read' }).record;
+  const unread = inbox.accept({ source: 'cursor', eventId: 'unread' }).record;
   inbox.markRead(read.id);
-  clock += READ_RETENTION_MS - 1;
-  assert.equal(inbox.list().total, 2);
-  inbox.markRead(read.id);
-  clock++;
+  for (let i = 0; i < MAX_RECORDS; i++) inbox.accept({ source: 'codex', eventId: `new-${i}` });
+  assert.equal(inbox.list().total, MAX_RECORDS);
+  assert.equal(inbox.list().unread, MAX_RECORDS);
+  assert.equal(inbox.get(read.id), null);
+  assert.equal(inbox.get(unread.id), null);
+  const saved = JSON.parse(fs.readFileSync(filePath));
+  assert.equal(saved.records.length, MAX_RECORDS);
+  assert.equal(Object.keys(saved.dedupe).length, MAX_RECORDS);
+  assert.equal(inbox.accept({ source: 'codex', eventId: 'new-99' }).duplicate, true);
+  assert.equal(inbox.accept({ source: 'cursor', eventId: 'read' }).duplicate, false);
+});
+test('startup trims unsorted oversized historical files without new events', (t) => {
+  const filePath = fixture(t);
+  const records = Array.from({ length: 140 }, (_, i) => ({ id: `old-${i}`, source: 'claude', receivedAt: i, readAt: i % 2 ? null : i }));
+  const dedupe = Object.fromEntries(records.map(row => [`event:${row.id}`, { id: row.id, at: row.receivedAt, stable: true }]));
+  fs.writeFileSync(filePath, JSON.stringify({ version: 1, records, dedupe }));
+  const inbox = createTaskInbox({ filePath });
+  assert.equal(inbox.list().total, MAX_RECORDS);
+  assert.equal(inbox.list().items[0].id, 'old-139');
+  assert.equal(inbox.list({offset: 99}).items[0].id, 'old-40');
+  assert.equal(inbox.list().unread, 50);
+  const saved = JSON.parse(fs.readFileSync(filePath));
+  assert.equal(saved.records.length, MAX_RECORDS);
+  assert.equal(Object.keys(saved.dedupe).length, MAX_RECORDS);
+  assert.equal(createTaskInbox({filePath}).get('old-39'), null);
+});
+test('records below capacity no longer expire based on age or read status', (t) => {
+  const filePath = fixture(t);
+  let clock = 10000;
+  let inbox = createTaskInbox({filePath, now: () => clock});
+  const row = inbox.accept({source:'codex', eventId:'read'}).record;
+  inbox.markRead(row.id);
+  clock += 365 * 86400000;
+  inbox = createTaskInbox({filePath, now: () => clock});
   assert.equal(inbox.list().total, 1);
-  assert.equal(inbox.list().items[0].taskId, 'unread');
+  assert.equal(inbox.accept({source:'codex', eventId:'read'}).duplicate, true);
 });
 test('write failure does not claim acceptance or damage previous records', (t) => {
   const filePath = fixture(t);

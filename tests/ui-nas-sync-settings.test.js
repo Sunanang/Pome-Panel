@@ -206,7 +206,8 @@ test('content details use each content type timestamp, retain partial errors and
     笔记: { message: '部分资料未传输：失败', at: 1700003600000, ok: false },
     录音音频: { message: '尚未确认全部音频传输' },
   }, true);
-  assert.equal(rows.length, 9);
+  assert.equal(rows.length, 10);
+  assert.equal(rows.find(row => row.name === 'AI 完成').at, null);
   assert.notEqual(rows[0].time, rows[1].time);
   assert.equal(rows[1].message, '部分资料未传输：失败');
   assert.equal(rows.find(row => row.name === '录音音频').time, '—');

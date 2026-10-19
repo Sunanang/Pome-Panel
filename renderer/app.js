@@ -148,6 +148,11 @@ async function hydratePortableWorkspace() {
       return;
     }
     localStorage.setItem('notch-workspace-root', workspace.path);
+    // Wait until workspace import has finished: writing empty history earlier
+    // would mask persisted keys that hydration only imports when absent.
+    pruneClipHistory();
+    renderClipList();
+    renderClipFavs();
     // Bound startup: hydratePortableWorkspace → SQLite projection overrides workspace.
     await hydrateTodosSyncProjectionAfterWorkspace();
     workspacePersistenceTimer = setInterval(() => {
@@ -4488,7 +4493,6 @@ if (clipfavListEl) {
 // ============ 剪贴板历史 ============
 const CLIP_HISTORY_KEY = 'notch-clip-history';
 const CLIP_FAV_KEY = 'notch-clip-favorites';
-const CLIP_MAX = 100;
 const CLIP_URL_RE = /^https?:\/\//i;
 const starOutlineSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg>';
 const starFilledSvg = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg>';
@@ -4568,6 +4572,23 @@ let clipClearArmed = false;
 // 防重入标志：renderClipList 内按需图片预加载完成后的二次渲染
 let clipRenderPending = false;
 
+function pruneClipHistory() {
+  const trimmed = window.NotchDomain.trimClipboardHistory(clipHistory, clipFavorites);
+  clipHistory = trimmed.history;
+  // A synced or restored row may share an image with a surviving favorite.
+  const imageKey = imagePath => window.NotchPlatform.portableMediaPath('clipboard-images', imagePath);
+  const retainedPaths = new Set(clipHistory.map(row => row.imagePath).filter(Boolean).map(imageKey));
+  const evictedPaths = [...new Set(trimmed.evicted.map(row => row.imagePath)
+    .filter(imagePath => imagePath && !retainedPaths.has(imageKey(imagePath))))];
+  saveClipHistory(clipHistory);
+  saveClipFavorites(clipFavorites);
+  clipDataVersion++;
+  evictedPaths.forEach(imagePath => clipImageCache.delete(imagePath));
+  if (evictedPaths.length && window.notchAPI?.deleteClipImages) {
+    window.notchAPI.deleteClipImages(evictedPaths).catch(() => {});
+  }
+}
+
 async function preloadClipImage(imagePath) {
   if (!imagePath) return;
   if (clipImageCache.has(imagePath)) return;
@@ -4594,22 +4615,8 @@ async function addClipEntry(raw) {
   };
 
   // 每一次系统复制都是独立历史事件；相同内容也必须保留为两条记录。
-  const updated = window.NotchDomain.prependClipboardHistory(clipHistory, entry, CLIP_MAX);
-  clipHistory = updated.history;
-  const evicted = updated.evicted;
-  if (evicted.length > 0) {
-    const evictedPaths = evicted
-      .filter((e) => e.type === 'image' && e.imagePath)
-      .map((e) => e.imagePath);
-    if (evictedPaths.length > 0) {
-      if (window.notchAPI && typeof window.notchAPI.deleteClipImages === 'function') {
-        window.notchAPI.deleteClipImages(evictedPaths).catch(() => {});
-      }
-      evictedPaths.forEach((p) => clipImageCache.delete(p));
-    }
-  }
-
-  saveClipHistory(clipHistory);
+  clipHistory = [entry, ...clipHistory];
+  pruneClipHistory();
 
   // 图片条目预加载缩略图
   if (entry.type === 'image' && entry.imagePath) {
@@ -4788,8 +4795,7 @@ function toggleClipFavorite(id, focusContext = null) {
   } else {
     clipFavorites.splice(idx, 1);
   }
-  clipDataVersion++; // clipFavorites 已变
-  saveClipFavorites(clipFavorites);
+  pruneClipHistory();
   renderClipList();
   renderClipFavs();
   if (focusContext && focusContext.restoreFocus) {
@@ -4828,9 +4834,7 @@ function deleteClipEntry(id, focusContext = null) {
       if (favoriteIndex !== -1) {
         clipFavorites.splice(Math.min(favoriteIndex, clipFavorites.length), 0, id);
       }
-      clipDataVersion++;
-      saveClipHistory(clipHistory);
-      saveClipFavorites(clipFavorites);
+      pruneClipHistory();
       renderClipList();
       renderClipFavs();
       focusClipControl([id]);
@@ -5014,12 +5018,11 @@ function applyWorkspaceClipboard(clipboard) {
   if (!clipboard || typeof clipboard !== 'object') return;
   if (Array.isArray(clipboard.history)) {
     clipHistory = clipboard.history.map(normalizeClipEntry).filter(Boolean);
-    saveClipHistory(clipHistory);
   }
   if (Array.isArray(clipboard.favorites)) {
     clipFavorites = clipboard.favorites.filter((id) => typeof id === 'string');
-    saveClipFavorites(clipFavorites);
   }
+  pruneClipHistory();
   if (typeof renderClipList === 'function') renderClipList();
   if (typeof renderClipFavs === 'function') renderClipFavs();
 }
