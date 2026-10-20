@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pome Panel · 等待操作提醒设计</title>
+  <link rel="stylesheet" href="../../../renderer/notification.css">
+  <style>
+    :root { --board-bg:#f4f4f1; --board-text:#1e2224; --board-muted:#6c7376; --board-line:#d9dddb; --board-accent:#2775d8; }
+    * { box-sizing:border-box; }
+    html,body { width:100%; height:auto; min-height:100%; overflow:auto; background:var(--board-bg); color:var(--board-text); user-select:text; color-scheme:light; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; }
+    button { cursor:pointer; }
+    .board { max-width:1536px; margin:auto; padding:44px 48px 36px; }
+    .eyebrow { font-size:11px; font-weight:650; letter-spacing:1.7px; color:var(--board-muted); }
+    .heading { display:flex; align-items:flex-end; justify-content:space-between; margin:12px 0 30px; gap:24px; }
+    h1 { font-size:32px; margin:0 0 10px; letter-spacing:-1px; font-weight:650; }
+    .intro { margin:0; font-size:14px; line-height:1.8; color:var(--board-muted); }
+    .version { flex-shrink:0; font-size:12px; line-height:1.8; color:var(--board-muted); text-align:right; }
+    .states { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; }
+    .state-label { display:flex; justify-content:space-between; align-items:center; padding-bottom:12px; }
+    .state-label h2 { margin:0; font-size:16px; font-weight:600; }
+    .state-label span { font-size:11px; color:var(--board-muted); letter-spacing:.7px; }
+    .scene { position:relative; height:182px; background:#e8ecea; border-top:1px solid #bfc7c3; overflow:hidden; display:flex; justify-content:center; }
+    .scene::after { content:'屏幕顶部 · 400 × 110 逻辑像素'; position:absolute; bottom:20px; font-size:10px; color:#7c8680; letter-spacing:.2px; }
+    .scene .notification-root { flex:0 0 400px; width:400px; height:110px; clip-path:none; overflow:visible; }
+    .scene .notification-content { opacity:1; transform:none; filter:none; transition:none; padding-top:10px; padding-bottom:12px; min-height:78px; align-items:center; }
+    .scene .notification-shape::after { border-color:rgba(255,255,255,.09); }
+    .scene .notification-copy { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 8px; color:var(--nb-text-1); }
+    .scene .notification-title { display:block; white-space:nowrap; font-size:13.5px; line-height:18px; }
+    .scene .notification-icon { align-self:center; }
+    .scene .notification-status { transform:none; opacity:1; background:var(--nb-accent-ask); color:#fff; transition:none; }
+    .scene .notification-close { display:grid; color:var(--nb-text-1); }
+    .scene .notification-trailing { gap:5px; }
+    .question { grid-column:1/-1; margin:0; font-size:12px; line-height:18px; color:#e1e2e4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .return-line { grid-column:1/-1; margin:0; font-size:10.5px; line-height:15px; color:#8e9298; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .scene .notification-open { cursor:pointer; }
+    .spec { margin:14px 0 0; padding:0; list-style:none; color:#555f5a; font-size:12px; line-height:1.9; }
+    .spec strong { color:#252e29; font-weight:550; }
+    .section-head { display:flex; justify-content:space-between; align-items:baseline; border-top:1px solid var(--board-line); margin:30px 0 19px; padding-top:19px; }
+    .section-head h2 { margin:0; font-size:16px; font-weight:600; }
+    .section-head p { margin:0; color:var(--board-muted); font-size:12px; }
+    .flow { display:grid; grid-template-columns:repeat(4,1fr); gap:24px; }
+    .flow-step { padding:0 12px 0 0; }
+    .step-number { font-size:11px; color:var(--board-accent); letter-spacing:1px; font-variant-numeric:tabular-nums; }
+    .flow h3 { margin:8px 0; font-size:14px; font-weight:600; }
+    .flow p { margin:0; font-size:12px; color:var(--board-muted); line-height:1.8; }
+    .details { display:grid; grid-template-columns:1fr 1fr; gap:36px; border-top:1px solid var(--board-line); margin-top:26px; padding-top:22px; }
+    .detail h3 { font-size:13px; margin:0 0 8px; font-weight:600; }
+    .detail p { font-size:12px; line-height:1.85; color:var(--board-muted); margin:0; max-width:570px; }
+    .pending { display:inline-flex; gap:8px; align-items:center; padding:5px 10px; margin-bottom:9px; background:#e5eaf0; color:#3c4651; font-size:11px; border-radius:5px; }
+    .pending b { color:var(--board-accent); font-weight:650; }
+    .footer { margin-top:28px; padding-top:15px; border-top:1px solid var(--board-line); display:flex; justify-content:space-between; gap:24px; font-size:10px; color:#7a827e; line-height:1.8; }
+    .demo { margin:22px 0 0; padding:14px 16px; background:#e9eeeb; font-size:12px; line-height:1.8; color:#42524a; display:none; }
+    .demo.shown { display:block; }
+    .reset { color:#305b80; background:none; text-decoration:underline; margin-left:8px; }
+    @media(max-width:1300px) { .board { min-width:1350px; padding-left:30px; padding-right:30px; } }
+    @media print { .demo { display:none!important; } }
+  </style>
+</head>
+<body>
+<main class="board">
+  <div class="eyebrow">POME PANEL / ATTENTION REMINDERS</div>
+  <header class="heading">
+    <div><h1>AI 等你操作时，明确告诉你。</h1><p class="intro">沿用顶部气泡。区分输入、选择与授权；问题留在原工具里处理。</p></div>
+    <div class="version">交互设计稿 · 2026.10.18<br>基于现有通知组件 / 非已上线功能</div>
+  </header>
+
+  <section class="states" aria-label="三种等待提醒状态">
+    <article id="input-state">
+      <header class="state-label"><h2>等待输入</h2><span>INPUT</span></header>
+      <div class="scene">
+        <div class="notification-root is-visible"><div class="notification-shell" data-source="codex" data-status="awaiting">
+          <span class="shoulder left"></span><span class="shoulder right"></span>
+          <div class="notification-shape"><div class="notification-cap"></div><div class="notification-content">
+            <span class="notification-icon"><span class="notification-brand" style="mask-image:url('../../../renderer/assets/inbox/codex.svg')"></span><span class="notification-status"><svg viewBox="0 0 10 10"><use href="../../../renderer/assets/notification/glyphs.svg#awaiting"></use></svg></span></span>
+            <div class="notification-copy"><span class="notification-title">Codex 等待你输入</span><span class="notification-trailing"><button class="notification-close" aria-label="隐藏输入提醒"><svg viewBox="0 0 10 10"><use href="../../../renderer/assets/notification/glyphs.svg#close"></use></svg></button></span>
+              <p class="question">请填写测试 NAS 的访问地址</p><p class="return-line">Pome-Panel · 点击返回 Codex</p>
+            </div>
+          </div><button class="notification-open" data-app="Codex" aria-label="演示返回 Codex"></button></div>
+        </div></div>
+      </div>
+      <ul class="spec"><li><strong>标题：</strong>来源 + 等待你输入</li><li><strong>摘要：</strong>需要补充什么，直接说清楚</li><li><strong>点击：</strong>回到来源软件填写</li></ul>
+    </article>
+    <article id="select-state">
+      <header class="state-label"><h2>等待选择</h2><span>SELECT</span></header>
+      <div class="scene">
+        <div class="notification-root is-visible"><div class="notification-shell" data-source="cursor" data-status="awaiting">
+          <span class="shoulder left"></span><span class="shoulder right"></span>
+          <div class="notification-shape"><div class="notification-cap"></div><div class="notification-content">
+            <span class="notification-icon"><span class="notification-brand" style="mask-image:url('../../../renderer/assets/inbox/cursor.svg')"></span><span class="notification-status"><svg viewBox="0 0 10 10"><use href="../../../renderer/assets/notification/glyphs.svg#awaiting"></use></svg></span></span>
+            <div class="notification-copy"><span class="notification-title">Cursor 等待你选择</span><span class="notification-trailing"><span class="notification-queue" title="另有 2 条等待">+2</span><button class="notification-close" aria-label="隐藏选择提醒"><svg viewBox="0 0 10 10"><use href="../../../renderer/assets/notification/glyphs.svg#close"></use></svg></button></span>
+              <p class="question">这次修改直接上线，还是先预览？</p><p class="return-line">Pome-Panel · 点击返回 Cursor</p>
+            </div>
+          </div><button class="notification-open" data-app="Cursor" aria-label="演示返回 Cursor"></button></div>
+        </div></div>
+      </div>
+      <ul class="spec"><li><strong>标题：</strong>来源 + 等待你选择</li><li><strong>摘要：</strong>提炼当前问题，不在气泡内作答</li><li><strong>+2：</strong>另有 2 条等待，可从待处理入口查看</li></ul>
+    </article>
+    <article id="approve-state">
+      <header class="state-label"><h2>等待授权</h2><span>APPROVE</span></header>
+      <div class="scene">
+        <div class="notification-root is-visible"><div class="notification-shell" data-source="claude" data-status="awaiting">
+          <span class="shoulder left"></span><span class="shoulder right"></span>
+          <div class="notification-shape"><div class="notification-cap"></div><div class="notification-content">
+            <span class="notification-icon"><span class="notification-brand" style="mask-image:url('../../../renderer/assets/inbox/claude.svg')"></span><span class="notification-status"><svg viewBox="0 0 10 10"><use href="../../../renderer/assets/notification/glyphs.svg#awaiting"></use></svg></span></span>
+            <div class="notification-copy"><span class="notification-title">Claude 等待你授权</span><span class="notification-trailing"><button class="notification-close" aria-label="隐藏授权提醒"><svg viewBox="0 0 10 10"><use href="../../../renderer/assets/notification/glyphs.svg#close"></use></svg></button></span>
+              <p class="question">允许运行 npm install 安装依赖吗？</p><p class="return-line">Pome-Panel · 点击返回 Claude Code</p>
+            </div>
+          </div><button class="notification-open" data-app="Claude Code" aria-label="演示返回 Claude Code"></button></div>
+        </div></div>
+      </div>
+      <ul class="spec"><li><strong>标题：</strong>来源 + 等待你授权</li><li><strong>摘要：</strong>展示安全摘要，隐藏敏感内容</li><li><strong>授权：</strong>在原工具完成，Pome 不替你批准</li></ul>
+    </article>
+  </section>
+
+  <div class="section-head"><h2>同一套交互，贯穿三种提醒</h2><p>不抢焦点 · 无倒计时 · 蓝色等待标记</p></div>
+  <section class="flow" aria-label="提醒生命周期">
+    <div class="flow-step"><span class="step-number">01 / 出现</span><h3>收到真实等待事件</h3><p>顶部展示问题和操作类型。单条等待持续保留，× 随时可关闭气泡。</p></div>
+    <div class="flow-step"><span class="step-number">02 / 返回</span><h3>点击回到来源软件</h3><p>输入、选择或授权都在原工具完成。点击气泡本身不等于回答。</p></div>
+    <div class="flow-step"><span class="step-number">03 / 响应</span><h3>用户回答，AI 继续</h3><p>收到对应请求的解决事件后撤销提醒，不额外弹一次“已回答”。</p></div>
+    <div class="flow-step"><span class="step-number">04 / 收敛</span><h3>完成后再报最终结果</h3><p>需要时展示正常完成提醒。后台 JSON、工具输出与中间内容不弹出。</p></div>
+  </section>
+
+  <section class="details">
+    <div class="detail"><h3>多条等待，不把下一条挡住</h3><div class="pending"><b>待处理 3</b><span>Codex · Cursor · Claude</span></div><p>有其他通知时按展示时隙公平轮转；鼠标悬停暂停切换。+2 统计额外等待，详细问题从待处理入口查看，不在小气泡塞入多组选项。</p></div>
+    <div class="detail"><h3>关闭是收起提醒，不是替你作答</h3><p>× 只隐藏这次气泡，待处理仍保留；同一请求不反复弹。来源暂时断线时标记“状态待确认”。Windows 原生能力关闭时显示“请返回来源软件”，不承诺点击聚焦。</p></div>
+  </section>
+  <div id="demo" class="demo" role="status"></div>
+  <footer class="footer"><span>设计基准：原有 400px 通知窗口、32px 顶帽、32px 来源图标、14px 蓝色角标；无新增外部阴影。</span><span>文案与问题为示例 · 客户端事件支持以技术方案和实机验收为准</span></footer>
+</main>
+<script>
+  const demo = document.getElementById('demo');
+  for (const button of document.querySelectorAll('.notification-open')) {
+    button.addEventListener('click', () => { demo.classList.add('shown'); demo.textContent = `设计演示：实际产品将返回 ${button.dataset.app}；输入或授权仍在原工具完成。此预览不会打开其他软件。`; });
+  }
+  for (const button of document.querySelectorAll('.notification-close')) {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      button.closest('.notification-root').style.visibility = 'hidden';
+      demo.classList.add('shown');
+      demo.replaceChildren(document.createTextNode('设计演示：已隐藏气泡，待处理请求仍保留。'));
+      const reset = document.createElement('button'); reset.className = 'reset'; reset.textContent = '恢复设计图';
+      reset.addEventListener('click', () => { for (const root of document.querySelectorAll('.notification-root')) root.style.visibility = ''; demo.classList.remove('shown'); });
+      demo.append(reset);
+    });
+  }
+  for (const shell of document.querySelectorAll('.notification-shell')) {
+    shell.addEventListener('pointerenter', () => shell.classList.add('is-hover'));
+    shell.addEventListener('pointerleave', () => shell.classList.remove('is-hover'));
+  }
+</script>
+</body>
+</html>
