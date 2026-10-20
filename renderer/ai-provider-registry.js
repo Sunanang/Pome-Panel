@@ -1,14 +1,11 @@
 (function (root, factory) {
-  const registry = factory();
+  const registry = factory(typeof module === 'object' && module.exports
+    ? require('../aiProviderCatalog')
+    : root.NotchAiProviders);
   if (typeof module === 'object' && module.exports) module.exports = registry;
   else root.NotchAiProviders = registry;
-})(typeof window === 'object' ? window : globalThis, function () {
+})(typeof window === 'object' ? window : globalThis, function (catalog) {
   'use strict';
-  // Register only implemented providers. A brand name is not an integration.
-  const providers = Object.freeze([
-    Object.freeze({ id: 'cursor', label: 'Cursor', request: 'getCursorUsage', settingsCard: 'settings-cursor-token-card',
-      pools: Object.freeze([['auto', 'auto', 'Auto'], ['other', 'other', 'Other'], ['grok', 'grokBot', 'Grok Bot']]) }),
-    Object.freeze({ id: 'codex', label: 'Codex', request: 'getCodexUsage', settingsCard: 'settings-codex-token-card' }),
-  ]);
-  return { providers, get: id => providers.find(provider => provider.id === id) };
+  // Thin re-export of the shared catalog for renderer script order and tests.
+  return catalog;
 });

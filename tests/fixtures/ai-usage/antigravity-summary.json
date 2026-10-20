@@ -1,0 +1,13 @@
+{
+  "summary": {
+    "groups": [{
+      "name": "Gemini Models",
+      "buckets": [
+        { "id": "weekly", "name": "Weekly Limit", "window": "weekly", "remaining": { "case": "remainingFraction", "value": 0.75 }, "resetTime": "2026-11-01T00:00:00Z" },
+        { "bucketId": "session-5h", "displayName": "Session", "remainingFraction": 0, "window": "5h" },
+        { "bucketId": "disabled", "disabled": true, "remainingFraction": 1 },
+        { "bucketId": "unknown", "remaining": { "case": "unknown", "value": 0.5 } }
+      ]
+    }]
+  }
+}

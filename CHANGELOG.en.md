@@ -6,6 +6,17 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+### Multi-AI providers (usage + completion matrix)
+
+- Correct Copilot unlimited buckets and root reset dates; show Unlimited when every reported bucket is unlimited. Parse Grok Bot ISO and epoch timestamps for reset scheduling, and Antigravity summary wrappers, aliases and tagged remaining fractions. Add representative response fixtures and UI regression coverage.
+
+- Fix host-scoped Copilot credentials, xAI team configuration and posted USD balance, grouped Antigravity quotas, invalid-auth cache recovery, Claude hook capability gates and token-card localization. Preserve encrypted provider settings across writes and restart. Use the official Manus v2 availableCredits endpoint and API key header; display authoritative spendable credits without fabricating a percentage.
+
+- Added a shared `aiProviderCatalog` covering Cursor / Codex / Claude / Grok Bot / Grok / Copilot / Antigravity / Manus with separate usage and completion capability bits; unverified capabilities stay `partial`/`unsupported`.
+- Home AI quota UI supports N providers with dynamic panels/tabs; Grok Bot is a separate card from Cursor’s main pools (requires Cursor sign-in); Grok is labeled as standalone xAI.
+- Added Claude / Copilot / Grok / Antigravity / Manus usage adapters (local credentials or safeStorage tokens, host allowlists). Completion HTTP still accepts only Codex / Claude / Cursor, now catalog-driven.
+- Settings shows completion and usage capabilities on one provider list, with ownership notes, icons, and zh/en copy. Reference repos are credited for endpoint knowledge only—no embedded menu-bar apps.
+
 ### History retention
 
 - Clipboard history consistently retains the latest 100 ordinary records. Favorites are exempt and retained indefinitely; removing a favorite restores the ordinary limit. Local copies, load, restore and NAS merges share trimming, propagate overflow deletes and preserve referenced images.

@@ -11,8 +11,9 @@ const { promisify } = require('node:util');
 const toml = require('toml-eslint-parser');
 const json = require('jsonc-parser');
 const { writeAtomic } = require('./atomicStorage');
-const SOURCES = Object.freeze(['codex', 'claude', 'cursor']);
-const LABELS = { codex: 'Codex', claude: 'Claude Code', cursor: 'Cursor' };
+const catalog = require('./aiProviderCatalog');
+const SOURCES = Object.freeze(catalog.hookableIds());
+const LABELS = catalog.labels();
 const CLAUDE_ATTENTION_EVENTS = { PreToolUse: 'AskUserQuestion', PostToolUse: 'AskUserQuestion', PostToolUseFailure: 'AskUserQuestion', Notification: 'permission_prompt|elicitation_dialog', UserPromptSubmit: null, Stop: null, SessionEnd: null };
 const digest = value => createHash('sha256').update(value).digest('hex');
 const marker = source => `--pome-panel-hook=${source}`;
@@ -130,10 +131,22 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
     return Object.values(config.value.hooks || {}).some(groups => Array.isArray(groups) && groups.some(group => group.hooks?.some(hook => isOwned(hook, 'claude-attention'))));
   }
   function capabilities(source, connected, complete) {
-    return { surface: source === 'claude' ? 'cli' : source === 'cursor' ? 'ide' : 'desktop', providerVersion: 'unverified',
-      completion: connected ? 'partial' : 'unsupported', input: source === 'claude' && complete ? 'partial' : 'unsupported',
-      select: source === 'claude' && complete ? 'partial' : 'unsupported', approve: source === 'claude' && complete ? 'partial' : 'unsupported',
-      autoResolve: source === 'claude' && complete ? 'partial' : 'unsupported' };
+    const staticCaps = catalog.get(source)?.capabilities || {};
+    const completion = connected
+      ? (staticCaps.completion === 'unsupported' ? 'unsupported' : staticCaps.completion || 'partial')
+      : 'unsupported';
+    const attention = connected && complete ? (staticCaps.attention || 'unsupported') : 'unsupported';
+    return {
+      surface: source === 'claude' ? 'cli' : source === 'cursor' ? 'ide' : 'desktop',
+      providerVersion: 'unverified',
+      usage: staticCaps.usage || 'unsupported',
+      completion,
+      attention,
+      input: attention === 'partial' ? 'partial' : 'unsupported',
+      select: attention === 'partial' ? 'partial' : 'unsupported',
+      approve: attention === 'partial' ? 'partial' : 'unsupported',
+      autoResolve: attention === 'partial' ? 'partial' : 'unsupported',
+    };
   }
   async function status(source) {
     supported(source);

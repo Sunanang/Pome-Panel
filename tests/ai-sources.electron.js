@@ -29,9 +29,9 @@ async function run(c){
  const config=path.join(home,'.codex/config.toml'),original='# User configuration\nnotify = ["echo", "original-notify"]\n[model]\nname="untouched"\n';fs.writeFileSync(config,original);
  fs.writeFileSync(path.join(home,'.claude/settings.json'),JSON.stringify({hooks:{Stop:[{hooks:[{type:'command',command:'echo original'}]}]},permissions:{allow:['Read']}},null,4));
  await js('NotchAiSources.refresh()');await until(`document.getElementById('home-inbox').dataset.sourceState==='suggestion'`);await capture('first-detection');
- await js(`document.querySelector('.home-inbox-empty-actions button:last-child').click()`);await js(`NotchAiSources.dismiss('claude');NotchAiSources.dismiss('cursor');location.reload()`);
+ await js(`document.querySelector('.home-inbox-empty-actions button:last-child').click()`);await js(`NotchAiSources.dismiss('codex');NotchAiSources.dismiss('claude');NotchAiSources.dismiss('cursor');location.reload()`);
  await until(`window.NotchAiSources?.getState().ready && document.getElementById('home-inbox').dataset.sourceState==='none'`);assert.equal(await js(`NotchAiSources.getState().suggestion`),undefined,'dismiss persists across reload');await js('setMode(true)');
- await js(`setActiveTab('settings')`);await until(`document.querySelectorAll('.ai-source-row').length===3`);
+ await js(`setActiveTab('settings')`);await until(`document.querySelectorAll('.ai-source-row').length===8`);
  assert.equal(await js(`document.querySelectorAll('.ai-source-restart-hint').length`),0,'detection alone must not ask to restart');
  assert.equal(await js(`getComputedStyle(document.querySelector('.settings-column-primary')).overflowY`),'auto');
  await js(`document.querySelector('.ai-source-row[data-source="codex"] button').click()`);await until(`document.getElementById('ai-source-confirm').open`);
@@ -66,7 +66,7 @@ async function run(c){
  fs.writeFileSync(path.join(home,'.cursor/hooks.json'),JSON.stringify({version:1,hooks:{stop:[{command:"ELECTRON_RUN_AS_NODE=1 '/missing/node' '/missing/cursor-notify.js' '--pome-panel-hook=cursor'"}]}}));
  await js('NotchAiSources.refresh()');await capture('settings-mixed-states');
  await apply('claude');await apply('cursor','repair');
- await assertRestartSources(['codex','claude','cursor']);assert(await js(`document.getElementById('ai-sources-status').textContent.includes('完全退出并重新打开 Cursor')`));
+ await assertRestartSources(['cursor','codex','claude']);assert(await js(`document.getElementById('ai-sources-status').textContent.includes('完全退出并重新打开 Cursor')`));
  for(const source of ['claude','cursor'])assert.equal((await js(`NotchAiSources.test('${source}')`)).ok,true);
  await capture('settings-all-connected');
  const cursorFile=path.join(home,'.cursor/hooks.json'),legacyCursor=JSON.parse(fs.readFileSync(cursorFile));
@@ -80,7 +80,7 @@ async function run(c){
  await until(`!document.getElementById('ai-source-confirm').open && !NotchAiSources.getState().sources.find(row=>row.source==='cursor').summaryHookMissing`);
  assert.equal(JSON.parse(fs.readFileSync(cursorFile)).hooks.afterAgentResponse.length,1);
 
- await apply('codex','disconnect');await assertRestartSources(['claude','cursor']);assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('Codex')`),false);assert.deepEqual(readConfig(config,'codex').value.notify,['echo','original-notify']);await apply('codex');
+ await apply('codex','disconnect');await assertRestartSources(['cursor','claude']);assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('Codex')`),false);assert.deepEqual(readConfig(config,'codex').value.notify,['echo','original-notify']);await apply('codex');
  await js(`setActiveTab('home')`);const beforeToggle=await js(`({sizes:{...homeSizes},placements:JSON.parse(JSON.stringify(homeWorkingLayout.placements))})`);
  assert.equal((await js(`NotchHome.setModuleVisible('inbox',false)`)).ok,true);
  assert.equal(await js(`document.getElementById('home-inbox-placeholder').hidden`),false,'N1: vacated slot has add-module placeholder');

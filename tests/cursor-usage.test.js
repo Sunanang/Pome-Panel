@@ -47,14 +47,15 @@ const { createCursorUsageService, buildSnapshot } = require('../cursor-usage');
 const response = (body, status = 200) => new Response(JSON.stringify(body), { status });
 const signedOut = () => ({ ok: false, error: 'cursor_token_missing' });
 const period = percent => ({ planUsage: { autoPercentUsed: percent, apiPercentUsed: 20 } });
-function fetcher(handler) { return async (url, options) => url.endsWith('GetSandUsageStatus') ? response({ usagePercent: 30 }) : handler(options); }
+function fetcher(handler) { return async (_url, options) => handler(options); }
 
 test('Cursor preserves unknown percentages instead of fabricating full remaining quota', () => {
   for (const value of [null, undefined, '', ' ', true, false, 'bad', Infinity]) {
-    const data = buildSnapshot({ planUsage: { autoPercentUsed: value, apiPercentUsed: value } }, null, {});
-    assert.equal(data.auto.percent, null); assert.equal(data.other.percent, null); assert.equal(data.grokBot.percent, null);
+    const data = buildSnapshot({ planUsage: { autoPercentUsed: value, apiPercentUsed: value } }, {});
+    assert.equal(data.auto.percent, null); assert.equal(data.other.percent, null);
+    assert.equal(data.grokBot, undefined);
   }
-  assert.equal(buildSnapshot(period(0), {}, {}).auto.percent, 0);
+  assert.equal(buildSnapshot(period(0), {}).auto.percent, 0);
 });
 test('Cursor cache fingerprints the whole token and never leaks credentials', async () => {
   let calls = 0;
@@ -68,12 +69,11 @@ test('Cursor cache fingerprints the whole token and never leaks credentials', as
   assert.equal(JSON.stringify(b).includes('identical-prefix'), false);
   assert.equal((await service.getUsage({ manualToken: 'identical-prefix-B' })).cached, true);
 });
-test('optional Grok failure preserves Cursor main pools and exposes a pool warning', async () => {
-  const service = createCursorUsageService({ readAuth: signedOut, fetchImpl: async url =>
-    url.endsWith('GetSandUsageStatus') ? response({}, 503) : response(period(42)) });
+test('Cursor period usage no longer embeds Grok Bot sand pool', async () => {
+  const service = createCursorUsageService({ readAuth: signedOut, fetchImpl: async () => response(period(42)) });
   const result = await service.getUsage({ manualToken: 'fixture' });
   assert.equal(result.ok, true); assert.equal(result.auto.percent, 42);
-  assert.equal(result.grokBot.percent, null); assert.ok(result.poolWarnings.grokBot);
+  assert.equal(result.grokBot, undefined); assert.equal(result.poolWarnings, undefined);
 });
 test('Cursor transient failure keeps original data/time, while invalid credentials clear it', async () => {
   let time = 100000, status = 200;

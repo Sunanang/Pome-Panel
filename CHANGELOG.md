@@ -6,6 +6,17 @@
 
 ## [未发布]
 
+### 多 AI 提供商（额度与完成矩阵）
+
+- 修复 Copilot 无限额度被误判耗尽及顶层重置时间遗漏，全部无限时显示“无限制”；Grok Bot 支持 ISO 与秒/毫秒时间并按重置时间刷新；Antigravity 支持 summary 包装、名称别名与 tagged remainingFraction。新增参考项目响应样本及界面回归。
+
+- 修复 Copilot 凭据主机归属、Grok 团队 ID 与账本金额解析、Antigravity 分组额度与空数据误报、认证失效缓存复活、Claude 钩子能力判断和 Token 卡语言更新；补齐提供商密钥设置读取白名单及进程重启验证。Manus 改用官方 v2 可用积分接口与 API Key 请求头，按 total_credits 显示余额，不虚构百分比。
+
+- 新增统一 `aiProviderCatalog`：稳定 ID 覆盖 Cursor / Codex / Claude / Grok Bot / Grok / Copilot / Antigravity / Manus；额度与完成能力分列，未验证能力保持 `partial`/`unsupported`。
+- 首页额度 UI 支持 N 家动态面板与切换；Grok Bot 从 Cursor 主额度拆出独立卡（依赖 Cursor 登录）；Grok 标明 xAI 独立归属。
+- 新增 Claude / Copilot / Grok / Antigravity / Manus 用量适配（本机凭据或 safeStorage Token、host 白名单）；完成 HTTP 白名单仍仅 Codex / Claude / Cursor，目录化驱动。
+- 设置页同一列表展示完成与额度能力；补充归属说明、图标与中英文文案。致谢参考仓接口知识，不嵌入第三方菜单栏 App。
+
 ### 历史记录清理
 
 - 剪贴板统一保留最新 100 条普通记录；收藏长期保留且不占名额，取消收藏后恢复普通记录限额。本地新增、载入、恢复与 NAS 同步合并统一裁剪，淘汰同步记录会发出删除，图片清理保护仍被引用的文件。

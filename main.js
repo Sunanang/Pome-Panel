@@ -44,11 +44,25 @@ const { createSyncRecovery } = require('./syncRecovery');
 function recoveryStore() { return createSyncRecovery(path.join(app.getPath('userData'), 'sync-recovery.json')); }
 const platformPolicy = require('./platform');
 const { loadAdapter } = require('./platform-adapters');
+const { completionIds: catalogCompletionIds } = require('./aiProviderCatalog');
 const { fetchCursorUsage, resetCursorUsage, readAuthToken: readCursorAuthToken } = require('./cursor-usage');
 const { readCodexUsage } = require('./codex-usage');
 const { readLocalCodexToken } = require('./codex-auth');
 const { createCodexUsageService } = require('./codex-usage-remote');
+const { createGrokbotUsageService } = require('./grokbot-usage');
+const { createClaudeUsageService } = require('./claude-usage');
+const { createCopilotUsageService } = require('./copilot-usage');
+const { createGrokUsageService } = require('./grok-usage');
+const { createAntigravityUsageService } = require('./antigravity-usage');
+const { createManusUsageService } = require('./manus-usage');
 const codexUsageService = createCodexUsageService({ readLocal: readCodexUsage });
+const grokbotUsageService = createGrokbotUsageService();
+const claudeUsageService = createClaudeUsageService();
+const copilotUsageService = createCopilotUsageService();
+const grokUsageService = createGrokUsageService();
+const antigravityUsageService = createAntigravityUsageService();
+const manusUsageService = createManusUsageService();
+const PROVIDER_TOKEN_IDS = new Set(['copilot', 'grok', 'antigravity', 'manus']);
 // 能力层 v2（P0-1）：启动时按平台 + 运行时（原生模块是否可用、用户开关）解析一次，
 // 通过 additionalArguments 下发给渲染层；运行期变化走 capabilities:changed。
 // 这里的初值不读设置：模块加载早于 app.whenReady，不能碰 screen / 设置文件。
@@ -352,7 +366,7 @@ const TASK_NOTIFICATION_BODY_LIMIT = 64 * 1024;
 const TASK_NOTIFICATION_HOST = '127.0.0.1';
 const TASK_NOTIFICATION_PORT = 43821;
 // /notify/<source> 的来源白名单：只放行已知 Agent，其余一律 404。
-const TASK_NOTIFICATION_SOURCES = new Set(['codex', 'claude', 'cursor']);
+const TASK_NOTIFICATION_SOURCES = new Set(catalogCompletionIds());
 const TODO_REMINDER_LEAD_MS = 60 * 60 * 1000;
 
 let mainWindow = null;
@@ -1599,6 +1613,9 @@ function readAppSettings() {
     ...appSettingsLayoutPreferences(stored),
     encryptedCursorToken: typeof stored.encryptedCursorToken === 'string' ? stored.encryptedCursorToken : '',
     encryptedCodexToken: typeof stored.encryptedCodexToken === 'string' ? stored.encryptedCodexToken : '',
+    encryptedProviderTokens: Object.fromEntries([...PROVIDER_TOKEN_IDS].map(id => [id,
+      typeof stored.encryptedProviderTokens?.[id] === 'string' ? stored.encryptedProviderTokens[id] : ''])),
+    grokTeamId: typeof stored.grokTeamId === 'string' ? stored.grokTeamId : '',
   };
 }
 
@@ -1685,7 +1702,7 @@ function syncDockMetrics() {
 
 function publicAppSettings() {
   const settings = readAppSettings();
-  const { encryptedCursorToken, encryptedCodexToken, ...publicSettings } = settings;
+  const { encryptedCursorToken, encryptedCodexToken, encryptedProviderTokens, ...publicSettings } = settings;
   return { ...publicSettings, localization: localizationSnapshot(), autoLaunch: isAutoLaunchEnabled() };
 }
 
@@ -4696,6 +4713,71 @@ ipcMain.handle('codex:usage', async (_event, options = {}) => {
   } while (result.superseded); // A save/clear cancels old requests; never return the previous token's state.
   return result;
 });
+ipcMain.handle('grokbot:usage', async (_event, options = {}) => {
+  try {
+    let data;
+    do { data = await grokbotUsageService.getUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
+    while (data.superseded);
+    return { ...data, detected: readCursorAuthToken().ok === true, configured: Boolean(readAppSettings().encryptedCursorToken) };
+  } catch {
+    return { ok: false, error: 'grokbot_usage_failed', detected: readCursorAuthToken().ok === true,
+      configured: Boolean(readAppSettings().encryptedCursorToken) };
+  }
+});
+ipcMain.handle('claude:usage', async (_event, options = {}) => {
+  try {
+    let data;
+    do { data = await claudeUsageService.getUsage({ force: options?.force === true }); }
+    while (data.superseded);
+    return data;
+  } catch {
+    return { ok: false, error: 'claude_usage_failed', detected: false, configured: false };
+  }
+});
+ipcMain.handle('copilot:usage', async (_event, options = {}) => {
+  try {
+    let data;
+    do { data = await copilotUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('copilot') }); }
+    while (data.superseded);
+    return data;
+  } catch {
+    return { ok: false, error: 'copilot_usage_failed', detected: false, configured: Boolean(readProviderManualToken('copilot')) };
+  }
+});
+ipcMain.handle('grok:usage', async (_event, options = {}) => {
+  try {
+    let data;
+    do { data = await grokUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('grok'), teamId: readAppSettings().grokTeamId }); }
+    while (data.superseded);
+    return data;
+  } catch {
+    return { ok: false, error: 'grok_usage_failed', detected: false, configured: Boolean(readProviderManualToken('grok')) };
+  }
+});
+ipcMain.handle('antigravity:usage', async (_event, options = {}) => {
+  try {
+    let data;
+    do { data = await antigravityUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('antigravity') }); }
+    while (data.superseded);
+    return data;
+  } catch {
+    return { ok: false, error: 'antigravity_usage_failed', detected: false, configured: Boolean(readProviderManualToken('antigravity')) };
+  }
+});
+ipcMain.handle('manus:usage', async (_event, options = {}) => {
+  try {
+    let data;
+    do { data = await manusUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('manus') }); }
+    while (data.superseded);
+    return data;
+  } catch {
+    return { ok: false, error: 'manus_usage_failed', detected: false, configured: Boolean(readProviderManualToken('manus')) };
+  }
+});
+ipcMain.handle('ai-provider:token-status', (_event, providerId) => providerTokenStatus(providerId));
+ipcMain.handle('ai-provider:set-token', (_event, providerId, token, options) => typeof token === 'string' && token.trim()
+  ? writeProviderManualToken(providerId, token, options) : { ok: false, error: 'token_required' });
+ipcMain.handle('ai-provider:clear-token', (_event, providerId) => writeProviderManualToken(providerId, ''));
 ipcMain.handle('codex:token-status', () => codexTokenStatus());
 ipcMain.handle('codex:read-local-token', async (event) => {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
@@ -4835,6 +4917,7 @@ function writeCursorManualToken(token) {
   }
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
   resetCursorUsage?.();
+  grokbotUsageService.reset();
   const status = cursorTokenStatus();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cursor:token-changed', status);
   return status;
@@ -4859,6 +4942,52 @@ function writeCodexManualToken(token) {
   codexUsageService.reset();
   const status = codexTokenStatus();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('codex:token-changed', status);
+  return status;
+}
+
+function readProviderManualToken(providerId) {
+  if (!PROVIDER_TOKEN_IDS.has(providerId)) return '';
+  const bag = readAppSettings().encryptedProviderTokens;
+  if (!bag || typeof bag !== 'object') return '';
+  return decryptStoredSecret(bag[providerId]).trim();
+}
+function providerTokenStatus(providerId) {
+  if (!PROVIDER_TOKEN_IDS.has(providerId)) return { ok: false, error: 'unsupported_provider' };
+  const configured = Boolean(readProviderManualToken(providerId));
+  return {
+    ok: true, providerId, configured, secureStorage: safeStorage.isEncryptionAvailable(),
+    label: configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : PomeI18n.t("copy.noManualTokenConfigured.a2ebce"),
+    state: configured ? 'saved' : 'empty',
+    ...(providerId === 'grok' ? { teamId: readAppSettings().grokTeamId } : {}),
+  };
+}
+function writeProviderManualToken(providerId, token, options = {}) {
+  if (!PROVIDER_TOKEN_IDS.has(providerId)) return { ok: false, error: 'unsupported_provider' };
+  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
+  const next = readAppSettings();
+  const bag = next.encryptedProviderTokens && typeof next.encryptedProviderTokens === 'object'
+    ? { ...next.encryptedProviderTokens } : {};
+  const trimmed = String(token || '').trim();
+  if (providerId === 'grok' && trimmed) {
+    const teamId = String(options?.teamId ?? next.grokTeamId ?? '').trim();
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(teamId)) return { ok: false, error: 'grok_team_required' };
+    next.grokTeamId = teamId;
+  }
+  if (providerId === 'grok' && !trimmed) next.grokTeamId = '';
+  if (!trimmed) bag[providerId] = '';
+  else {
+    const encrypted = encryptStoredSecret(trimmed);
+    if (!encrypted) return { ok: false, error: 'encrypt_failed' };
+    bag[providerId] = encrypted;
+  }
+  next.encryptedProviderTokens = bag;
+  if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  if (providerId === 'copilot') copilotUsageService.reset();
+  if (providerId === 'grok') grokUsageService.reset();
+  if (providerId === 'antigravity') antigravityUsageService.reset();
+  if (providerId === 'manus') manusUsageService.reset();
+  const status = providerTokenStatus(providerId);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('ai-provider:token-changed', status);
   return status;
 }
 

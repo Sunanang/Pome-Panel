@@ -9,22 +9,36 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
   const FALLBACK = {
     get title() { return pomeLocaleRendererAiUsageDomain.t("copy.noAiToolsConnectedYet.91c4b3"); },
     get body() { return pomeLocaleRendererAiUsageDomain.t("copy.signInToCursorLocallyOrUse.3b099a"); },
-    get miniTitle() { return pomeLocaleRendererAiUsageDomain.t("copy.noAiToolsConnected.116356"); }, get miniBody() { return pomeLocaleRendererAiUsageDomain.t("copy.neitherCursorNorCodexWasDetected.243e58"); },
+    get miniTitle() { return pomeLocaleRendererAiUsageDomain.t("copy.noAiToolsConnected.116356"); },
+    get miniBody() { return pomeLocaleRendererAiUsageDomain.t("copy.neitherCursorNorCodexWasDetected.243e58"); },
   };
   function available(data) {
     if (!data) return false;
     if ('detected' in data || 'configured' in data) return Boolean(data.detected || data.configured || data.manualTokenConfigured);
-    return Boolean(data.manualTokenConfigured || data.ok && (data.updatedAt || data.authSource));
+    return Boolean(data.manualTokenConfigured || data.ok && (data.updatedAt || data.authSource || data.fetchedAt));
   }
-  function providers(cursor, codex) {
-    return registry.providers.map(provider => provider.id).filter((id) => available(id === 'cursor' ? cursor : codex));
+  function asSnapshots(first, second) {
+    if (first && typeof first === 'object' && !Array.isArray(first) && (second === undefined || second === null)
+      && !('detected' in first || 'configured' in first || 'ok' in first || 'authSource' in first || 'manualTokenConfigured' in first
+        || 'auto' in first || 'primary' in first || 'windows' in first)) {
+      return first;
+    }
+    // Backward-compatible (cursor, codex) signature used by older tests/callers.
+    return { cursor: first, codex: second };
   }
-  function title(ids) { return ids.length === 1 ? pomeLocaleRendererAiUsageDomain.t("copy.remainingQuota.68dc7b", { arg1: (registry.get(ids[0])?.label || ids[0]) }) : pomeLocaleRendererAiUsageDomain.t("copy.aiQuota.faa20c"); }
+  function providers(first, second) {
+    const snapshots = asSnapshots(first, second);
+    return registry.usageProviders().map((provider) => provider.id).filter((id) => available(snapshots[id]));
+  }
+  function title(ids) {
+    return ids.length === 1
+      ? pomeLocaleRendererAiUsageDomain.t("copy.remainingQuota.68dc7b", { arg1: (registry.get(ids[0])?.label || ids[0]) })
+      : pomeLocaleRendererAiUsageDomain.t("copy.aiQuota.faa20c");
+  }
   function percent(value) {
     if (value == null || typeof value === 'boolean' || typeof value === 'string' && !value.trim()) return null;
     const n = Number(value); return Number.isFinite(n) ? n : null;
   }
-  // Keep raw used percentages in provider data; convert only for presentation.
   function remaining(used) { const n = percent(used); return n == null ? null : Math.min(100, Math.max(0, 100 - n)); }
   function lowestRemaining(data, id) {
     if (data?.ok === false) return null;
@@ -32,13 +46,19 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
       .map((window) => remaining(window?.percent)).filter((value) => value != null);
     return values.length ? Math.min(...values) : null;
   }
-  function chooseTab(saved, ids, cursor, codex) {
+  function chooseTab(saved, ids, first, second) {
     if (ids.includes(saved)) return saved;
     if (ids.length === 1) return ids[0];
     if (!ids.length) return null;
-    return (lowestRemaining(codex, 'codex') ?? 100) < (lowestRemaining(cursor, 'cursor') ?? 100) ? 'codex' : 'cursor';
+    const snapshots = asSnapshots(first, second);
+    let best = ids[0];
+    let bestRem = lowestRemaining(snapshots[ids[0]], ids[0]) ?? 100;
+    for (const id of ids.slice(1)) {
+      const rem = lowestRemaining(snapshots[id], id) ?? 100;
+      if (rem < bestRem) { best = id; bestRem = rem; }
+    }
+    return best;
   }
-  // Thresholds use the unrounded remainder so warning behavior stays equivalent.
   function level(value) { const n = percent(value); return n == null ? 'ok' : n <= 5 ? 'critical' : n <= 20 ? 'warn' : 'ok'; }
   function formatPercent(value) { const n = percent(value); return n == null ? '--%' : `${Math.round(n)}%`; }
   function clock(value) {
@@ -76,15 +96,13 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     return ['primary', 'secondary'].filter(key => data?.[key]).map(key => ({ key,
       name: windowLabel(data[key], key === 'primary' ? pomeLocaleRendererAiUsageDomain.t("copy.primaryQuota.b2a098") : pomeLocaleRendererAiUsageDomain.t("copy.secondaryQuota.0a9d1a")), windowUsage: data[key] }));
   }
-  // Poll active views normally and once just after a known reset. An unchanged,
-  // expired snapshot must not produce a tight retry loop.
   function refreshDelay(snapshots, visible, now = Date.now()) {
     const normal = visible ? 5 * 60000 : 15 * 60000;
     if (!visible) return normal;
-    const resets = registry.providers.flatMap(({ id }) => quotaRows(snapshots[id], id))
+    const resets = registry.usageProviders().flatMap(({ id }) => quotaRows(snapshots[id], id))
       .map(row => row.windowUsage?.resetsAt * 1000).filter(time => Number.isFinite(time) && time > now);
     return Math.max(1000, Math.min(normal, ...resets.map(time => time - now + 1000)));
   }
   function planLabel(plan) { return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : ''; }
-  return { registry, windowLabel, quotaRows, refreshDelay, TAB_KEY, FALLBACK, available, providers, title, remaining, lowestRemaining, chooseTab, level, percent, formatPercent, clock, expired, resetText, planLabel };
+  return { registry, windowLabel, quotaRows, refreshDelay, TAB_KEY, FALLBACK, available, providers, title, remaining, lowestRemaining, chooseTab, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots };
 });

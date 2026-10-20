@@ -171,3 +171,15 @@ test('Cursor repairs a stale response hook and removes orphaned Pome response en
  data=JSON.parse(fs.readFileSync(files.cursor));delete data.hooks.stop;fs.writeFileSync(files.cursor,JSON.stringify(data));
  p=await service.preview('cursor','disconnect');await service.apply(p.token);assert.equal(JSON.parse(fs.readFileSync(files.cursor)).hooks.afterAgentResponse,undefined);
 });
+
+test('Claude waiting capabilities require complete installed observation hooks', async t => {
+ const {home,service,files}=fixture(t);
+ assert.equal((await service.status('claude')).attentionCapabilities.input,'unsupported');
+ const plan=await service.preview('claude');await service.apply(plan.token);
+ assert.equal((await service.status('claude')).attentionCapabilities.input,'partial');
+ const config=JSON.parse(fs.readFileSync(files.claude,'utf8'));delete config.hooks.Notification;
+ fs.writeFileSync(files.claude,JSON.stringify(config));
+ const partial=await service.status('claude');assert.equal(partial.attentionHookMissing,true);
+ for(const key of ['attention','input','select','approve','autoResolve'])assert.equal(partial.attentionCapabilities[key],'unsupported');
+ assert.equal((await createAiSourceHooks({homeDir:path.join(home,'missing')}).status('claude')).attentionCapabilities.input,'unsupported');
+});

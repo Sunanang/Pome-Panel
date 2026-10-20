@@ -164,11 +164,14 @@ async function checkCodexTokenFlow(contents) {
     const button = document.getElementById('settings-codex-token-save');
     button.click();
     for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
-    await window.NotchAiUsage.refresh();
+    await window.NotchAiUsage.refresh({ force: true });
+    for (let i = 0; i < 50 && !/^更新于/.test(document.getElementById('codex-usage-footnote')?.textContent || ''); i++) {
+      await new Promise(r => setTimeout(r, 40));
+    }
     return { status: await window.notchAPI.getCodexTokenStatus(),
       value: document.getElementById('settings-codex-token').value,
       settings: await window.notchAPI.getAppSettings(),
-      usage: await window.notchAPI.getCodexUsage(),
+      usage: await window.notchAPI.getCodexUsage({ force: true }),
       percent: document.querySelector('#codex-usage-rows strong').textContent,
       footer: document.getElementById('codex-usage-footnote').textContent,
       leaked: JSON.stringify(collectLocalStorageSnapshot()).includes('fixture-codex-token') };

@@ -19,10 +19,16 @@ run(process.execPath, ['--test', ...fs.readdirSync(path.join(root, 'tests')).fil
 env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-test.log');
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
-for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'home-layout-swap', 'sun-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'notification', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'localization', 'normal-startup']) {
+env.NODE_OPTIONS = `${env.NODE_OPTIONS || ''} --require=${JSON.stringify(path.join(root, 'tests/provider-usage-fixtures.cjs'))}`.trim();
+for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'provider-credentials', 'home-layout-swap', 'sun-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'notification', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'localization', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   run(require('electron'), [`tests/${file}.electron.js`]);
+  if (file === 'provider-credentials') {
+    env.POME_PROVIDER_RESTART = '1';
+    run(require('electron'), ['tests/provider-credentials.electron.js']);
+    delete env.POME_PROVIDER_RESTART;
+  }
   if (file === 'work-hub' || file === 'work-hub-nas') {
     env.POME_RESTART_CHECK = file === 'work-hub' ? 'inbox' : 'paused-sync';
     run(require('electron'), ['tests/work-hub-restart.electron.js']);
@@ -65,6 +71,13 @@ for (const file of [
   'codex-usage-remote.js',
   'codex-auth.js',
   'codex-thread-metadata.js',
+  'aiProviderCatalog.js',
+  'grokbot-usage.js',
+  'claude-usage.js',
+  'copilot-usage.js',
+  'grok-usage.js',
+  'antigravity-usage.js',
+  'manus-usage.js',
   'renderer/ai-provider-registry.js',
   'renderer/ai-usage-domain.js',
   'renderer/ai-usage.js',

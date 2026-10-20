@@ -50,7 +50,7 @@ Use the menu bar or tray to show the panel, configure the summon shortcut, enabl
 | Links | Save public HTTP/HTTPS URLs. Title fetching rejects local addresses, private networks and unsafe redirects. |
 | Recordings | Audio stays in the local `recordings/` directory. Optional Model Studio Qwen3-ASR live transcription uses an encrypted API key or an environment variable. |
 | Credentials | Accounts, passwords and API keys use system secure storage; the page cannot directly read plaintext. New and edited passwords are masked by default. |
-| Settings | Language, transcription and smart naming, AI quota, AI activity sources, NAS sync, feature visibility, Home modules, mirror cover, default page, summon shortcut, dock position, data folder and launch at login. |
+| Settings | Language, transcription and smart naming, AI providers (completion hooks + usage tokens / ownership), NAS sync, feature visibility, Home modules, mirror cover, default page, summon shortcut, dock position, data folder and launch at login. |
 
 Home edit mode swaps cards while preserving their sizes. Packing keeps the swapped pair fixed and may expand other cards to fill holes. If the requested swap does not fit, it reports insufficient space and retains the saved layout.
 
@@ -86,7 +86,7 @@ The connector uses Electron's bundled Node runtime rather than relying on PATH. 
 
 ### AI attention reminders (development)
 
-**Scope:** Completion reminders work for all three sources. Waiting for input/choice/approval currently covers Claude only (partial). Codex and Cursor waiting observers are not enabled; Settings shows each capability, and Pome will not invent waiting states by guessing or polling.
+**Scope:** Completion reminders can connect Codex / Claude / Cursor. Usage follows each provider’s capability matrix in Settings. Waiting for input/choice/approval currently covers Claude only (partial). Codex and Cursor waiting observers are not enabled; Pome will not invent waiting states by guessing or polling.
 
 Validated v2 events use the same loopback endpoints and keep input, choice and approval requests separate from completion history. The final blue B design uses a 400×146 macOS window with a 32px black cap and a 384×114 Windows card. Existing completion sizes are preserved. Safe question summaries fit one line; Settings → AI completion sources → Pending shows the complete safe summary. Sensitive content is hidden before persistence.
 
@@ -100,15 +100,17 @@ Entire Codex responses that exactly match an empty suggestions/exclude object (o
 
 ## AI quota
 
-Only detected providers or providers with a configured token appear. With both Codex and Cursor, mini/small remember the selected provider locally; the initial choice has the lowest remaining quota. Medium places providers side by side; large stacks them. Layout retains the existing `cursor` module ID.
+Only detected providers or providers with a configured token appear. The shared catalog covers Cursor, Codex, Claude, Grok Bot, Grok, Copilot, Antigravity and Manus. With two or more providers, mini/small (and any count above two) use tabs and remember the selection locally; the first default is the lowest remaining quota. Exactly two providers at medium size sit side by side; large stacks them. Grok Bot is a separate Cursor sand-pool card (requires Cursor sign-in), distinct from standalone xAI Grok. Layout retains the existing `cursor` module ID.
 
-Quota is **remaining**, rounded from the original used percentage. A fuller bar means more remains. At ≤20% it is orange; at ≤5% it is red. Unknown remains `--%`; expired samples are gray and request refresh. Stored usage retains the original used percentage. Periods, extra models, plans, credits and timestamps come from actual provider data. Refresh follows visibility and known reset times; manual refresh runs immediately.
+Provider quota limits: Grok requires an xAI Management API key and team ID, and displays posted prepaid USD balance rather than an invented quota percentage. Manus uses the documented /v2/usage.availableCredits endpoint on api.manus.ai with x-manus-api-key and displays data.total_credits as spendable credits, without inferring a percentage from the monthly entitlement. Copilot credentials are scoped to github.com. Antigravity requires measured quota buckets; empty summaries remain unavailable.
 
-Cursor reads the local login state by default. **Get local token** reads a signed-in Cursor on Mac or Windows into a password field; Save applies it. No sqlite3 or Python is required. Saved tokens take priority, are encrypted locally and sync as encrypted AI configuration. Invalid saved tokens fall back to the local login. Clear restores local-login mode and propagates the saved-token removal. Unsaved input is not synced. Network failures retain the same account's last successful value and original timestamp; logout, account change and authentication failure do not reuse another account's cache. Optional Grok Bot quota failures do not block the main quota.
+Quota is **remaining**, rounded from the original used percentage. A fuller bar means more remains. At ≤20% it is orange; at ≤5% it is red. Unknown remains `--%`; expired samples are gray and request refresh. Periods, extra models, plans, credits and timestamps come from actual provider data. Refresh follows visibility and known reset times.
 
-Codex **Get local token** reads only the access token from local `auth.json` when you explicitly click it; Save encrypts it with `safeStorage`. It is excluded from workspace files, NAS sync and logs. No refresh token is extracted or used, and tokens are not silently renewed. A saved token queries `https://chatgpt.com/backend-api/wham/usage` with a 10-second timeout. Otherwise, or on network failure, bounded local reads use recent `token_count` entries under `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` (default `~/.codex`; Windows also checks `%USERPROFILE%\.codex`).
+Cursor reads the local login state by default. **Get local token** reads a signed-in Cursor into a password field; Save applies it. Saved tokens take priority, are encrypted locally and sync as encrypted AI configuration. Invalid saved tokens fall back to local login. Network failures retain the same account's last successful value; authentication failure does not reuse another account's cache.
 
-401/403 marks a Codex token invalid and offers re-acquisition or settings; local data remains a fallback. Saving a token clears that state and refreshes. Network errors and 5xx do not invalidate it. Without local data, a network failure preserves the previous successful remote sample and its original time. Reset labels use local dates, including tomorrow when appropriate.
+Claude usage uses local Claude Code OAuth. Copilot / Grok / Antigravity accept optional manual tokens via `safeStorage`. Completion HTTP still accepts only Codex / Claude / Cursor (catalog-driven).
+
+Codex **Get local token** reads only the access token from local `auth.json` when you explicitly click it; Save encrypts it with `safeStorage`. A saved token queries ChatGPT usage with a short timeout; otherwise bounded local session reads apply. 401/403 marks a token invalid with local fallback; network errors do not. Reset labels use local dates.
 
 ## Data, backup and NAS sync
 

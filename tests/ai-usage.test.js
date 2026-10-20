@@ -3,28 +3,36 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const D = require('../renderer/ai-usage-domain');
 const absent = { ok: true, detected: false, configured: false };
-const cursor = { detected: true, auto: { percent: 30 }, other: { percent: 45 }, grokBot: { percent: 10 } };
+const cursor = { detected: true, auto: { percent: 30 }, other: { percent: 45 } };
 const codex = { detected: true, primary: { percent: 86 }, secondary: { percent: 15 } };
+const grokbot = { detected: true, ok: true, primary: { percent: 90 } };
 test('AI usage four visibility combinations and titles have no empty provider', () => {
-  for (const [c, d, ids, title] of [[absent, absent, [], 'AI 剩余额度'], [cursor, absent, ['cursor'], 'Cursor 剩余额度'],
-    [absent, codex, ['codex'], 'Codex 剩余额度'], [cursor, codex, ['cursor', 'codex'], 'AI 剩余额度']]) {
-    assert.deepEqual(D.providers(c, d), ids);
+  for (const [snapshots, ids, title] of [
+    [{ cursor: absent, codex: absent }, [], 'AI 剩余额度'],
+    [{ cursor, codex: absent }, ['cursor'], 'Cursor 剩余额度'],
+    [{ cursor: absent, codex }, ['codex'], 'Codex 剩余额度'],
+    [{ cursor, codex }, ['cursor', 'codex'], 'AI 剩余额度'],
+  ]) {
+    assert.deepEqual(D.providers(snapshots), ids);
     assert.equal(D.title(ids), title);
   }
+  assert.deepEqual(D.providers(cursor, codex), ['cursor', 'codex'], 'legacy dual-arg signature still works');
 });
 test('manual-only and failing configured providers remain visible', () => {
-  assert.deepEqual(D.providers({ ok: false, configured: true }, { ok: true, configured: true }), ['cursor', 'codex']);
+  assert.deepEqual(D.providers({ cursor: { ok: false, configured: true }, codex: { ok: true, configured: true } }), ['cursor', 'codex']);
   assert.equal(D.available({ ...absent, ok: true, authSource: 'local' }), false, 'cached Cursor usage must disappear after logout');
 });
 test('first tab uses the least remaining pool; persisted tab never follows changing percentages', () => {
-  assert.equal(D.chooseTab(null, ['cursor', 'codex'], cursor, codex), 'codex');
-  assert.equal(D.chooseTab('cursor', ['cursor', 'codex'], cursor, codex), 'cursor');
-  assert.equal(D.chooseTab('codex', ['cursor', 'codex'], { ...cursor, auto: { percent: 100 } }, codex), 'codex');
-  assert.equal(D.chooseTab('codex', ['cursor'], cursor, absent), 'cursor');
-  assert.equal(D.chooseTab(null, [], absent, absent), null);
-  assert.equal(D.chooseTab(null, ['cursor', 'codex'], {}, { primary: { percent: 0 } }), 'cursor', 'ties preserve Cursor default');
-  assert.equal(D.chooseTab(null, ['cursor', 'codex'], {}, codex), 'codex');
-  assert.equal(D.chooseTab(null, ['cursor', 'codex'], { auto: { percent: 79.6 } }, { primary: { percent: 79.7 } }), 'codex', 'compare unrounded remainders');
+  const both = { cursor, codex };
+  assert.equal(D.chooseTab(null, ['cursor', 'codex'], both), 'codex');
+  assert.equal(D.chooseTab('cursor', ['cursor', 'codex'], both), 'cursor');
+  assert.equal(D.chooseTab('codex', ['cursor', 'codex'], { ...both, cursor: { ...cursor, auto: { percent: 100 } } }), 'codex');
+  assert.equal(D.chooseTab('codex', ['cursor'], { cursor, codex: absent }), 'cursor');
+  assert.equal(D.chooseTab(null, [], {}), null);
+  assert.equal(D.chooseTab(null, ['cursor', 'codex'], { cursor: {}, codex: { primary: { percent: 0 } } }), 'cursor', 'ties preserve catalog order');
+  assert.equal(D.chooseTab(null, ['cursor', 'codex'], { cursor: {}, codex }), 'codex');
+  assert.equal(D.chooseTab(null, ['cursor', 'codex'], { cursor: { auto: { percent: 79.6 } }, codex: { primary: { percent: 79.7 } } }), 'codex', 'compare unrounded remainders');
+  assert.equal(D.chooseTab(null, ['cursor', 'codex', 'grokbot'], { cursor, codex, grokbot }), 'grokbot');
 });
 test('remaining presentation handles zero, full, excess, decimals and missing without changing used data', () => {
   for (const [used, remaining, text] of [[0, 100, '100%'], [100, 0, '0%'], [125, 0, '0%'],
@@ -39,7 +47,7 @@ test('remaining presentation handles zero, full, excess, decimals and missing wi
   const snapshot = JSON.stringify({ cursor, codex });
   assert.equal(D.lowestRemaining(cursor, 'cursor'), 55);
   assert.equal(D.lowestRemaining(codex, 'codex'), 14);
-  D.chooseTab(null, ['cursor', 'codex'], cursor, codex);
+  D.chooseTab(null, ['cursor', 'codex'], { cursor, codex });
   assert.equal(JSON.stringify({ cursor, codex }), snapshot);
 });
 test('remaining warning thresholds and hidden tab indicators use unrounded values', () => {
@@ -76,7 +84,7 @@ test('resetText uses local calendar dates for today, tomorrow, week, month and y
 test('fallback has calm copy for full and mini layouts', () => {
   assert.equal(D.FALLBACK.title, '还没有连接 AI 工具');
   assert.equal(D.FALLBACK.miniTitle, '未连接 AI 工具');
-  assert.equal(D.FALLBACK.miniBody, 'Cursor、Codex 都未检测到');
+  assert.equal(D.FALLBACK.miniBody, '尚未检测到已连接的 AI 工具');
   assert.match(D.FALLBACK.body, /在本机登录 Cursor，或用过一次 Codex/);
 });
 
@@ -89,8 +97,11 @@ test('dynamic quota labels use actual cadence including weekly-only primary and 
   assert.equal(rows.length, 1); assert.equal(rows[0].name, '每周额度');
   assert.equal(D.quotaRows({ primary: {} }, 'codex')[0].name, '主要额度');
 });
-test('registry describes only implemented providers and dynamic model rows participate in remaining quota', () => {
-  assert.deepEqual(D.registry.providers.map(provider => provider.id), ['cursor', 'codex']);
+test('registry catalogs eight providers and dynamic model rows participate in remaining quota', () => {
+  assert.deepEqual(D.registry.ids(), ['cursor', 'codex', 'claude', 'grokbot', 'grok', 'copilot', 'antigravity', 'manus']);
+  assert.equal(D.registry.get('cursor').pools.length, 2);
+  assert.equal(D.registry.get('grokbot').capabilities.completion, 'unsupported');
+  assert.deepEqual(D.registry.completionIds(), ['cursor', 'codex', 'claude']);
   const data = { windows: [{ id: 'spark', label: 'Spark', percent: 98, windowMinutes: 300 }] };
   assert.equal(D.quotaRows(data, 'codex')[0].name, 'Spark · 5 小时额度');
   assert.equal(D.lowestRemaining(data, 'codex'), 2);

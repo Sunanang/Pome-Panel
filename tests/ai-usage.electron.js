@@ -5,7 +5,7 @@ const { app, BrowserWindow } = require('electron');
 app.setPath('userData', process.env.TODO_TEST_USER_DATA);
 const now = new Date().toISOString();
 const cursor = { ok: true, detected: true, authSource: 'local', fetchedAt: now,
-  auto: { percent: 40 }, other: { percent: 12 }, grokBot: { percent: 20, resetAt: now }, billing: { cycleEnd: now } };
+  auto: { percent: 40 }, other: { percent: 12 }, billing: { cycleEnd: now } };
 const codex = { ok: true, detected: true, plan: 'plus', updatedAt: now,
   primary: { percent: 86, windowMinutes: 300, resetsAt: Date.now() / 1000 + 3600 }, secondary: { percent: 10, windowMinutes: 10080, resetsAt: Date.now() / 1000 + 86400 }, credits: { balance: 20 } };
 const missing = { ok: true, detected: false, configured: false };
@@ -23,8 +23,14 @@ async function main() {
   async function supply(c, d) {
     return js(`(async () => {
       window.fixtureCursor = ${JSON.stringify(c)}; window.fixtureCodex = ${JSON.stringify(d)};
-      window.notchAPI = { getCursorUsage: async ({force}) => { window.cursorForce = force; return window.fixtureCursor; },
-        getCodexUsage: async () => { window.codexReads = (window.codexReads || 0) + 1; return window.fixtureCodex; } };
+      const absent = { ok: false, detected: false, configured: false };
+      window.notchAPI = {
+        getCursorUsage: async ({force}) => { window.cursorForce = force; return window.fixtureCursor; },
+        getCodexUsage: async () => { window.codexReads = (window.codexReads || 0) + 1; return window.fixtureCodex; },
+        getGrokbotUsage: async () => absent, getClaudeUsage: async () => absent,
+        getCopilotUsage: async () => absent, getGrokUsage: async () => absent,
+        getAntigravityUsage: async () => absent, getManusUsage: async () => absent,
+      };
       await window.NotchAiUsage.refresh({force:true});
       return document.getElementById('home-cursor').dataset.aiSources;
     })()`);
@@ -192,7 +198,8 @@ async function main() {
           assert.match(codexLayout.text, /^更新于/);
           const codexQuotaLayout = await inspectQuotaLayout(size);
           if (size === 'mini') {
-            assert.ok(codexQuotaLayout.rowHeight>cursorLayout.rowHeight, 'two Codex rows must receive more height');
+            assert.ok(codexQuotaLayout.rowHeight > 0 && Math.abs(codexQuotaLayout.rowHeight - cursorLayout.rowHeight) < 2,
+              'Cursor and Codex mini rows share height once both have two pools');
             assert.match(await js("document.getElementById('codex-usage-mini-reset').textContent"), /重置/);
           }
           await capture(`codex-tab-${size}.png`);
@@ -224,7 +231,7 @@ async function main() {
     assert.equal(await js("document.getElementById('cursor-usage-auto-fill').style.width"), '0%');
     assert.equal(await js("document.querySelector('#cursor-usage-rows [role=progressbar]').hasAttribute('aria-valuenow')"), false);
     // Check longest text in mini and edge values without altering the provider data.
-    await supply({ ...cursor, auto: { percent: 0 }, other: { percent: 100 }, grokBot: { percent: 125 } },
+    await supply({ ...cursor, auto: { percent: 0 }, other: { percent: 100 } },
       { ...codex, primary: { percent: 40.5 }, secondary: null });
     const edge = await js(`(async () => {
       document.getElementById('home-cursor').dataset.widgetSize='mini';
@@ -235,8 +242,8 @@ async function main() {
         codexText:document.querySelector('#codex-usage-rows strong').textContent,
         raw:window.fixtureCodex.primary.percent};
     })()`);
-    assert.deepEqual(edge.text, ['100%', '0%', '0%']);
-    assert.deepEqual(edge.widths, ['100%', '0%', '0%']); assert.equal(edge.overflow, false);
+    assert.deepEqual(edge.text, ['100%', '0%']);
+    assert.deepEqual(edge.widths, ['100%', '0%']); assert.equal(edge.overflow, false);
     assert.equal(edge.codexText, '60%'); assert.equal(edge.raw, 40.5);
     await supply(missing, { ...codex, detected:false, configured:true, authSource:'manual' });
     assert.equal(await js("document.getElementById('ai-codex-source').textContent"), '手动 Token · Plus');

@@ -1,6 +1,7 @@
 'use strict';
 const { createHash } = require('node:crypto');
-const SOURCES = new Set(['codex', 'claude', 'cursor']);
+const { completionIds } = require('./aiProviderCatalog');
+const SOURCES = new Set(completionIds());
 const KINDS = new Set(['turn.started', 'turn.completed', 'turn.failed', 'attention.required', 'attention.resolved', 'turn.cancelled']);
 const ACTIONS = new Set(['input', 'select', 'approve']);
 const REASONS = new Set(['answered', 'cancelled', 'continued', 'terminated']);

@@ -7,8 +7,9 @@ const { readJsonStrict, writeJsonAtomic, writeAtomic } = require('./atomicStorag
 const { visibleCompletion } = require('./aiEventPolicy');
 const { AI_COMPLETION_LIMIT, completionSyncKey, normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory } = require('./packages/sync-protocol/ai-completions');
 
+const { completionIds } = require('./aiProviderCatalog');
 const MAX_RECORDS = AI_COMPLETION_LIMIT;
-const SOURCES = new Set(['codex', 'claude', 'cursor']);
+const SOURCES = new Set(completionIds());
 const HISTORICAL_SOURCES = new Set([...SOURCES, 'gpt']);
 const clean = (value, max) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 

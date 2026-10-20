@@ -148,27 +148,11 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>
                   </button>
                 </div>
-                <div class="ai-usage-tabs" id="ai-usage-tabs" role="tablist" aria-label="AI 剩余额度来源" hidden data-i18n-aria-label="copy.aiQuotaSources.a9427a">
-                  <button type="button" role="tab" data-ai-tab="cursor" id="ai-tab-cursor" aria-controls="ai-provider-cursor">Cursor<i aria-hidden="true"></i></button>
-                  <button type="button" role="tab" data-ai-tab="codex" id="ai-tab-codex" aria-controls="ai-provider-codex">Codex<i aria-hidden="true"></i></button>
-                </div>
-                <div class="ai-usage-providers">
-                <section class="ai-usage-provider" id="ai-provider-cursor" aria-label="Cursor 剩余额度" data-i18n-aria-label="copy.cursorRemainingQuota.af84d3">
-                <div class="ai-usage-source"><b>Cursor</b><span id="ai-cursor-source"></span></div>
-                <div class="cursor-usage-rows" id="cursor-usage-rows"></div>
-                <p class="cursor-usage-footnote" id="cursor-usage-footnote"><span data-i18n="copy.checkingAiUsage.b415f8">正在检测 AI 用量…</span></p>
-                </section>
-                <section class="ai-usage-provider" id="ai-provider-codex" aria-label="Codex 剩余额度" hidden data-i18n-aria-label="copy.codexRemainingQuota.f7c91c">
-                  <div class="ai-usage-source"><b>Codex</b><span id="ai-codex-source"></span></div>
-                  <div class="cursor-usage-rows" id="codex-usage-rows"></div>
-                  <p class="cursor-usage-footnote" id="codex-usage-footnote"></p>
-                  <small class="ai-mini-reset" id="codex-usage-mini-reset" hidden></small>
-                  <dl class="ai-codex-details" id="ai-codex-details"></dl>
-                </section>
-                </div>
+                <div class="ai-usage-tabs" id="ai-usage-tabs" role="tablist" aria-label="AI 剩余额度来源" hidden data-i18n-aria-label="copy.aiQuotaSources.a9427a"></div>
+                <div class="ai-usage-providers" id="ai-usage-providers"></div>
                 <div class="ai-usage-empty" id="ai-usage-empty" hidden>
                   <strong class="ai-empty-title"></strong><p class="ai-empty-body"></p>
-                  <div class="ai-empty-bars"><div><span>Cursor</span><i></i><small><span data-i18n="copy.notDetected.156219">未检测到</span></small></div><div><span>Codex</span><i></i><small><span data-i18n="copy.notDetected.156219">未检测到</span></small></div></div>
+                  <div class="ai-empty-bars"></div>
                   <button class="workspace-button compact ai-open-settings" type="button"><span data-i18n="copy.openSettings.b6ce1d">去设置 ›</span></button>
                 </div>
               </section>
@@ -484,10 +468,10 @@
 
                 <section class="tile settings-card settings-ai-sources-card" id="settings-ai-sources" aria-labelledby="settings-ai-sources-title">
                   <div class="settings-card-heading">
-                    <div><span class="tile-label"><span data-i18n="copy.aiFeatures.1b6636">智能能力</span></span><strong id="settings-ai-sources-title"><span data-i18n="copy.aiActivitySources.2f54cf">AI 完成来源</span></strong></div>
+                    <div><span class="tile-label"><span data-i18n="copy.aiFeatures.1b6636">智能能力</span></span><strong id="settings-ai-sources-title"><span data-i18n="copy.aiProvidersCatalog.a1b2c3">AI 提供商</span></strong></div>
                     <small id="settings-ai-sources-count"><span data-i18n="copy.local03Connected.f9026e">本机 · 0/3 已接入</span></small>
                   </div>
-                  <p class="ai-source-scope"><span data-i18n="attention.scopeSummary">三家均可接完成提醒。等待输入/选择/授权目前主要覆盖 Claude（受限）；Codex 与 Cursor 尚未启用等待监听，不会用猜测或轮询冒充。</span></p>
+                  <p class="ai-source-scope"><span data-i18n="attention.scopeSummary">完成提醒可接入 Codex / Claude / Cursor。额度按各家能力矩阵展示；Grok Bot 依赖 Cursor 登录，Grok 为 xAI 独立账号。等待输入/选择/授权目前主要覆盖 Claude（受限）。</span></p>
                   <div id="settings-ai-sources-list" class="ai-source-list"></div>
                   <p><span data-i18n="copy.onlyLocalToolConfigurationIsChangedWith.f4a095">仅修改本机工具配置；先在同目录备份。断开只移除 Pome 的项。</span></p>
                   <p id="ai-sources-status" role="status" aria-live="polite"></p>
@@ -495,7 +479,7 @@
 
                 <section class="tile settings-card settings-ai-usage-card" id="settings-ai-usage-card" aria-labelledby="settings-ai-usage-heading">
                   <div class="settings-card-heading settings-ai-heading">
-                    <div><span class="tile-label">Cursor / Codex</span><strong id="settings-ai-usage-heading"><span data-i18n="copy.aiQuota.faa20c">AI 剩余额度</span></strong></div>
+                    <div><span class="tile-label" data-i18n="copy.aiProviders.7e2f1a">AI 提供商</span><strong id="settings-ai-usage-heading"><span data-i18n="copy.aiQuota.faa20c">AI 剩余额度</span></strong></div>
                   </div>
                 <section class="settings-ai-provider settings-cursor-token-card" id="settings-cursor-token-card">
                   <div class="settings-card-heading">
@@ -528,6 +512,19 @@
                   </div>
                   <p class="settings-cursor-token-hint" id="settings-codex-token-hint" role="status" aria-live="polite"></p>
                 </section>
+                <section class="settings-ai-provider" id="settings-grokbot-token-card">
+                  <div class="settings-card-heading">
+                    <div><span class="tile-label">Grok Bot</span><strong data-i18n="copy.usageViaCursor.9c1d2e">Quota via Cursor</strong></div>
+                  </div>
+                  <p data-i18n="providers.ownership.grokbot">Cursor/Anysphere sand pool (requires Cursor sign-in; not a standalone xAI account). Separate from Grok (xAI).</p>
+                </section>
+                <section class="settings-ai-provider" id="settings-claude-token-card">
+                  <div class="settings-card-heading">
+                    <div><span class="tile-label">Claude Code</span><strong data-i18n="copy.localOauthUsage.4a8b1c">Local sign-in usage</strong></div>
+                  </div>
+                  <p data-i18n="providers.ownership.claude">Uses local Claude Code OAuth (~/.claude / Keychain). Tokens are not stored here.</p>
+                </section>
+                <div id="settings-ai-provider-tokens"></div>
                 </section>
 
                 <div class="settings-nas-dialog-root" id="settings-nas-sync-options" hidden>
@@ -810,6 +807,7 @@
     <script src="nas-sync-migration.js"></script>
     <script src="nas-sync-settings.js"></script>
 
+    <script src="../aiProviderCatalog.js"></script>
     <script src="ai-provider-registry.js"></script>
     <script src="ai-usage-domain.js"></script>
     <script src="app.js"></script>

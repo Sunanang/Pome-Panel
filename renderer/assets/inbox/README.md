@@ -8,4 +8,4 @@
 
 新增 cursor.svg：https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/cursor.svg。
 
-UI 仅接入 Codex / Claude Code / Cursor。circle-alert.svg 来自 Lucide 官方图标库，许可证见 LICENSE-alert，用于损坏状态的小型提示。
+完成接入图标：Codex / Claude Code / Cursor。额度 catalog 额外使用本地绘制的 `grokbot.svg`、`grok.svg`、`copilot.svg`、`antigravity.svg`、`manus.svg`（非 Lobe Icons）。circle-alert.svg 来自 Lucide，许可证见 LICENSE-alert，用于损坏状态的小型提示。

@@ -8,7 +8,6 @@ const { DatabaseSync } = require('node:sqlite');
 
 const API_BASE = 'https://api2.cursor.sh';
 const PERIOD_PATH = '/aiserver.v1.DashboardService/GetCurrentPeriodUsage';
-const SAND_PATH = '/aiserver.v1.DashboardService/GetSandUsageStatus';
 const CACHE_TTL_MS = 60_000;
 
 
@@ -97,7 +96,7 @@ function msToIso(value) {
   try { return new Date(ms).toISOString(); } catch (_) { return null; }
 }
 
-function buildSnapshot(period, sand, auth) {
+function buildSnapshot(period, auth) {
   const planUsage = period && period.planUsage ? period.planUsage : {};
   return {
     ok: true,
@@ -113,14 +112,6 @@ function buildSnapshot(period, sand, auth) {
       label: 'Other',
       percent: clampPercent(planUsage.apiPercentUsed),
       detail: period && period.namedModelSelectedDisplayMessage || null,
-    },
-    grokBot: {
-      label: 'Grok Bot',
-      percent: clampPercent(sand && (sand.usagePercent ?? sand.usage_percent)),
-      periodStart: sand && (sand.currentPeriodStart || sand.current_period_start) || null,
-      resetAt: sand && (sand.nextResetTimestampUtc || sand.next_reset_timestamp_utc) || null,
-      hasAvailableUsage: sand ? sand.hasAvailableUsage !== false : null,
-      detail: sand && sand.grokPlanLabel || null,
     },
     billing: {
       cycleStart: msToIso(period && period.billingCycleStart),
@@ -152,15 +143,10 @@ function createCursorUsageService({ fetchImpl = (...args) => fetch(...args), rea
     if (!pending) {
       const controller = new AbortController();
       async function fetchWithToken(token, meta, source) {
-        const options = { fetchImpl, signal: controller.signal };
-        const [period, sand] = await Promise.allSettled([
-          postConnect(PERIOD_PATH, token, {}, options), postConnect(SAND_PATH, token, {}, options),
-        ]);
-        if (period.status === 'rejected') throw period.reason;
-        const snapshot = buildSnapshot(period.value, sand.status === 'fulfilled' ? sand.value : null, meta);
+        const period = await postConnect(PERIOD_PATH, token, {}, { fetchImpl, signal: controller.signal });
+        const snapshot = buildSnapshot(period, meta);
         snapshot.fetchedAt = new Date(now()).toISOString();
         snapshot.authSource = source;
-        if (sand.status === 'rejected') snapshot.poolWarnings = { grokBot: '暂时读不到用量' };
         return snapshot;
       }
       const task = (async () => {
