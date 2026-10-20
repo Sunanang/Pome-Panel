@@ -1610,6 +1610,7 @@ function readAppSettings() {
   const panelPosition = normalizePanelPosition(stored.panelPosition);
   return {
     features,
+    onboardingPending: stored.onboardingPending === true,
     language: PomeI18n.preference(stored.language),
     shortcut: isValidPanelShortcut(stored.shortcut) ? stored.shortcut : 'Space',
     defaultTab: normalizeDefaultTabPreference(stored.defaultTab, features),
@@ -2112,6 +2113,12 @@ ipcMain.handle('window:set-typing-focus', (event, focused) => {
 });
 
 ipcMain.handle('settings:get', () => publicAppSettings());
+ipcMain.handle('settings:complete-welcome', (event) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return { ok: false, error: 'invalid_sender' };
+  if (!saveAppSettings({ ...readAppSettings(), onboardingPending: false })) return { ok: false, error: 'save_failed' };
+  try { fs.writeFileSync(path.join(app.getPath('userData'), '.ui-welcome-done'), String(Date.now())); } catch { /* The saved preference is authoritative. */ }
+  return { ok: true, settings: publicAppSettings() };
+});
 ipcMain.handle('settings:set-language', (event, value) => {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return { ok: false, error: 'invalid_sender' };
   if (!['system', 'zh-CN', 'en-US'].includes(value)) return { ok: false, error: 'invalid_language' };
@@ -5908,10 +5915,13 @@ function hasExistingUserData() {
 function ensureFirstRunAutoLaunch() {
   // 全新安装默认开启开机自启（D1）；升级用户只补写标记，保留他们在托盘里的选择（D13）。
   const marker = path.join(app.getPath('userData'), '.first-run-done');
+  const fresh = !fs.existsSync(marker) && !hasExistingUserData()
+    && !fs.existsSync(path.join(app.getPath('userData'), '.ui-welcome-done'));
+  if (fresh) saveAppSettings({ ...readAppSettings(), onboardingPending: true });
   const plan = firstRunAutoLaunchPlan({
     supported: platformCapabilities.features.firstRunAutoLaunch === true,
     markerExists: fs.existsSync(marker),
-    hasExistingUserData: hasExistingUserData(),
+    hasExistingUserData: fresh ? false : hasExistingUserData(),
   });
   if (!plan.writeMarker) return plan;
   try {

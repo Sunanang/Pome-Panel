@@ -45,8 +45,8 @@ async function main() {
   }
   async function capture(name) {
     if (!screenshots) return;
-    await js("setActiveTab('home');new Promise(r=>setTimeout(r,250))");
-    await js('document.activeElement?.blur()');
+    await js("if(activeTab!=='home')setActiveTab('home');new Promise(r=>setTimeout(r,250))");
+    await js("document.activeElement?.blur();document.getElementById('ui-capsule-hint').hidden=true");
     win.webContents.invalidate();
     await js('new Promise(r=>setTimeout(r,150))');
     await settle();
@@ -95,7 +95,7 @@ async function main() {
         await resize(size);
         const view = await inspect();
         assert.equal(view.noTabs,true);
-        assert.equal(view.title,'AI 剩余额度');
+        assert.equal(view.title,'AI 额度');
         assert.equal(view.overflow,false,`${size}/${count} tile overflow`);
         assert.equal(view.ringsFit,true,`${size}/${count} ring clipping`);
         assert.equal(view.cellsFit,true,`${size}/${count} cell clipping`);
@@ -117,6 +117,18 @@ async function main() {
         if (size==='medium') {assert.equal(view.cols,Math.min(count,3));assert.equal(view.gridScroll,false,'up to five providers fit simultaneously');}
 
         await capture(`${size}-${count}ai`);
+        if(count===2 && size!=='mini') {
+          assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
+          await js(`document.querySelector('#ai-provider-codex [data-quota-toggle]').click()`);
+          assert.equal(await js(`document.getElementById('codex-usage-rows').matches(':popover-open')`),true);
+          await capture(`${size}-2ai-details`);
+          await js(`document.querySelector('#ai-provider-codex [data-quota-toggle]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
+          assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
+          await js(`document.getElementById('ai-provider-cursor').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}))`);
+          assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`),true);
+          await js(`document.getElementById('ai-provider-cursor').dispatchEvent(new PointerEvent('pointerout',{bubbles:true,relatedTarget:document.body}))`);
+          assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
+        }
         await resize(size,currentSizes);
         const real = await inspect();
         assert.equal(real.overflow,false,`${size}/${count} actual home overflow`);
@@ -156,7 +168,7 @@ async function main() {
         assert.equal(alarm.state,'critical');assert.equal(alarm.level,'critical');assert.equal(alarm.empty,'true');
         assert.match(alarm.title,new RegExp(copy));assert.equal(alarm.percent,false);
         assert.equal(alarm.track,'rgb(255, 123, 114)');assert.equal(alarm.amount,'rgb(255, 138, 128)');
-        if(size!=='mini') assert.equal(alarm.alert,true);
+        if(size!=='mini') assert.equal(alarm.alert,false);
       }
       await capture(`depleted-${size}`);
     }
@@ -226,6 +238,8 @@ async function main() {
     await supply({codex:{...codex,windows:Array.from({length:8},(_,i)=>({id:'model-'+i,label:i===0?'<img src=x onerror=alert(1)>':'Long model '+i,percent:20+i,windowMinutes:300}))}});
     for(const size of ['small','medium','large']) {
       await resize(size);
+      await js(`document.querySelector('#ai-provider-codex [data-quota-toggle]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));document.querySelector('#ai-provider-codex [data-quota-toggle]').click()`);
+      assert.equal(await js(`document.getElementById('codex-usage-rows').matches(':popover-open')`),true);
       assert.equal(await js(`document.querySelectorAll('#codex-usage-rows .ai-quota-row').length`),8);
       assert.equal(await js(`document.querySelector('#codex-usage-rows img')`),null);
       assert.equal((await inspect()).overflow,false);

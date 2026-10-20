@@ -89,6 +89,7 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     const limit = size === 'mini' ? ids.length <= 4 ? 4 : 3 : size === 'small' ? 3 : ids.length;
     const shown = ids.slice(0, limit), hidden = ids.slice(limit);
     const columns = size === 'mini' ? shown.length + (hidden.length ? 1 : 0)
+      : size === 'small' && ids.length <= 2 ? ids.length
       : size === 'medium' ? Math.min(3, ids.length) : size === 'large' && ids.length >= 7 ? 3 : size === 'large' && ids.length >= 4 ? 2 : 1;
     const summary = size === 'large' && ids.length === 5;
     return { ids, shown, hidden, columns: Math.max(1, columns), summary,

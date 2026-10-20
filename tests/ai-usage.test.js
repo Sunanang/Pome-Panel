@@ -8,10 +8,10 @@ const codex = { detected: true, primary: { percent: 86 }, secondary: { percent: 
 const grokbot = { detected: true, ok: true, primary: { percent: 90 } };
 test('AI usage four visibility combinations and titles have no empty provider', () => {
   for (const [snapshots, ids, title] of [
-    [{ cursor: absent, codex: absent }, [], 'AI 剩余额度'],
-    [{ cursor, codex: absent }, ['cursor'], 'AI 剩余额度'],
-    [{ cursor: absent, codex }, ['codex'], 'AI 剩余额度'],
-    [{ cursor, codex }, ['cursor', 'codex'], 'AI 剩余额度'],
+    [{ cursor: absent, codex: absent }, [], 'AI 额度'],
+    [{ cursor, codex: absent }, ['cursor'], 'AI 额度'],
+    [{ cursor: absent, codex }, ['codex'], 'AI 额度'],
+    [{ cursor, codex }, ['cursor', 'codex'], 'AI 额度'],
   ]) {
     assert.deepEqual(D.providers(snapshots), ids);
     assert.equal(D.title(ids), title);
@@ -29,6 +29,7 @@ test('dashboard folds only compact sizes and preserves settings order in larger 
   assert.deepEqual(D.dashboard(snapshots, 'mini').hidden, ['cursor', 'grok']);
   assert.equal(D.dashboard(snapshots, 'mini').columns, 4);
   assert.equal(D.dashboard(snapshots, 'small').shown.length, 3);
+  assert.equal(D.dashboard({cursor,codex}, 'small').columns, 2);
   for (const size of ['medium', 'large']) assert.deepEqual(D.dashboard(snapshots, size).shown, ['cursor', 'codex', 'claude', 'grokbot', 'grok']);
   assert.equal(D.dashboard(snapshots, 'medium').columns, 3);
   assert.equal(D.dashboard(snapshots, 'medium').rows, 2);

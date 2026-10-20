@@ -1044,6 +1044,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       input.checked = settingsAppSettings?.features?.[input.dataset.settingsFeature] !== false;
     });
     renderHomeModuleSettings();
+    window.NotchUi?.renderTokenSources();
   }
 
   function renderHomeModuleSettings() {
@@ -1129,15 +1130,18 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         hint.classList.add('error');
         return;
       }
-      input.value = result.token;
-      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.localAccessTokenFilledInSaveTo.dbcc94")));
+      const saved = await window.notchAPI.setCodexToken(result.token);
+      if (!saved?.ok) throw new Error(saved?.error || "save_failed");
+      input.value = ""; renderCodexSettings(null, saved);
+      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("ui.token.savedPending")));
       hint.classList.add('success');
-    } catch {
-      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.129397")));
+    } catch (error) {
+      window.NotchUi?.showError({ diagnostic: `Codex: ${error.message}`, onRepair: () => window.NotchAiSources?.openSettings("codex") });
+      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t(error.message === "secure_storage_unavailable" ? "copy.systemSecureStorageIsUnavailableCanT.3a9217" : "copy.couldnTGetATokenRetryOr.129397")));
       hint.classList.add('error');
     } finally {
       setCodexTokenBusy(false);
-      pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.getLocalToken.713114")));
+      pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("ui.token.acquire")));
     }
   });
   for (const action of ['save', 'clear']) {
@@ -1837,6 +1841,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     settingsCursorTokenHint.classList.toggle('error', kind === 'error');
     settingsCursorTokenHint.classList.toggle('success', kind === 'success');
     settingsCursorTokenHint.classList.toggle('warning', kind === 'warning');
+    if (kind === 'error') window.NotchUi?.showError({ diagnostic: `Cursor: ${message}`, onRepair: () => window.NotchAiSources?.openSettings('cursor') });
   }
 
   function paintNasHint(el, message, kind = '') {
@@ -1848,6 +1853,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   // Pairing and sync errors retain their own hints inside the merged card.
   function setNasSyncHint(message, kind = '') {
     paintNasHint(settingsNasSyncHint, message, kind);
+    if (kind === 'error') window.NotchUi?.showError({ diagnostic: `NAS: ${message}`, onRepair: () => { document.getElementById('ui-nas-troubleshoot').open = true; settingsNasSyncBaseUrl?.focus(); } });
   }
 
   function setNasStatusHint(message, kind = '') {
@@ -1880,7 +1886,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   function applyNasSettingsUi(action) {
     if (!window.NasSyncSettings || typeof window.NasSyncSettings.reduceSettingsUi !== 'function') return;
     nasSettingsUi = window.NasSyncSettings.reduceSettingsUi(nasSettingsUi, action);
-    renderNasEndpoints();
+    renderNasSyncPanel();
   }
 
   function renderNasBoundChrome() {
@@ -2053,6 +2059,13 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }
     renderNasEndpoints();
     renderNasContentResults();
+    const errorCode = (nasPairUi.error && nasPairUi.errorCode) || nasSettingsUi.view?.lastError?.code || '';
+    const connectionError = uiState === 'offline_pending' || /timeout|network|fetch_failed|econn|offline/i.test(errorCode);
+    const brief = { bound, paused: Boolean(nasSettingsUi.recovery?.paused || status?.recovery?.paused),
+      busy: Boolean(nasSettingsUi.busy || nasPairUi.submitting || nasMigrationUi.readonly),
+      needsAttention: Boolean(hardError || lostToken || uiState === 'needs_reauth' || !connectionError && (nasPairUi.error || nasSettingsUi.view?.lastError)),
+      offline: connectionError, code: errorCode || uiState };
+    window.__pomeNasUi = brief; window.NotchUi?.renderNas(brief);
   }
 
   function openNasSyncOptions() {
@@ -2066,6 +2079,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
 
   function openNasDialog(dialog) {
     if (!settingsNasDialogRoot || !dialog) return Promise.resolve({ confirmed: false });
+    window.NotchUi?.prepareConfirmation(dialog);
     if (settingsNasDialogTitle) pomeLocaleRendererWorkspace.bind(settingsNasDialogTitle, "textContent", () => (dialog.title || pomeLocaleRendererWorkspace.t("copy.confirm.36f33a")));
     if (settingsNasDialogBody) {
       settingsNasDialogBody.textContent = dialog.body || '';
@@ -2282,7 +2296,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   } = {}) {
     if (!window.NasSyncPair || !window.notchAPI || typeof window.notchAPI.syncPairClaim !== 'function') return;
     const code = settingsNasPairCode?.value || '';
-    const baseUrl = settingsNasSyncBaseUrl?.value || '';
+    const baseUrl = window.NotchUiDomain.normalizeAddress(settingsNasSyncBaseUrl?.value || '');
+    if (settingsNasSyncBaseUrl) settingsNasSyncBaseUrl.value = baseUrl;
     applyNasPairUi({ type: 'submit_start' });
     setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.pairing.f55f93"));
 
@@ -2349,6 +2364,10 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         message: result.message,
         needsTrustConfirm: askTrust,
       });
+      if (result.error === 'https_on_http' && settingsNasSyncBaseUrl) {
+        settingsNasSyncBaseUrl.value = baseUrl.replace(/^https:/, 'http:');
+        nasPairUi = { ...nasPairUi, baseUrl: settingsNasSyncBaseUrl.value };
+      }
       setNasSyncHint(result.message || pomeLocaleRendererWorkspace.t("copy.pairingFailed.aea73b"), 'error');
       return;
     }
@@ -2387,13 +2406,15 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         setCursorTokenHint(messages[result?.error] || pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.8c7624"), 'error');
         return;
       }
-      settingsCursorToken.value = result.token;
-      setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.localTokenFilledInSaveToApply.aa9c1a"), 'success');
+      const saved = await window.notchAPI.setCursorToken(result.token);
+      if (!saved?.ok) throw new Error(saved?.error || "save_failed");
+      settingsCursorToken.value = ""; settingsCursorTokenMeta = saved; renderSettingsPanel();
+      setCursorTokenHint(pomeLocaleRendererWorkspace.t("ui.token.savedPending"), 'success');
     } catch (error) {
       setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.8c7624"), 'error');
     } finally {
       setCursorTokenBusy(false);
-      pomeLocaleRendererWorkspace.bind(settingsCursorTokenFetch, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.getLocalToken.713114")));
+      pomeLocaleRendererWorkspace.bind(settingsCursorTokenFetch, "textContent", () => (pomeLocaleRendererWorkspace.t("ui.token.acquire")));
     }
   });
 
@@ -2584,7 +2605,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   document.getElementById('settings-nas-recovery').addEventListener('click', async () => {
     const preview = await window.notchAPI.recoveryPreview();
     if (!preview.ok) { setNasStatusHint(preview.message || pomeLocaleRendererWorkspace.t("copy.previewUnavailable.b825cc"), 'error'); return; }
-    const confirmed = await window.notchAPI.confirm({ title: pomeLocaleRendererWorkspace.t("copy.replaceNasDataWithLocalData.2a31fb"), message: pomeLocaleRendererWorkspace.t("copy.overwriteThisDataAfterReviewingTheImpact.b62dd1"), detail: pomeLocaleRendererWorkspace.t("copy.addChangeDeleteDeletedItemsIncludesTasks.ca3b5f", { arg1: (preview.adds.length), arg2: (preview.updates.length), arg3: (preview.deletes.length), arg4: ((preview.deleteLabels || preview.deletes).join('、') || pomeLocaleRendererWorkspace.t("copy.none.484d55")) }) });
+    const confirmed = await (window.NotchUi?.confirm || window.notchAPI.confirm)({ title: pomeLocaleRendererWorkspace.t("copy.replaceNasDataWithLocalData.2a31fb"), message: pomeLocaleRendererWorkspace.t("ui.confirm.impact", { adds: preview.adds.length, updates: preview.updates.length, deletes: preview.deletes.length }), detail: pomeLocaleRendererWorkspace.t("copy.addChangeDeleteDeletedItemsIncludesTasks.ca3b5f", { arg1: (preview.adds.length), arg2: (preview.updates.length), arg3: (preview.deletes.length), arg4: ((preview.deleteLabels || preview.deletes).join('、') || pomeLocaleRendererWorkspace.t("copy.none.484d55")) }) });
     if (!confirmed) return;
     const result = await window.notchAPI.recoveryExecute(preview.previewId);
     setNasStatusHint(result.ok ? pomeLocaleRendererWorkspace.t("copy.overwriteVerifiedSyncResumed.da48e7") : result.message || pomeLocaleRendererWorkspace.t("copy.operationFailedSyncRemainsPaused.aff63e"), result.ok ? 'success' : 'error');
@@ -2592,7 +2613,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   });
   document.getElementById('settings-nas-rollback').addEventListener('click', async () => {
     const status = await window.notchAPI.syncGetStatus();
-    const confirmed = await window.notchAPI.confirm({ title: pomeLocaleRendererWorkspace.t("copy.restoreNasSnapshot.1ce868"), message: pomeLocaleRendererWorkspace.t("copy.restoreOrdinaryDataFromBeforeTheLast.252e58"), detail: pomeLocaleRendererWorkspace.t("copy.rollbackIsAvailableOnlyIfTheNas.a5665f") });
+    const confirmed = await (window.NotchUi?.confirm || window.notchAPI.confirm)({ title: pomeLocaleRendererWorkspace.t("copy.restoreNasSnapshot.1ce868"), message: pomeLocaleRendererWorkspace.t("copy.restoreOrdinaryDataFromBeforeTheLast.252e58"), detail: pomeLocaleRendererWorkspace.t("copy.rollbackIsAvailableOnlyIfTheNas.a5665f") });
     if (!confirmed) return;
     const result = await window.notchAPI.recoveryRollback(status.recovery.operationId);
     setNasStatusHint(result.ok ? pomeLocaleRendererWorkspace.t("copy.nasRolledBackSyncRemainsPaused.7e5880") : result.message || pomeLocaleRendererWorkspace.t("copy.rollbackFailed.577da4"), result.ok ? 'success' : 'error');
@@ -3245,8 +3266,21 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       const heading = document.createElement('strong');
       pomeLocaleRendererWorkspace.bind(heading, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.currentWindowsUnavailable.d6a9a7")));
       const hint = document.createElement('span');
-      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.enableWindowsNativeCapabilitiesExperimentalInSettings.c7cda7")));
+      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t('ui.windows.hint')));
+      const repairNative = () => { void setActiveTab('settings').then(() => settingsWinNativeRow?.scrollIntoView({ block: 'center' })); };
+      const enable = document.createElement('button'); enable.type = 'button'; enable.className = 'workspace-button compact primary'; enable.id = 'ui-enable-win-native';
+      pomeLocaleRendererWorkspace.bind(enable, 'textContent', () => pomeLocaleRendererWorkspace.t('ui.windows.enable'));
+      enable.addEventListener('click', async () => {
+        enable.disabled = true;
+        try {
+          const result = await window.notchAPI.setWinNative(true);
+          if (!result?.ok || !result.nativeAvailable) { window.NotchUi?.showError({ diagnostic: result?.nativeReason || result?.error || 'native_unavailable', repairKey: 'ui.windows.unavailable', onRepair: repairNative }); return; }
+          await refreshWindows(true);
+        } catch { window.NotchUi?.showError({ diagnostic: 'native_unavailable', repairKey: 'ui.windows.unavailable', onRepair: repairNative }); }
+        finally { if (enable.isConnected) enable.disabled = false; }
+      });
       empty.append(heading, hint);
+      if (window.notchAPI?.capabilities?.features?.winNativeSetting) empty.append(enable);
       windowList.appendChild(empty);
       return;
     }

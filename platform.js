@@ -52,7 +52,7 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
     }
     caps.unavailableHomeModules = [
       !caps.features.musicControl && 'music',
-      !caps.features.windowSwitcher && 'windows',
+      !caps.features.windowSwitcher && !caps.features.winNativeSetting && 'windows',
     ].filter(Boolean);
     // 旧的扁平字段：留一个版本给尚未迁移到 features.* 的调用方。
     caps.automaticPaste = caps.features.automaticPaste;

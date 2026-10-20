@@ -88,7 +88,7 @@ async function main() {
         homeBento.dispatchEvent(new PointerEvent('pointermove',{...pointer,clientX:b.left+b.width/2,clientY:b.top+b.height/2}));
         homeBento.dispatchEvent(new PointerEvent('pointerup',{...pointer,clientX:b.left+b.width/2,clientY:b.top+b.height/2,buttons:0}));
         return {unchanged:before===JSON.stringify({layout:homeWorkingLayout,sizes:homeSizes,order:homeOrder}),
-          persisted:stored===localStorage.getItem(HOME_PLACEMENTS_KEY),toast:document.getElementById('status-toast-message').textContent,
+          persisted:stored===localStorage.getItem(HOME_PLACEMENTS_KEY),toast:document.querySelector('#ui-error-bar p')?.textContent,
           dragging:homeBento.classList.contains('layout-dragging'),placeholder:!!homeBento.querySelector('.home-swap-placeholder')};
       } finally { NotchDomain.swapHomeWidgetPlacements=real; }
     })()`);

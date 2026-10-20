@@ -46,12 +46,12 @@ async function run(c) {
     oldQuota:!!document.getElementById('settings-ai-usage-card'),
     obsolete:document.querySelectorAll('#settings-ai-sources .ai-source-matrix,#settings-ai-sources .ai-source-capabilities,#settings-ai-sources .ai-attention-section').length,
     testButtons:[...document.querySelectorAll('#settings-ai-sources button,#home-inbox button')].filter(e=>e.textContent==='发送测试').length,
-    tokens:[...document.querySelectorAll('#settings-ai-sources input[type=password]')].map(e=>({id:e.id,provider:e.closest('.ai-source-row')?.dataset.source,visible:!e.closest('[hidden]')})),
+    tokens:[...document.querySelectorAll('#settings-ai-sources input[type=password]')].map(e=>({id:e.id,provider:e.closest('.ai-source-row')?.dataset.source,visible:e.checkVisibility()})),
     features:document.querySelectorAll('.settings-display-card [data-settings-feature]').length,
     modules:document.querySelectorAll('.settings-display-card [data-settings-home-module]').length,
     columns:getComputedStyle(document.getElementById('settings-feature-list')).gridTemplateColumns.split(' ').length,
     homeColumns:getComputedStyle(document.getElementById('settings-home-module-list')).gridTemplateColumns.split(' ').length,
-    primaryColor:getComputedStyle(document.querySelector('[data-source=codex] .ai-source-actions button')).backgroundColor,
+    primaryColor:getComputedStyle(document.querySelector('[data-source=codex] .ai-source-actions button')).color,
     quotaOnly:getComputedStyle(document.querySelector('[data-source=grokbot] .ai-source-state')).borderTopStyle,
     quotaAction:document.querySelector('[data-source=grokbot] .ai-source-actions').textContent,
     claudeButton:!!document.querySelector('[data-source=claude] .ai-source-actions button')
@@ -64,13 +64,13 @@ async function run(c) {
   assert.equal(await js(`!!document.querySelector('.settings-device-card .settings-language-row #settings-language')`),true,'language is a device setting');
   assert.equal(await js(`document.querySelector('.settings-language-card')`),null);
   assert.equal(structure.secondary.length,3);
-  assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI 配置');
+  assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI');
   assert.equal(structure.oldQuota,false); assert.equal(structure.obsolete,0); assert.equal(structure.testButtons,0);
   assert.equal(structure.tokens.length,6);
-  for (const token of structure.tokens) { assert(token.provider && token.id.includes(token.provider)); assert(token.visible); }
+  for (const token of structure.tokens) { assert(token.provider && token.id.includes(token.provider)); assert.equal(token.visible,false); }
   assert.equal(structure.features,6); assert.equal(structure.modules,10);
-  assert.equal(structure.columns,3); assert.equal(structure.homeColumns,2);
-  assert.equal(structure.primaryColor,'rgb(67, 140, 255)');
+  assert.equal(structure.columns,2); assert.equal(structure.homeColumns,2);
+  assert.equal(structure.primaryColor,'rgb(18, 19, 24)');
   assert.equal(structure.quotaOnly,'solid'); assert.equal(structure.quotaAction,'无需接入'); assert.equal(structure.claudeButton,true);
   assert.equal(await js(`document.querySelector('[data-source=manus] .ai-source-state').textContent`),'API');
   assert.equal(await js(`document.querySelector('[data-source=manus] .ai-source-actions').textContent`),'下方配置 Token 与完成提醒');
@@ -89,7 +89,7 @@ async function run(c) {
   assert.equal(await js(`document.querySelector('.settings-display-card > .settings-card-heading strong').textContent`),'Display');
   assert.equal(await js(`document.querySelector('[data-source=grokbot] .ai-source-actions').textContent`),'No setup needed');
   assert.equal(await js(`document.querySelector('[data-source=manus] .ai-source-actions').textContent`),'Configure the token and completion alerts below');
-  assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI configuration');
+  assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI');
   assert.equal(await js(`document.querySelector('[data-provider-save=grok]')?.textContent`),'Save');
   await js(`document.getElementById('settings-grok-token').value='';notchAPI.setLanguage('zh-CN')`); await until(`document.documentElement.lang==='zh-CN'`);
   await until(`document.querySelector('[data-provider-save=grok]')?.textContent==='保存'`);
@@ -104,6 +104,8 @@ async function run(c) {
     await js(`document.getElementById('settings-grok-team').value='';delete document.getElementById('settings-grok-team').dataset.dirty`);
     await until(`document.querySelector('[data-source=cursor]').dataset.state==='connected'`);
     await js(`document.querySelectorAll('.settings-column').forEach(e=>e.scrollTop=0);document.activeElement.blur()`);
+    c.invalidate();
+    await js('document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))');
     await delay(200);
     fs.writeFileSync(path.join(output,'settings-viewport.png'),(await c.capturePage()).toPNG());
     const proof = await js(`(()=>{const h=document.querySelector('.topbar');return {html:h.outerHTML,styles:[h,...h.querySelectorAll('*')].map(e=>({tag:e.tagName,css:getComputedStyle(e).cssText,values:Array.from(getComputedStyle(e),k=>[k,getComputedStyle(e).getPropertyValue(k)])})),rect:h.getBoundingClientRect().toJSON()}})()`);
@@ -115,8 +117,8 @@ async function run(c) {
       const info=columns[column], step=Math.floor(info.rect.height);
       info.segments=[];
       for (let offset=0;offset<info.height;offset+=step) {
-        const actual=await js(`(()=>{const e=document.querySelectorAll('.settings-column')[${column}];e.scrollTop=${offset};return e.scrollTop})()`);
-        await delay(100);
+        const actual=await js(`(()=>{const e=document.querySelectorAll('.settings-column')[${column}];e.style.scrollBehavior='auto';e.scrollTo({top:${offset},behavior:'instant'});return e.scrollTop})()`);
+        c.invalidate();await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');await delay(100);
         const file=`column-${column}-${offset}.png`;
         fs.writeFileSync(path.join(output,file),(await c.capturePage()).toPNG());
         info.segments.push({file,offset:actual});

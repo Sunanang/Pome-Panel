@@ -54,6 +54,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       const target = source ? row : el('settings-ai-sources');
       target?.scrollIntoView({ block: source ? 'center' : 'start' });
       const focusRow = source ? row : list.querySelector('[data-source="codex"]') || row;
+      window.NotchUi?.openManual(source || "codex");
       const input = focusRow?.querySelector('input[type="password"], input:not([type="checkbox"])');
       (input || focusRow?.querySelector('.ai-source-actions button') || focusRow?.querySelector('button'))
         ?.focus({ preventScroll: true });
@@ -208,7 +209,10 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
           if (el(`settings-${id}-token`)) el(`settings-${id}-token`).value = '';
           document.dispatchEvent(new CustomEvent('notch:ai-provider-token-changed', { detail: result }));
           await refreshTokenStatuses();
-        } catch { pomeLocaleRendererAiSources.bind(el(`settings-${id}-token-hint`) || el(`settings-${id}-token-status`), 'textContent', () => pomeLocaleRendererAiSources.t('providers.tokenSaveFailed')); }
+        } catch {
+          pomeLocaleRendererAiSources.bind(el(`settings-${id}-token-hint`) || el(`settings-${id}-token-status`), 'textContent', () => pomeLocaleRendererAiSources.t('providers.tokenSaveFailed'));
+          window.NotchUi?.showError({ diagnostic: `${id}: token_save_failed`, onRepair: () => openSettings(id) });
+        }
         finally { button.disabled = false; }
       });
     });
@@ -252,6 +256,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       if (id === 'grok' && !el('settings-grok-team').dataset.dirty) el('settings-grok-team').value = result?.teamId || '';
     }
     await refreshManusCompletionStatus();
+    window.NotchUi?.renderTokenSources();
   }
   // Keep provider/token DOM stable across status refreshes and language changes:
   // moving or recreating password inputs would lose focus and unsaved edits.
@@ -324,7 +329,8 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       const file = document.createElement('small');
       // Compact display only; preview and confirmation keep the full target path.
       file.textContent = row.filePath ? compactPath(row.filePath)
-        : row.source === 'manus' ? pomeLocaleRendererAiSources.t('settings.ai.tokenQuota') : row.message || row.ownership;
+        : row.source === 'grokbot' ? pomeLocaleRendererAiSources.t('ui.grokbot.pool')
+          : row.source === 'manus' ? pomeLocaleRendererAiSources.t('settings.ai.tokenQuota') : row.message || row.ownership;
       file.title = row.filePath || row.ownership || '';
       // Manus is API-managed (token + completion), not a hook "quota only" source.
       if (row.source === 'manus' && row.state === 'catalogOnly') {
@@ -336,7 +342,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         hint.textContent = restartMessage(row.source); copy.append(hint);
       }
       const note = item.querySelector('.ai-source-local-quota');
-      if (note) note.textContent = pomeLocaleRendererAiSources.t(row.source === 'claude' ? 'settings.ai.localQuota' : 'settings.ai.cursorQuota');
+      if (note) note.textContent = pomeLocaleRendererAiSources.t(row.source === 'claude' ? 'settings.ai.localQuota' : 'ui.grokbot.quota');
       renderActions(row, item.querySelector('.ai-source-actions'));
     }
   }
@@ -395,6 +401,8 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       const result = await api.previewAiSource(source, action);
       if (!result?.ok) throw new Error(result?.message || pomeLocaleRendererAiSources.t("copy.couldnTPreviewConfiguration.6158dd"));
       plan = result.preview; anchor = from;
+      el('ai-source-confirm-details').open = false;
+      pomeLocaleRendererAiSources.bind(el('ai-source-confirm-summary'), 'textContent', () => pomeLocaleRendererAiSources.t(action === 'disconnect' ? 'ui.hookDisconnect' : 'ui.hookSummary'));
       pomeLocaleRendererAiSources.bind(el('ai-source-confirm-title'), "textContent", () => (`${action === 'disconnect' ? pomeLocaleRendererAiSources.t("copy.disconnect.f33ac0") : action === 'repair' ? pomeLocaleRendererAiSources.t("copy.repair.37a693") : pomeLocaleRendererAiSources.t("copy.connect.f3b392")} ${labels[source]}？`));
       el('ai-source-confirm-file').textContent = plan.filePath;
       el('ai-source-confirm-content').textContent = plan.added;

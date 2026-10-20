@@ -91,14 +91,15 @@ async function checkCursorTokenFlow(contents) {
         leaked: JSON.stringify(collectLocalStorageSnapshot()).includes('fixture-cursor-local-token') };
     })()
   `);
-  assert.equal(acquired.value, 'fixture-cursor-local-token');
+  assert.equal(acquired.value, '');
   assert.equal(acquired.type, 'password');
   assert.equal(acquired.disabled, false);
-  assert.equal(acquired.status.configured, false, '获取不能自动保存');
+  assert.equal(acquired.status.configured, true, '获取并保存一步完成');
   assert.equal(acquired.leaked, false, '凭证不能写入 LocalStorage');
   const saved = await contents.executeJavaScript(`
     (async () => {
       const button = document.getElementById('settings-cursor-token-save');
+      document.getElementById('settings-cursor-token').value='fixture-cursor-local-token';
       button.click();
       for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
       return { value: document.getElementById('settings-cursor-token').value,
@@ -152,16 +153,17 @@ async function checkCodexTokenFlow(contents) {
       sameCard: input.closest('#settings-ai-sources') === document.getElementById('settings-cursor-token').closest('#settings-ai-sources'),
       leaked: JSON.stringify(collectLocalStorageSnapshot()).includes('fixture-codex-token') };
   })()`);
-  assert.equal(acquired.value, 'fixture-codex-token');
+  assert.equal(acquired.value, '');
   assert.equal(acquired.type, 'password');
   assert.equal(acquired.disabled, false);
-  assert.equal(acquired.status.configured, false, 'acquisition must not automatically save');
+  assert.equal(acquired.status.configured, true, 'acquisition saves securely in one step');
   assert.equal(acquired.sameCard, true, 'both providers must be in one settings card');
   assert.equal(acquired.leaked, false);
   assert.equal(codexAuthReads, 1);
 
   const saved = await contents.executeJavaScript(`(async () => {
     const button = document.getElementById('settings-codex-token-save');
+    document.getElementById('settings-codex-token').value='fixture-codex-token';
     button.click();
     for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
     await window.NotchAiUsage.refresh({ force: true });

@@ -156,6 +156,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   onToggleShortcut: (cb) => subscribe('shortcut:toggle-panel', () => cb()),
   getHoverSpaceStatus: () => ipcRenderer.invoke('shortcut:hover-space-status'),
   getAppSettings: () => ipcRenderer.invoke('settings:get'),
+  completeWelcome: () => ipcRenderer.invoke('settings:complete-welcome'),
   setFeature: (featureId, enabled) => ipcRenderer.invoke('settings:set-feature', { featureId, enabled }),
   setDefaultTab: (tab) => ipcRenderer.invoke('settings:set-default-tab', tab),
   setWinNative: (enabled) => ipcRenderer.invoke('settings:set-win-native', enabled === true),

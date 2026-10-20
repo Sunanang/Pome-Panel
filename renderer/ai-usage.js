@@ -10,6 +10,40 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   const registry = D.registry;
   const usageProviders = () => registry.usageProviders();
   const state = Object.fromEntries(usageProviders().map(({ id }) => [id, null]));
+  let pinnedDetails = null;
+  function closeDetails() {
+    tile.querySelectorAll('.cursor-usage-rows:popover-open').forEach(node => node.hidePopover());
+    tile.querySelectorAll('[data-quota-toggle]').forEach(node => node.setAttribute('aria-expanded', 'false'));
+  }
+  function showDetails(id) {
+    closeDetails();
+    const provider = byId(`ai-provider-${id}`), rows = byId(`${id}-usage-rows`);
+    if (!provider || !rows) return;
+    const r = provider.getBoundingClientRect();
+    rows.style.width = `${Math.min(240, innerWidth - 24)}px`;
+    rows.style.left = `${Math.max(12, Math.min(innerWidth - 252, r.left))}px`;
+    rows.style.top = `${Math.max(12, Math.min(innerHeight - 190, r.bottom - 8))}px`;
+    rows.showPopover();
+    provider.querySelector('[data-quota-toggle]')?.setAttribute('aria-expanded', 'true');
+  }
+  tile.addEventListener('click', event => {
+    const toggle = event.target.closest('[data-quota-toggle]');
+    if (!toggle) return;
+    const id = toggle.dataset.quotaToggle;
+    if (pinnedDetails === id) { pinnedDetails = null; closeDetails(); }
+    else { pinnedDetails = id; showDetails(id); }
+  });
+  tile.addEventListener('pointerover', event => {
+    const provider = event.target.closest('.ai-usage-provider');
+    if (!pinnedDetails && provider && !provider.contains(event.relatedTarget)) showDetails(provider.dataset.provider);
+  });
+  tile.addEventListener('pointerout', event => {
+    const provider = event.target.closest('.ai-usage-provider');
+    if (!pinnedDetails && provider && !provider.contains(event.relatedTarget)) closeDetails();
+  });
+  tile.addEventListener('keydown', event => { if (event.key === 'Escape') { pinnedDetails = null; closeDetails(); event.stopPropagation(); } });
+  document.addEventListener('pointerdown', event => { if (!tile.contains(event.target)) { pinnedDetails = null; closeDetails(); } });
+  for (const name of ['notch:tabchange', 'notch:modechange']) document.addEventListener(name, () => { pinnedDetails = null; closeDetails(); });
   const revisions = Object.fromEntries(usageProviders().map(({ id }) => [id, 0]));
   let refreshTimer, inFlight = null, queuedForce = false;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -25,6 +59,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     if (byId('tab-settings').getAttribute('aria-hidden') !== 'false') return;
     const card = byId(registry.get(provider)?.settingsCard || 'settings-ai-sources');
     card?.scrollIntoView({ block: provider ? 'center' : 'start', behavior: 'instant' });
+    window.NotchUi?.openManual(provider);
     card?.querySelector('input')?.focus({ preventScroll: true });
   }
   function sourceLabel(id, data) {
@@ -94,8 +129,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const showPct = !unknown && (bad || m.status !== 'undetected');
     const dashed = bad || m.status === 'undetected' || unknown;
     const center = size === 32 ? icon(m.id) : ((bad && unknown) || m.exhausted)
-      ? '<span class="q-alert" aria-hidden="true"></span>'
-      : unknown ? `<span class="q-ring-unknown">${m.lowest.kind === 'unlimited' ? '∞' : '—'}</span>` : `<span class="q-pct">${pct(m.remaining)}</span>`;
+      ? m.exhausted ? `<span class="q-pct">${escape(m.lowest.display)}</span>` : '<span class="q-alert" aria-hidden="true"></span>'
+      : unknown ? `<span class="q-ring-unknown">${m.lowest.kind === 'unlimited' ? '∞' : ['currency','credits'].includes(m.lowest.kind) ? escape(m.lowest.display) : '—'}</span>` : `<span class="q-pct">${pct(m.remaining)}</span>`;
     const label = t('copy.lowestRemainingQuota.775faf', { arg1: registry.get(m.id).label, arg2: D.formatPercent(m.remaining), arg3: m.message });
     return `<div class="q-ring" style="--q-ring-size:${size}px" ${showPct && !bad ? `role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.remaining}"` : 'role="img"'} aria-label="${escape(label)}">
       <svg class="q-ring-svg" viewBox="0 0 ${size} ${size}" aria-hidden="true"><defs><linearGradient id="quota-gradient-${m.id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="q-gradient-start"/><stop offset="1" class="q-gradient-end"/></linearGradient></defs>
@@ -103,7 +138,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       ${dashed || unknown ? '' : `<circle class="q-ring-value" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke="url(#quota-gradient-${m.id})" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${length * m.remaining / 100} ${length}"${m.remaining === 0 ? ' visibility="hidden"' : ''}/>`}</svg><span class="q-ring-center">${center}</span></div>`;
   }
   function quotaRows(m) {
-    return `<div class="cursor-usage-rows" id="${m.id}-usage-rows">${m.rows.map(row => {
+    return `<div class="cursor-usage-rows" popover="manual" id="${m.id}-usage-rows">${m.rows.map(row => {
       const name = row.kind === 'currency' ? t('providers.prepaidBalance') : row.kind === 'credits' ? t('providers.availableCredits') : row.name;
       const special = row.kind !== 'percent', value = special ? escape(row.display) : pct(row.value);
       return `<div class="cursor-usage-row ai-quota-row" data-pool="${escape(row.key)}" data-level="${D.level(row.value)}" data-kind="${row.kind}" data-expired="${D.expired(row.windowUsage)}" title="${escape(`${name}: ${row.display} · ${row.help}`)}">
@@ -116,7 +151,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const chip = m.status === 'error' ? m.source : m.message || m.source;
     const errorAction = m.status === 'error' ? `<button class="ai-inline-settings" type="button" data-quota-settings="${m.id}">${escape(t('copy.openSettings.93112c'))}</button>` : '';
     const foot = [m.status === 'error' && !m.expanded && D.invalidToken(m.data) ? t('copy.tokenExpired.22c3fe') : m.message, m.updated].filter(Boolean).join(' · ');
-    return `<section class="ai-usage-provider${m.vertical ? ' q-vertical' : ' q-horizontal'}" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-level="${m.level}" data-balance-empty="${m.exhausted}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}" title="${escape(m.title)}">
+    return `<section class="ai-usage-provider${m.vertical ? ' q-vertical' : ' q-horizontal'}" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-level="${m.level}" data-unit="${m.lowest.kind}" data-balance-empty="${m.exhausted}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}" title="${escape(m.title)}">
+      <button class="q-detail-toggle" data-quota-toggle="${m.id}" type="button" aria-controls="${m.id}-usage-rows" aria-expanded="false" aria-label="${escape(t('ui.quota.details', { source: registry.get(m.id).label }))}"></button>
       ${ring(m, layout.ringSize)}<div class="q-provider-body">
       <div class="ai-usage-source">${icon(m.id)}<b>${escape(registry.get(m.id).label)}</b><span class="q-chip" id="ai-${m.id}-source">${escape(chip)}</span></div>
       ${quotaRows(m)}<div class="q-compact-caption">${escape(m.message || m.reset)}</div>
@@ -150,6 +186,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     providers.style.setProperty('--q-rows', layout.rows);
     providers.innerHTML = visible.map(m => provider(m, layout)).join('') + (layout.summary ? summary(models) : '')
       + (size === 'mini' && layout.hidden.length ? `<button class="q-more-ring" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}" aria-label="${escape(t('quota.moreSources', { count: layout.hidden.length }))}">+${layout.hidden.length}</button>` : '');
+    if (pinnedDetails) showDetails(pinnedDetails);
     providers.scrollTop = scroll;
     for (const [id, offset] of rowScroll) if (byId(id)) byId(id).scrollTop = offset;
     providers.hidden = !ids.length;
@@ -168,7 +205,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       : size === 'large' ? escape(t('quota.refreshOrder')) : `${layout.hidden.length ? `<button class="ai-inline-settings" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}">${escape(t('quota.moreSources', { count: layout.hidden.length }))}</button> · ` : `${escape(t('quota.compactOrder'))} · `}${escape(updated)}`;
     footer.title = [footer.textContent, updated].filter(Boolean).join(' · ');
     if (focused !== undefined) [...tile.querySelectorAll('[data-quota-settings]')].find(el => el.dataset.quotaSettings === focused)?.focus({ preventScroll: true });
-    document.dispatchEvent(new CustomEvent('notch:ai-usage-updated', { detail: { codex: state.codex, ids } }));
+    document.dispatchEvent(new CustomEvent('notch:ai-usage-updated', { detail: { ...state, ids } }));
   }
   async function refresh({ force = false } = {}) {
     const api = window.notchAPI;

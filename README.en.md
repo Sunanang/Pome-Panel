@@ -56,7 +56,7 @@ Home edit mode swaps cards while preserving their sizes. Packing keeps the swapp
 
 ## AI activity and notifications
 
-Connect **Codex, Claude Code and Cursor** at **Settings → AI configuration**. Preview shows the exact files, Pome hook entries and timestamped backups. Confirmation verifies the backup and writes atomically. Invalid configurations and stale previews are rejected. Only Pome-owned entries change; other hooks, formatting and comments are retained. Existing Codex `notify` commands are forwarded and restored on disconnect. After a configuration change, fully quit and reopen the connected tool.
+Connect **Codex, Claude Code and Cursor** at **Settings → AI**. Preview shows the exact files, Pome hook entries and timestamped backups. Confirmation verifies the backup and writes atomically. Invalid configurations and stale previews are rejected. Only Pome-owned entries change; other hooks, formatting and comments are retained. Existing Codex `notify` commands are forwarded and restored on disconnect. After a configuration change, fully quit and reopen the connected tool.
 
 The local receiver listens only on `127.0.0.1:43821`, at `/notify/codex`, `/notify/claude` and `/notify/cursor`. Other sources return 404. Child-agent completion and cloud sessions do not show notifications.
 
@@ -104,7 +104,7 @@ Entire Codex responses that exactly match an empty suggestions/exclude object (o
 
 ## AI quota
 
-Only detected providers or providers with a configured token appear. The shared catalog covers Cursor, Codex, Claude, Grok Bot, Grok, Copilot, Antigravity and Manus. The B dashboard mosaic shows providers together without tabs. Each ring represents the lowest remaining percentage across that provider’s windows, with thin per-window bars beside it. Currency balances, credits and unlimited quotas retain their units without fabricated percentages. Mini shows up to four rings, or three plus +N for five or more providers; small shows up to three plus a source count. Compact sizes prioritize critical, low, error, normal (lowest first) and stale states; medium/large follow settings order. Medium supports five sources in a wrapped three-column grid. Large with five sources uses a 2×3 grid with a lowest-remaining summary in the sixth cell. Hover reveals source, reset and timestamp details; extra windows scroll within each cell. Grok Bot is a separate Cursor sand-pool card (requires Cursor sign-in), distinct from standalone xAI Grok. Layout retains the existing `cursor` module ID.
+Only detected providers or providers with a configured token appear. The shared catalog covers Cursor, Codex, Claude, Grok Bot, Grok, Copilot, Antigravity and Manus. The B dashboard mosaic shows providers together without tabs. Each provider shows one lowest-remaining value by default. Hover or click to reveal per-window bars. Currency balances, credits and unlimited quotas retain their units without fabricated percentages. Mini shows up to four providers, or three plus +N for five or more providers; small shows up to three plus a source count. Compact sizes prioritize critical, low, error, normal (lowest first) and stale states; medium/large follow settings order. Medium supports five sources in a wrapped three-column grid. Large with five sources uses a 2×3 grid with a lowest-remaining summary in the sixth cell. Hover reveals source, reset and timestamp details; extra windows scroll within each cell. Grok Bot is a separate Cursor Sand pool card (local sign-in or saved Cursor token), distinct from standalone xAI Grok. Layout retains the existing `cursor` module ID.
 
 Provider quota limits: Grok requires an xAI Management API key and team ID, and displays posted prepaid USD balance rather than an invented quota percentage. Manus uses the documented /v2/usage.availableCredits endpoint on api.manus.ai with x-manus-api-key and displays data.total_credits as spendable credits, without inferring a percentage from the monthly entitlement. Copilot credentials are scoped to github.com. Antigravity requires measured quota buckets; empty summaries remain unavailable.
 
@@ -203,3 +203,11 @@ Main entry points: `main.js` and `main-services.js`; safe IPC in `preload.js`; d
 ## License
 
 [MIT](LICENSE) © 2026 [Sunanang](https://github.com/Sunanang)
+
+## Simplified interactions
+
+Only fresh installs see the three-step welcome (activation, home widgets, optional NAS/AI). New homes start with Quick note, Focus timer, AI quota and AI completion alerts. Existing layouts stay intact. Settings → Display → Home offers Simple, Balanced and Everything presets, with the existing fit rules and an active-recording guard.
+
+NAS shows a brief status and primary action; pairing, endpoints, migration, rollback, HTTP permissions and backups live in Troubleshooting. Missing schemes become HTTPS. A detected HTTPS-to-HTTP mismatch only corrects the draft; HTTP credentials still require explicit consent. Cursor/Codex can Get and save local tokens in one click, with manual entry folded away. Source status follows actual quota responses.
+
+Quota defaults to one value per provider; hover, click or keyboard reveals the window breakdown. Quick notes and recording link to their full libraries, and disabling a workspace hides its tab and quick entry. Initial activation hints stop after three openings. Confirmations summarize impact with expandable details. Errors provide repair and redacted diagnostics. Windows can enable native capabilities from Current windows; forced-off and unavailable-native cases remain recoverable.

@@ -206,6 +206,11 @@ function dismissStatusToast(commitPending = true) {
 }
 
 function showStatusToast(message, options = {}) {
+  if (!options.onAction && window.NotchUi?.isError(message)) {
+    dismissStatusToast(true);
+    window.NotchUi.showError({ diagnostic: message });
+    return;
+  }
   dismissStatusToast(true);
   if (!statusToast || !statusToastMessage) return;
   const { actionLabel, onAction, onExpire, duration = 1800 } = options;
@@ -2948,10 +2953,16 @@ function readPlatformCapabilities() {
   return window.NotchPlatform.resolveCapabilities(exposed?.platform || window.notchAPI?.platform || 'darwin');
 }
 const unavailableHomeModules = [...readPlatformCapabilities().unavailableHomeModules];
-const effectiveHomeHidden = (hidden) => window.NotchPlatform.effectiveHiddenModules(hidden, HOME_MODULE_REGISTRY, unavailableHomeModules);
+let homeCapabilities = readPlatformCapabilities();
+let windowsInlineRequested = false;
+try { windowsInlineRequested = localStorage.getItem('pome-windows-inline-v1') === '1'; } catch {}
+const effectiveHomeHidden = (hidden) => window.NotchPlatform.effectiveHiddenModules(hidden, HOME_MODULE_REGISTRY,
+  !windowsInlineRequested && homeCapabilities.features.winNativeSetting && !homeCapabilities.features.windowSwitcher
+    ? [...unavailableHomeModules, 'windows'] : unavailableHomeModules);
 // 运行期能力降级（Windows 原生模块加载失败 / 用户关闭开关）时重算首页可见模块。
 window.notchAPI?.onCapabilitiesChanged?.((capabilities) => {
   if (!Array.isArray(capabilities?.unavailableHomeModules)) return;
+  homeCapabilities = capabilities;
   unavailableHomeModules.splice(0, unavailableHomeModules.length, ...capabilities.unavailableHomeModules);
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
 });
@@ -3144,7 +3155,7 @@ const repairWindowsDefaultHome = readPlatformCapabilities().homeDefaults?.showSu
   && window.NotchDomain.isLegacyWindowsDefaultHomeLayout({
     order: homeOrder, defaultOrder: HOME_ORDER_DEFAULTS, sizes: homeSizes, defaults: HOME_SIZE_DEFAULTS,
     placements: homeWorkingLayout?.placements, hiddenIds: hiddenHomeModules,
-    unavailableIds: unavailableHomeModules, registry: HOME_MODULE_REGISTRY,
+    unavailableIds: effectiveHomeHidden([]), registry: HOME_MODULE_REGISTRY,
   });
 const useWindowsHomeDefaults = freshWindowsHome || repairWindowsDefaultHome;
 if (repairWindowsDefaultHome) {
@@ -3520,6 +3531,15 @@ function visibilitySnapshot() {
 }
 
 function setHomeModuleVisible(moduleId, visible) {
+  const before = windowsInlineRequested;
+  const requestInline = moduleId === 'windows' && visible === true && homeCapabilities.features.winNativeSetting && !before;
+  if (requestInline) windowsInlineRequested = true;
+  const result = setHomeModuleVisibleCore(moduleId, visible, requestInline);
+  if (!result.ok) windowsInlineRequested = before;
+  else if (requestInline) { try { localStorage.setItem('pome-windows-inline-v1', '1'); } catch {} }
+  return result;
+}
+function setHomeModuleVisibleCore(moduleId, visible, force = false) {
   const current = [...hiddenHomeModules];
   if (unavailableHomeModules.includes(moduleId)) return { ok: false, changed: false, error: 'unsupported', hiddenIds: current, persisted: homeVisibilityPersisted };
   const currentlyVisible = visibilitySnapshot().visibleIds;
@@ -3536,7 +3556,7 @@ function setHomeModuleVisible(moduleId, visible) {
     visible
   );
   if (!next.ok) return { ...next, changed: false, persisted: homeVisibilityPersisted };
-  const changed = JSON.stringify(next.hiddenIds) !== JSON.stringify(current);
+  const changed = force || JSON.stringify(next.hiddenIds) !== JSON.stringify(current);
   if (!changed) {
     return { ok: true, changed: false, hiddenIds: current, persisted: homeVisibilityPersisted };
   }
@@ -3646,10 +3666,36 @@ function setHomeModuleVisible(moduleId, visible) {
   return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
 }
 
+function applyHomePreset(name, selected) {
+  if (homeLayoutReadOnly || window.NotchWorkspace?.isRecordingActive?.()) return { ok: false, error: 'layout_busy' };
+  const available = HOME_MODULE_REGISTRY.filter(id => !unavailableHomeModules.includes(id));
+  const ids = window.NotchUiDomain.presetIds(name, available, selected);
+  const old = { hidden: hiddenHomeModules, sizes: homeSizes, layout: homeWorkingLayout, order: homeOrder, inline: windowsInlineRequested };
+  if (ids.includes('windows')) windowsInlineRequested = true;
+  const nextHidden = HOME_MODULE_REGISTRY.filter(id => !ids.includes(id));
+  homeOrder = [...ids, ...HOME_MODULE_REGISTRY.filter(id => !ids.includes(id))];
+  const defaults = Object.fromEntries(ids.map(id => [id, HOME_SIZE_DEFAULTS[id]]));
+  homeSizes = { ...HOME_SIZE_DEFAULTS, ...window.NotchDomain.normalizeHomeWidgetSizes(defaults, defaults, '', 48) };
+  homeWorkingLayout = null;
+  const layout = resolveValidatedHomeLayout(nextHidden, homeOrder, homeSizes, { forcePack: true, sealGaps: true });
+  if (!layout) {
+    homeSizes = old.sizes; homeOrder = old.order; homeWorkingLayout = old.layout;
+    windowsInlineRequested = old.inline;
+    return { ok: false, error: 'layout_invalid' };
+  }
+  hiddenHomeModules = nextHidden;
+  stopMirror();
+  applyHomeLayout(layout, { reason: 'visibility' });
+  const persisted = saveHiddenHomeModules(); saveHomeLayout();
+  if (windowsInlineRequested) { try { localStorage.setItem('pome-windows-inline-v1', '1'); } catch {} }
+  document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
+  return { ok: true, persisted };
+}
 window.NotchHome = Object.freeze({
   getVisibility: visibilitySnapshot,
   isVisible: (moduleId) => visibilitySnapshot().visibleIds.includes(String(moduleId || '')),
   setModuleVisible: setHomeModuleVisible,
+  applyPreset: applyHomePreset,
 });
 document.getElementById('home-inbox-placeholder')?.addEventListener('click', async () => {
   await setActiveTab('settings');

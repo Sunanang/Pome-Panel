@@ -83,10 +83,12 @@ const pomeLocaleRendererNasSyncPair = typeof module === 'object' && module.expor
       case 'input':
         next.code = normalizePairCode(action.value);
         next.error = '';
+        next.errorCode = '';
         return next;
       case 'submit_start':
         next.submitting = true;
         next.error = '';
+        next.errorCode = '';
         next.disabled = true;
         return next;
       case 'submit_end':
@@ -98,6 +100,7 @@ const pomeLocaleRendererNasSyncPair = typeof module === 'object' && module.expor
         next.disabled = false;
         next.code = '';
         next.error = '';
+        next.errorCode = '';
         next.bound = true;
         next.status = action.status || null;
         next.toast = pomeLocaleRendererNasSyncPair.t("copy.pairingSuccessful.b1e2f7");
@@ -107,6 +110,7 @@ const pomeLocaleRendererNasSyncPair = typeof module === 'object' && module.expor
         next.submitting = false;
         next.disabled = false;
         next.error = action.message || action.error || pomeLocaleRendererNasSyncPair.t("copy.pairingFailed.aea73b");
+        next.errorCode = action.error || '';
         next.toast = next.error;
         next.needsTrustConfirm = action.needsTrustConfirm === true;
         if (!next.needsTrustConfirm) next.dialog = null;
