@@ -81,15 +81,15 @@ async function run(c) {
   const sand = await js('notchAPI.getGrokbotUsage({force:true})');
   assert.equal(sand.primary.resetsAt, Date.parse('2026-09-14T04:00:16.825Z')/1000);
   await js('NotchAiUsage.refresh({force:true})');
-  await js(`document.getElementById('home-cursor').dataset.widgetSize='small';document.getElementById('ai-tab-grok').click()`);
+  await js(`document.getElementById('home-cursor').dataset.widgetSize='large'`);
   assert.match(await js(`document.querySelector('#grok-usage-rows strong').textContent`),/10\.00/);
   assert.equal(await js(`document.querySelector('#grok-usage-rows .cursor-usage-track').hidden`),true);
   assert.equal(await js(`document.querySelectorAll('#copilot-usage-rows .ai-quota-row').length`),1);
   assert.equal(await js(`document.querySelector('#copilot-usage-rows strong').textContent`),'50%');
-  assert.equal(await js(`document.getElementById('ai-tab-copilot').dataset.level`),'ok');
+  assert.equal(await js(`document.getElementById('ai-provider-copilot').dataset.level`),'ok');
   assert.equal(await js(`document.querySelector('#antigravity-usage-rows strong').textContent`),'50%');
   assert.equal(await js(`document.querySelector('#grokbot-usage-rows .ai-quota-help').textContent.includes(PomeI18n.t('copy.resetTimeUnknown.2446e1'))`),false);
-  await js(`document.getElementById('ai-tab-manus').click()`);
+  assert.equal(await js(`document.querySelector('#home-cursor [role=tab]')`),null);
   assert.equal(await js(`document.querySelector('#manus-usage-rows strong').textContent`),'60');
   assert.equal(await js(`document.querySelector('#manus-usage-rows .cursor-usage-track').hidden`),true);
   assert(!await js(`JSON.stringify(collectLocalStorageSnapshot()).includes('fixture-grok')`));
@@ -97,7 +97,7 @@ async function run(c) {
   await js('NotchAiUsage.refresh({force:true})');
   await until(`document.querySelector('#copilot-usage-rows strong').textContent===PomeI18n.t('copy.unlimited.8651f5')`);
   assert.equal(await js(`document.querySelector('#copilot-usage-rows .cursor-usage-track').hidden`),true);
-  assert.equal(await js(`document.getElementById('ai-tab-copilot').dataset.level`),'ok');
+  assert.equal(await js(`document.getElementById('ai-provider-copilot').dataset.level`),'ok');
   if (restart) {
     assert.equal((await js(`notchAPI.clearAiProviderToken('grok')`)).ok,true);
     assert.equal((await js(`notchAPI.getAiProviderTokenStatus('grok')`)).configured,false);

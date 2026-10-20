@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Replace home AI quota tabs with the B dashboard mosaic: simultaneous provider rings and window bars, urgency-based compact folding, settings order in larger sizes, and a lowest-remaining summary for five-provider large cards. Critical now starts at ≤10%. Preserve balance/credit units, stale/error fallbacks, source and reset details; update Grok, Grok Bot and Manus branding.
+
 ### Multi-AI providers (usage + completion matrix)
 
 - Manus follow-up fixes: overdue tasks no longer shorten rate-limit or offline backoff. Compact cold task content while retaining consumed-event checkpoints so old tasks cannot replay after confirmed identities expire.

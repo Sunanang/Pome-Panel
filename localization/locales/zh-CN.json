@@ -1326,5 +1326,16 @@
   "providers.availableCredits": "可用积分",
   "sources.openProvider": "打开 {source}",
   "providers.completionScope.copilot": "完成提醒目前支持 Copilot CLI；VS Code 与云端会话暂未接入。",
-  "providers.completionScope.antigravity": "支持 Antigravity App、IDE 与 CLI；完成摘要暂显示默认标题，待操作提醒尚未启用。"
+  "providers.completionScope.antigravity": "支持 Antigravity App、IDE 与 CLI；完成摘要暂显示默认标题，待操作提醒尚未启用。",
+  "quota.tokenRequired": "需重新获取 Token",
+  "quota.stale": "数据过期",
+  "quota.week": "周",
+  "quota.day": "日",
+  "quota.error": "获取失败",
+  "quota.lowest": "最低剩余",
+  "quota.moreSources": "+{count} 个来源",
+  "quota.sourcesNeedAttention": "{count} 个来源需处理",
+  "quota.minimumReset": "最低 {source} · {reset}",
+  "quota.refreshOrder": "每 5 分钟自动刷新 · 按设置中的顺序排列",
+  "quota.compactOrder": "按紧急度排序"
 }

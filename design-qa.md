@@ -1,3 +1,53 @@
+# 首页 AI 剩余额度 · B 仪表盘 · 2026-10-20
+
+final result: passed
+
+## 视觉准绳与证据
+
+- 定稿：[Drive 文件夹](https://drive.google.com/drive/folders/1tjUIGrq6q2FyRJ0fSDCSej36KLXE46lv)。只实现 B 仪表盘，未使用 A 列表方向。源码与品牌 SVG 取自用户指定的 ai-quota-final-src.zip。
+- 原图：`dist.noindex/ai-quota-dashboard/original/`，包含用户指定的十张独立尺寸/来源截图。源文件保存在 `/private/tmp/pome-ai-quota-reference/`，不作为产品运行依赖。
+- 实现：生产 `renderer/index.html`、CSS、JS 在 macOS Electron 中运行；使用隔离 userData 和明确的额度样本，无真实账号凭据。`tests/ai-usage.electron.js` 触发刷新、切尺寸、异常、设置跳转和语言切换。
+- 截图：`dist.noindex/ai-quota-dashboard/`。`acceptance-overview.png` 展示四尺寸 × 2/3 来源和 large × 5；`comparisons/` 为十组左参考/右实现的逐张对照。每组比较过完整卡片及圆环/图标/细条/文字的局部区域。
+- 像素和密度：原图为 520×436（mini）、520×712（small）、874×712（medium）、874×1264（large）；按源 HTML 的 24px 留白裁切。对应卡片 378×252、378×528、778×528、778×1080，均为 2x，CSS 尺寸分别为 189×126、189×264、389×264、389×540；实现以同尺寸同密度采集，不拉伸。额外验证现有首页 196×118、196×248、404×248、404×510，保留现有首页格子和窗口布局。
+- 采集最终从完整页面裁切，避免隐藏窗口局部 capturePage 的绘制残影；`*-full.png` 与同名 JSON 留存完整页面/裁切坐标。普通外观与定稿对照；玻璃外观另存 `medium-3ai-glass.png`，保留用户原有外观选项。
+
+## 逐张检查
+
+| 尺寸 | 已检查实现与对照图 | 结果 |
+| --- | --- | --- |
+| mini | mini-2ai.png、mini-3ai.png；另验 mini-4ai / mini-5ai | 32px 环、中心品牌图标、最低剩余；5 家为 3 环 +2 |
+| small | small-2ai.png、small-3ai.png；另验 small-5ai | 46/36px 环；3 家折叠窗口细节；超过 3 家为 +N 个来源 |
+| medium | medium-2ai.png、medium-3ai.png、medium-5ai.png | 64/52/40px 环，2/3 列，五家折行且在现有首页尺寸也同屏可见 |
+| large | large-2ai.png、large-3ai.png、large-5ai.png | 84/66/50px 环；五家 2×3，第六格最低剩余摘要 |
+
+大尺寸按设置中的 catalog 顺序，所以五来源样本中 Claude Code 在 Grok Bot 前；来源名保留现有 catalog 的 Claude Code / GitHub Copilot，不为匹配静态样图缩写。额度、来源标签、账期及重置时间使用实际样本；不会把样图中的固定时间当成真实数据。mini/small 按产品明确的紧急度顺序排序，底部写“按紧急度排序”。
+
+## 五项视觉检查与迭代
+
+1. 字体：模块内复用源包 Inter 变量字体及许可证；中文沿用系统回退。标题 11/500，来源 11.5–12.5/620，百分比 650/等宽数字，窗口文字 9.5–10.5；百分号为 0.62em。中文系统字体与定稿 Noto 有轻微字形差异，属于平台字体回退，不引入 17MB 中文字体。
+2. 间距：格间 8px，格圆角 12px；保持原模块 18px 外壳、ECG 背景和尺寸。中号五来源减少格内间距，保证现有较矮首页也完整展示；超过六家时中号采用更紧凑的横向格，大号三列，不使用 Tab。
+3. 色彩：轨道、格底、渐变均按定稿；≤20% 偏低、≤10% 告急，按原始未取整值判断。过期环/细条半透明并直接标“数据过期”；Token 错误红色虚线，网络错误不会要求替换有效凭据。零剩余不画圆头小点。
+4. 图标：Cursor/Codex/Claude 复用仓库 SVG；Grok/Grok Bot 使用源包真标，Grok Bot 增强方底并按要求写注释；Manus 使用源包官方白色字形。图标为本地静态资源，无运行时请求。
+5. 文案：标题固定 AI 剩余额度；源标签、更新时间、账期/重置时间、Credits/套餐仍可查。余额、积分、无限额度不换算百分比。长文单行截断，可通过整格/窗口 tooltip 和 aria-description 查看完整信息。中英文即时切换，包括来源数量单复数。
+
+首轮 P2：五来源中号过密、长归属标签挤压来源名、过期状态只变淡而缺少可见提示；分别压紧格内间距、使用短来源标签并限制 chip、增加可见过期说明，复拍通过。第二轮恢复启动凭据流程依赖的更新时间，并修复没有本机用量样本时错误声称“已改用本机”的标签。设置跳转后的截图显式切回首页，避免将设置页当成组件截图。最终十组对照无待修 P0/P1/P2。
+
+## 交互与验证
+
+- 自动覆盖无 Tab、来源同屏、4/5/8 来源边界、+N、状态排序和新阈值、多窗口最低值、未知值、单 Cursor/单 Codex、空态、Token 设置入口、网络回退与失效清理、真实更新时间、无限/金额/积分、超多窗口格内滚动、HTML 转义、语言切换、手动刷新。
+- 本轮 Node 相关测试：39 项通过。额度专项 Electron 与启动凭据专项通过，渲染控制台无错误。
+- 完整 npm test：823 项 Node 测试中 822 通过、1 项平台专属跳过、0 失败；26 次 Electron 场景/重启运行及全部 JS 语法、本地化检查通过。日志 `/private/tmp/pome-quota-full.log`；额度专项日志 `/private/tmp/pome-quota-ui.log`。
+- 未做：真实 AI 账号联网验收、Windows 真机/DPI；本轮为 macOS 实际 Electron + 隔离 API 样本，不将样本当成真实接入凭据或 Windows 实机证据。没有运行打包、发布或 main 合并。
+
+## 本轮文件范围
+
+- 界面与规则：renderer/ai-usage.js、renderer/ai-usage-domain.js、renderer/styles.css、renderer/index.html。
+- 资产：renderer/assets/inbox/{grok,grokbot,manus}.svg、图标 README、assets/fonts/Inter-VF.ttf 及 LICENSE。
+- 回归：tests/ai-usage.test.js、tests/ai-usage.electron.js、tests/provider-credentials.electron.js、tests/startup.electron.js。
+- 说明与中英文：README、CHANGELOG、localization/locales、桌面/NAS 自动生成资源、本报告。
+
+---
+
 # 屏幕顶部任务通知 · 2026-10-16
 
 final result: passed

@@ -201,7 +201,7 @@ async function checkCodexTokenFlow(contents) {
   assert.equal(invalid.status.manualTokenInvalid, true);
   assert.equal(invalid.label, 'Token 失效'); assert.equal(invalid.percent, '--%');
   assert.equal(invalid.guideVisible, true);
-  assert.match(invalid.footer, /Codex Token 已失效，请重新获取 · 去设置/);
+  assert.match(invalid.footer, /Token 失效.*去设置/);
   codexTelemetry = { ok:true, detected:true, updatedAt:new Date(Date.now()-60000).toISOString(),
     primary:{percent:45}, secondary:{percent:15}, plan:'plus' };
   const fallback = await contents.executeJavaScript(`(async () => {

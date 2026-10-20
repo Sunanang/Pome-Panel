@@ -1350,5 +1350,22 @@
   "providers.availableCredits": "Available credits",
   "sources.openProvider": "Open {source}",
   "providers.completionScope.copilot": "Completion reminders currently support Copilot CLI; VS Code and cloud sessions are not connected.",
-  "providers.completionScope.antigravity": "Supports Antigravity App, IDE and CLI. Completion summaries use a default title; attention reminders are not enabled."
+  "providers.completionScope.antigravity": "Supports Antigravity App, IDE and CLI. Completion summaries use a default title; attention reminders are not enabled.",
+  "quota.tokenRequired": "Get a new token",
+  "quota.stale": "Data expired",
+  "quota.week": "Week",
+  "quota.day": "Day",
+  "quota.error": "Unavailable",
+  "quota.lowest": "Lowest remaining",
+  "quota.moreSources": {
+    "one": "+{count} source",
+    "other": "+{count} sources"
+  },
+  "quota.sourcesNeedAttention": {
+    "one": "{count} source needs attention",
+    "other": "{count} sources need attention"
+  },
+  "quota.minimumReset": "Lowest {source} · {reset}",
+  "quota.refreshOrder": "Refreshes every 5 min · Settings order",
+  "quota.compactOrder": "Urgency first"
 }

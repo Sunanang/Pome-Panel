@@ -5,7 +5,6 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
   else root.NotchAiUsageDomain = api;
 })(typeof window === 'object' ? window : globalThis, function (registry) {
   'use strict';
-  const TAB_KEY = 'notch-ai-usage-tab-v1';
   const FALLBACK = {
     get title() { return pomeLocaleRendererAiUsageDomain.t("copy.noAiToolsConnectedYet.91c4b3"); },
     get body() { return pomeLocaleRendererAiUsageDomain.t("copy.signInToCursorLocallyOrUse.3b099a"); },
@@ -30,11 +29,7 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     const snapshots = asSnapshots(first, second);
     return registry.usageProviders().map((provider) => provider.id).filter((id) => available(snapshots[id]));
   }
-  function title(ids) {
-    return ids.length === 1
-      ? pomeLocaleRendererAiUsageDomain.t("copy.remainingQuota.68dc7b", { arg1: (registry.get(ids[0])?.label || ids[0]) })
-      : pomeLocaleRendererAiUsageDomain.t("copy.aiQuota.faa20c");
-  }
+  function title() { return pomeLocaleRendererAiUsageDomain.t('copy.aiQuota.faa20c'); }
   function percent(value) {
     if (value == null || typeof value === 'boolean' || typeof value === 'string' && !value.trim()) return null;
     const n = Number(value); return Number.isFinite(n) ? n : null;
@@ -43,23 +38,42 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
   function lowestRemaining(data, id) {
     if (data?.ok === false) return null;
     const values = quotaRows(data, id).map(row => row.windowUsage)
+      .filter(window => !window?.unlimited && !window?.currency && window?.unit !== 'credits')
       .map((window) => remaining(window?.percent)).filter((value) => value != null);
     return values.length ? Math.min(...values) : null;
   }
-  function chooseTab(saved, ids, first, second) {
-    if (ids.includes(saved)) return saved;
-    if (ids.length === 1) return ids[0];
-    if (!ids.length) return null;
-    const snapshots = asSnapshots(first, second);
-    let best = ids[0];
-    let bestRem = lowestRemaining(snapshots[ids[0]], ids[0]) ?? 100;
-    for (const id of ids.slice(1)) {
-      const rem = lowestRemaining(snapshots[id], id) ?? 100;
-      if (rem < bestRem) { best = id; bestRem = rem; }
-    }
-    return best;
+  function level(value) { const n = percent(value); return n == null ? 'ok' : n <= 10 ? 'critical' : n <= 20 ? 'warn' : 'ok'; }
+  function invalidToken(data) { return Boolean(data?.manualTokenInvalid || data?.status === 401 || data?.status === 403); }
+  function timestamp(data) {
+    const value = data?.fetchedAt || data?.updatedAt;
+    const parsed = typeof value === 'number' ? value * 1000 : Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
-  function level(value) { const n = percent(value); return n == null ? 'ok' : n <= 5 ? 'critical' : n <= 20 ? 'warn' : 'ok'; }
+  function status(data, id, now = Date.now()) {
+    if (!available(data)) return 'undetected';
+    if (invalidToken(data) || data?.ok === false) return 'error';
+    if (data?.stale || quotaRows(data, id).some(row => expired(row.windowUsage, now))
+      || timestamp(data) != null && now - timestamp(data) > 86400000) return 'stale';
+    return level(lowestRemaining(data, id));
+  }
+  function dashboard(snapshots, size = 'small', now = Date.now()) {
+    const ids = providers(snapshots);
+    if (['mini', 'small'].includes(size)) {
+      const rank = { critical: 0, warn: 1, error: 2, ok: 3, stale: 4, undetected: 5 };
+      ids.sort((a, b) => rank[status(snapshots[a], a, now)] - rank[status(snapshots[b], b, now)]
+        || (lowestRemaining(snapshots[a], a) ?? Infinity) - (lowestRemaining(snapshots[b], b) ?? Infinity));
+    }
+    const limit = size === 'mini' ? ids.length <= 4 ? 4 : 3 : size === 'small' ? 3 : ids.length;
+    const shown = ids.slice(0, limit), hidden = ids.slice(limit);
+    const columns = size === 'mini' ? shown.length + (hidden.length ? 1 : 0)
+      : size === 'medium' ? Math.min(3, ids.length) : size === 'large' && ids.length >= 7 ? 3 : size === 'large' && ids.length >= 4 ? 2 : 1;
+    const summary = size === 'large' && ids.length === 5;
+    return { ids, shown, hidden, columns: Math.max(1, columns), summary,
+      rows: Math.ceil((shown.length + Number(summary)) / Math.max(1, columns)),
+      ringSize: size === 'mini' ? 32 : size === 'small' ? ids.length <= 2 ? 46 : 36
+        : size === 'medium' ? ids.length <= 2 ? 64 : ids.length === 3 ? 52 : ids.length > 6 ? 28 : 40
+          : ids.length <= 2 ? 84 : ids.length === 3 ? 66 : 50 };
+  }
   function formatPercent(value) { const n = percent(value); return n == null ? '--%' : `${Math.round(n)}%`; }
   function clock(value) {
     if (value == null) return '--:--';
@@ -104,5 +118,5 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     return Math.max(1000, Math.min(normal, ...resets.map(time => time - now + 1000)));
   }
   function planLabel(plan) { return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : ''; }
-  return { registry, windowLabel, quotaRows, refreshDelay, TAB_KEY, FALLBACK, available, providers, title, remaining, lowestRemaining, chooseTab, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots };
+  return { registry, windowLabel, quotaRows, refreshDelay, FALLBACK, available, providers, title, remaining, lowestRemaining, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots, invalidToken, timestamp, status, dashboard };
 });

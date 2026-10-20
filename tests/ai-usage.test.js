@@ -9,8 +9,8 @@ const grokbot = { detected: true, ok: true, primary: { percent: 90 } };
 test('AI usage four visibility combinations and titles have no empty provider', () => {
   for (const [snapshots, ids, title] of [
     [{ cursor: absent, codex: absent }, [], 'AI 剩余额度'],
-    [{ cursor, codex: absent }, ['cursor'], 'Cursor 剩余额度'],
-    [{ cursor: absent, codex }, ['codex'], 'Codex 剩余额度'],
+    [{ cursor, codex: absent }, ['cursor'], 'AI 剩余额度'],
+    [{ cursor: absent, codex }, ['codex'], 'AI 剩余额度'],
     [{ cursor, codex }, ['cursor', 'codex'], 'AI 剩余额度'],
   ]) {
     assert.deepEqual(D.providers(snapshots), ids);
@@ -22,17 +22,43 @@ test('manual-only and failing configured providers remain visible', () => {
   assert.deepEqual(D.providers({ cursor: { ok: false, configured: true }, codex: { ok: true, configured: true } }), ['cursor', 'codex']);
   assert.equal(D.available({ ...absent, ok: true, authSource: 'local' }), false, 'cached Cursor usage must disappear after logout');
 });
-test('first tab uses the least remaining pool; persisted tab never follows changing percentages', () => {
-  const both = { cursor, codex };
-  assert.equal(D.chooseTab(null, ['cursor', 'codex'], both), 'codex');
-  assert.equal(D.chooseTab('cursor', ['cursor', 'codex'], both), 'cursor');
-  assert.equal(D.chooseTab('codex', ['cursor', 'codex'], { ...both, cursor: { ...cursor, auto: { percent: 100 } } }), 'codex');
-  assert.equal(D.chooseTab('codex', ['cursor'], { cursor, codex: absent }), 'cursor');
-  assert.equal(D.chooseTab(null, [], {}), null);
-  assert.equal(D.chooseTab(null, ['cursor', 'codex'], { cursor: {}, codex: { primary: { percent: 0 } } }), 'cursor', 'ties preserve catalog order');
-  assert.equal(D.chooseTab(null, ['cursor', 'codex'], { cursor: {}, codex }), 'codex');
-  assert.equal(D.chooseTab(null, ['cursor', 'codex'], { cursor: { auto: { percent: 79.6 } }, codex: { primary: { percent: 79.7 } } }), 'codex', 'compare unrounded remainders');
-  assert.equal(D.chooseTab(null, ['cursor', 'codex', 'grokbot'], { cursor, codex, grokbot }), 'grokbot');
+test('dashboard folds only compact sizes and preserves settings order in larger sizes', () => {
+  const snapshots = { cursor, codex, claude: { detected: true, primary: { percent: 82 } }, grokbot,
+    grok: { configured: true, ok: true, primary: { currency: 'USD', balance: 20 } } };
+  assert.deepEqual(D.dashboard(snapshots, 'mini').shown, ['grokbot', 'codex', 'claude']);
+  assert.deepEqual(D.dashboard(snapshots, 'mini').hidden, ['cursor', 'grok']);
+  assert.equal(D.dashboard(snapshots, 'mini').columns, 4);
+  assert.equal(D.dashboard(snapshots, 'small').shown.length, 3);
+  for (const size of ['medium', 'large']) assert.deepEqual(D.dashboard(snapshots, size).shown, ['cursor', 'codex', 'claude', 'grokbot', 'grok']);
+  assert.equal(D.dashboard(snapshots, 'medium').columns, 3);
+  assert.equal(D.dashboard(snapshots, 'medium').rows, 2);
+  assert.equal(D.dashboard(snapshots, 'large').columns, 2);
+  assert.equal(D.dashboard(snapshots, 'large').rows, 3);
+  assert.equal(D.dashboard(snapshots, 'large').summary, true);
+  delete snapshots.grok;
+  assert.equal(D.dashboard(snapshots, 'mini').shown.length, 4);
+  assert.equal(D.dashboard(snapshots, 'mini').hidden.length, 0);
+});
+test('compact urgency ranks critical, warn, error, ok by unrounded minimum, then stale', () => {
+  const snapshots = {
+    cursor: { ...cursor, auto: { percent: 40 }, other: { percent: 0 } },
+    codex: { ...codex, primary: { percent: 0 }, secondary: { percent: 0 } },
+    claude: { detected: true, primary: { percent: 80 } },
+    grokbot: { ...grokbot, primary: { percent: 95 } },
+    grok: { configured: true, ok: false, status: 401 },
+    copilot: { detected: true, windows: [{ percent: 39.9 }] },
+    antigravity: { detected: true, stale: true, windows: [{ percent: 99 }] },
+  };
+  assert.deepEqual(D.dashboard(snapshots, 'small').ids, ['grokbot', 'claude', 'grok', 'cursor', 'copilot', 'codex', 'antigravity']);
+  assert.equal(D.status({ detected: false, configured: false }, 'manus'), 'undetected');
+  assert.equal(D.status({ ...cursor, manualTokenInvalid: true }, 'cursor'), 'error');
+  assert.equal(D.status({ ...cursor, fetchedAt: '2020-01-01T00:00:00Z' }, 'cursor'), 'stale');
+});
+test('all eight sources stay present in medium and large, no tab state remains', () => {
+  const data = Object.fromEntries(D.registry.ids().map(id => [id, { detected: true }]));
+  for (const size of ['medium', 'large']) assert.equal(D.dashboard(data, size).shown.length, 8);
+  assert.equal('chooseTab' in D, false);
+  assert.equal('TAB_KEY' in D, false);
 });
 test('remaining presentation handles zero, full, excess, decimals and missing without changing used data', () => {
   for (const [used, remaining, text] of [[0, 100, '100%'], [100, 0, '0%'], [125, 0, '0%'],
@@ -47,14 +73,14 @@ test('remaining presentation handles zero, full, excess, decimals and missing wi
   const snapshot = JSON.stringify({ cursor, codex });
   assert.equal(D.lowestRemaining(cursor, 'cursor'), 55);
   assert.equal(D.lowestRemaining(codex, 'codex'), 14);
-  D.chooseTab(null, ['cursor', 'codex'], { cursor, codex });
+  D.dashboard({ cursor, codex }, 'small');
   assert.equal(JSON.stringify({ cursor, codex }), snapshot);
 });
-test('remaining warning thresholds and hidden tab indicators use unrounded values', () => {
-  for (const [remaining, level] of [[100, 'ok'], [20.1, 'ok'], [20, 'warn'], [5.1, 'warn'], [5, 'critical'], [0, 'critical'], [null, 'ok'], [undefined, 'ok']]) {
+test('remaining warning thresholds and dashboard urgency use unrounded values', () => {
+  for (const [remaining, level] of [[100, 'ok'], [20.1, 'ok'], [20, 'warn'], [10.1, 'warn'], [10, 'critical'], [0, 'critical'], [null, 'ok'], [undefined, 'ok']]) {
     assert.equal(D.level(remaining), level);
   }
-  for (const [used, level] of [[79.9, 'ok'], [80, 'warn'], [94.9, 'warn'], [95, 'critical'], [101, 'critical']]) {
+  for (const [used, level] of [[79.9, 'ok'], [80, 'warn'], [89.9, 'warn'], [90, 'critical'], [101, 'critical']]) {
     assert.equal(D.level(D.lowestRemaining({ primary: { percent: used } }, 'codex')), level);
     assert.equal(D.level(D.lowestRemaining({ auto: { percent: used } }, 'cursor')), level);
   }
@@ -111,4 +137,11 @@ test('quota refresh adapts to reset time and visibility without retrying expired
   assert.equal(D.refreshDelay(data, true, 1000000), 2000);
   assert.equal(D.refreshDelay(data, false, 1000000), 900000);
   assert.equal(D.refreshDelay(data, true, 1002000), 300000);
+});
+
+test('balances and unlimited windows never manufacture a percent or a minimum', () => {
+  for (const [id, window] of [['grok', { currency: 'USD', balance: 12, percent: 100 }], ['manus', { unit: 'credits', balance: 80, percent: 100 }], ['copilot', { unlimited: true, percent: 100 }]]) {
+    assert.equal(D.lowestRemaining({ ok: true, primary: window }, id), null);
+  }
+  assert.equal(D.lowestRemaining({ windows: [{ unlimited: true, percent: 100 }, { percent: 30 }] }, 'copilot'), 70);
 });
