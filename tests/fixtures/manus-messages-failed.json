@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "request_id": "req_messages_failed",
+  "task_id": "task_fixture_failed",
+  "messages": [
+    {
+      "id": "evt_user_f1",
+      "type": "user_message",
+      "timestamp": 1760923005000,
+      "user_message": { "content": "Do the thing", "message_type": "text" }
+    },
+    {
+      "id": "evt_error_f1",
+      "type": "error_message",
+      "timestamp": 1760923100000,
+      "error_message": { "error_type": "runtime", "content": "Model call failed" }
+    },
+    {
+      "id": "evt_status_error_f1",
+      "type": "status_update",
+      "timestamp": 1760923101000,
+      "status_update": { "agent_status": "error", "brief": "Failed" }
+    }
+  ],
+  "has_more": false
+}

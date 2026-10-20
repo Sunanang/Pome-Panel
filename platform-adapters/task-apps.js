@@ -15,6 +15,7 @@ const LABELS = {
   codex: providerLabels.codex,
   cursor: providerLabels.cursor,
   antigravity: providerLabels.antigravity,
+  manus: providerLabels.manus,
   get claude() { return terminalLabel(); },
   get grok() { return terminalLabel(); },
   get copilot() { return terminalLabel(); },

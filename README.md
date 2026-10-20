@@ -97,7 +97,7 @@ Cursor 用量默认自动读取本机 Cursor 登录态。「设置 → AI 剩余
 
 Codex 配置手动 access token 后，由主进程向 `https://chatgpt.com/backend-api/wham/usage` 查询实时额度，超时 10 秒；沿用首页的定期刷新与刷新按钮。未配置 Token 或联网失败时，回退读取本机 `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` 的最近 `token_count` 记录，默认目录为 `~/.codex`；Windows 还会检查 `%USERPROFILE%\.codex`。两种来源按实际 windowMinutes 展示额度周期、套餐、Credits 与更新时间；仅有每周窗口时只显示每周额度，额外模型额度按各自名称和周期列出，标签分别为「手动 Token」和「本机 Codex」。重置时间按本地日期显示为「HH:MM 重置」「明天 HH:MM 重置」或「M/D HH:MM 重置」。过期记录的额度条变灰并提示「待刷新」。网络故障且没有可用本机记录时保留上次成功的远程数据与原更新时间。Cursor 也保留同一账号的最近成功值并标注刷新失败；退出、切换账号或认证失效时不复用旧账号缓存。可选的 Grok Bot 用量失败不会阻断 Cursor 主额度。刷新按可见性降频，并在已知额度重置后主动更新；手动刷新仍立即查询。
 
-「设置 → AI 提供商 / AI 剩余额度」按统一 catalog 列出各家完成与额度能力。Cursor / Codex Token 卡保留原交互；Grok Bot 注明依赖 Cursor 登录；Claude 用量走本机 OAuth；Copilot / Grok / Antigravity / Manus 可配置手动 Token（`safeStorage`），Grok 还需 xAI 团队 ID；只接受 Management API Key，显示以美元计的已入账预付余额，不伪造订阅额度百分比。Manus 使用官方 `https://api.manus.ai/v2/usage.availableCredits` 与 `x-manus-api-key`，只以 `data.total_credits` 作为可消费积分余额。Codex「获取本机 Token」仅在主动点击时只读本机 `auth.json`。Token 不写入工作区、不进日志、不自动续期。401/403 标记失效并可回退本机记录；网络故障不会把有效 Token 标失效。完成 HTTP 接收 Codex / Claude / Cursor / Grok / Copilot CLI / Antigravity。
+「设置 → AI 提供商 / AI 剩余额度」按统一 catalog 列出各家完成与额度能力。Cursor / Codex Token 卡保留原交互；Grok Bot 注明依赖 Cursor 登录；Claude 用量走本机 OAuth；Copilot / Grok / Antigravity / Manus 可配置手动 Token（`safeStorage`），Grok 还需 xAI 团队 ID；只接受 Management API Key，显示以美元计的已入账预付余额，不伪造订阅额度百分比。Manus 使用官方 `https://api.manus.ai/v2/usage.availableCredits` 与 `x-manus-api-key`，只以 `data.total_credits` 作为可消费积分余额。Codex「获取本机 Token」仅在主动点击时只读本机 `auth.json`。Token 不写入工作区、不进日志、不自动续期。401/403 标记失效并可回退本机记录；网络故障不会把有效 Token 标失效。完成 HTTP 接收 Codex / Claude / Cursor / Grok / Copilot CLI / Antigravity。Manus 完成不走 HTTP：在设置里单独开启「接收完成提醒」后，由本机用已配置的 API Key 只读轮询官方任务 API（面板运行时检查，关闭后下次启动补查）；点击打开 manus.im 任务页。等待输入/授权尚未接入。
 
 首页编辑模式下拖动卡片只交换位置，各自保留尺寸；靠近网格边界时向左或向上收，有冲突则按原尺寸顺序重排。补洞锁定交换双方，只允许其他卡片扩展；无法按原尺寸放下时提示「空间不够，无法交换」并保留原布局。
 
@@ -133,7 +133,9 @@ curl -X POST http://127.0.0.1:43821/notify/codex \
 
 Copilot CLI 使用 `$COPILOT_HOME/hooks/pome-panel.json`（默认 `~/.copilot/hooks/pome-panel.json`）的 `agentStop` 与不可恢复的模型/系统错误事件；退出会话、子代理及可恢复的工具错误不作为完成。按当前助手结果标识去重，缺少结果时使用带时间的事件身份。配置使用直接执行参数，避免 shell 转义。
 
-Antigravity 使用 `~/.gemini/config/hooks.json` 中独立的 `pome-panel.Stop`，保留其他 hook；仅在后台任务全部结束且停止原因为模型结束时提示完成，系统错误或步数耗尽提示失败。会话与执行序号区分轮次。官方事件未提供回答正文，完成摘要暂使用默认标题；App/IDE 打开 Antigravity，CLI 打开终端。两家均保留“受限”标记，未声称覆盖 Copilot VS Code/云端或未验证的转录格式。其他 Stop hook 若要求继续运行，首版仍受门控事件时序限制。Grok Bot 与 Manus 完成接入保持未支持。
+Antigravity 使用 `~/.gemini/config/hooks.json` 中独立的 `pome-panel.Stop`，保留其他 hook；仅在后台任务全部结束且停止原因为模型结束时提示完成，系统错误或步数耗尽提示失败。会话与执行序号区分轮次。官方事件未提供回答正文，完成摘要暂使用默认标题；App/IDE 打开 Antigravity，CLI 打开终端。两家均保留“受限”标记，未声称覆盖 Copilot VS Code/云端或未验证的转录格式。其他 Stop hook 若要求继续运行，首版仍受门控事件时序限制。Grok Bot 完成接入保持未支持。Manus 完成见上文 API 轮询通道（partial）。
+
+Manus 监听按账号保存分页检查点与待核验的结束事件；同账号更新 Key、断网和正常重启保留进度，主动关闭后再开启从新监听时段开始。新任务、活跃任务和旧任务分页扫描共用限流预算并公平调度，大量任务或长时间离线会增加发现延迟，不保证实时或任意离线时长完全补齐。完成记录与其他来源合计保留最新 100 条并同步 NAS；内部仅保留必要的去重控制信息，已确认投递的正文会从控制队列清除。标题、摘要和同步字段在落盘前过滤敏感凭据。Key 本身具有较广权限，面板仅调用读取接口，不替用户回答、授权或修改任务。
 
 ### AI 待操作提醒（开发版）
 

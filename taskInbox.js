@@ -5,7 +5,7 @@ const { statusKey } = require('./renderer/notification-domain');
 const { randomUUID, createHash } = require('node:crypto');
 const { readJsonStrict, writeJsonAtomic, writeAtomic } = require('./atomicStorage');
 const { visibleCompletion } = require('./aiEventPolicy');
-const { AI_COMPLETION_LIMIT, completionSyncKey, normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory } = require('./packages/sync-protocol/ai-completions');
+const { AI_COMPLETION_LIMIT, completionSyncKey, normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory, sanitizeCompletionText } = require('./packages/sync-protocol/ai-completions');
 
 const { completionIds } = require('./aiProviderCatalog');
 const MAX_RECORDS = AI_COMPLETION_LIMIT;
@@ -51,7 +51,15 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     throw Object.assign(new Error('收件箱格式损坏，原文件已保留。'), { code: 'storage_corrupt' });
   }
   if (new Set(state.records.map((r) => r.id)).size !== state.records.length || Object.values(state.dedupe).some((r) => !r || typeof r.id !== 'string' || !Number.isFinite(r.at))) throw Object.assign(new Error('收件箱格式损坏，原文件已保留。'), { code: 'storage_corrupt' });
-  state.records = state.records.map(record => ({ ...record, status: statusKey(record.status, record.source) }));
+  let sanitizedLegacy = false;
+  state.records = state.records.map(record => {
+    const next = { ...record, status: statusKey(record.status, record.source) };
+    if (record.source === 'manus') for (const key of ['title', 'project', 'sessionTitle', 'completionSummary']) {
+      const value = sanitizeCompletionText('manus', record[key]);
+      if (value !== (record[key] || '')) { next[key] = value; sanitizedLegacy = true; }
+    }
+    return next;
+  });
   const diskVersion = () => { if (!disk.existsSync(filePath)) return null; const stat = disk.statSync(filePath); return [stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':'); };
   const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
   let lastDiskVersion = diskVersion();
@@ -69,8 +77,9 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     const records = trimCompletionHistory(state.records);
     const ids = new Set(records.map(row => row.id));
     const dedupe = Object.fromEntries(Object.entries(state.dedupe).filter(([, row]) => ids.has(row.id) && row.stable === true));
-    if (records.some((row, index) => row.id !== state.records[index]?.id) || records.length !== state.records.length || Object.keys(dedupe).length !== Object.keys(state.dedupe).length) {
+    if (sanitizedLegacy || records.some((row, index) => row.id !== state.records[index]?.id) || records.length !== state.records.length || Object.keys(dedupe).length !== Object.keys(state.dedupe).length) {
       commit({ ...state, records, dedupe });
+      sanitizedLegacy = false;
     }
   }
   function accept(input) {
@@ -79,8 +88,8 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     prune();
     const ts = now();
     const taskId = clean(input.taskId, 160);
-    const title = clean(input.title, 4096);
-    const project = clean(input.project, 320);
+    const title = sanitizeCompletionText(input.source, clean(input.title, 4096));
+    const project = sanitizeCompletionText(input.source, clean(input.project, 320));
     const key = `event:${stableId}`;
     const prior = state.dedupe[key];
     if (prior) return { ok: true, duplicate: true, record: get(prior.id) };
@@ -89,7 +98,7 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     const record = {
       id: randomUUID(), completionEventId: stableId, source: input.source, status: statusKey(input.status, input.source), taskId, title, project,
       titleIsFallback: input.titleIsFallback === true,
-      sessionTitle: clean(input.sessionTitle, 256), completionSummary: clean(input.completionSummary || input.title, 4096),
+      sessionTitle: sanitizeCompletionText(input.source, clean(input.sessionTitle, 256)), completionSummary: sanitizeCompletionText(input.source, clean(input.completionSummary || input.title, 4096)),
       receivedAt: ts, completedAt: Number.isFinite(parsedCompletedAt) && parsedCompletedAt > 0 ? parsedCompletedAt : ts, readAt: null,
       window: input.window && typeof input.window === 'object' ? {
         app: clean(input.window.app, 160), title: clean(input.window.title, 320),

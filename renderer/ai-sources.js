@@ -17,6 +17,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     ? pomeLocaleRendererAiSources.t('sources.claudeRestart')
     : pomeLocaleRendererAiSources.t("copy.configurationSavedQuitCompletelyThenReopenIt.507666", { arg1: labels[source] });
   let hookRows = [];
+  let manusListener = null;
   let ready = false, busy = false, plan = null, anchor = null, checkedAt = 0;
   let dismissed = [];
   try { const value = JSON.parse(localStorage.getItem(dismissKey) || '[]'); if (Array.isArray(value)) dismissed = value; } catch {}
@@ -63,23 +64,26 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
           hookable: provider.hookable,
         };
       }
+      const manusConnected = provider.id === 'manus' && manusListener?.enabled
+        && ['listening', 'preparing'].includes(manusListener.connectionState);
       return {
         source: provider.id,
         label: provider.label,
-        state: 'catalogOnly',
+        state: manusConnected ? 'connected' : provider.id === 'manus' && manusListener?.enabled ? 'error' : 'catalogOnly',
         filePath: '',
         message: ownershipText(provider),
         ownership: ownershipText(provider),
         usageCapability: provider.capabilities.usage,
-        completionCapability: provider.capabilities.completion,
+        completionCapability: manusConnected ? 'partial' : provider.capabilities.completion,
         attentionCapability: provider.capabilities.attention,
         hookable: false,
+        apiConnected: manusConnected,
         attentionCapabilities: {
           usage: provider.capabilities.usage,
-          completion: provider.capabilities.completion,
+          completion: manusConnected ? 'partial' : provider.capabilities.completion,
           attention: provider.capabilities.attention,
           input: 'unsupported', select: 'unsupported', approve: 'unsupported', autoResolve: 'unsupported',
-          surface: 'catalog', providerVersion: 'unverified',
+          surface: provider.surface || 'catalog', providerVersion: 'unverified',
         },
       };
     });
@@ -105,6 +109,19 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
           <button class="workspace-button compact" type="button" data-provider-clear="${id}">${pomeLocaleRendererAiSources.t("copy.clear.bce237")}</button>
         </div>
         ${id === 'grok' ? '<label class="settings-cursor-token-row"><span id="settings-grok-team-label"></span><input id="settings-grok-team" type="text" maxlength="128" autocomplete="off" spellcheck="false" /></label>' : ''}
+        ${id === 'manus' ? `
+          <p class="settings-cursor-token-hint" id="settings-manus-completion-hint"></p>
+          <label class="settings-nas-http-toggle">
+            <span><b id="settings-manus-completion-label"></b></span>
+            <input id="settings-manus-completion-enabled" type="checkbox" />
+            <i aria-hidden="true"></i>
+          </label>
+          <p class="settings-cursor-token-hint" id="settings-manus-completion-status" role="status" aria-live="polite"></p>
+          <div class="settings-cursor-token-row">
+            <button class="workspace-button compact" type="button" id="settings-manus-completion-check"></button>
+            <button class="workspace-button compact" type="button" id="settings-manus-completion-preview"></button>
+          </div>
+        ` : ''}
         <p class="settings-cursor-token-hint" id="settings-${id}-token-hint" role="status" aria-live="polite"></p>`;
       tokenHost.append(section);
       const bindText = (node, key, params) => pomeLocaleRendererAiSources.bind(node, 'textContent', () => pomeLocaleRendererAiSources.t(key, params));
@@ -116,6 +133,45 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       if (id === 'grok') {
         bindText(el('settings-grok-team-label'), 'providers.teamId');
         el('settings-grok-team').addEventListener('input', event => { event.target.dataset.dirty = '1'; });
+      }
+      if (id === 'manus') {
+        bindText(el('settings-manus-completion-hint'), 'providers.manus.completionHint');
+        bindText(el('settings-manus-completion-label'), 'providers.manus.completionToggle');
+        bindText(el('settings-manus-completion-check'), 'providers.manus.check');
+        bindText(el('settings-manus-completion-preview'), 'providers.manus.preview');
+        el('settings-manus-completion-enabled')?.addEventListener('change', async (event) => {
+          const checked = event.target.checked === true;
+          event.target.disabled = true;
+          try {
+            const result = await api?.setManusCompletionEnabled?.(checked);
+            if (result?.ok !== true) event.target.checked = !checked;
+            await refreshManusCompletionStatus();
+            if (result?.ok !== true && !result?.superseded) {
+              const key = result?.error === 'manus_token_missing' ? 'providers.tokenRequired'
+                : result?.error === 'manus_unauthenticated' ? 'providers.manus.authInvalid'
+                  : result?.error === 'manus_permission_denied' ? 'providers.manus.permissionDenied' : 'providers.manus.networkError';
+              pomeLocaleRendererAiSources.bind(el('settings-manus-completion-status'), 'textContent', () => pomeLocaleRendererAiSources.t(key));
+            }
+          } catch {
+            event.target.checked = !checked;
+          } finally { event.target.disabled = false; }
+        });
+        el('settings-manus-completion-check')?.addEventListener('click', async () => {
+          const statusEl = el('settings-manus-completion-status');
+          try {
+            const result = await api?.checkManusCompletion?.();
+            pomeLocaleRendererAiSources.bind(statusEl, 'textContent', () => pomeLocaleRendererAiSources.t(
+              result?.ok ? 'providers.manus.connectionOk' : result?.error === 'manus_unauthenticated' ? 'providers.manus.authInvalid'
+                : result?.error === 'manus_permission_denied' ? 'providers.manus.permissionDenied' : 'providers.manus.networkError',
+              { arg1: pomeLocaleRendererAiSources.t('providers.manus.justNow') }
+            ));
+          } catch {
+            pomeLocaleRendererAiSources.bind(statusEl, 'textContent', () => pomeLocaleRendererAiSources.t('providers.manus.networkError'));
+          }
+        });
+        el('settings-manus-completion-preview')?.addEventListener('click', async () => {
+          try { await api?.previewManusCompletion?.(); } catch { /* preview is best-effort */ }
+        });
       }
     }
     tokenHost.querySelectorAll('[data-provider-save]').forEach((button) => {
@@ -153,6 +209,35 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       });
     });
   }
+  function manusCheckedLabel(status) {
+    const at = Number(status?.lastCheckedAt || status?.lastSuccessfulAt || 0);
+    if (!at) return pomeLocaleRendererAiSources.t('providers.manus.justNow');
+    const seconds = Math.max(0, Math.round((Date.now() - at) / 1000));
+    return seconds < 3
+      ? pomeLocaleRendererAiSources.t('providers.manus.justNow')
+      : pomeLocaleRendererAiSources.t('providers.manus.secondsAgo', { arg1: seconds });
+  }
+  async function refreshManusCompletionStatus() {
+    if (!api?.getManusCompletionStatus) return;
+    applyManusCompletionStatus(await api.getManusCompletionStatus());
+  }
+  function applyManusCompletionStatus(status) {
+    const toggle = el('settings-manus-completion-enabled');
+    const statusEl = el('settings-manus-completion-status');
+    if (!toggle || !statusEl) return;
+    manusListener = status || null;
+    toggle.checked = status?.enabled === true;
+    const key = status?.connectionState === 'listening' ? 'providers.manus.listening'
+      : status?.connectionState === 'preparing' ? 'providers.manus.preparing'
+        : status?.connectionState === 'auth_invalid' ? 'providers.manus.authInvalid'
+          : status?.connectionState === 'permission_denied' ? 'providers.manus.permissionDenied'
+            : status?.enabled ? 'providers.manus.networkError'
+              : 'providers.manus.disabled';
+    pomeLocaleRendererAiSources.bind(statusEl, 'textContent', () => pomeLocaleRendererAiSources.t(key, {
+      arg1: manusCheckedLabel(status),
+    }));
+    render(); announce();
+  }
   async function refreshTokenStatuses() {
     for (const id of TOKEN_PROVIDERS) {
       const statusEl = el(`settings-${id}-token-status`);
@@ -162,14 +247,15 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       statusEl.dataset.state = result?.state || 'empty';
       if (id === 'grok' && !el('settings-grok-team').dataset.dirty) el('settings-grok-team').value = result?.teamId || '';
     }
+    await refreshManusCompletionStatus();
   }
   function render() {
     list.replaceChildren();
     const rows = mergedRows();
-    const hookable = rows.filter((row) => row.hookable);
-    const connected = hookable.filter((row) => row.state === 'connected').length;
+    const connectable = rows.filter((row) => row.hookable || row.source === 'manus');
+    const connected = connectable.filter((row) => row.state === 'connected' || row.apiConnected).length;
     pomeLocaleRendererAiSources.bind(el('settings-ai-sources-count'), "textContent", () => (
-      pomeLocaleRendererAiSources.t("copy.localConnectedOf.9f3a1b", { arg1: connected, arg2: hookable.length })
+      pomeLocaleRendererAiSources.t("copy.localConnectedOf.9f3a1b", { arg1: connected, arg2: connectable.length })
     ));
     for (const row of rows) {
       const item = document.createElement('div'); item.className = 'ai-source-row'; item.dataset.source = row.source; item.dataset.state = row.state;
@@ -308,10 +394,10 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     document.dispatchEvent(new CustomEvent('notch:ai-provider-token-changed', { detail: status }));
     void refreshTokenStatuses();
   });
+  api?.onManusCompletionStatus?.(applyManusCompletionStatus);
   window.NotchAiSources = Object.freeze({ refresh, request, test, openSettings, dismiss, icons,
     getState: () => ({
-      // Inbox empty-states only care about hookable completion sources.
-      sources: hookRows.map((row) => ({ ...row })),
+      sources: mergedRows().filter(row => row.hookable || row.source === 'manus').map(row => ({ ...row })),
       providers: mergedRows().map((row) => ({ ...row })),
       ready,
       suggestion: hookRows.find((row) => row.state === 'disconnected' && !dismissed.includes(row.source)),

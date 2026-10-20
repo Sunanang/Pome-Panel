@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "request_id": "req_user_me_fixture",
+  "message": "ok",
+  "user_id": "user_fixture_manus_001",
+  "name": "Fixture User",
+  "email": "fixture@example.invalid"
+}

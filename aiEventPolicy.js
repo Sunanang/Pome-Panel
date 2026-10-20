@@ -28,7 +28,8 @@ function safeQuestion(value, action) {
   const commandPreview = sensitive && action === 'approve' ? safeCommandPreview(text) : undefined;
   return { question: sensitive ? '' : clean(text), sensitive, action, commandPreview };
 }
-function classifyAiEvent(payload, source) {
+const MANUS_TRUSTED_ADAPTER = 'manus-official-readonly';
+function classifyAiEvent(payload, source, options = {}) {
   const ignore = reason => ({ category: 'ignore', reason });
   const invalid = reason => ({ category: 'invalid', reason });
   if (!SOURCES.has(source) || !payload || typeof payload !== 'object' || Array.isArray(payload)) return invalid('invalid_source');
@@ -36,7 +37,16 @@ function classifyAiEvent(payload, source) {
   const eventType = String(payload.hook_event_name || payload.type || payload.event_type || '').toLowerCase();
   if (payload.agent_id || payload.agentId || payload.is_subagent || payload.isSubagent || payload.isSidechain || /subagent/.test(eventType)
     || /subagent/i.test(String(payload.agent_type || payload.agentType || payload['agent-type'] || ''))) return ignore('subagent');
-  if (payload.remote === true || payload.is_remote === true || payload.cloud === true || payload.surface === 'cloud' || payload.evidence?.surface === 'cloud') return ignore('remote');
+  const remote = payload.remote === true || payload.is_remote === true || payload.cloud === true
+    || payload.surface === 'cloud' || payload.evidence?.surface === 'cloud'
+    || payload.evidence?.surface === 'api' || payload.surface === 'api';
+  if (remote) {
+    const trustedManus = source === 'manus'
+      && options.trustedAdapter === MANUS_TRUSTED_ADAPTER
+      && payload.evidence?.adapter === MANUS_TRUSTED_ADAPTER
+      && (payload.evidence?.surface === 'api' || payload.surface === 'api');
+    if (!trustedManus) return ignore('remote');
+  }
   if (payload.schemaVersion !== undefined) {
     if (payload.schemaVersion !== 2 || !KINDS.has(payload.kind)) return invalid('invalid_schema');
     const evidence = payload.evidence;
@@ -82,4 +92,7 @@ function classifyAiEvent(payload, source) {
 }
 const visibleCompletion = record => !(record.source === 'codex' && knownControlEnvelope(record.completionSummary || record.title));
 const requestKey = event => hash([event.source, event.evidence.surface, event.sessionId, event.turnId, event.requestId]);
-module.exports = { classifyAiEvent, knownControlEnvelope, visibleCompletion, safeQuestion, safeCommandPreview, requestKey, hash };
+module.exports = {
+  classifyAiEvent, knownControlEnvelope, visibleCompletion, safeQuestion, safeCommandPreview,
+  requestKey, hash, MANUS_TRUSTED_ADAPTER,
+};

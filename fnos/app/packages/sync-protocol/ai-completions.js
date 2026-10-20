@@ -1,10 +1,16 @@
 'use strict';
 const { createHash } = require('node:crypto');
 const AI_COMPLETION_LIMIT = 100;
-const sources = new Set(['codex', 'claude', 'cursor', 'grok', 'copilot', 'antigravity', 'gpt']);
+const sources = new Set(['codex', 'claude', 'cursor', 'grok', 'copilot', 'antigravity', 'manus', 'gpt']);
 const statuses = new Set(['completed', 'failed', 'awaiting', 'due']);
 const clean = (value, max) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+function sanitizeCompletionText(source, value, max = 4096) {
+  const text = clean(value, max);
+  if (source === 'manus' && /(?:bearer\s+\S+|(?:password|passwd|token|secret|api[_-]?key|authorization|credential|私钥|密码|密钥)["']?\s*[=: ]|https?:\/\/[^\s/@]+:[^\s/@]+@|-----BEGIN [^-]*PRIVATE KEY|\b(?:sk|ghp|github_pat)[-_][\w-]{12,}|\b[A-Z][A-Z0-9_]{2,}=\S+)/i.test(text)) return '';
+  return text;
+}
 
 function completionIdentity(row) {
   return clean(row.completionEventId, 320) || hash(['legacy', row.source, row.id]);
@@ -21,9 +27,9 @@ function normalizeSyncedCompletion(row) {
   return {
     id: completionSyncKey(row), completionEventId: completionIdentity(row), source: row.source,
     status: statuses.has(row.status) ? row.status : 'completed',
-    taskId: clean(row.taskId, 160), title: clean(row.title, 4096), project: clean(row.project, 320),
-    titleIsFallback: row.titleIsFallback === true, sessionTitle: clean(row.sessionTitle, 256),
-    completionSummary: clean(row.completionSummary || row.title, 4096),
+    taskId: clean(row.taskId, 160), title: sanitizeCompletionText(row.source, row.title, 4096), project: sanitizeCompletionText(row.source, row.project, 320),
+    titleIsFallback: row.titleIsFallback === true, sessionTitle: sanitizeCompletionText(row.source, row.sessionTitle, 256),
+    completionSummary: sanitizeCompletionText(row.source, row.completionSummary || row.title, 4096),
     receivedAt: row.receivedAt, completedAt: Number.isFinite(row.completedAt) ? row.completedAt : row.receivedAt,
     readAt: row.readAt,
   };
@@ -44,4 +50,4 @@ function trimCompletionHistory(rows) {
     || completionSyncKey(a).localeCompare(completionSyncKey(b))).slice(0, AI_COMPLETION_LIMIT);
 }
 
-module.exports = { AI_COMPLETION_LIMIT, completionSyncKey, normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory };
+module.exports = { AI_COMPLETION_LIMIT, completionSyncKey, normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory, sanitizeCompletionText };

@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "request_id": "req_messages_waiting",
+  "task_id": "task_fixture_waiting",
+  "messages": [
+    {
+      "id": "evt_user_w1",
+      "type": "user_message",
+      "timestamp": 1760925005000,
+      "user_message": { "content": "Need a choice", "message_type": "text" }
+    },
+    {
+      "id": "evt_wait_w1",
+      "type": "status_update",
+      "timestamp": 1760925100000,
+      "status_update": {
+        "agent_status": "waiting",
+        "status_detail": {
+          "waiting_for_event_id": "evt_ask_w1",
+          "waiting_for_event_type": "messageAskUser",
+          "waiting_description": "Which format?"
+        }
+      }
+    }
+  ],
+  "has_more": false
+}

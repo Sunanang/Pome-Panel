@@ -8,7 +8,7 @@
 
 新增 cursor.svg：https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/cursor.svg。
 
-完成接入图标：Codex / Claude Code / Cursor / Grok / Copilot CLI / Antigravity。额度 catalog 额外使用本地绘制的 `grokbot.svg`、`grok.svg`、`manus.svg`（非 Lobe Icons）。circle-alert.svg 来自 Lucide，许可证见 LICENSE-alert，用于损坏状态的小型提示。
+完成接入图标：Codex / Claude Code / Cursor / Grok / Copilot CLI / Antigravity / Manus（Manus 走 API 轮询，非 HTTP hook）。额度 catalog 额外使用本地绘制的 `grokbot.svg`、`grok.svg`、`manus.svg`（非 Lobe Icons）。circle-alert.svg 来自 Lucide，许可证见 LICENSE-alert，用于损坏状态的小型提示。
 
 - `copilot.svg`：GitHub Primer Octicons 的 [copilot-24](https://github.com/primer/octicons/blob/main/icons/copilot-24.svg)，MIT 许可证见 LICENSE-copilot.txt；填色改为白色。
 - `antigravity.svg`：[官方 favicon](https://www.antigravity.google/favicon.svg) 中的标志轮廓，去掉背景与颜色效果，裁切 viewBox 并改为白色，以用于通知蒙版。

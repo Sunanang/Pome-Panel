@@ -8,7 +8,13 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ### Multi-AI providers (usage + completion matrix)
 
-- Add partial completion integration for Copilot CLI and Antigravity, including configuration lifecycle/test, bubbles/history, platform source opening and NAS sync. Copilot deduplicates current results and filters child/recoverable errors. Antigravity requires full idle and an explicit outcome, with a default summary title. Grok Bot, Manus and Copilot VS Code/cloud remain unsupported.
+- Manus follow-up fixes: overdue tasks no longer shorten rate-limit or offline backoff. Compact cold task content while retaining consumed-event checkpoints so old tasks cannot replay after confirmed identities expire.
+
+- Fix Manus scan starvation, lost background/long-conversation completions, checkpoint loss on same-account key changes, and cross-account pending delivery. Persist pagination and terminal candidates transactionally, acknowledge queued notifications, redact task titles and synced fields, and remove delivered outbox bodies. Update listener status live and distinguish checking a connection from enabling collection.
+
+- Add Manus completion (phase 1): a separate local “Receive completion alerts” switch (off by default) reuses the existing API key to poll the official read-only task API while the panel runs; completions/failures enter history and bubbles, open `manus.im` task pages, and sync over NAS. HTTP `/notify/manus` stays closed. Waiting for input/approval remains unsupported; capability stays partial pending live-account acceptance.
+
+- Add partial completion integration for Copilot CLI and Antigravity, including configuration lifecycle/test, bubbles/history, platform source opening and NAS sync. Copilot deduplicates current results and filters child/recoverable errors. Antigravity requires full idle and an explicit outcome, with a default summary title. Grok Bot and Copilot VS Code/cloud remain unsupported.
 
 - Fix Grok turn deduplication, subagent/teardown false notifications, NAS source validation, source branding and terminal opening. Honor `GROK_HOME` and preserve unrelated configuration when connecting, repairing or disconnecting. Cover two-device read sync, latest-100 retention, real forwarding and Windows fallback.
 

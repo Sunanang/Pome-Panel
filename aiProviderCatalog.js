@@ -16,6 +16,7 @@
       icon: row.icon || `assets/inbox/${row.id}.svg`,
       hookable: row.hookable === true,
       surface: row.surface || 'desktop',
+      connection: row.connection || (row.hookable ? 'hook' : 'catalog'),
       request: row.request || null,
       settingsCard: row.settingsCard || null,
       completionNoteKey: row.completionNoteKey || null,
@@ -124,9 +125,12 @@
       ownershipKey: 'providers.ownership.manus',
       icon: 'assets/inbox/manus.svg',
       hookable: false,
+      surface: 'api',
+      connection: 'api',
+      completionNoteKey: 'providers.completionScope.manus',
       request: 'getManusUsage',
       settingsCard: 'settings-manus-token-card',
-      capabilities: { usage: CAP.PARTIAL, completion: CAP.UNSUPPORTED, attention: CAP.UNSUPPORTED },
+      capabilities: { usage: CAP.PARTIAL, completion: CAP.PARTIAL, attention: CAP.UNSUPPORTED },
     }),
   ]);
 
@@ -148,6 +152,14 @@
     return providers.filter((row) => row.capabilities.completion !== CAP.UNSUPPORTED).map((row) => row.id);
   }
 
+  // Local HTTP /notify whitelist. API-polled sources (Manus) are history-capable
+  // but must not open an external loopback notify endpoint.
+  function httpNotifyIds() {
+    return providers
+      .filter((row) => row.hookable && row.capabilities.completion !== CAP.UNSUPPORTED)
+      .map((row) => row.id);
+  }
+
   function usageProviders() {
     return providers.filter((row) => row.capabilities.usage !== CAP.UNSUPPORTED && row.request);
   }
@@ -163,6 +175,7 @@
     ids,
     hookableIds,
     completionIds,
+    httpNotifyIds,
     usageProviders,
     labels,
   };

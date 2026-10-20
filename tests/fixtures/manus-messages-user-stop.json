@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "request_id": "req_messages_user_stop",
+  "task_id": "task_fixture_cancelled",
+  "messages": [
+    {
+      "id": "evt_user_c1",
+      "type": "user_message",
+      "timestamp": 1760924005000,
+      "user_message": { "content": "Long running request", "message_type": "text" }
+    },
+    {
+      "id": "evt_user_stop_c1",
+      "type": "user_stop",
+      "timestamp": 1760924100000
+    },
+    {
+      "id": "evt_stop_c1",
+      "type": "status_update",
+      "timestamp": 1760924101000,
+      "status_update": { "agent_status": "stopped", "brief": "Stopped by user" }
+    }
+  ],
+  "has_more": false
+}

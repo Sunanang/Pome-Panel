@@ -26,7 +26,7 @@ const zlib = require('zlib');
 const crypto = require('crypto');
 const { createTaskInbox, completionEventId, rebuildTaskInbox } = require('./taskInbox');
 const { createAiSourceHooks } = require('./aiSourceHooks');
-const { classifyAiEvent } = require('./aiEventPolicy');
+const { classifyAiEvent, MANUS_TRUSTED_ADAPTER } = require('./aiEventPolicy');
 const { createAiAttentionStore, rebuildAiAttention } = require('./aiAttentionStore');
 const { createAiNotificationScheduler, countQueuedNotifications } = require('./aiNotificationScheduler');
 const { createClaudeAttentionAdapter } = require('./claudeAttentionAdapter');
@@ -45,7 +45,10 @@ const { createSyncRecovery } = require('./syncRecovery');
 function recoveryStore() { return createSyncRecovery(path.join(app.getPath('userData'), 'sync-recovery.json')); }
 const platformPolicy = require('./platform');
 const { loadAdapter } = require('./platform-adapters');
-const { completionIds: catalogCompletionIds } = require('./aiProviderCatalog');
+const { completionIds: catalogCompletionIds, httpNotifyIds: catalogHttpNotifyIds } = require('./aiProviderCatalog');
+const { createManusCompletionService } = require('./manusCompletionService');
+const { taskOpenUrl, matchesOfficialTaskUrl } = require('./manusCompletionAdapter');
+let manusCompletionService = null;
 const { fetchCursorUsage, resetCursorUsage, readAuthToken: readCursorAuthToken } = require('./cursor-usage');
 const { readCodexUsage } = require('./codex-usage');
 const { readLocalCodexToken } = require('./codex-auth');
@@ -367,7 +370,8 @@ const TASK_NOTIFICATION_BODY_LIMIT = 64 * 1024;
 const TASK_NOTIFICATION_HOST = '127.0.0.1';
 const TASK_NOTIFICATION_PORT = 43821;
 // /notify/<source> 的来源白名单：只放行已知 Agent，其余一律 404。
-const TASK_NOTIFICATION_SOURCES = new Set(catalogCompletionIds());
+// HTTP /notify whitelist is hook transports only. Manus completion is polled via API.
+const TASK_NOTIFICATION_SOURCES = new Set(catalogHttpNotifyIds());
 const TODO_REMINDER_LEAD_MS = 60 * 60 * 1000;
 
 let mainWindow = null;
@@ -855,7 +859,7 @@ function enqueueTaskNotification(notification) {
     status: notificationDomain.statusKey(notification.status, notification.source),
     queuedAt, occurredAt: notificationDomain.eventTime(notification.completedAt, queuedAt) };
   if (notification.source !== 'todo' && !notification.eventId) return 'identity_required';
-  if (notification.source !== 'todo') {
+  if (notification.source !== 'todo' && notification.previewOnly !== true) {
     try {
       const accepted = getTaskInbox().accept(notification);
       if (!accepted.ok) return accepted.error === 'completion_identity_required' ? 'identity_required' : 'save_failed';
@@ -2444,6 +2448,7 @@ ipcMain.handle('tasks:open-source', async (event, id) => {
   // gates focusing an already-open window via accessibility / native bindings.
   const record = getTaskInbox().get(String(id || ''));
   if (!record) return { ok: false, message: PomeI18n.t("copy.recordNotFound.0c312b") };
+  if (record.source === 'manus') return openManusTaskRecord(record);
   return platformAdapter.taskApps.open(record);
 });
 
@@ -2681,6 +2686,21 @@ ipcMain.handle('windows:focus', async (event, windowId) => {
   return platformAdapter.windows.focus(windowId);
 });
 
+async function openManusTaskRecord(record) {
+  const taskId = String(record?.taskId || '').trim();
+  const url = taskOpenUrl(taskId);
+  if (!url) return { ok: false, error: 'invalid_task_id', message: PomeI18n.t('providers.manus.openFailed') };
+  if (record?.taskUrl && !matchesOfficialTaskUrl(record.taskUrl, taskId)) {
+    return { ok: false, error: 'invalid_task_url', message: PomeI18n.t('providers.manus.openFailed') };
+  }
+  try {
+    await shell.openExternal(url);
+    return { ok: true };
+  } catch {
+    return { ok: false, message: PomeI18n.t('providers.manus.openFailed') };
+  }
+}
+
 async function activateActiveTaskNotification(eventId = null) {
   const notification = activeTaskNotification;
   if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return { ok: false, message: PomeI18n.t("copy.thisTaskReminderIsNoLongerAvailable.f287da") };
@@ -2691,7 +2711,11 @@ async function activateActiveTaskNotification(eventId = null) {
   notification.activationPending = true;
   setTaskNotificationPaused(true);
   let result;
-  try { result = await platformAdapter.taskApps.open(notification); }
+  try {
+    result = notification.previewOnly ? { ok: true } : notification.source === 'manus'
+      ? await openManusTaskRecord(notification)
+      : await platformAdapter.taskApps.open(notification);
+  }
   catch { result = { ok: false, message: PomeI18n.t("copy.couldnTOpenTheSourceAppTry.180b9d") }; }
   if (activeTaskNotification !== notification || taskNotificationLeaving) return { ok: false, message: PomeI18n.t("copy.thisTaskReminderIsNoLongerAvailable.f287da") };
   notification.activationPending = false;
@@ -4780,6 +4804,29 @@ ipcMain.handle('manus:usage', async (_event, options = {}) => {
     return { ok: false, error: 'manus_usage_failed', detected: false, configured: Boolean(readProviderManualToken('manus')) };
   }
 });
+ipcMain.handle('manus:completion-status', (event) => {
+  requireWorkspaceOwner(event);
+  try { return { ok: true, ...getManusCompletionService().status() }; }
+  catch { return { ok: false, enabled: false, connectionState: 'error', error: 'manus_status_failed' }; }
+});
+ipcMain.handle('manus:completion-set-enabled', async (event, enabled) => {
+  requireWorkspaceOwner(event);
+  try { return await getManusCompletionService().setListening(enabled === true); }
+  catch (error) { return { ok: false, error: error.code || 'manus_enable_failed' }; }
+});
+ipcMain.handle('manus:completion-check', async (event) => {
+  requireWorkspaceOwner(event);
+  try { return await getManusCompletionService().checkConnection(); }
+  catch (error) { return { ok: false, error: error.code || 'manus_check_failed' }; }
+});
+ipcMain.handle('manus:completion-preview', async (event) => {
+  requireWorkspaceOwner(event);
+  try {
+    return await getManusCompletionService().previewLocal({
+      title: PomeI18n.t('providers.manus.previewTitle'),
+    });
+  } catch (error) { return { ok: false, error: error.code || 'manus_preview_failed' }; }
+});
 ipcMain.handle('ai-provider:token-status', (_event, providerId) => providerTokenStatus(providerId));
 ipcMain.handle('ai-provider:set-token', (_event, providerId, token, options) => typeof token === 'string' && token.trim()
   ? writeProviderManualToken(providerId, token, options) : { ok: false, error: 'token_required' });
@@ -4967,6 +5014,54 @@ function providerTokenStatus(providerId) {
     ...(providerId === 'grok' ? { teamId: readAppSettings().grokTeamId } : {}),
   };
 }
+async function deliverTrustedManusEvent(event) {
+  if (event?._pome_preview === true) {
+    const notification = normalizeTaskNotification({
+      source: 'manus',
+      event_id: event.eventId,
+      session_id: event.sessionId,
+      turn_id: event.turnId,
+      completed_at: event.occurredAt,
+      status: 'completed',
+      title: event.title || event.completionSummary || PomeI18n.t('providers.manus.previewTitle'),
+      last_assistant_message: event.completionSummary || '',
+      sessionTitle: event.sessionTitle || 'Manus',
+    }, 'manus');
+    if (!notification) return 'ignored';
+    // Preview: show bubble only, never write inbox / NAS.
+    return enqueueTaskNotification({ ...notification, previewOnly: true });
+  }
+  const policy = classifyAiEvent(event, 'manus', { trustedAdapter: MANUS_TRUSTED_ADAPTER });
+  if (policy.category !== 'completion' || !policy.completion) return policy.reason || policy.category || 'ignored';
+  const taskId = String(event.taskId || policy.completion.session_id || '').trim();
+  const notification = normalizeTaskNotification({
+    ...policy.completion,
+    // Prefer explicit task_id for browser open; turn_id remains event identity only.
+    turn_id: undefined,
+    turnId: undefined,
+    task_id: taskId,
+    taskId,
+    session_id: taskId,
+    sessionTitle: event.sessionTitle || '',
+  }, 'manus');
+  if (notification) notification.taskId = taskId.slice(0, 160);
+  return enqueueTaskNotification(notification);
+}
+
+function getManusCompletionService() {
+  if (!manusCompletionService) {
+    manusCompletionService = createManusCompletionService({
+      userDataPath: app.getPath('userData'),
+      getToken: () => readProviderManualToken('manus'),
+      deliverEvent: deliverTrustedManusEvent,
+      onStatusChanged: status => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('manus:completion-changed', status);
+      },
+    });
+  }
+  return manusCompletionService;
+}
+
 function writeProviderManualToken(providerId, token, options = {}) {
   if (!PROVIDER_TOKEN_IDS.has(providerId)) return { ok: false, error: 'unsupported_provider' };
   if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
@@ -4991,7 +5086,14 @@ function writeProviderManualToken(providerId, token, options = {}) {
   if (providerId === 'copilot') copilotUsageService.reset();
   if (providerId === 'grok') grokUsageService.reset();
   if (providerId === 'antigravity') antigravityUsageService.reset();
-  if (providerId === 'manus') manusUsageService.reset();
+  if (providerId === 'manus') {
+    manusUsageService.reset();
+    try {
+      const service = getManusCompletionService();
+      if (!trimmed) void service.stop({ disable: true });
+      else void service.refreshCredentials().catch(() => {});
+    } catch { /* Listener restart must not block token save. */ }
+  }
   const status = providerTokenStatus(providerId);
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('ai-provider:token-changed', status);
   return status;
@@ -5881,6 +5983,10 @@ app.whenReady().then(() => {
     createTray();
     startTaskNotificationServer();
     void promptForMissingPermissions();
+    try {
+      const manus = getManusCompletionService();
+      if (manus.status().enabled) void manus.start();
+    } catch { /* Manus listener is optional at boot. */ }
   }
   if (process.env.TODO_TEST_USER_DATA && process.env.POME_TEST_NOTIFICATIONS === '1') startTaskNotificationServer();
   watchDisplayChanges();
@@ -5916,6 +6022,9 @@ app.on('will-quit', () => {
   stopTaskNotificationServer();
   closeAllTranscriptionSessions();
   closeTodosSyncStore();
+  try { manusCompletionService?.stop(); } catch { /* optional */ }
+  try { manusCompletionService?.close(); } catch { /* optional */ }
+  manusCompletionService = null;
   globalShortcut.unregisterAll();
   stopClipboardPolling();
 });
