@@ -3689,6 +3689,7 @@ function applyHomePreset(name, selected) {
   const persisted = saveHiddenHomeModules(); saveHomeLayout();
   if (windowsInlineRequested) { try { localStorage.setItem('pome-windows-inline-v1', '1'); } catch {} }
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
+  document.dispatchEvent(new CustomEvent('notch:home-preset-applied', { detail: { name, custom: !!selected } }));
   return { ok: true, persisted };
 }
 window.NotchHome = Object.freeze({

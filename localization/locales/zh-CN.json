@@ -1428,5 +1428,7 @@
   "ui.token.fetchFailed": "暂未获取到额度 · 请检查连接或登录后重试",
   "ui.error.layout": "空间不够，无法交换",
   "ui.error.layoutRepair": "缩小组件或选择一个预设布局后重试。",
-  "ui.windows.hint": "开启后可查看并切换窗口，可随时在设置中关闭。"
+  "ui.windows.hint": "开启后可查看并切换窗口，可随时在设置中关闭。",
+  "ui.welcome.saveFailed": "无法保存欢迎设置，请重试。",
+  "ui.welcome.layoutFailed": "无法保存首页布局，请检查本机存储后重试。"
 }

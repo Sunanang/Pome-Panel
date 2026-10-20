@@ -38,7 +38,9 @@ async function run(c) {
   await js('NotchAiUsage.openSettings()');
   assert.equal(await js(`(()=>{const card=document.getElementById('settings-ai-sources').getBoundingClientRect(),column=document.querySelector('.settings-column-primary').getBoundingClientRect();return Math.abs(card.top-column.top)<2})()`),true,'quota settings entry scrolls to the merged AI card heading');
   await js(`document.querySelector('.settings-column-primary').scrollTop=0`);
-  const headerSignature = `(()=>{const h=document.querySelector('.topbar');return [h,...h.querySelectorAll('*')].map(e=>({tag:e.tagName,attrs:[...e.attributes].map(a=>[a.name,a.name==='class'?a.value.split(' ').sort().join(' '):a.value]).sort(([a],[b])=>a.localeCompare(b)),text:e.children.length?null:e.textContent}))})()`;
+  // Compare permanent navigation markup. Feature visibility, the active tab,
+  // unread badges and the animated indicator are independently updated state.
+  const headerSignature = `(()=>{const h=document.querySelector('.topbar');return [h,...h.querySelectorAll('*')].map(e=>({tag:e.tagName,attrs:[...e.attributes].filter(a=>!(e.matches('.tab,.badge')&&['hidden','aria-hidden','aria-selected','aria-label','tabindex','title','data-dot','data-error'].includes(a.name))&&!(e.id==='tab-indicator'&&a.name==='style')).map(a=>[a.name,a.name==='class'?a.value.split(' ').filter(c=>c!=='active').sort().join(' '):a.value]).sort(([a],[b])=>a.localeCompare(b)),text:e.children.length||e.matches('.badge')?null:e.textContent}))})()`;
   const header = await js(headerSignature);
   const structure = await js(`(()=>({
     primary:[...document.querySelectorAll('.settings-column-primary > .settings-card')].map(e=>e.className),
@@ -134,10 +136,12 @@ async function run(c) {
     const before = featureBefore[id];
     await js(`document.querySelector('[data-settings-feature=${id}]').click()`);
     await until(`!document.querySelector('[data-settings-feature=${id}]').disabled && document.querySelector('[data-settings-feature=${id}]').checked===${!before}`);
+    await until(`document.getElementById('tab-button-${id}').hidden===${!!before}`);
     assert.equal((await js('notchAPI.getAppSettings()')).features[id],!before);
     assert.deepEqual(await js('NotchHome.getVisibility()'),homeBefore,'workspace switches keep home settings independent');
     await js(`document.querySelector('[data-settings-feature=${id}]').click()`);
     await until(`!document.querySelector('[data-settings-feature=${id}]').disabled && document.querySelector('[data-settings-feature=${id}]').checked===${before}`);
+    await until(`document.getElementById('tab-button-${id}').hidden===${!before}`);
   }
   const visible = await js('NotchHome.getVisibility().visibleIds');
   // Actual settings inputs dispatch through NotchHome, independently of feature IPC.

@@ -1458,5 +1458,7 @@
   "ui.token.fetchFailed": "Quota unavailable · check connection or sign-in and retry",
   "ui.error.layout": "Not enough space to swap these widgets",
   "ui.error.layoutRepair": "Shrink a widget or choose a layout preset, then retry.",
-  "ui.windows.hint": "Enable to view and switch windows. Turn it off anytime in Settings."
+  "ui.windows.hint": "Enable to view and switch windows. Turn it off anytime in Settings.",
+  "ui.welcome.saveFailed": "Could not save your welcome settings. Please retry.",
+  "ui.welcome.layoutFailed": "Could not save the home layout. Check local storage and retry."
 }

@@ -22,6 +22,10 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   let dismissed = [];
   try { const value = JSON.parse(localStorage.getItem(dismissKey) || '[]'); if (Array.isArray(value)) dismissed = value; } catch {}
   const el = id => document.getElementById(id);
+  function reportFailure(source, message, hint = status, scope = `source:${source}`) {
+    if (window.NotchUi) window.NotchUi.showError({ diagnostic: `${source}: ${message}`, scope, inlineHint: hint, onRepair: () => openSettings(source) });
+    else if (hint) hint.textContent = message;
+  }
   function makeButton(text, callback) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = text;
     button.className = 'workspace-button compact'; button.addEventListener('click', callback); return button;
@@ -191,6 +195,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
           const message = result?.ok === true ? 'copy.sourceConfigurationUpdated.3181cd' : result?.error === 'grok_team_required' ? 'providers.grokTeamRequired' : result?.error === 'token_required' ? 'providers.tokenRequired' : 'providers.tokenSaveFailed';
           pomeLocaleRendererAiSources.bind(hint, 'textContent', () => pomeLocaleRendererAiSources.t(message));
           if (result?.ok !== true) return;
+          window.NotchUi?.clearError(`token:${id}`);
           document.dispatchEvent(new CustomEvent('notch:ai-provider-token-changed', { detail: result }));
           if (input?.value === token) input.value = '';
           await refreshTokenStatuses();
@@ -205,13 +210,13 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         try {
           const result = await api?.clearAiProviderToken?.(id);
           if (result?.ok !== true) throw new Error('clear_failed');
+          window.NotchUi?.clearError(`token:${id}`);
           if (id === 'grok') { el('settings-grok-team').value = ''; delete el('settings-grok-team').dataset.dirty; }
           if (el(`settings-${id}-token`)) el(`settings-${id}-token`).value = '';
           document.dispatchEvent(new CustomEvent('notch:ai-provider-token-changed', { detail: result }));
           await refreshTokenStatuses();
         } catch {
-          pomeLocaleRendererAiSources.bind(el(`settings-${id}-token-hint`) || el(`settings-${id}-token-status`), 'textContent', () => pomeLocaleRendererAiSources.t('providers.tokenSaveFailed'));
-          window.NotchUi?.showError({ diagnostic: `${id}: token_save_failed`, onRepair: () => openSettings(id) });
+          reportFailure(id, pomeLocaleRendererAiSources.t('providers.tokenSaveFailed'), el(`settings-${id}-token-hint`) || el(`settings-${id}-token-status`), `token:${id}`);
         }
         finally { button.disabled = false; }
       });
@@ -410,7 +415,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       pomeLocaleRendererAiSources.bind(el('ai-source-confirm-note'), "textContent", () => (pomeLocaleRendererAiSources.t("copy.onlyPomeEntriesWillChangeOtherConfiguration.336c05", { arg1: (plan.message) })));
       pomeLocaleRendererAiSources.bind(el('ai-source-confirm-apply'), "textContent", () => (action === 'disconnect' ? pomeLocaleRendererAiSources.t("copy.backUpAndDisconnect.6abb4a") : action === 'repair' ? pomeLocaleRendererAiSources.t("copy.backUpAndRepair.9b2ea1") : pomeLocaleRendererAiSources.t("copy.backUpAndConnect.bda493")));
       dialog.showModal(); positionConfirmation();
-    } catch (error) { status.textContent = error.message; window.showStatusToast?.(error.message); }
+    } catch (error) { reportFailure(source, error.message); }
     finally { busy = false; render(); }
   }
   el('ai-source-confirm-cancel')?.addEventListener('click', () => { dialog.close(); plan = null; anchor?.focus({ preventScroll: true }); });
@@ -419,17 +424,19 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   });
   el('ai-source-confirm-apply')?.addEventListener('click', async () => {
     if (!plan || busy) return;
+    const applyingPlan = plan;
     busy = true; el('ai-source-confirm-apply').disabled = true;
     try {
-      const result = await api.applyAiSource(plan.token);
+      const result = await api.applyAiSource(applyingPlan.token);
       if (!result.ok) throw new Error(result.message || pomeLocaleRendererAiSources.t("copy.couldnTUpdateConfiguration.73ac0d"));
-      const needsRestart = plan.action !== 'disconnect' && !plan.unchanged;
-      if (needsRestart) restartSources.add(plan.source);
-      else if (plan.action === 'disconnect') restartSources.delete(plan.source);
-      const message = needsRestart ? restartMessage(plan.source) : plan.unchanged ? pomeLocaleRendererAiSources.t("copy.noConfigurationChangesNeeded.300b3f") : pomeLocaleRendererAiSources.t("copy.sourceConfigurationUpdated.3181cd");
-      dismiss(plan.source); pomeLocaleRendererAiSources.bind(status, "textContent", () => (`${message}${result.backupPath ? pomeLocaleRendererAiSources.t("copy.backup.9297fd", { arg1: (result.backupPath) }) : ''}`));
+      window.NotchUi?.clearError(`source:${applyingPlan.source}`);
+      const needsRestart = applyingPlan.action !== 'disconnect' && !applyingPlan.unchanged;
+      if (needsRestart) restartSources.add(applyingPlan.source);
+      else if (applyingPlan.action === 'disconnect') restartSources.delete(applyingPlan.source);
+      const message = needsRestart ? restartMessage(applyingPlan.source) : applyingPlan.unchanged ? pomeLocaleRendererAiSources.t("copy.noConfigurationChangesNeeded.300b3f") : pomeLocaleRendererAiSources.t("copy.sourceConfigurationUpdated.3181cd");
+      dismiss(applyingPlan.source); pomeLocaleRendererAiSources.bind(status, "textContent", () => (`${message}${result.backupPath ? pomeLocaleRendererAiSources.t("copy.backup.9297fd", { arg1: (result.backupPath) }) : ''}`));
       dialog.close(); plan = null; window.showStatusToast?.(message);
-    } catch (error) { dialog.close(); plan = null; status.textContent = error.message; window.showStatusToast?.(error.message); }
+    } catch (error) { dialog.close(); plan = null; reportFailure(applyingPlan.source, error.message); }
     finally { busy = false; el('ai-source-confirm-apply').disabled = false; await refresh(); }
   });
   document.addEventListener('notch:tabchange', event => {

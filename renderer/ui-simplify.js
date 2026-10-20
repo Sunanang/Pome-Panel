@@ -20,7 +20,9 @@
   const tokens = ['cursor', 'codex', 'copilot', 'grok', 'antigravity', 'manus'];
   const usage = {};
   function renderTokenSources(snapshots) {
-    if (snapshots) Object.assign(usage, snapshots);
+    if (snapshots) for (const id of tokens) {
+      if (Object.hasOwn(snapshots, id)) usage[id] = snapshots[id];
+    }
     for (const id of tokens) {
       const node = el(`settings-${id}-token-status`), data = usage[id];
       if (!node || !data) continue;
@@ -111,18 +113,31 @@
   const errorMessage = document.createElement('p'); const repairCopy = document.createElement('small');
   const errorDetails = details('ui.details', 'ui-error-details'); const raw = document.createElement('pre'); errorDetails.append(raw);
   let repair = () => window.NotchAiSources?.openSettings();
+  let activeError = null;
+  function clearError(scope) {
+    if (scope && activeError?.scope !== scope) return;
+    activeError = null; errorBar.hidden = true;
+  }
   const fix = button('ui.repair', () => repair(), true);
   const copy = button('ui.copyDiagnostic', async () => { text(copy, await copyDiagnostic(raw.textContent) ? 'ui.copied' : 'ui.copyFailed'); });
-  const dismiss = button('ui.close', () => { errorBar.hidden = true; });
+  const dismiss = button('ui.close', () => clearError());
   errorBar.append(errorMessage, repairCopy, fix, copy, dismiss, errorDetails); el('panel').append(errorBar);
   function showError(options) {
+    // A failure has one presentation. Keep the inline hint as a fallback only
+    // when this shared error surface is unavailable.
+    if (options.inlineHint) {
+      I.bind(options.inlineHint, 'textContent', () => '');
+      options.inlineHint.classList.remove('error', 'success', 'warning');
+    }
+    activeError = { scope: options.scope };
     const value = options.diagnostic || options.message || '';
     const problem = D.errorKey(value);
     text(errorMessage, problem); text(repairCopy, options.repairKey || (problem === 'ui.error.layout' ? 'ui.error.layoutRepair' : 'ui.error.repair'));
     raw.textContent = D.diagnostic(value);
     const source = ['claude','codex','cursor','manus','grok','copilot'].find(id => value.toLowerCase().includes(id));
     repair = options.onRepair || (problem === 'ui.error.layout' ? () => { void setActiveTab('settings').then(() => presets.scrollIntoView({ block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
-    text(copy, 'ui.copyDiagnostic'); errorDetails.open = false; errorBar.hidden = false;
+    text(copy, 'ui.copyDiagnostic'); errorDetails.open = false;
+    errorBar.hidden = !el('app').classList.contains('expanded');
   }
   const isError = value => /失败|无法|错误|失效|连不上|failed|failure|error|invalid|couldn['’]t|unavailable|ECONN|ENOTFOUND|ETIMEDOUT/i.test(String(value || ''));
 
@@ -142,11 +157,26 @@
   api?.onAppSettingsChanged?.(quickEntries);
 
   const presets = document.createElement('div'); presets.id = 'ui-home-presets'; presets.className = 'ui-home-presets';
+  let presetSelection = null;
+  function layoutSignature() {
+    return JSON.stringify([...document.querySelectorAll('[data-home-module]')].map(tile =>
+      [tile.dataset.homeModule, tile.hidden, tile.dataset.layoutColumn, tile.dataset.layoutRow,
+        tile.dataset.layoutWidth, tile.dataset.layoutHeight, tile.dataset.widgetSize]));
+  }
+  function syncPresets() {
+    const selected = presetSelection?.signature === layoutSignature() ? presetSelection.name : null;
+    presets.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.preset === selected)));
+  }
+  document.addEventListener('notch:home-layout-applied', syncPresets);
+  document.addEventListener('notch:home-modules-changed', syncPresets);
+  document.addEventListener('notch:home-preset-applied', e => {
+    presetSelection = e.detail.custom ? null : { name: e.detail.name, signature: layoutSignature() };
+    syncPresets();
+  });
   for (const name of Object.keys(D.PRESETS)) {
     const b = button('ui.preset.' + name, () => {
       const result = window.NotchHome.applyPreset(name);
       if (!result.ok) showError({ diagnostic: result.error, repairKey: 'ui.preset.busy' });
-      else { presets.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); }
     }); b.dataset.preset = name; b.setAttribute('aria-pressed', 'false'); presets.append(b);
   }
   el('settings-home-module-list')?.before(presets);
@@ -157,17 +187,29 @@
   welcome.setAttribute('aria-labelledby', 'ui-welcome-title');
   const progress = document.createElement('small'); const title = document.createElement('h2'); title.id = 'ui-welcome-title';
   const body = document.createElement('div'); body.className = 'ui-welcome-body';
+  const welcomeError = document.createElement('section'); welcomeError.id = 'ui-welcome-error'; welcomeError.hidden = true;
+  const welcomeErrorText = document.createElement('p'); welcomeErrorText.setAttribute('role', 'alert');
+  const welcomeErrorDetails = details('ui.details', 'ui-welcome-error-details');
+  const welcomeDiagnostic = document.createElement('pre'); welcomeErrorDetails.append(welcomeDiagnostic);
+  const welcomeCopy = button('ui.copyDiagnostic', async () => text(welcomeCopy, await copyDiagnostic(welcomeDiagnostic.textContent) ? 'ui.copied' : 'ui.copyFailed'));
+  const welcomeRetry = button('ui.retry', () => finishWelcome());
+  welcomeError.append(welcomeErrorText, welcomeRetry, welcomeCopy, welcomeErrorDetails);
+  function showWelcomeError(key, diagnostic, retry = true) {
+    text(welcomeErrorText, key); text(welcomeCopy, 'ui.copyDiagnostic');
+    welcomeDiagnostic.textContent = D.diagnostic(diagnostic);
+    welcomeErrorDetails.open = false; welcomeRetry.hidden = !retry; welcomeError.hidden = false;
+  }
   const skip = button('ui.welcome.skip', () => finishWelcome());
-  const back = button('ui.back', () => { step--; renderWelcome(); });
+  const back = button('ui.back', () => { welcomeError.hidden = true; step--; renderWelcome(); });
   const next = button('ui.next', () => {
     if (step === 2) {
       const result = window.NotchHome.applyPreset('simple', [...body.querySelectorAll('input:checked')].map(n => n.value));
-      if (!result.ok) return showError({ diagnostic: result.error });
+      if (!result.ok) return showWelcomeError('ui.welcome.layoutFailed', result.error, false);
     }
-    if (step === 3) void finishWelcome(); else { step++; renderWelcome(); }
+    if (step === 3) void finishWelcome(); else { welcomeError.hidden = true; step++; renderWelcome(); }
   }, true);
   const actions = document.createElement('div'); actions.className = 'ui-welcome-actions'; actions.append(skip, back, next);
-  welcome.append(progress, title, body, actions); document.body.append(welcome);
+  welcome.append(progress, title, body, welcomeError, actions); document.body.append(welcome);
   let step = 1, settings = {}, firstWelcome = false;
   function renderWelcome() {
     progress.textContent = `${step} / 3`; text(title, 'ui.welcome.title' + step); body.replaceChildren();
@@ -204,13 +246,18 @@
   async function finishWelcome() {
     if (finishing) return false;
     finishing = true;
+    [skip, back, next, welcomeRetry].forEach(b => { b.disabled = true; });
     try {
       const result = await api?.completeWelcome?.();
-      if (!result?.ok) { showError({ diagnostic: result?.error || 'welcome_save_failed' }); return false; }
-      welcome.close(); firstWelcome = false; return true;
-    } finally { finishing = false; }
+      if (!result?.ok) throw new Error(result?.error || 'welcome_save_failed');
+      welcomeError.hidden = true; welcome.close(); firstWelcome = false; return true;
+    } catch (error) {
+      showWelcomeError('ui.welcome.saveFailed', error?.message || 'welcome_save_failed'); return false;
+    } finally {
+      finishing = false; [skip, back, next, welcomeRetry].forEach(b => { b.disabled = false; });
+    }
   }
-  welcome.addEventListener('cancel', e => { e.preventDefault(); void finishWelcome(); });
+  welcome.addEventListener('cancel', e => { e.preventDefault(); if (!finishing) welcome.close(); });
   api?.getAppSettings?.().then(value => {
     settings = value || {}; quickEntries(settings);
     firstWelcome = settings.onboardingPending === true;
@@ -219,7 +266,7 @@
       if (!localRead('pome-welcome-layout-v1')) {
         const result = window.NotchHome.applyPreset('simple');
         if (result.ok) localWrite('pome-welcome-layout-v1', '1');
-        else showError({ diagnostic: 'welcome_layout_storage_unavailable' });
+        else showWelcomeError('ui.welcome.layoutFailed', 'welcome_layout_storage_unavailable', false);
       }
       renderWelcome();
       if (document.getElementById('app').classList.contains('expanded')) welcome.showModal();
@@ -232,6 +279,7 @@
   document.addEventListener('notch:modechange', e => {
     clearTimeout(hintTimer);
     if (!e.detail.expanded) { hint.hidden = true; if (welcome.open) welcome.close(); errorBar.hidden = true; return; }
+    errorBar.hidden = !activeError;
     if (firstWelcome) { if (!welcome.open) welcome.showModal(); return; }
     const count = hintsSeen;
     if (count >= 3 || document.getElementById('tab-home').getAttribute('aria-hidden') === 'true') return;
@@ -257,5 +305,5 @@
     return new Promise(resolve => { confirmResolve = resolve; });
   }
   document.addEventListener('notch:modechange', e => { if (!e.detail.expanded && confirm.open) resolveConfirm(false); });
-  window.NotchUi = { openManual, renderTokenSources, renderNas, prepareConfirmation, showError, isError, copyDiagnostic, confirm: confirmData };
+  window.NotchUi = { openManual, renderTokenSources, renderNas, prepareConfirmation, showError, clearError, isError, copyDiagnostic, confirm: confirmData };
 })();

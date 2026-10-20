@@ -29,6 +29,14 @@ Grok Bot 说明按代码核对：`grokbot-usage.js` 调用 `api2.cursor.sh` 的 
 
 ## 测试与证据
 
+后续交互回归修复：Esc 暂时关闭欢迎向导，重新展开回到原步骤；仅跳过/完成才保存完成状态。保存返回失败或 IPC 异常均在向导内显示重试、详情和复制诊断，不在遮罩背后报错。Cursor/Codex Token、NAS 配对与来源接入失败使用单一报错入口；未关闭的报错在收起后保留，同类操作成功或用户关闭后清除，其他来源成功不会误清。首页预设选中态随实际布局变动更新；Token 来源缓存只接收六家 Token 来源字段。设置顶栏回归仅比较固定结构，工作区 tab 显隐另外等待并检查，避免把异步徽章当作结构变更。语言绑定机制保持不变。
+
+新增回归截图：`dist.noindex/ui-simplify/flows/welcome-save-failed.png`。
+
+本轮完整 `npm test` 通过：827 项 Node 测试通过、1 项平台专属跳过，29 次 Electron 场景/重启及语法、语言资源检查通过。最后补强 NAS 报错关闭行为后，欢迎完整流程与重启、NAS 卡、设置页连续两次回归均通过。日志：`dist.noindex/ui-simplify/bugfix-npm-test.log`、`bugfix-regression.log`。真实 Codex/Claude/Cursor 配置在测试前后哈希一致。
+
+本轮修改文件：`renderer/ui-simplify.js`、`renderer/workspace.js`、`renderer/ai-sources.js`、`renderer/app.js`、`renderer/styles.css`；`localization/locales/{zh-CN,en-US}.json` 及生成资源 `localization/resources.js`、`fnos/app/ui/i18n/resources.js`；`tests/{ui-simplify,settings-slim,startup,ai-sources,nas-settings-card}.electron.js`；本验收记录。后端、IPC 和顶部导航结构没有改动。
+
 - 完整 `npm test`：828 项 Node 检查中 827 通过、1 项平台专属跳过；29 次 Electron 场景/重启及 JavaScript、语言资源检查通过。日志：`dist.noindex/ui-simplify/npm-test.log`。
 - 专项：`unit.log`、`hooks.log`、`startup.log`、`nas.log`、`quota.log`、`flows.log`、`sun.log`。
 - 隔离临时 HOME/userData 和模拟远端响应；真实 Codex/Claude/Cursor 配置前后 SHA-256 一致（`real-config-before.json` / `real-config-after.json`），不连接真实 NAS。

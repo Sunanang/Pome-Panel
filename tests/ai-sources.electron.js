@@ -51,7 +51,8 @@ async function run(c){
  // Simulate a failed apply using only the isolated fixture configuration.
  await js(`NotchAiSources.request('cursor')`);await until(`document.getElementById('ai-source-confirm').open`);
  fs.writeFileSync(path.join(home,'.cursor/hooks.json'),'{}');
- await js(`document.getElementById('ai-source-confirm-apply').click()`);await until(`!document.getElementById('ai-source-confirm').open && document.getElementById('ai-sources-status').textContent.includes('配置文件已变化')`);
+ await js(`document.getElementById('ai-source-confirm-apply').click()`);await until(`!document.getElementById('ai-source-confirm').open && !document.getElementById('ui-error-bar').hidden && document.querySelector('#ui-error-details pre').textContent.includes('配置文件已变化')`);
+ assert.equal(await js(`document.getElementById('ai-sources-status').textContent`),'','failed apply has only one error surface');
  await assertRestartSources([]);assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('重新打开')`),false,'failed source must not ask to restart');
  async function apply(source,action='connect'){
   await js(`NotchAiSources.request('${source}','${action}',document.querySelector('.ai-source-row[data-source="${source}"] button'))`);await until(`document.getElementById('ai-source-confirm').open`);await js(`document.getElementById('ai-source-confirm-apply').click()`);await until(`!document.getElementById('ai-source-confirm').open && NotchAiSources.getState().sources.find(s=>s.source==='${source}').state==='${action==='disconnect'?'disconnected':'connected'}'`);

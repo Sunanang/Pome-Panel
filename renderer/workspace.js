@@ -1133,12 +1133,13 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       const saved = await window.notchAPI.setCodexToken(result.token);
       if (!saved?.ok) throw new Error(saved?.error || "save_failed");
       input.value = ""; renderCodexSettings(null, saved);
+      window.NotchUi?.clearError('token:codex');
       pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("ui.token.savedPending")));
       hint.classList.add('success');
     } catch (error) {
-      window.NotchUi?.showError({ diagnostic: `Codex: ${error.message}`, onRepair: () => window.NotchAiSources?.openSettings("codex") });
       pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t(error.message === "secure_storage_unavailable" ? "copy.systemSecureStorageIsUnavailableCanT.3a9217" : "copy.couldnTGetATokenRetryOr.129397")));
       hint.classList.add('error');
+      window.NotchUi?.showError({ diagnostic: `Codex: ${error.message}`, scope: 'token:codex', inlineHint: hint, onRepair: () => window.NotchAiSources?.openSettings("codex") });
     } finally {
       setCodexTokenBusy(false);
       pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("ui.token.acquire")));
@@ -1155,6 +1156,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         const result = action === 'save' ? await window.notchAPI.setCodexToken(input.value) : await window.notchAPI.clearCodexToken();
         if (!result?.ok) throw new Error(result?.error);
         input.value = ''; renderCodexSettings(null, result);
+        window.NotchUi?.clearError('token:codex');
         pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (action === 'save' ? pomeLocaleRendererWorkspace.t("copy.savedSecurelyQueryingLiveQuota.f4cf88") : pomeLocaleRendererWorkspace.t("copy.manualTokenCleared.03619f")));
         hint.classList.add('success');
       } catch (error) {
@@ -1841,7 +1843,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     settingsCursorTokenHint.classList.toggle('error', kind === 'error');
     settingsCursorTokenHint.classList.toggle('success', kind === 'success');
     settingsCursorTokenHint.classList.toggle('warning', kind === 'warning');
-    if (kind === 'error') window.NotchUi?.showError({ diagnostic: `Cursor: ${message}`, onRepair: () => window.NotchAiSources?.openSettings('cursor') });
+    if (kind === 'error') window.NotchUi?.showError({ diagnostic: `Cursor: ${message}`, scope: 'token:cursor', inlineHint: settingsCursorTokenHint, onRepair: () => window.NotchAiSources?.openSettings('cursor') });
+    else if (kind === 'success') window.NotchUi?.clearError('token:cursor');
   }
 
   function paintNasHint(el, message, kind = '') {
@@ -1850,10 +1853,12 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     el.dataset.kind = kind || '';
   }
 
-  // Pairing and sync errors retain their own hints inside the merged card.
+  // Failures use the shared error surface; inline hints remain for progress,
+  // success and as a fallback when that surface is unavailable.
   function setNasSyncHint(message, kind = '') {
     paintNasHint(settingsNasSyncHint, message, kind);
-    if (kind === 'error') window.NotchUi?.showError({ diagnostic: `NAS: ${message}`, onRepair: () => { document.getElementById('ui-nas-troubleshoot').open = true; settingsNasSyncBaseUrl?.focus(); } });
+    if (kind === 'error') window.NotchUi?.showError({ diagnostic: `NAS: ${message}`, scope: 'nas', inlineHint: settingsNasSyncHint, onRepair: () => { document.getElementById('ui-nas-troubleshoot').open = true; settingsNasSyncBaseUrl?.focus(); } });
+    else if (kind === 'success') window.NotchUi?.clearError('nas');
   }
 
   function setNasStatusHint(message, kind = '') {
@@ -2042,9 +2047,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     } else if (statusHint === lostTokenCopy) {
       setNasStatusHint('', '');
     }
-    if (nasPairUi.error && !(status && status.schemaIncompatible)) {
-      setNasSyncHint(nasPairUi.error, 'error');
-    }
+    // Submit reports failures once. A status repaint must not reopen a dismissed
+    // error or replace a newer error from a different operation.
     document.getElementById('settings-nas-pair-fields').hidden = bound;
     if (settingsNasPairReauth) settingsNasPairReauth.hidden = !bound;
     if (settingsNasPairSubmit) {

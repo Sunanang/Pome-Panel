@@ -7751,6 +7751,10 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 .ui-welcome h2 { font-size:20px; margin:12px 0; }
 .ui-welcome p { font-size:13px; color:var(--text-3); line-height:1.8; }
 .ui-welcome small { color:var(--text-3); }
+#ui-welcome-error { margin-top:12px; }
+#ui-welcome-error p { color:var(--p0); }
+#ui-welcome-error button { margin-right:8px; }
+#ui-welcome-error details { margin-top:8px; font-size:11px; color:var(--text-3); }
 .ui-welcome-body { max-height:340px; overflow-y:auto; }
 .ui-welcome-body > button { margin:12px 8px 12px 0; }
 .ui-welcome-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }

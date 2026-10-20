@@ -72,10 +72,11 @@ async function run(c) {
   assert.equal(await js(`document.getElementById('settings-nas-sync-open').disabled`), true);
   await capture('unpaired');
   await js(`document.getElementById('settings-nas-sync-base-url').value='https://nas.example/sync';document.getElementById('settings-nas-pair-submit').click()`);
-  await until(`document.getElementById('settings-nas-sync-hint').textContent==='请输入配对码'`);
+  await until(`!document.getElementById('ui-error-bar').hidden && document.querySelector('#ui-error-details pre').textContent.includes('请输入配对码')`);
+  assert.equal(await js(`document.getElementById('settings-nas-sync-hint').textContent`),'');
   pairFailure = { ok: false, error: 'code_expired' };
   await js(`document.getElementById('settings-nas-pair-code').value='123456';document.getElementById('settings-nas-pair-submit').click()`);
-  await until(`document.getElementById('settings-nas-sync-hint').textContent==='配对码已过期'`);
+  await until(`!document.getElementById('ui-error-bar').hidden && document.querySelector('#ui-error-details pre').textContent.includes('配对码已过期')`);
   pairFailure = null;
   await js(`document.getElementById('settings-nas-pair-submit').click()`);
   await until(`!document.getElementById('settings-nas-sync-options').hidden`);

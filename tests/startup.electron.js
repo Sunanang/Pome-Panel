@@ -121,12 +121,14 @@ async function checkCursorTokenFlow(contents) {
       for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
       return { value: input.value, disabled: button.disabled,
         hint: document.getElementById('settings-cursor-token-hint').textContent,
+        diagnostic: document.querySelector('#ui-error-details pre').textContent,
         response: await window.notchAPI.readLocalCursorToken() };
     })()
   `);
   assert.equal(failed.value, 'keep-existing-input');
   assert.equal(failed.disabled, false);
-  assert.match(failed.hint, /尚未登录/);
+  assert.equal(failed.hint, '', 'failure uses only the shared error surface');
+  assert.match(failed.diagnostic, /尚未登录/);
   assert.deepEqual(failed.response, { ok: false, error: 'cursor_token_missing' });
   const cleared = await contents.executeJavaScript(`
     (async () => {
