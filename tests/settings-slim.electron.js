@@ -56,9 +56,15 @@ async function run(c) {
     quotaAction:document.querySelector('[data-source=grokbot] .ai-source-actions').textContent,
     claudeButton:!!document.querySelector('[data-source=claude] .ai-source-actions button')
   }))()`);
-  assert.equal(structure.primary.length,4);
-  for (const [i,name] of ['language','api','ai-sources','display'].entries()) assert(structure.primary[i].includes(`settings-${name}-card`));
-  for (const [i,name] of ['mirror','nas-sync','device'].entries()) assert(structure.secondary[i].includes(`settings-${name}-card`));
+  assert.equal(structure.primary.length,3);
+  for (const [i,name] of ['mirror','api','ai-sources'].entries()) assert(structure.primary[i].includes(`settings-${name}-card`));
+  for (const [i,name] of ['nas-sync','display','device'].entries()) assert(structure.secondary[i].includes(`settings-${name}-card`));
+  assert.equal(await js(`document.querySelectorAll('.settings-page .tile-label').length`),1,'only mirror cover keeps its eyebrow');
+  assert.equal(await js(`!!document.querySelector('.settings-mirror-card .tile-label')`),true);
+  assert.equal(await js(`!!document.querySelector('.settings-device-card .settings-language-row #settings-language')`),true,'language is a device setting');
+  assert.equal(await js(`document.querySelector('.settings-language-card')`),null);
+  assert.equal(structure.secondary.length,3);
+  assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI 配置');
   assert.equal(structure.oldQuota,false); assert.equal(structure.obsolete,0); assert.equal(structure.testButtons,0);
   assert.equal(structure.tokens.length,6);
   for (const token of structure.tokens) { assert(token.provider && token.id.includes(token.provider)); assert(token.visible); }
@@ -75,6 +81,7 @@ async function run(c) {
   assert.equal(await js(`document.activeElement.id`),'settings-grok-token');
   assert.equal(await js(`document.querySelector('.settings-display-card > .settings-card-heading strong').textContent`),'Display');
   assert.equal(await js(`document.querySelector('[data-source=grokbot] .ai-source-actions').textContent`),'No setup needed');
+  assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI configuration');
   await js(`document.getElementById('settings-grok-token').value='';notchAPI.setLanguage('zh-CN')`); await until(`document.documentElement.lang==='zh-CN'`);
   if (output) {
     fs.mkdirSync(output,{recursive:true});

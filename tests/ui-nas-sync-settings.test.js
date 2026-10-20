@@ -217,7 +217,9 @@ test('content details use each content type timestamp, retain partial errors and
 test('NAS card markup removes standalone cards and retains recovery outside collapsed details', () => {
   assert.doesNotMatch(html, /settings-nas-endpoints|settings-nas-pair-card|settings-nas-endpoint-list|添加 endpoint|绑定本机/);
   const secondary = html.slice(html.indexOf('settings-column settings-column-secondary'));
-  assert(secondary.indexOf('settings-mirror-card') < secondary.indexOf('id="settings-nas-sync-card"'));
+  const primary = html.slice(html.indexOf('settings-column settings-column-primary'), html.indexOf('settings-column settings-column-secondary'));
+  assert(primary.indexOf('settings-mirror-card') < primary.indexOf('settings-api-card'));
+  assert.doesNotMatch(secondary, /settings-mirror-card/);
   assert(secondary.indexOf('id="settings-nas-sync-card"') < secondary.indexOf('settings-device-card'));
   const advanced = secondary.match(/<details[^>]*id="settings-nas-advanced"[\s\S]*?<\/details>/)?.[0];
   assert(advanced); assert.doesNotMatch(advanced, /\sopen(?:\s|>)/); assert.doesNotMatch(advanced, /上次同步|last-sync/);

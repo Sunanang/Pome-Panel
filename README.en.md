@@ -13,7 +13,7 @@ Supports macOS 13+ on Apple Silicon and Windows 10/11 x64. The desktop app uses 
 
 ## Language
 
-The desktop app starts in the system language: Simplified Chinese or English, with English as the fallback for other languages. Change it at **Settings → Language**: System, 简体中文 or English. The preference belongs to this device and is not synced to the NAS. Changing the language preserves your content and unsaved form input.
+The desktop app starts in the system language: Simplified Chinese or English, with English as the fallback for other languages. Change it at **Settings → Device & activation → Language**: System, 简体中文 or English. The preference belongs to this device and is not synced to the NAS. Changing the language preserves your content and unsaved form input.
 
 Recording recognition has its own **Chinese / English** setting in API configuration. Changing the interface language does not change recognition, including an ongoing recording or a reconnection. Smart naming follows the language of the note or recording content. Existing titles, notes, task summaries, project names and custom locations are not translated. Dates and numbers follow the interface language and system regional conventions.
 
@@ -50,13 +50,13 @@ Use the menu bar or tray to show the panel, configure the summon shortcut, enabl
 | Links | Save public HTTP/HTTPS URLs. Title fetching rejects local addresses, private networks and unsafe redirects. |
 | Recordings | Audio stays in the local `recordings/` directory. Optional Model Studio Qwen3-ASR live transcription uses an encrypted API key or an environment variable. |
 | Credentials | Accounts, passwords and API keys use system secure storage; the page cannot directly read plaintext. New and edited passwords are masked by default. |
-| Settings | Language, transcription and smart naming, AI (completion hooks and usage tokens), Display (workspace and Home switches), NAS sync, mirror cover, default page, summon shortcut, dock position, data folder and launch at login. |
+| Settings | Language, transcription and smart naming, AI configuration (completion hooks and usage tokens), Display (workspace and Home switches), NAS sync, mirror cover, default page, summon shortcut, dock position, data folder and launch at login. |
 
 Home edit mode swaps cards while preserving their sizes. Packing keeps the swapped pair fixed and may expand other cards to fill holes. If the requested swap does not fit, it reports insufficient space and retains the saved layout.
 
 ## AI activity and notifications
 
-Connect **Codex, Claude Code and Cursor** at **Settings → AI**. Preview shows the exact files, Pome hook entries and timestamped backups. Confirmation verifies the backup and writes atomically. Invalid configurations and stale previews are rejected. Only Pome-owned entries change; other hooks, formatting and comments are retained. Existing Codex `notify` commands are forwarded and restored on disconnect. After a configuration change, fully quit and reopen the connected tool.
+Connect **Codex, Claude Code and Cursor** at **Settings → AI configuration**. Preview shows the exact files, Pome hook entries and timestamped backups. Confirmation verifies the backup and writes atomically. Invalid configurations and stale previews are rejected. Only Pome-owned entries change; other hooks, formatting and comments are retained. Existing Codex `notify` commands are forwarded and restored on disconnect. After a configuration change, fully quit and reopen the connected tool.
 
 The local receiver listens only on `127.0.0.1:43821`, at `/notify/codex`, `/notify/claude` and `/notify/cursor`. Other sources return 404. Child-agent completion and cloud sessions do not show notifications.
 

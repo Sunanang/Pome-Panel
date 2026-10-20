@@ -1350,5 +1350,6 @@
   "settings.ai.fetchLocal": "获取本机",
   "attention.closeList": "关闭待处理列表",
   "settings.ai.waitingForCompletion": "在来源工具中完成一个任务后，记录会显示在这里。",
-  "settings.ai.connectedCount": "本机 · {arg1}/{arg2} 已接入"
+  "settings.ai.connectedCount": "本机 · {arg1}/{arg2} 已接入",
+  "settings.ai.title": "AI 配置"
 }

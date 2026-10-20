@@ -448,16 +448,19 @@
           <section id="tab-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-settings" aria-hidden="true" inert>
             <div class="settings-page" id="settings-page" aria-label="Pome Panel 设置" data-i18n-aria-label="copy.pomePanelSettings.e4a017">
               <div class="settings-column settings-column-primary">
-                <section class="tile settings-card settings-language-card">
-                  <label for="settings-language" data-i18n="settings.language">语言</label>
-                  <select id="settings-language" class="workspace-input" data-language-preference>
-                    <option value="system" data-i18n="settings.system">跟随系统</option>
-                    <option value="zh-CN">简体中文</option><option value="en-US">English</option>
-                  </select>
+                <section class="tile settings-card settings-mirror-card">
+                  <img id="settings-mirror-preview" src="assets/mirror-portrait.jpg" alt="当前首页镜子配图" draggable="false"  data-i18n-alt="copy.currentHomeMirrorCover.f642b6"/>
+                  <div>
+                    <span class="tile-label"><span data-i18n="copy.homeMirror.fb5ca2">首页镜子</span></span>
+                    <strong><span data-i18n="copy.coverImage.eab4f8">封面图片</span></strong>
+                    <p><span data-i18n="copy.supportsPngJpgWebpAndHeicChanges.98d93a">支持 PNG、JPG、WebP 与 HEIC，替换后首页立即同步。</span></p>
+                    <button class="workspace-button compact" id="settings-mirror-choose" type="button"><span data-i18n="copy.chooseImage.79b21b">选择图片…</span></button>
+                  </div>
                 </section>
+
                 <section class="tile settings-card settings-api-card">
                   <div class="settings-card-heading">
-                    <div><span class="tile-label"><span data-i18n="copy.aiFeatures.1b6636">智能能力</span></span><strong><span data-i18n="copy.apiConfiguration.0313d1">API 配置</span></strong></div>
+                    <div><strong><span data-i18n="copy.apiConfiguration.0313d1">API 配置</span></strong></div>
                     <button class="workspace-button compact" id="settings-api-configure" type="button"><span data-i18n="copy.configureOrReplace.d307ca">配置或替换</span></button>
                   </div>
                   <div class="settings-status-list">
@@ -469,7 +472,7 @@
 
                 <section class="tile settings-card settings-ai-sources-card" id="settings-ai-sources" aria-labelledby="settings-ai-sources-title">
                   <div class="settings-card-heading">
-                    <div><span class="tile-label" data-i18n="copy.aiFeatures.1b6636">智能能力</span><strong id="settings-ai-sources-title">AI</strong></div>
+                    <div><strong id="settings-ai-sources-title" data-i18n="settings.ai.title">AI 配置</strong></div>
                     <small id="settings-ai-sources-count"></small>
                   </div>
                   <p class="ai-source-scope" data-i18n="settings.ai.subtitle">接入本机完成提醒，并管理各家额度。</p>
@@ -531,50 +534,16 @@
                   </section>
                 </div>
 
-                <section class="tile settings-card settings-display-card settings-features-card settings-home-modules-card">
-                  <div class="settings-card-heading">
-                    <div><span class="tile-label" data-i18n="settings.display.eyebrow">界面</span><strong data-i18n="settings.display.title">显示</strong></div>
-                  </div>
-                  <div class="settings-display-section-heading"><strong data-i18n="copy.workspace.379798">工作区</strong><small data-i18n="copy.homeAndSettingsAreAlwaysVisible.708298">首页与设置始终显示</small></div>
-                  <div class="settings-feature-grid" id="settings-feature-list">
-                    <label><span><b><span data-i18n="copy.tasks.52fdbb">待办</span></b><small><span data-i18n="copy.fourTaskGroups.0cde21">四象限任务</span></small></span><input type="checkbox" data-settings-feature="todo" aria-label="显示待办"  data-i18n-aria-label="copy.showTasks.c9c242"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.notes.b778e3">笔记</span></b><small><span data-i18n="copy.quickNotesLibrary.4e60a6">随笔与资料库</span></small></span><input type="checkbox" data-settings-feature="notes" aria-label="显示笔记"  data-i18n-aria-label="copy.showNotes.b9bb29"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.links.305378">链接</span></b><small><span data-i18n="copy.savedLinksGroups.2e6794">收藏与分组</span></small></span><input type="checkbox" data-settings-feature="links" aria-label="显示链接"  data-i18n-aria-label="copy.showLinks.2c6364"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.recordings.4b6ef7">录制</span></b><small><span data-i18n="copy.recordingTranscription.376486">录音与转写</span></small></span><input type="checkbox" data-settings-feature="recordings" aria-label="显示录制"  data-i18n-aria-label="copy.showRecordings.6788bf"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.credentials.f67bca">密钥</span></b><small><span data-i18n="copy.localSecureStorage.fabbb7">本机安全存储</span></small></span><input type="checkbox" data-settings-feature="credentials" aria-label="显示密钥"  data-i18n-aria-label="copy.showCredentials.6b88fb"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.clipboard.8c10e2">剪贴板</span></b><small><span data-i18n="copy.offByDefault.0ab592">默认关闭</span></small></span><input type="checkbox" data-settings-feature="clip" aria-label="显示剪贴板"  data-i18n-aria-label="copy.showClipboard.a9e466"/><i aria-hidden="true"></i></label>
-                  </div>
-                  <div class="settings-display-section-heading settings-display-home-heading"><strong data-i18n="copy.home.203c08">首页</strong><small id="settings-home-module-status" data-i18n="copy.hiddenSpacesRefillAutomaticallyKeepAtLeast.be4674">隐藏后自动填充 · 至少保留一个</small></div>
-                  <div class="settings-home-module-grid" id="settings-home-module-list">
-                    <label><span><b><span data-i18n="copy.music.db9514">音乐</span></b><small><span data-i18n="copy.playbackStatusControls.848fd3">播放状态与控制</span></small></span><input type="checkbox" data-settings-home-module="music" aria-label="显示音乐"  data-i18n-aria-label="copy.showMusic.ca02c9"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.focusTimer.e7d0e7">番茄钟</span></b><small><span data-i18n="copy.focusTimer.9a86da">专注计时</span></small></span><input type="checkbox" data-settings-home-module="pomodoro" aria-label="显示番茄钟"  data-i18n-aria-label="copy.showFocusTimer.982b66"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.aiQuota.faa20c">AI 剩余额度</span></b><small data-i18n="settings.display.allQuotas">各家剩余额度</small></span><input type="checkbox" data-settings-home-module="cursor" aria-label="显示 AI 剩余额度"  data-i18n-aria-label="copy.showAiQuota.95ec9f"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.quickRecording.bd31b8">快速录音</span></b><small data-home-module-setting-note="recorder"><span data-i18n="copy.recordingTranscription.376486">录音与转写</span></small></span><input type="checkbox" data-settings-home-module="recorder" aria-label="显示快速录音"  data-i18n-aria-label="copy.showQuickRecording.5e357a"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.aiActivity.d6dcbe">AI 完成</span></b><small><span data-i18n="copy.taskEventsUnreadReminders.d7445e">完成记录与未读提醒</span></small></span><input type="checkbox" data-settings-home-module="inbox" aria-label="显示 AI 完成"  data-i18n-aria-label="copy.showAiActivity.4cf809"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.currentWindows.8dfcdd">当前窗口</span></b><small><span data-i18n="copy.quickWindowSwitching.87a581">窗口快速切换</span></small></span><input type="checkbox" data-settings-home-module="windows" aria-label="显示当前窗口"  data-i18n-aria-label="copy.showCurrentWindows.bf8373"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.mirror.e1a4f5">镜子</span></b><small><span data-i18n="copy.cameraCover.9f7a35">相机与封面</span></small></span><input type="checkbox" data-settings-home-module="mirror" aria-label="显示镜子"  data-i18n-aria-label="copy.showMirror.c3a2f9"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.quickNote.990572">随笔记</span></b><small><span data-i18n="copy.writeQuicklyOnHome.500789">首页快速记录</span></small></span><input type="checkbox" data-settings-home-module="note" aria-label="显示随笔记"  data-i18n-aria-label="copy.showQuickNote.d789a7"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.commands.b85789">常用指令</span></b><small><span data-i18n="copy.quickAccessToPrompts.4b0162">提示词快捷入口</span></small></span><input type="checkbox" data-settings-home-module="commands" aria-label="显示常用指令"  data-i18n-aria-label="copy.showCommands.b9dc81"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.sunriseSunset.224064">日出日落</span></b><small><span data-i18n="copy.dawnGoldenHourSunset.622918">天亮、黄金时刻与日落</span></small></span><input type="checkbox" data-settings-home-module="sun" aria-label="显示日出日落"  data-i18n-aria-label="copy.showSunriseSunset.6b970f"/><i aria-hidden="true"></i></label>
-                  </div>
-                </section>
+
               </div>
 
               <div class="settings-column settings-column-secondary">
 
-                <section class="tile settings-card settings-mirror-card">
-                  <img id="settings-mirror-preview" src="assets/mirror-portrait.jpg" alt="当前首页镜子配图" draggable="false"  data-i18n-alt="copy.currentHomeMirrorCover.f642b6"/>
-                  <div>
-                    <span class="tile-label"><span data-i18n="copy.homeMirror.fb5ca2">首页镜子</span></span>
-                    <strong><span data-i18n="copy.coverImage.eab4f8">封面图片</span></strong>
-                    <p><span data-i18n="copy.supportsPngJpgWebpAndHeicChanges.98d93a">支持 PNG、JPG、WebP 与 HEIC，替换后首页立即同步。</span></p>
-                    <button class="workspace-button compact" id="settings-mirror-choose" type="button"><span data-i18n="copy.chooseImage.79b21b">选择图片…</span></button>
-                  </div>
-                </section>
+
 
                 <section class="tile settings-card settings-nas-sync-card" id="settings-nas-sync-card" data-control-root="nas-sync-settings" data-control-id="settings.nas-sync.tab" aria-labelledby="settings-nas-status-title">
                   <div class="settings-card-heading">
-                    <div><span class="tile-label"><span data-i18n="copy.workspace.379798">工作区</span></span><strong id="settings-nas-status-title"><span data-i18n="copy.nasSync.deb3d4">NAS 同步</span></strong></div>
+                    <div><strong id="settings-nas-status-title"><span data-i18n="copy.nasSync.deb3d4">NAS 同步</span></strong></div>
                   </div>
                   <label class="settings-nas-field">
                     <span><span data-i18n="copy.syncAddress.afea64">同步地址</span></span>
@@ -629,10 +598,45 @@
                   </details>
                 </section>
 
+                <section class="tile settings-card settings-display-card settings-features-card settings-home-modules-card">
+                  <div class="settings-card-heading">
+                    <div><strong data-i18n="settings.display.title">显示</strong></div>
+                  </div>
+                  <div class="settings-display-section-heading"><strong data-i18n="copy.workspace.379798">工作区</strong><small data-i18n="copy.homeAndSettingsAreAlwaysVisible.708298">首页与设置始终显示</small></div>
+                  <div class="settings-feature-grid" id="settings-feature-list">
+                    <label><span><b><span data-i18n="copy.tasks.52fdbb">待办</span></b><small><span data-i18n="copy.fourTaskGroups.0cde21">四象限任务</span></small></span><input type="checkbox" data-settings-feature="todo" aria-label="显示待办"  data-i18n-aria-label="copy.showTasks.c9c242"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.notes.b778e3">笔记</span></b><small><span data-i18n="copy.quickNotesLibrary.4e60a6">随笔与资料库</span></small></span><input type="checkbox" data-settings-feature="notes" aria-label="显示笔记"  data-i18n-aria-label="copy.showNotes.b9bb29"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.links.305378">链接</span></b><small><span data-i18n="copy.savedLinksGroups.2e6794">收藏与分组</span></small></span><input type="checkbox" data-settings-feature="links" aria-label="显示链接"  data-i18n-aria-label="copy.showLinks.2c6364"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.recordings.4b6ef7">录制</span></b><small><span data-i18n="copy.recordingTranscription.376486">录音与转写</span></small></span><input type="checkbox" data-settings-feature="recordings" aria-label="显示录制"  data-i18n-aria-label="copy.showRecordings.6788bf"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.credentials.f67bca">密钥</span></b><small><span data-i18n="copy.localSecureStorage.fabbb7">本机安全存储</span></small></span><input type="checkbox" data-settings-feature="credentials" aria-label="显示密钥"  data-i18n-aria-label="copy.showCredentials.6b88fb"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.clipboard.8c10e2">剪贴板</span></b><small><span data-i18n="copy.offByDefault.0ab592">默认关闭</span></small></span><input type="checkbox" data-settings-feature="clip" aria-label="显示剪贴板"  data-i18n-aria-label="copy.showClipboard.a9e466"/><i aria-hidden="true"></i></label>
+                  </div>
+                  <div class="settings-display-section-heading settings-display-home-heading"><strong data-i18n="copy.home.203c08">首页</strong><small id="settings-home-module-status" data-i18n="copy.hiddenSpacesRefillAutomaticallyKeepAtLeast.be4674">隐藏后自动填充 · 至少保留一个</small></div>
+                  <div class="settings-home-module-grid" id="settings-home-module-list">
+                    <label><span><b><span data-i18n="copy.music.db9514">音乐</span></b><small><span data-i18n="copy.playbackStatusControls.848fd3">播放状态与控制</span></small></span><input type="checkbox" data-settings-home-module="music" aria-label="显示音乐"  data-i18n-aria-label="copy.showMusic.ca02c9"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.focusTimer.e7d0e7">番茄钟</span></b><small><span data-i18n="copy.focusTimer.9a86da">专注计时</span></small></span><input type="checkbox" data-settings-home-module="pomodoro" aria-label="显示番茄钟"  data-i18n-aria-label="copy.showFocusTimer.982b66"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.aiQuota.faa20c">AI 剩余额度</span></b><small data-i18n="settings.display.allQuotas">各家剩余额度</small></span><input type="checkbox" data-settings-home-module="cursor" aria-label="显示 AI 剩余额度"  data-i18n-aria-label="copy.showAiQuota.95ec9f"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.quickRecording.bd31b8">快速录音</span></b><small data-home-module-setting-note="recorder"><span data-i18n="copy.recordingTranscription.376486">录音与转写</span></small></span><input type="checkbox" data-settings-home-module="recorder" aria-label="显示快速录音"  data-i18n-aria-label="copy.showQuickRecording.5e357a"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.aiActivity.d6dcbe">AI 完成</span></b><small><span data-i18n="copy.taskEventsUnreadReminders.d7445e">完成记录与未读提醒</span></small></span><input type="checkbox" data-settings-home-module="inbox" aria-label="显示 AI 完成"  data-i18n-aria-label="copy.showAiActivity.4cf809"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.currentWindows.8dfcdd">当前窗口</span></b><small><span data-i18n="copy.quickWindowSwitching.87a581">窗口快速切换</span></small></span><input type="checkbox" data-settings-home-module="windows" aria-label="显示当前窗口"  data-i18n-aria-label="copy.showCurrentWindows.bf8373"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.mirror.e1a4f5">镜子</span></b><small><span data-i18n="copy.cameraCover.9f7a35">相机与封面</span></small></span><input type="checkbox" data-settings-home-module="mirror" aria-label="显示镜子"  data-i18n-aria-label="copy.showMirror.c3a2f9"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.quickNote.990572">随笔记</span></b><small><span data-i18n="copy.writeQuicklyOnHome.500789">首页快速记录</span></small></span><input type="checkbox" data-settings-home-module="note" aria-label="显示随笔记"  data-i18n-aria-label="copy.showQuickNote.d789a7"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.commands.b85789">常用指令</span></b><small><span data-i18n="copy.quickAccessToPrompts.4b0162">提示词快捷入口</span></small></span><input type="checkbox" data-settings-home-module="commands" aria-label="显示常用指令"  data-i18n-aria-label="copy.showCommands.b9dc81"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.sunriseSunset.224064">日出日落</span></b><small><span data-i18n="copy.dawnGoldenHourSunset.622918">天亮、黄金时刻与日落</span></small></span><input type="checkbox" data-settings-home-module="sun" aria-label="显示日出日落"  data-i18n-aria-label="copy.showSunriseSunset.6b970f"/><i aria-hidden="true"></i></label>
+                  </div>
+                </section>
+
                 <section class="tile settings-card settings-device-card">
                   <div class="settings-card-heading">
-                    <div><span class="tile-label"><span data-i18n="copy.thisComputer.b7c226">这台电脑</span></span><strong><span data-i18n="copy.deviceActivation.d32e63">本机与唤出</span></strong></div>
+                    <div><strong><span data-i18n="copy.deviceActivation.d32e63">本机与唤出</span></strong></div>
                   </div>
+                  <label class="settings-device-row settings-language-row" for="settings-language">
+                    <span data-i18n="settings.language">语言</span>
+                    <select id="settings-language" class="workspace-input" data-language-preference>
+                      <option value="system" data-i18n="settings.system">跟随系统</option>
+                      <option value="zh-CN">简体中文</option><option value="en-US">English</option>
+                    </select>
+                  </label>
                   <div class="settings-device-row">
                     <div><span><span data-i18n="copy.panelShortcut.f64340">唤出快捷键</span></span><strong id="settings-shortcut-value">Space</strong></div>
                     <button id="settings-shortcut-change" type="button"><span data-i18n="copy.change.a1f9c6">重新设置</span></button>

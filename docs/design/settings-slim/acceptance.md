@@ -56,3 +56,21 @@ macOS 上运行当前 dev 的生产 Electron、preload 与主进程；测试 HOM
 - `npm test` 全部通过：824 项 Node 测试，823 通过、1 项平台专属跳过、0 失败；27 次 Electron 场景/重启运行，JavaScript 语法和语言资源检查全部通过。
 - Codex、Claude、Cursor 真实配置文件的前后 SHA-256 一致，记录在截图目录的 `real-config-before.json` / `real-config-after.json`。
 - 顶部导航 54 个元素的计算样式和截图像素差异均为空，几何一致。
+
+## 2026-10-20 追加布局调整
+
+- 设置各卡片删除大标题上方的小标题，镜子封面保留「首页镜子」。
+- 语言选择保留原控件、ID、语言偏好逻辑，作为「本机与唤出」卡第一项。
+- 主列现在依次为 API 配置、AI；次列依次为镜子封面、NAS 同步、显示、本机与唤出。
+- 设置与 NAS 位置断言已更新，补充只剩镜子小标题、语言属于本机子项的检查；已有双语切换和表单保留回归继续覆盖移动后的语言控件。
+- macOS 生产 Electron 截图：`dist.noindex/settings-slim-r2/settings-full.png`（滚动拼接）、`settings-viewport.png`（实际窗口）。顶部 54 个元素的计算样式和截图像素仍无差异。
+- 本次不新增文案；README 中的语言入口路径已随位置更新。真实账号与 Windows 真机验证范围同上。
+
+## 2026-10-20 最终布局补充
+
+- 按后续要求，镜子封面从次列移到主列 API 配置上方；镜子原来的小标题和内容保留。
+- AI 卡主标题改为「AI 配置」/「AI configuration」，使用 `settings.ai.title` 双语资源；设置位置及切换语言后的标题均有回归断言。
+- 最终顺序：主列「镜子封面 → API 配置 → AI 配置」；次列「NAS 同步 → 显示 → 本机与唤出」，语言仍是本机卡第一项。
+- 最新截图目录为 `dist.noindex/settings-slim-r3/`，R2 目录只保留上一步验收历史。
+
+最终布局追加回归：`npm test` 全部通过（824 项 Node 测试中 823 通过、1 项平台专属跳过；27 次 Electron 场景/重启运行及全部语法/语言资源检查通过）。日志：`dist.noindex/settings-slim-r3/npm-test.log`。

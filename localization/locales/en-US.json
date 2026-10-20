@@ -1380,5 +1380,6 @@
   "settings.ai.fetchLocal": "Get local",
   "attention.closeList": "Close pending requests",
   "settings.ai.waitingForCompletion": "Complete a task in a connected tool to see it here.",
-  "settings.ai.connectedCount": "Local · {arg1}/{arg2} connected"
+  "settings.ai.connectedCount": "Local · {arg1}/{arg2} connected",
+  "settings.ai.title": "AI configuration"
 }
