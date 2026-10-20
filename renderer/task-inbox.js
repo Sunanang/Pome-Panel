@@ -94,13 +94,13 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     }
     empty.append(heading);
     const details = document.createElement('p');
-    pomeLocaleRendererTaskInbox.bind(details, "textContent", () => (invalid.length ? invalid[0].message : suggestion ? pomeLocaleRendererTaskInbox.t("copy.previewTheConfigurationChangesThenConfirmTo.e6f59b") : connected.length ? pomeLocaleRendererTaskInbox.t("copy.completeATaskInTheToolOr.982a17") : pomeLocaleRendererTaskInbox.t("copy.completionEventsWillAppearHereAfterConnecting.ff55a6")));
+    pomeLocaleRendererTaskInbox.bind(details, "textContent", () => (invalid.length ? invalid[0].message : suggestion ? pomeLocaleRendererTaskInbox.t("copy.previewTheConfigurationChangesThenConfirmTo.e6f59b") : connected.length ? pomeLocaleRendererTaskInbox.t("settings.ai.waitingForCompletion") : pomeLocaleRendererTaskInbox.t("copy.completionEventsWillAppearHereAfterConnecting.ff55a6")));
     if (size !== 'mini') empty.append(details);
     const actions = document.createElement('div'); actions.className = 'home-inbox-empty-actions';
     const primary = size === 'mini' ? '' : 'workspace-button compact home-inbox-onboard-primary';
     if (invalid.length) actions.append(button(pomeLocaleRendererTaskInbox.t("copy.repair.37a693"), event => invalid[0].repairable ? window.NotchAiSources?.request(invalid[0].source, 'repair', event.currentTarget) : window.NotchAiSources?.openSettings(invalid[0].source), primary));
     else if (suggestion) actions.append(button(pomeLocaleRendererTaskInbox.t("copy.connect.f3b392"), event => window.NotchAiSources?.request(suggestion.source, 'connect', event.currentTarget), primary), button(pomeLocaleRendererTaskInbox.t("copy.later.9d2055"), () => window.NotchAiSources?.dismiss(suggestion.source)));
-    else if (connected.length) actions.append(button(pomeLocaleRendererTaskInbox.t("copy.sendTest.a49d32"), () => void window.NotchAiSources?.test(connected[0].source)), button(pomeLocaleRendererTaskInbox.t("copy.manageSources.a0b36f"), () => window.NotchAiSources?.openSettings()));
+    else if (connected.length) actions.append(button(pomeLocaleRendererTaskInbox.t("copy.manageSources.a0b36f"), () => window.NotchAiSources?.openSettings()));
     else actions.append(button(pomeLocaleRendererTaskInbox.t("copy.connect.d312c6"), () => window.NotchAiSources?.openSettings(), primary));
     empty.append(actions); list.append(empty);
     if (state === 'waiting') pomeLocaleRendererTaskInbox.bind(unreadLabel, "textContent", () => (pomeLocaleRendererTaskInbox.t("copy.listening.fa2d74")));

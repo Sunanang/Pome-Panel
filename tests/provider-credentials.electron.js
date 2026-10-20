@@ -98,6 +98,20 @@ async function run(c) {
   await until(`document.querySelector('#copilot-usage-rows strong').textContent===PomeI18n.t('copy.unlimited.8651f5')`);
   assert.equal(await js(`document.querySelector('#copilot-usage-rows .cursor-usage-track').hidden`),true);
   assert.equal(await js(`document.getElementById('ai-provider-copilot').dataset.level`),'ok');
+  if (!restart) {
+    // Merged rows retain every generic provider's actual save/clear UI handlers.
+    for (const id of ['copilot','grok','antigravity','manus']) {
+      await js(`document.querySelector('[data-provider-clear="${id}"]').click()`);
+      await until(`!document.querySelector('[data-provider-clear="${id}"]').disabled`);
+      assert.equal((await js(`notchAPI.getAiProviderTokenStatus('${id}')`)).configured,false);
+      assert.equal(await js(`document.getElementById('settings-${id}-token').value`),'');
+      await js(`document.getElementById('settings-${id}-token').value='fixture-${id}'`);
+      if (id === 'grok') await js(`document.getElementById('settings-grok-team').value='team-b';document.getElementById('settings-grok-team').dispatchEvent(new Event('input'))`);
+      await js(`document.querySelector('[data-provider-save="${id}"]').click()`);
+      await until(`!document.querySelector('[data-provider-save="${id}"]').disabled && document.getElementById('settings-${id}-token').value===''`);
+      assert.equal((await js(`notchAPI.getAiProviderTokenStatus('${id}')`)).configured,true);
+    }
+  }
   if (restart) {
     assert.equal((await js(`notchAPI.clearAiProviderToken('grok')`)).ok,true);
     assert.equal((await js(`notchAPI.getAiProviderTokenStatus('grok')`)).configured,false);

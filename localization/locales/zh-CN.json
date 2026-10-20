@@ -1289,7 +1289,7 @@
   "attention.hide": "隐藏这次提醒",
   "attention.sensitive": "敏感内容已隐藏，请返回来源查看",
   "attention.generic": "需要你在来源软件中处理",
-  "attention.storageError": "待处理提醒无法保存，原文件已保留，请在设置中修复后重试。",
+  "attention.storageError": "待处理提醒无法保存，原文件已保留，请从首页 AI 完成的待处理入口修复后重试。",
   "attention.pending": "待处理",
   "attention.unverified": "需返回来源软件确认",
   "attention.reopen": "重新显示",
@@ -1337,5 +1337,18 @@
   "quota.sourcesNeedAttention": "{count} 个来源需处理",
   "quota.minimumReset": "最低 {source} · {reset}",
   "quota.refreshOrder": "每 5 分钟自动刷新 · 按设置中的顺序排列",
-  "quota.compactOrder": "按紧急度排序"
+  "quota.compactOrder": "按紧急度排序",
+  "settings.ai.subtitle": "接入本机完成提醒，并管理各家额度。",
+  "settings.ai.footer": "仅修改本机工具配置；断开只移除 Pome 的项。",
+  "settings.ai.noConnection": "无需接入",
+  "settings.ai.localQuota": "额度来自本机 Claude OAuth 登录。",
+  "settings.ai.cursorQuota": "额度来自 Cursor 登录态，无需单独配置 Token。",
+  "settings.ai.tokenQuota": "Token 额度",
+  "settings.display.eyebrow": "界面",
+  "settings.display.title": "显示",
+  "settings.display.allQuotas": "各家剩余额度",
+  "settings.ai.fetchLocal": "获取本机",
+  "attention.closeList": "关闭待处理列表",
+  "settings.ai.waitingForCompletion": "在来源工具中完成一个任务后，记录会显示在这里。",
+  "settings.ai.connectedCount": "本机 · {arg1}/{arg2} 已接入"
 }

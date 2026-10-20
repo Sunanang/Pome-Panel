@@ -52,7 +52,7 @@ async function run(c){
  }
  await apply('codex');assert(fs.readdirSync(path.dirname(config)).some(n=>n.includes('.pome-backup-')));
  await assertRestartSources(['codex']);assert(await js(`document.getElementById('ai-sources-status').textContent.includes('完全退出并重新打开 Codex')`));
- const beforeTest=await js('window.notchAPI.getTaskInbox()');const test=await js(`NotchAiSources.test('codex')`);assert.equal(test.ok,true,JSON.stringify(test));assert.equal(test.message,'测试通知已送达');assert.equal((await js('window.notchAPI.getTaskInbox()')).total,beforeTest.total,'tests do not enter history or unread');await capture('settings-test-delivered');
+ const beforeTest=await js('window.notchAPI.getTaskInbox()');const test=await js(`notchAPI.testAiSource('codex')`);assert.equal(test.ok,true,JSON.stringify(test));assert.equal(test.message,'测试通知已送达');assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('测试通知已送达')`),false,'backend testing has no settings delivery hint');assert.equal((await js('window.notchAPI.getTaskInbox()')).total,beforeTest.total,'tests do not enter history or unread');await capture('settings-test-delivered');
  await assertRestartSources(['codex']);
  // An already matching config is skipped: successful detection is not a new write.
  await js(`(async()=>{const preview=await notchAPI.previewAiSource('claude','connect');return notchAPI.applyAiSource(preview.preview.token);})()`);await js('NotchAiSources.refresh()');
@@ -67,14 +67,14 @@ async function run(c){
  await js('NotchAiSources.refresh()');await capture('settings-mixed-states');
  await apply('claude');await apply('cursor','repair');
  await assertRestartSources(['cursor','codex','claude']);assert(await js(`document.getElementById('ai-sources-status').textContent.includes('完全退出并重新打开 Cursor')`));
- for(const source of ['claude','cursor'])assert.equal((await js(`NotchAiSources.test('${source}')`)).ok,true);
+ for(const source of ['claude','cursor'])assert.equal((await js(`notchAPI.testAiSource('${source}')`)).ok,true);
  await capture('settings-all-connected');
  const cursorFile=path.join(home,'.cursor/hooks.json'),legacyCursor=JSON.parse(fs.readFileSync(cursorFile));
  delete legacyCursor.hooks.afterAgentResponse;fs.writeFileSync(cursorFile,JSON.stringify(legacyCursor));
  await js('NotchAiSources.refresh()');
- await until(`Array.from(document.querySelectorAll('.ai-source-row[data-source="cursor"] button')).some(button=>button.textContent==='补全摘要')`);
+ await until(`Array.from(document.querySelectorAll('.ai-source-row[data-source="cursor"] button')).some(button=>button.textContent==='修复')`);
  assert.equal(await js(`NotchAiSources.getState().sources.find(row=>row.source==='cursor').state`),'connected','legacy stop-only stays connected');
- await js(`Array.from(document.querySelectorAll('.ai-source-row[data-source="cursor"] button')).find(button=>button.textContent==='补全摘要').click()`);
+ await js(`Array.from(document.querySelectorAll('.ai-source-row[data-source="cursor"] button')).find(button=>button.textContent==='修复').click()`);
  await until(`document.getElementById('ai-source-confirm').open`);
  await js(`document.getElementById('ai-source-confirm-apply').click()`);
  await until(`!document.getElementById('ai-source-confirm').open && !NotchAiSources.getState().sources.find(row=>row.source==='cursor').summaryHookMissing`);

@@ -7675,3 +7675,87 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 .ai-usage-provider[data-state='error'] .q-mini-value { color: var(--q-error); }
 .q-window-reset { font-size: 9.5px; font-weight: 500; color: var(--q-caption); }
 .home-cursor[data-widget-size='large']:not([data-ai-density='dense']) .ai-quota-help { display: none; }
+
+/* Settings A: shared AI rows and separate workspace/home controls. Scoped to
+   settings content; the existing topbar and its interactions stay unchanged. */
+.settings-page {
+  --settings-gap: 8px;
+  --settings-rule: rgba(255,255,255,.075);
+  --settings-blue: #438cff;
+  --settings-connected: #36cf86;
+  gap: 14px;
+}
+.settings-page .settings-column { gap: var(--settings-gap); }
+.settings-page .settings-card { padding: 16px 20px; background: #1b1b1d; }
+.settings-page .settings-status-list { margin: 12px 0 8px; }
+.settings-page .workspace-button.compact { min-height: 28px; padding: 4px 10px; border-radius: 10px; font-size: 11px; }
+.settings-page .ai-source-scope { margin-top: 5px; }
+.settings-page .ai-source-list { margin-top: 10px; border-top: 1px solid var(--settings-rule); }
+.settings-page .ai-source-row { display: block; padding: 12px 0; }
+.settings-page .ai-source-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.settings-page .ai-source-icon { box-sizing: border-box; width: 30px; height: 30px; padding: 6px; border-radius: 9px; background: rgba(255,255,255,.065); }
+.settings-page .ai-source-row[data-source='claude'] .ai-source-icon { filter: none; background: rgba(255,255,255,.065); }
+.settings-page .ai-source-copy strong { font-size: 13px; color: var(--text-1); }
+.settings-page .ai-source-copy small { font-size: 10px; }
+.settings-page .ai-source-state { font-size: 10px; line-height: 1.2; padding: 3px 7px; border-radius: 20px; background: rgba(255,255,255,.065); color: var(--text-3); }
+.settings-page .ai-source-state::before { display: none; }
+.settings-page .ai-source-row[data-state='connected'] .ai-source-state { color: var(--settings-connected); background: rgba(54,207,134,.12); }
+.settings-page .ai-source-row[data-state='catalogOnly'] .ai-source-state { color: #8db8ff; border: 1px solid rgba(93,145,239,.6); background: transparent; }
+.settings-page .ai-source-actions { margin-left: auto; }
+.settings-page .ai-source-actions button { min-width: 56px; color: var(--text-2); }
+.settings-page .ai-source-actions button.primary { color: #fff; background: var(--settings-blue); border-color: rgba(255,255,255,.14); }
+.settings-page .ai-source-actions button.primary:hover { background: #367eea; }
+.settings-page .ai-source-actions > small { color: var(--text-4); font-size: 10px; }
+.settings-page #settings-ai-sources-count { color: var(--settings-connected); background: rgba(54,207,134,.10); padding: 4px 8px; border-radius: 20px; }
+.settings-page .ai-source-token { margin: 10px 0 0 40px; padding-top: 8px; border: 0; border-top: 1px solid rgba(255,255,255,.045); border-radius: 0; background: none; }
+.settings-page .ai-source-token .settings-cursor-token-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 0; }
+.settings-page .ai-source-token .settings-cursor-token-row input { min-width: 100px; flex: 1 1 115px; width: 0; height: 28px; font-size: 10px; padding: 4px 9px; border-radius: 9px; }
+.settings-page .ai-source-token .settings-cursor-token-row button { flex: 0 0 auto; min-height: 28px; padding: 4px 8px; font-size: 10px; }
+.settings-page .ai-source-token .settings-cursor-token-row > small { align-self: center; color: var(--text-4); font-size: 9px; }
+.settings-page .ai-source-token > p { margin-top: 5px; font-size: 9px; }
+.settings-page .ai-source-token > p:empty { display: none; }
+.settings-page .ai-source-token > .settings-cursor-token-row ~ .settings-cursor-token-row { margin-top: 8px; }
+.settings-page .ai-source-token .settings-nas-http-toggle { margin-top: 8px; }
+.settings-page .ai-source-token label.settings-cursor-token-row { align-items: center; font-size: 10px; color: var(--text-3); }
+.settings-page .ai-source-row:not([data-state='connected']) .ai-source-token { opacity: .62; }
+.settings-page .ai-source-token:focus-within,.settings-page .ai-source-row:not([data-state='connected']) .ai-source-token:hover { opacity: 1; }
+.settings-page .ai-source-local-quota { margin: 8px 0 0 40px; font-size: 10px; }
+.settings-page .ai-source-footer { margin-top: 4px; }
+.settings-display-section-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 14px; }
+.settings-display-section-heading strong { color: var(--text-2); font-size: 12px; }
+.settings-display-section-heading small { color: var(--text-4); font-size: 10px; text-align: right; }
+.settings-display-home-heading { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--settings-rule); }
+.settings-display-card .settings-feature-grid { grid-template-columns: repeat(3,minmax(0,1fr)); margin-top: 8px; overflow: visible; }
+.settings-display-card .settings-home-module-grid { grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 8px; }
+.settings-display-card :is(.settings-feature-grid,.settings-home-module-grid) label { min-height: 52px; padding: 9px 11px; gap: 6px; }
+.settings-display-card :is(.settings-feature-grid,.settings-home-module-grid) input:not(:checked) + i { background: #3b3b3f; box-shadow: none; }
+.settings-display-card :is(.settings-feature-grid,.settings-home-module-grid) input:not(:checked) + i::after { background: #838389; }
+.ai-attention-section { position: fixed; margin: 0; width: min(380px,calc(100vw - 24px)); max-height: min(380px,calc(100vh - 24px)); padding: 14px; border-radius: 14px; border: 1px solid var(--hairline-soft); background: var(--bg-base); color: var(--text-1); box-shadow: 0 15px 40px #0008; }
+.ai-attention-section:not([open]) { display: none; }
+.ai-attention-section[open] { display: grid; gap: 10px; }
+.ai-attention-section::backdrop { background: rgba(0,0,0,.12); }
+.ai-attention-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+.ai-attention-heading > button { border: 0; background: transparent; color: var(--text-3); font: 18px var(--font); cursor: pointer; }
+.ai-attention-section #ai-attention-list { max-height: 260px; }
+.ai-attention-section .ai-attention-row { border-top: 1px solid var(--hairline-soft); }
+.ai-attention-section .ai-attention-row strong { font-size: 12px; }
+.ai-attention-section .ai-attention-actions { flex-wrap: wrap; justify-content: flex-end; }
+.ai-attention-section .ai-attention-status:empty { display: none; }
+/* Override the optional glass treatment only inside settings cards. */
+html[data-liquid-glass='1'] .settings-page .settings-card {
+  background: #1b1b1d !important;
+  border-color: rgba(255,255,255,.055) !important;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.settings-page .workspace-button.compact {
+  background: #242426 !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.settings-page .workspace-button.compact:hover { background: #2c2c2f !important; }
+.settings-page .ai-source-actions button.primary { background: var(--settings-blue) !important; color: white; }
+.settings-page .ai-source-actions button.primary:hover { background: #367eea !important; }
+.settings-page .ai-source-row:not([data-state='connected']) .ai-source-token:focus-within { opacity: 1; }
+.settings-page .settings-cursor-token-hint:empty { display: none; }

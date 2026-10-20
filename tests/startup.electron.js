@@ -149,7 +149,7 @@ async function checkCodexTokenFlow(contents) {
     for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
     return { value: input.value, type: input.type, disabled: button.disabled,
       status: await window.notchAPI.getCodexTokenStatus(),
-      sameCard: input.closest('.settings-ai-usage-card') === document.getElementById('settings-cursor-token').closest('.settings-ai-usage-card'),
+      sameCard: input.closest('#settings-ai-sources') === document.getElementById('settings-cursor-token').closest('#settings-ai-sources'),
       leaked: JSON.stringify(collectLocalStorageSnapshot()).includes('fixture-codex-token') };
   })()`);
   assert.equal(acquired.value, 'fixture-codex-token');

@@ -1313,7 +1313,7 @@
   "attention.hide": "Hide this reminder",
   "attention.sensitive": "Sensitive content hidden. Return to the source app.",
   "attention.generic": "Action needed in the source app",
-  "attention.storageError": "Pending reminders could not be saved. The original file is preserved. Repair in Settings and retry.",
+  "attention.storageError": "Pending requests could not be saved. The original file is preserved. Repair storage from Pending in the home AI activity widget, then retry.",
   "attention.pending": "Pending",
   "attention.unverified": "Return to the source app to confirm",
   "attention.reopen": "Show again",
@@ -1367,5 +1367,18 @@
   },
   "quota.minimumReset": "Lowest {source} · {reset}",
   "quota.refreshOrder": "Refreshes every 5 min · Settings order",
-  "quota.compactOrder": "Urgency first"
+  "quota.compactOrder": "Urgency first",
+  "settings.ai.subtitle": "Connect local completion alerts and manage each provider’s quota.",
+  "settings.ai.footer": "Only local tool configuration changes; disconnecting removes Pome entries only.",
+  "settings.ai.noConnection": "No setup needed",
+  "settings.ai.localQuota": "Quota uses the local Claude OAuth sign-in.",
+  "settings.ai.cursorQuota": "Quota uses Cursor sign-in; no separate token is needed.",
+  "settings.ai.tokenQuota": "Token quota",
+  "settings.display.eyebrow": "Interface",
+  "settings.display.title": "Display",
+  "settings.display.allQuotas": "Quota across providers",
+  "settings.ai.fetchLocal": "Get local",
+  "attention.closeList": "Close pending requests",
+  "settings.ai.waitingForCompletion": "Complete a task in a connected tool to see it here.",
+  "settings.ai.connectedCount": "Local · {arg1}/{arg2} connected"
 }

@@ -469,63 +469,39 @@
 
                 <section class="tile settings-card settings-ai-sources-card" id="settings-ai-sources" aria-labelledby="settings-ai-sources-title">
                   <div class="settings-card-heading">
-                    <div><span class="tile-label"><span data-i18n="copy.aiFeatures.1b6636">智能能力</span></span><strong id="settings-ai-sources-title"><span data-i18n="copy.aiProvidersCatalog.a1b2c3">AI 提供商</span></strong></div>
-                    <small id="settings-ai-sources-count"><span data-i18n="copy.local03Connected.f9026e">本机 · 0/3 已接入</span></small>
+                    <div><span class="tile-label" data-i18n="copy.aiFeatures.1b6636">智能能力</span><strong id="settings-ai-sources-title">AI</strong></div>
+                    <small id="settings-ai-sources-count"></small>
                   </div>
-                  <p class="ai-source-scope"><span data-i18n="attention.scopeSummary">完成提醒可接入 Codex / Claude / Cursor / Grok / Copilot CLI / Antigravity。额度按各家能力矩阵展示；等待输入/选择/授权目前主要覆盖 Claude（受限）。</span></p>
+                  <p class="ai-source-scope" data-i18n="settings.ai.subtitle">接入本机完成提醒，并管理各家额度。</p>
                   <div id="settings-ai-sources-list" class="ai-source-list"></div>
-                  <p><span data-i18n="copy.onlyLocalToolConfigurationIsChangedWith.f4a095">仅修改本机工具配置；先在同目录备份。断开只移除 Pome 的项。</span></p>
+                  <div id="settings-ai-token-controls" hidden>
+                    <section class="ai-source-token" id="settings-cursor-token-card">
+                      <div class="settings-cursor-token-row">
+                        <input id="settings-cursor-token" type="password" placeholder="粘贴 Cursor access token" autocomplete="off" spellcheck="false" aria-label="Cursor access token"  data-i18n-placeholder="copy.pasteACursorAccessToken.bb32fc"/>
+                        <button class="workspace-button compact" id="settings-cursor-token-fetch" type="button"><span data-i18n="settings.ai.fetchLocal">获取本机</span></button>
+                        <button class="workspace-button compact" id="settings-cursor-token-save" type="button"><span data-i18n="copy.save.a3030b">保存</span></button>
+                        <button class="workspace-button compact" id="settings-cursor-token-clear" type="button"><span data-i18n="copy.clear.bce237">清除</span></button>
+                        <small id="settings-cursor-token-status" data-state="empty"><span data-i18n="copy.notConfiguredUsingLocalSignIn.3004c2">未配置 · 使用本机登录</span></small>
+                      </div>
+                      <p class="settings-cursor-token-hint" id="settings-cursor-token-hint" role="status" aria-live="polite"></p>
+                    </section>
+                    <section class="ai-source-token" id="settings-codex-token-card">
+                      <p id="settings-codex-local-status"><span data-i18n="copy.localCodexNotDetected.89ad92">未检测到本机 Codex</span></p>
+                      <p id="settings-codex-percent"></p>
+                      <p id="settings-codex-token-guide" hidden role="status"><span data-i18n="copy.codexTokenExpiredOnAComputerWith.7376f6">Codex Token 已失效。本机有 Codex：点「获取本机 Token」，或先在 Codex 里重新登录再获取。本机没有 Codex：在装了 Codex 的电脑上获取后粘贴过来，再点保存。</span></p>
+                      <div class="settings-cursor-token-row">
+                        <input id="settings-codex-token" type="password" placeholder="粘贴 Codex access token" autocomplete="off" spellcheck="false" aria-label="Codex Token"  data-i18n-placeholder="copy.pasteACodexAccessToken.d8c9b4"/>
+                        <button class="workspace-button compact" id="settings-codex-token-fetch" type="button"><span data-i18n="settings.ai.fetchLocal">获取本机</span></button>
+                        <button class="workspace-button compact" id="settings-codex-token-save" type="button"><span data-i18n="copy.save.a3030b">保存</span></button>
+                        <button class="workspace-button compact" id="settings-codex-token-clear" type="button"><span data-i18n="copy.clear.bce237">清除</span></button>
+                        <small id="settings-codex-token-status"><span data-i18n="copy.noManualTokenConfigured.a2ebce">未配置手动 Token</span></small>
+                      </div>
+                      <p class="settings-cursor-token-hint" id="settings-codex-token-hint" role="status" aria-live="polite"></p>
+                    </section>
+                    <div id="settings-ai-provider-tokens"></div>
+                  </div>
+                  <p class="ai-source-footer" data-i18n="settings.ai.footer">仅修改本机工具配置；断开只移除 Pome 的项。</p>
                   <p id="ai-sources-status" role="status" aria-live="polite"></p>
-                </section>
-
-                <section class="tile settings-card settings-ai-usage-card" id="settings-ai-usage-card" aria-labelledby="settings-ai-usage-heading">
-                  <div class="settings-card-heading settings-ai-heading">
-                    <div><span class="tile-label" data-i18n="copy.aiProviders.7e2f1a">AI 提供商</span><strong id="settings-ai-usage-heading"><span data-i18n="copy.aiQuota.faa20c">AI 剩余额度</span></strong></div>
-                  </div>
-                <section class="settings-ai-provider settings-cursor-token-card" id="settings-cursor-token-card">
-                  <div class="settings-card-heading">
-                    <div><span class="tile-label">Cursor</span><strong><span data-i18n="copy.usageToken.ccb5d6">用量 Token</span></strong></div>
-                    <small id="settings-cursor-token-status" data-state="empty"><span data-i18n="copy.notConfiguredUsingLocalSignIn.3004c2">未配置 · 使用本机登录</span></small>
-                  </div>
-                  <p><span data-i18n="copy.optionalReadALocalCursorTokenThen.cf3fde">可选。可从本机 Cursor 获取，保存后优先用于查询用量，并随 NAS 加密同步；失效时回退本机登录态。</span></p>
-                  <div class="settings-cursor-token-row">
-                    <input id="settings-cursor-token" type="password" placeholder="粘贴 Cursor access token" autocomplete="off" spellcheck="false" aria-label="Cursor access token"  data-i18n-placeholder="copy.pasteACursorAccessToken.bb32fc"/>
-                    <button class="workspace-button compact" id="settings-cursor-token-fetch" type="button"><span data-i18n="copy.getLocalToken.713114">获取本机 Token</span></button>
-                    <button class="workspace-button compact" id="settings-cursor-token-save" type="button"><span data-i18n="copy.save.a3030b">保存</span></button>
-                    <button class="workspace-button compact" id="settings-cursor-token-clear" type="button"><span data-i18n="copy.clear.bce237">清除</span></button>
-                  </div>
-                  <p class="settings-cursor-token-hint" id="settings-cursor-token-hint" role="status" aria-live="polite"></p>
-                </section>
-                <section class="settings-ai-provider settings-codex-token-card" id="settings-codex-token-card">
-                  <div class="settings-card-heading">
-                    <div><span class="tile-label">Codex</span><strong><span data-i18n="copy.usageSourceToken.27e824">用量来源与 Token</span></strong></div>
-                    <small id="settings-codex-token-status"><span data-i18n="copy.noManualTokenConfigured.a2ebce">未配置手动 Token</span></small>
-                  </div>
-                  <p id="settings-codex-local-status"><span data-i18n="copy.localCodexNotDetected.89ad92">未检测到本机 Codex</span></p>
-                  <p id="settings-codex-percent"></p>
-                  <p id="settings-codex-token-guide" hidden role="status"><span data-i18n="copy.codexTokenExpiredOnAComputerWith.7376f6">Codex Token 已失效。本机有 Codex：点「获取本机 Token」，或先在 Codex 里重新登录再获取。本机没有 Codex：在装了 Codex 的电脑上获取后粘贴过来，再点保存。</span></p>
-                  <p><span data-i18n="copy.saveAnAccessTokenForLiveOnline.a8efb5">保存 access token 后联网查询实时额度，联网失败时回退本机记录。Token 由系统安全存储加密保存在本机。</span></p>
-                  <div class="settings-cursor-token-row">
-                    <input id="settings-codex-token" type="password" placeholder="粘贴 Codex access token" autocomplete="off" spellcheck="false" aria-label="Codex Token"  data-i18n-placeholder="copy.pasteACodexAccessToken.d8c9b4"/>
-                    <button class="workspace-button compact" id="settings-codex-token-fetch" type="button"><span data-i18n="copy.getLocalToken.713114">获取本机 Token</span></button>
-                    <button class="workspace-button compact" id="settings-codex-token-save" type="button"><span data-i18n="copy.save.a3030b">保存</span></button>
-                    <button class="workspace-button compact" id="settings-codex-token-clear" type="button"><span data-i18n="copy.clear.bce237">清除</span></button>
-                  </div>
-                  <p class="settings-cursor-token-hint" id="settings-codex-token-hint" role="status" aria-live="polite"></p>
-                </section>
-                <section class="settings-ai-provider" id="settings-grokbot-token-card">
-                  <div class="settings-card-heading">
-                    <div><span class="tile-label">Grok Bot</span><strong data-i18n="copy.usageViaCursor.9c1d2e">Quota via Cursor</strong></div>
-                  </div>
-                  <p data-i18n="providers.ownership.grokbot">Cursor/Anysphere sand pool (requires Cursor sign-in; not a standalone xAI account). Separate from Grok (xAI).</p>
-                </section>
-                <section class="settings-ai-provider" id="settings-claude-token-card">
-                  <div class="settings-card-heading">
-                    <div><span class="tile-label">Claude Code</span><strong data-i18n="copy.localOauthUsage.4a8b1c">Local sign-in usage</strong></div>
-                  </div>
-                  <p data-i18n="providers.ownership.claude">Uses local Claude Code OAuth (~/.claude / Keychain). Tokens are not stored here.</p>
-                </section>
-                <div id="settings-ai-provider-tokens"></div>
                 </section>
 
                 <div class="settings-nas-dialog-root" id="settings-nas-sync-options" hidden>
@@ -555,11 +531,11 @@
                   </section>
                 </div>
 
-                <section class="tile settings-card settings-features-card">
+                <section class="tile settings-card settings-display-card settings-features-card settings-home-modules-card">
                   <div class="settings-card-heading">
-                    <div><span class="tile-label"><span data-i18n="copy.workspace.379798">工作区</span></span><strong><span data-i18n="copy.visibleFeatures.c10f98">显示功能</span></strong></div>
-                    <small><span data-i18n="copy.homeAndSettingsAreAlwaysVisible.708298">首页与设置始终显示</span></small>
+                    <div><span class="tile-label" data-i18n="settings.display.eyebrow">界面</span><strong data-i18n="settings.display.title">显示</strong></div>
                   </div>
+                  <div class="settings-display-section-heading"><strong data-i18n="copy.workspace.379798">工作区</strong><small data-i18n="copy.homeAndSettingsAreAlwaysVisible.708298">首页与设置始终显示</small></div>
                   <div class="settings-feature-grid" id="settings-feature-list">
                     <label><span><b><span data-i18n="copy.tasks.52fdbb">待办</span></b><small><span data-i18n="copy.fourTaskGroups.0cde21">四象限任务</span></small></span><input type="checkbox" data-settings-feature="todo" aria-label="显示待办"  data-i18n-aria-label="copy.showTasks.c9c242"/><i aria-hidden="true"></i></label>
                     <label><span><b><span data-i18n="copy.notes.b778e3">笔记</span></b><small><span data-i18n="copy.quickNotesLibrary.4e60a6">随笔与资料库</span></small></span><input type="checkbox" data-settings-feature="notes" aria-label="显示笔记"  data-i18n-aria-label="copy.showNotes.b9bb29"/><i aria-hidden="true"></i></label>
@@ -568,17 +544,11 @@
                     <label><span><b><span data-i18n="copy.credentials.f67bca">密钥</span></b><small><span data-i18n="copy.localSecureStorage.fabbb7">本机安全存储</span></small></span><input type="checkbox" data-settings-feature="credentials" aria-label="显示密钥"  data-i18n-aria-label="copy.showCredentials.6b88fb"/><i aria-hidden="true"></i></label>
                     <label><span><b><span data-i18n="copy.clipboard.8c10e2">剪贴板</span></b><small><span data-i18n="copy.offByDefault.0ab592">默认关闭</span></small></span><input type="checkbox" data-settings-feature="clip" aria-label="显示剪贴板"  data-i18n-aria-label="copy.showClipboard.a9e466"/><i aria-hidden="true"></i></label>
                   </div>
-                </section>
-
-                <section class="tile settings-card settings-home-modules-card">
-                  <div class="settings-card-heading">
-                    <div><span class="tile-label"><span data-i18n="copy.home.203c08">首页</span></span><strong><span data-i18n="copy.homeWidgets.3be8d4">首页组件</span></strong></div>
-                    <small id="settings-home-module-status"><span data-i18n="copy.hiddenSpacesRefillAutomaticallyKeepAtLeast.be4674">隐藏后自动填充 · 至少保留一个</span></small>
-                  </div>
+                  <div class="settings-display-section-heading settings-display-home-heading"><strong data-i18n="copy.home.203c08">首页</strong><small id="settings-home-module-status" data-i18n="copy.hiddenSpacesRefillAutomaticallyKeepAtLeast.be4674">隐藏后自动填充 · 至少保留一个</small></div>
                   <div class="settings-home-module-grid" id="settings-home-module-list">
                     <label><span><b><span data-i18n="copy.music.db9514">音乐</span></b><small><span data-i18n="copy.playbackStatusControls.848fd3">播放状态与控制</span></small></span><input type="checkbox" data-settings-home-module="music" aria-label="显示音乐"  data-i18n-aria-label="copy.showMusic.ca02c9"/><i aria-hidden="true"></i></label>
                     <label><span><b><span data-i18n="copy.focusTimer.e7d0e7">番茄钟</span></b><small><span data-i18n="copy.focusTimer.9a86da">专注计时</span></small></span><input type="checkbox" data-settings-home-module="pomodoro" aria-label="显示番茄钟"  data-i18n-aria-label="copy.showFocusTimer.982b66"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.aiQuota.faa20c">AI 剩余额度</span></b><small>Cursor / Codex</small></span><input type="checkbox" data-settings-home-module="cursor" aria-label="显示 AI 剩余额度"  data-i18n-aria-label="copy.showAiQuota.95ec9f"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.aiQuota.faa20c">AI 剩余额度</span></b><small data-i18n="settings.display.allQuotas">各家剩余额度</small></span><input type="checkbox" data-settings-home-module="cursor" aria-label="显示 AI 剩余额度"  data-i18n-aria-label="copy.showAiQuota.95ec9f"/><i aria-hidden="true"></i></label>
                     <label><span><b><span data-i18n="copy.quickRecording.bd31b8">快速录音</span></b><small data-home-module-setting-note="recorder"><span data-i18n="copy.recordingTranscription.376486">录音与转写</span></small></span><input type="checkbox" data-settings-home-module="recorder" aria-label="显示快速录音"  data-i18n-aria-label="copy.showQuickRecording.5e357a"/><i aria-hidden="true"></i></label>
                     <label><span><b><span data-i18n="copy.aiActivity.d6dcbe">AI 完成</span></b><small><span data-i18n="copy.taskEventsUnreadReminders.d7445e">完成记录与未读提醒</span></small></span><input type="checkbox" data-settings-home-module="inbox" aria-label="显示 AI 完成"  data-i18n-aria-label="copy.showAiActivity.4cf809"/><i aria-hidden="true"></i></label>
                     <label><span><b><span data-i18n="copy.currentWindows.8dfcdd">当前窗口</span></b><small><span data-i18n="copy.quickWindowSwitching.87a581">窗口快速切换</span></small></span><input type="checkbox" data-settings-home-module="windows" aria-label="显示当前窗口"  data-i18n-aria-label="copy.showCurrentWindows.bf8373"/><i aria-hidden="true"></i></label>

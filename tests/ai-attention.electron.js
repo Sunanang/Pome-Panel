@@ -138,7 +138,13 @@ async function run() {
   assert.equal(await evaluate(visibleWindow, 'document.getElementById("attention-queue").hidden'), true);
   assert.equal((await pending()).items.length, 2, 'hidden request remains in pending list');
   await resolve(visibleAfterHide); await delay(650);
-  await mainEval(`window.notchAPI.showAiAttention(${JSON.stringify(rows[0].key)})`); await shown(hidden.question);
+  await mainEval(`setMode(true);setActiveTab('home');document.querySelector('.ai-attention-entry').click()`);
+  assert.equal(await mainEval(`document.querySelector('.ai-attention-section').open`),true);
+  assert.equal(await mainEval(`document.querySelector('.tab-panel.active').id`),'tab-home','pending list stays on home');
+  assert.equal(await mainEval(`document.querySelector('#settings-ai-sources .ai-attention-section')`),null);
+  await capture(BrowserWindow.fromWebContents(mainContents), 'home-pending-list');
+  await mainEval(`Array.from(document.querySelectorAll('.ai-attention-actions button')).find(b=>b.textContent===PomeI18n.t('attention.reopen')).click()`); await shown(hidden.question);
+  await mainEval(`document.querySelector('.ai-attention-heading button').click()`);
   assert.notEqual(await evaluate(window(), 'currentNotification.eventId'), hiddenId, 'every display has a fresh generation');
   await resolve(hidden); await delay(650);
   const fallback = event('input', 'codex', { question: '原生能力关闭时只隐藏' }); await send(fallback); const fallbackWindow = await shown(fallback.question);
@@ -192,8 +198,16 @@ async function run() {
     assert.equal((await mainEval('notchAPI.rebuildAiAttention()')).canceled, true);
     assert.equal(fs.readFileSync(attentionPath, 'utf8'), '{corrupt fixture');
     dialog.showMessageBox = async () => ({ response: 1 });
-    const repaired = await mainEval('notchAPI.rebuildAiAttention()'); assert.equal(repaired.ok, true);
-    assert.equal(fs.readFileSync(repaired.backupPath, 'utf8'), '{corrupt fixture'); assert.deepEqual((await pending()).items, []);
+    await mainEval(`document.dispatchEvent(new CustomEvent('notch:tabchange',{detail:{tab:'home'}}))`);
+    await until(async()=>await mainEval(`document.querySelector('.ai-attention-entry').textContent===PomeI18n.t('attention.repairStorage')`),'home repair entry');
+    await mainEval(`document.querySelector('.ai-attention-entry').click()`);
+    await until(async()=>await mainEval(`document.querySelector('#ai-attention-list button')?.textContent===PomeI18n.t('attention.repairStorage')`),'home repair action');
+    await mainEval(`document.querySelector('#ai-attention-list button').click()`);
+    await until(async()=>(await pending()).ok,'repaired from home');
+    const backup = fs.readdirSync(profile).find(name=>name.startsWith('ai-attention.json.corrupt-'));
+    assert(backup,'repair keeps corrupt-file backup');
+    assert.equal(fs.readFileSync(path.join(profile,backup), 'utf8'), '{corrupt fixture'); assert.deepEqual((await pending()).items, []);
+    await mainEval(`document.querySelector('.ai-attention-section').close()`);
   } finally { dialog.showMessageBox = originalDialog; }
   assert.deepEqual(errors, []);
 }

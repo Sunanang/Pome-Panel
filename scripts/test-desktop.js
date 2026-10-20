@@ -20,7 +20,7 @@ env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-t
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
 env.NODE_OPTIONS = `${env.NODE_OPTIONS || ''} --require=${JSON.stringify(path.join(root, 'tests/provider-usage-fixtures.cjs'))}`.trim();
-for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'provider-credentials', 'home-layout-swap', 'sun-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'nas-settings-card', 'localization', 'normal-startup']) {
+for (const file of ['notch-focus', 'retained-workspace', 'startup', 'ai-usage', 'provider-credentials', 'home-layout-swap', 'sun-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'settings-slim', 'nas-settings-card', 'localization', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   run(require('electron'), [`tests/${file}.electron.js`]);

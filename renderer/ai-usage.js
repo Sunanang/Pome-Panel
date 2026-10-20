@@ -23,8 +23,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     if (byId('tab-settings').getAttribute('aria-hidden') !== 'false') return;
-    const card = byId(registry.get(provider)?.settingsCard || 'settings-ai-usage-card');
-    card?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    const card = byId(registry.get(provider)?.settingsCard || 'settings-ai-sources');
+    card?.scrollIntoView({ block: provider ? 'center' : 'start', behavior: 'instant' });
     card?.querySelector('input')?.focus({ preventScroll: true });
   }
   function sourceLabel(id, data) {

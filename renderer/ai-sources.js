@@ -26,9 +26,6 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     const button = document.createElement('button'); button.type = 'button'; button.textContent = text;
     button.className = 'workspace-button compact'; button.addEventListener('click', callback); return button;
   }
-  function capabilityLabel(value) {
-    return pomeLocaleRendererAiSources.t(`attention.capability.${value || 'unsupported'}`);
-  }
   function ownershipText(row) {
     if (row.ownershipKey) {
       try { return pomeLocaleRendererAiSources.t(row.ownershipKey); } catch { /* fall through */ }
@@ -45,7 +42,8 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   }
   function openSettings(source) {
     void setActiveTab('settings').then(() => {
-      el('settings-ai-sources').scrollIntoView({ block: 'center' });
+      const target = source ? list.querySelector(`[data-source="${source}"]`) : el('settings-ai-sources');
+      target?.scrollIntoView({ block: source ? 'center' : 'start' });
       list.querySelector(`[data-source="${source || 'codex'}"] button`)?.focus({ preventScroll: true });
     });
   }
@@ -95,18 +93,14 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       const provider = catalog.get(id);
       if (!provider) continue;
       const section = document.createElement('section');
-      section.className = 'settings-ai-provider';
+      section.className = 'ai-source-token';
       section.id = provider.settingsCard;
       section.innerHTML = `
-        <div class="settings-card-heading">
-          <div><span class="tile-label">${provider.label}</span><strong>${pomeLocaleRendererAiSources.t("copy.usageToken.ccb5d6")}</strong></div>
-          <small id="settings-${id}-token-status" data-state="empty">${pomeLocaleRendererAiSources.t("copy.noManualTokenConfigured.a2ebce")}</small>
-        </div>
-        <p class="ai-source-ownership">${ownershipText(provider)}</p>
         <div class="settings-cursor-token-row">
-          <input id="settings-${id}-token" type="password" autocomplete="off" spellcheck="false" placeholder="${pomeLocaleRendererAiSources.t("copy.pasteToken.8a1c2d", { arg1: provider.label })}" />
+          <input id="settings-${id}-token" type="password" autocomplete="off" spellcheck="false" placeholder="${pomeLocaleRendererAiSources.t("copy.pasteToken.8a1c2d", { arg1: provider.label })}" aria-label="${provider.label} Token" />
           <button class="workspace-button compact" type="button" data-provider-save="${id}">${pomeLocaleRendererAiSources.t("copy.save.a3030b")}</button>
           <button class="workspace-button compact" type="button" data-provider-clear="${id}">${pomeLocaleRendererAiSources.t("copy.clear.bce237")}</button>
+          <small id="settings-${id}-token-status" data-state="empty">${pomeLocaleRendererAiSources.t("copy.noManualTokenConfigured.a2ebce")}</small>
         </div>
         ${id === 'grok' ? '<label class="settings-cursor-token-row"><span id="settings-grok-team-label"></span><input id="settings-grok-team" type="text" maxlength="128" autocomplete="off" spellcheck="false" /></label>' : ''}
         ${id === 'manus' ? `
@@ -125,8 +119,6 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         <p class="settings-cursor-token-hint" id="settings-${id}-token-hint" role="status" aria-live="polite"></p>`;
       tokenHost.append(section);
       const bindText = (node, key, params) => pomeLocaleRendererAiSources.bind(node, 'textContent', () => pomeLocaleRendererAiSources.t(key, params));
-      bindText(section.querySelector('strong'), 'copy.usageToken.ccb5d6');
-      pomeLocaleRendererAiSources.bind(section.querySelector('.ai-source-ownership'), 'textContent', () => ownershipText(provider));
       pomeLocaleRendererAiSources.bind(el(`settings-${id}-token`), 'placeholder', () => pomeLocaleRendererAiSources.t('copy.pasteToken.8a1c2d', { arg1: provider.label }));
       bindText(section.querySelector('[data-provider-save]'), 'copy.save.a3030b');
       bindText(section.querySelector('[data-provider-clear]'), 'copy.clear.bce237');
@@ -249,74 +241,69 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     }
     await refreshManusCompletionStatus();
   }
+  // Keep provider/token DOM stable across status refreshes and language changes:
+  // moving or recreating password inputs would lose focus and unsaved edits.
+  const providerRows = new Map();
   function render() {
-    list.replaceChildren();
-    const rows = mergedRows();
+    const order = ['cursor', 'codex', 'grokbot', 'claude'];
+    const rank = source => order.includes(source) ? order.indexOf(source) : order.length;
+    const rows = mergedRows().sort((a, b) => rank(a.source) - rank(b.source));
     const connectable = rows.filter((row) => row.hookable || row.source === 'manus');
     const connected = connectable.filter((row) => row.state === 'connected' || row.apiConnected).length;
-    pomeLocaleRendererAiSources.bind(el('settings-ai-sources-count'), "textContent", () => (
-      pomeLocaleRendererAiSources.t("copy.localConnectedOf.9f3a1b", { arg1: connected, arg2: connectable.length })
+    pomeLocaleRendererAiSources.bind(el('settings-ai-sources-count'), 'textContent', () => (
+      pomeLocaleRendererAiSources.t('settings.ai.connectedCount', { arg1: connected, arg2: connectable.length })
     ));
     for (const row of rows) {
-      const item = document.createElement('div'); item.className = 'ai-source-row'; item.dataset.source = row.source; item.dataset.state = row.state;
-      const icon = document.createElement('img'); icon.src = icons[row.source] || 'assets/inbox/circle-alert.svg'; icon.alt = ''; icon.className = 'ai-source-icon';
-      const copy = document.createElement('div'); copy.className = 'ai-source-copy';
-      const heading = document.createElement('div'); const name = document.createElement('strong'); name.textContent = row.label;
-      const state = document.createElement('span'); state.className = 'ai-source-state'; state.textContent = states[row.state] || row.state; heading.append(name, state);
-      const file = document.createElement('small');
-      pomeLocaleRendererAiSources.bind(file, "textContent", () => (row.filePath || row.message || pomeLocaleRendererAiSources.t("copy.waitingForDetection.f97f6a")));
-      file.title = row.filePath || '';
-      const ownership = document.createElement('small'); ownership.className = 'ai-source-ownership'; ownership.textContent = row.ownership || '';
-      const matrix = document.createElement('div'); matrix.className = 'ai-source-matrix';
-      for (const [key, value] of [
-        ['completionLabel', row.completionCapability],
-        ['usageLabel', row.usageCapability],
-        ['attentionLabel', row.attentionCapability],
-      ]) {
-        const line = document.createElement('small');
-        const labelKey = key === 'usageLabel' ? 'attention.usageLabel' : key === 'attentionLabel' ? 'attention.attentionLabel' : 'attention.completionLabel';
-        line.textContent = `${pomeLocaleRendererAiSources.t(labelKey)} · ${capabilityLabel(value)}`;
-        matrix.append(line);
-      }
-      copy.append(heading, file, ownership, matrix);
-      const noteKey = catalog.get(row.source)?.completionNoteKey;
-      if (noteKey) {
-        const note = document.createElement('small'); note.className = 'ai-source-capability';
-        note.textContent = pomeLocaleRendererAiSources.t(noteKey); copy.append(note);
-      }
-      if (row.state === 'connected' && row.attentionHookMissing) {
-        const capability = document.createElement('small'); capability.className = 'ai-source-capability';
-        capability.textContent = pomeLocaleRendererAiSources.t('attention.hooksMissing');
-        copy.append(capability);
-      }
-      if (row.hookable && row.attentionCapabilities) {
-        const details = document.createElement('details'); details.className = 'ai-source-capabilities';
-        const summary = document.createElement('summary'); summary.textContent = pomeLocaleRendererAiSources.t('attention.capabilities'); details.append(summary);
-        const detailLabels = { completion: 'completionLabel', input: 'input', select: 'choice', approve: 'authorization', autoResolve: 'autoResolveLabel' };
-        for (const [key, label] of Object.entries(detailLabels)) {
-          const line = document.createElement('small');
-          line.textContent = `${pomeLocaleRendererAiSources.t(`attention.${label}`)} · ${capabilityLabel(row.attentionCapabilities[key])}`;
-          details.append(line);
+      let item = providerRows.get(row.source);
+      if (!item) {
+        item = document.createElement('div'); item.className = 'ai-source-row'; item.dataset.source = row.source;
+        const main = document.createElement('div'); main.className = 'ai-source-main';
+        const icon = document.createElement('img'); icon.src = icons[row.source] || 'assets/inbox/circle-alert.svg'; icon.alt = ''; icon.className = 'ai-source-icon';
+        const copy = document.createElement('div'); copy.className = 'ai-source-copy';
+        const actions = document.createElement('div'); actions.className = 'ai-source-actions';
+        main.append(icon, copy, actions); item.append(main);
+        // Existing Cursor/Codex listeners retain their input nodes and IDs.
+        const token = el(catalog.get(row.source)?.settingsCard);
+        if (token) item.append(token);
+        else if (['claude', 'grokbot'].includes(row.source)) {
+          const note = document.createElement('p'); note.className = 'ai-source-local-quota';
+          note.id = catalog.get(row.source).settingsCard;
+          item.append(note);
         }
-        copy.append(details);
+        providerRows.set(row.source, item); list.append(item);
       }
+      item.dataset.state = row.state;
+      const copy = item.querySelector('.ai-source-copy'); copy.replaceChildren();
+      const heading = document.createElement('div');
+      const name = document.createElement('strong'); name.textContent = row.label;
+      const state = document.createElement('span'); state.className = 'ai-source-state'; state.textContent = states[row.state] || row.state;
+      heading.append(name, state);
+      const file = document.createElement('small');
+      // Compact display only; preview and confirmation keep the full target path.
+      file.textContent = row.filePath ? row.filePath.replace(/^.*?(?=[\\/]\.[^\\/]+[\\/])/, '~')
+        : row.source === 'manus' ? pomeLocaleRendererAiSources.t('settings.ai.tokenQuota') : row.message || row.ownership;
+      file.title = row.filePath || row.ownership || '';
+      copy.append(heading, file);
       if (row.state === 'connected' && restartSources.has(row.source)) {
         const hint = document.createElement('small'); hint.className = 'ai-source-restart-hint';
         hint.textContent = restartMessage(row.source); copy.append(hint);
       }
-      const actions = document.createElement('div'); actions.className = 'ai-source-actions';
+      const note = item.querySelector('.ai-source-local-quota');
+      if (note) note.textContent = pomeLocaleRendererAiSources.t(row.source === 'claude' ? 'settings.ai.localQuota' : 'settings.ai.cursorQuota');
+      const actions = item.querySelector('.ai-source-actions'); actions.replaceChildren();
       if (row.hookable) {
         if (row.state === 'connected') {
-          if (row.attentionHookMissing) actions.append(makeButton(pomeLocaleRendererAiSources.t('attention.repairHooks'), event => void request(row.source, 'repair', event.currentTarget)));
-          if (row.summaryHookMissing) actions.append(makeButton(pomeLocaleRendererAiSources.t("copy.addSummaries.29366e"), event => void request(row.source, 'repair', event.currentTarget)));
-          actions.append(makeButton(pomeLocaleRendererAiSources.t("copy.sendTest.a49d32"), () => void test(row.source)), makeButton(pomeLocaleRendererAiSources.t("copy.disconnect.f33ac0"), event => void request(row.source, 'disconnect', event.currentTarget)));
+          if (row.attentionHookMissing || row.summaryHookMissing) actions.append(makeButton(pomeLocaleRendererAiSources.t('copy.repair.37a693'), event => void request(row.source, 'repair', event.currentTarget)));
+          actions.append(makeButton(pomeLocaleRendererAiSources.t('copy.disconnect.f33ac0'), event => void request(row.source, 'disconnect', event.currentTarget)));
         } else {
-          const connect = makeButton(row.state === 'error' ? pomeLocaleRendererAiSources.t("copy.repair.37a693") : pomeLocaleRendererAiSources.t("copy.connect.bc38d3"), event => void request(row.source, row.state === 'error' ? 'repair' : 'connect', event.currentTarget));
+          const connect = makeButton(pomeLocaleRendererAiSources.t(row.state === 'error' ? 'copy.repair.37a693' : 'copy.connect.f3b392'), event => void request(row.source, row.state === 'error' ? 'repair' : 'connect', event.currentTarget));
+          if (row.state !== 'error') connect.classList.add('primary');
           connect.disabled = busy || row.state === 'undetected' || (row.state === 'error' && !row.repairable);
           actions.append(connect);
         }
+      } else {
+        const hint = document.createElement('small'); hint.textContent = pomeLocaleRendererAiSources.t('settings.ai.noConnection'); actions.append(hint);
       }
-      item.append(icon, copy, actions); list.append(item);
     }
   }
   async function refresh() {
@@ -375,16 +362,6 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     } catch (error) { dialog.close(); plan = null; status.textContent = error.message; window.showStatusToast?.(error.message); }
     finally { busy = false; el('ai-source-confirm-apply').disabled = false; await refresh(); }
   });
-  async function test(source) {
-    if (busy || !api?.testAiSource) return;
-    busy = true; render();
-    try {
-      const result = await api.testAiSource(source || hookRows.find(row => row.state === 'connected')?.source);
-      status.textContent = result.message; window.showStatusToast?.(result.message);
-      return result;
-    } catch (error) { pomeLocaleRendererAiSources.bind(status, "textContent", () => (pomeLocaleRendererAiSources.t("copy.testNotificationFailed.e8440c", { arg1: (error.message) }))); window.showStatusToast?.(status.textContent); return { ok: false, message: status.textContent };
-    } finally { busy = false; render(); }
-  }
   document.addEventListener('notch:tabchange', event => {
     if (event.detail.tab === 'settings' || (event.detail.tab === 'home' && !modeBusy && Date.now() - checkedAt > 30000)) void refresh();
   });
@@ -395,7 +372,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     void refreshTokenStatuses();
   });
   api?.onManusCompletionStatus?.(applyManusCompletionStatus);
-  window.NotchAiSources = Object.freeze({ refresh, request, test, openSettings, dismiss, icons,
+  window.NotchAiSources = Object.freeze({ refresh, request, openSettings, dismiss, icons,
     getState: () => ({
       sources: mergedRows().filter(row => row.hookable || row.source === 'manus').map(row => ({ ...row })),
       providers: mergedRows().map((row) => ({ ...row })),

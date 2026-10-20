@@ -69,7 +69,7 @@ Pome Panel 基于 Todo Panel 二次开发。仓库没有登记可核对的上游
 | **链接** | 只保存公开的 http/https。抓取标题时拒绝本机、内网和不安全重定向 |
 | **录制** | 音频写在本机 `recordings/`。可选百炼 Qwen3-ASR 实时转写，API Key 经系统安全存储或环境变量读取 |
 | **密钥** | 账号、密码和 API Key 使用系统安全存储，页面不能直接读出明文 |
-| **设置** | 转写与智能命名、AI 提供商（完成接入 + 额度 Token / 归属说明）、NAS 同步、功能显隐、首页组件、镜子封面、默认展开页、唤出快捷键、面板位置、数据目录、开机启动 |
+| **设置** | 转写与智能命名、AI（完成接入与额度 Token）、显示（工作区与首页开关）、NAS 同步、镜子封面、默认展开页、唤出快捷键、面板位置、数据目录、开机启动 |
 
 首页 Bento 的「AI 完成」模块可回看 Codex / Claude Code / Cursor 的完成事件及 NAS 同步历史（旧 GPT 历史保留，显示为“其他”）。模块支持四档尺寸：迷你显示未读数与最新来源，小号显示最近 3 条，中号显示最近 5 条，大号显示 10 条及项目摘要。记录按模块尺寸分页（迷你 1、小号 3、中号 5、大号 10 条），不再提供“查看全部”模式。第 1 页只显示“下一页”；后续页显示“上一页”和当前页码，仅在确实有下一页数据时显示“下一页”，总数不超过一页时隐藏分页区；迷你尺寸始终隐藏整个分页区。新完成记录到达时保留当前页，翻页后列表回到顶部，卡片尺寸保持不变；「全部已读」通过逐条保存标记已有记录。首页 tab 未选中时在文字右上方显示未读角标（超过 9 为 9+），损坏时显示 !；选中首页时隐藏。模块关闭时角标显示小点，点击转到首页模块设置；模块开启时点击返回首页并高亮。关闭 AI 完成后在原空位显示淡色“添加模块”入口；再开启会保留其他组件的尺寸和位置，重新开启时优先恢复原位置，空间不足只缩小 AI 完成本身。记录先落盘再提醒，点击记录时标已读；按接收时间保留最新 100 条，超出后自动清理最早记录（含未读），新增、启动载入和读取使用同一规则。去重使用来源的完成事件 ID，或来源、任务与完成时间/回合序号生成的稳定身份，延迟重试和重启重投不会再提醒；同一会话的新回合仍正常接收。去重信息随记录保留，数量淘汰时一起清理；已淘汰事件再次投递不保证去重。缺少明确身份的旧钩子事件仍接收，以补充的完成/接收时间和内容生成身份；没有原始 ID 的旧事件无法保证跨时间重投仍被识别为同一事件。收件箱损坏时显示“备份损坏文件并重建”，确认弹窗展示完整备份路径和可能无法恢复历史的影响；取消继续暂停，确认后先保存并校验原始字节，再原子建立空收件箱。收件箱在本机 userData 落盘，并通过 NAS 同步完成记录及已读状态；不参与普通资料备份。同步按来源与稳定完成身份合并，拉回历史不重弹通知；本机窗口和目录信息不跨设备。新增、载入和跨设备合并统一保留最新 100 条，NAS 同样裁剪并留下删除标记，防止离线旧记录复活。首次配对按已有的本机/NAS 为准流程处理；旧 NAS 伴侣需先升级以支持 AI 完成集合。点击记录直接打开来源软件，不定位聊天或会话：Codex 打开桌面版，Cursor 打开 Cursor，Claude Code 打开终端。macOS 优先复用 cwd 对应的 Terminal 标签页，找不到时新开终端并进入该目录；Windows 优先 Windows Terminal，回退 PowerShell。没有 cwd 时只打开终端；目录须为存在的绝对目录。未安装或打开失败时显示轻提示。
 
@@ -79,7 +79,7 @@ Pome Panel 基于 Todo Panel 二次开发。仓库没有登记可核对的上游
 
 同步结果按内容类型显示，录音元数据与音频分开；超过 6 MiB 或缺失的音频不会显示为已传输。本机备份仍保存完整超限音频；本机音频不完整且 NAS 已有完整音频时禁止破坏性覆盖。笔记冲突以新的笔记 ID 保留版本，按来源及版本去重，标题不会递归生成“副本的副本”；待办维持服务器实际接受的版本顺序，不做字段级自动合并。密钥新增与编辑默认使用密码掩码。
 
-剪贴板历史默认关闭，可从菜单栏或「设置 → 显示功能」打开。它只在本机轮询，不占用全局快捷键。Windows 上没打开原生能力时，点击条目是复制，再用 Ctrl+V 粘贴。
+剪贴板历史默认关闭，可从菜单栏或「设置 → 显示 → 工作区」打开。它只在本机轮询，不占用全局快捷键。Windows 上没打开原生能力时，点击条目是复制，再用 Ctrl+V 粘贴。
 
 剪贴板普通历史按复制时间保留最新 100 条，超过后自动清理最早记录；收藏永久保留，不占用这 100 条名额（仍可手动删除或清空）。本地新增、启动载入、资料恢复与 NAS 同步投影使用同一裁剪规则；取消收藏后重新计入普通历史，超限的旧记录立即淘汰。NAS 合并后被淘汰的普通记录会同步删除，避免再次拉回；清理图片时保留仍被收藏或其他记录引用的文件。
 
@@ -97,7 +97,7 @@ Cursor 用量默认自动读取本机 Cursor 登录态。「设置 → AI 剩余
 
 Codex 配置手动 access token 后，由主进程向 `https://chatgpt.com/backend-api/wham/usage` 查询实时额度，超时 10 秒；沿用首页的定期刷新与刷新按钮。未配置 Token 或联网失败时，回退读取本机 `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` 的最近 `token_count` 记录，默认目录为 `~/.codex`；Windows 还会检查 `%USERPROFILE%\.codex`。两种来源按实际 windowMinutes 展示额度周期、套餐、Credits 与更新时间；仅有每周窗口时只显示每周额度，额外模型额度按各自名称和周期列出，标签分别为「手动 Token」和「本机 Codex」。重置时间按本地日期显示为「HH:MM 重置」「明天 HH:MM 重置」或「M/D HH:MM 重置」。过期记录的圆环和额度条半透明，并提示「数据过期」；Token 失效显示红色虚线和重新获取提示，网络故障仍保留可用的旧数据。网络故障且没有可用本机记录时保留上次成功的远程数据与原更新时间。Cursor 也保留同一账号的最近成功值并标注刷新失败；退出、切换账号或认证失效时不复用旧账号缓存。可选的 Grok Bot 用量失败不会阻断 Cursor 主额度。刷新按可见性降频，并在已知额度重置后主动更新；手动刷新仍立即查询。
 
-「设置 → AI 提供商 / AI 剩余额度」按统一 catalog 列出各家完成与额度能力。Cursor / Codex Token 卡保留原交互；Grok Bot 注明依赖 Cursor 登录；Claude 用量走本机 OAuth；Copilot / Grok / Antigravity / Manus 可配置手动 Token（`safeStorage`），Grok 还需 xAI 团队 ID；只接受 Management API Key，显示以美元计的已入账预付余额，不伪造订阅额度百分比。Manus 使用官方 `https://api.manus.ai/v2/usage.availableCredits` 与 `x-manus-api-key`，只以 `data.total_credits` 作为可消费积分余额。Codex「获取本机 Token」仅在主动点击时只读本机 `auth.json`。Token 不写入工作区、不进日志、不自动续期。401/403 标记失效并可回退本机记录；网络故障不会把有效 Token 标失效。完成 HTTP 接收 Codex / Claude / Cursor / Grok / Copilot CLI / Antigravity。Manus 完成不走 HTTP：在设置里单独开启「接收完成提醒」后，由本机用已配置的 API Key 只读轮询官方任务 API（面板运行时检查，关闭后下次启动补查）；点击打开 manus.im 任务页。等待输入/授权尚未接入。
+「设置 → AI」按统一列表管理各家完成接入与额度，每个来源的 Token 控件直接放在该行下方。Cursor / Codex 保留获取本机、保存与清除操作；Grok Bot 注明依赖 Cursor 登录；Claude 用量走本机 OAuth；Copilot / Grok / Antigravity / Manus 可配置手动 Token（`safeStorage`），Grok 还需 xAI 团队 ID；只接受 Management API Key，显示以美元计的已入账预付余额，不伪造订阅额度百分比。Manus 使用官方 `https://api.manus.ai/v2/usage.availableCredits` 与 `x-manus-api-key`，只以 `data.total_credits` 作为可消费积分余额。Codex「获取本机 Token」仅在主动点击时只读本机 `auth.json`。Token 不写入工作区、不进日志、不自动续期。401/403 标记失效并可回退本机记录；网络故障不会把有效 Token 标失效。完成 HTTP 接收 Codex / Claude / Cursor / Grok / Copilot CLI / Antigravity。Manus 完成不走 HTTP：在设置里单独开启「接收完成提醒」后，由本机用已配置的 API Key 只读轮询官方任务 API（面板运行时检查，关闭后下次启动补查）；点击打开 manus.im 任务页。等待输入/授权尚未接入。
 
 首页编辑模式下拖动卡片只交换位置，各自保留尺寸；靠近网格边界时向左或向上收，有冲突则按原尺寸顺序重排。补洞锁定交换双方，只允许其他卡片扩展；无法按原尺寸放下时提示「空间不够，无法交换」并保留原布局。
 
@@ -121,13 +121,13 @@ curl -X POST http://127.0.0.1:43821/notify/codex \
   -d '{"title":"任务已完成","project":"my-project","task_id":"demo","event_id":"demo-completion-1"}'
 ```
 
-在「设置 → AI 提供商」检测并接入可 hook 的完成来源（Codex、Claude Code、Cursor、Grok、Copilot CLI、Antigravity）；同一列表展示其余家的额度能力与归属说明。Grok 写入 `$GROK_HOME/hooks/pome-panel.json`（未设置时为 `~/.grok/hooks/pome-panel.json`）的 Stop / StopFailure；按会话与 `promptId` 区分轮次和重试，忽略子代理及退出会话事件。Grok 来源名与图标在完成气泡和收件箱中保留，点击沿用终端打开方式；完成历史参与 NAS 同步及统一的最新 100 条裁剪。确认浮层列出修改文件、Pome 钩子内容和同目录的 `.pome-backup-时间戳` 备份；确认后先校验备份再原子写入。配置损坏时拒绝修改，预览过期或文件被外部编辑后需要重新确认。仅增删 Pome 标记项，其他配置、钩子和缩进保留；Codex 的原 `notify` 被继续转发，断开后还原。Codex 接入后需重启工具。
+在「设置 → AI」检测并接入可 hook 的完成来源（Codex、Claude Code、Cursor、Grok、Copilot CLI、Antigravity）；同一列表展示其余家的额度能力与归属说明。Grok 写入 `$GROK_HOME/hooks/pome-panel.json`（未设置时为 `~/.grok/hooks/pome-panel.json`）的 Stop / StopFailure；按会话与 `promptId` 区分轮次和重试，忽略子代理及退出会话事件。Grok 来源名与图标在完成气泡和收件箱中保留，点击沿用终端打开方式；完成历史参与 NAS 同步及统一的最新 100 条裁剪。确认浮层列出修改文件、Pome 钩子内容和同目录的 `.pome-backup-时间戳` 备份；确认后先校验备份再原子写入。配置损坏时拒绝修改，预览过期或文件被外部编辑后需要重新确认。仅增删 Pome 标记项，其他配置、钩子和缩进保留；Codex 的原 `notify` 被继续转发，断开后还原。Codex 接入后需重启工具。
 
 通知与收件箱保留 completed / failed / awaiting / due 状态。标题跳过空泛的“已完成”首行，摘要最多保留 4096 字符，省略只发生在显示层，悬停可读完整摘要。Codex 原生会话名按精确 thread ID 只读本机会话索引或 SQLite 元数据，与完成摘要分开保存；不存在时不伪造。打开来源软件失败时保留气泡、暂停倒计时并显示原因，可重试或点 × 关闭。
 
-优先用 Pome 自带 Electron 的 Node 运行时，脚本采用当前应用安装路径。每次启动检查接入路径，应用搬家后可点「修复」。Claude Code 使用 `hooks.Stop`，Cursor 使用官方 `hooks.json` v1 的 `hooks.stop` 与 `hooks.afterAgentResponse`，以 conversation_id 与 generation_id 关联摘要并去重。现有 stop-only 配置仍可接收通知；在设置中点「补全摘要」可补上摘要钩子。原生 error 映射为失败，aborted 不作为成功提醒。摘要仅在本机私有目录缓存（读取有效期 10 分钟、最多 256 条、每条 4096 字符；后续写入清理过期项），stop 读取后移除；可用时也会有界读取 transcript_path。首次检测到未接入工具会提示；「以后再说」仅存本机并停止重复提示。
+优先用 Pome 自带 Electron 的 Node 运行时，脚本采用当前应用安装路径。每次启动检查接入路径，应用搬家后可点「修复」。Claude Code 使用 `hooks.Stop`，Cursor 使用官方 `hooks.json` v1 的 `hooks.stop` 与 `hooks.afterAgentResponse`，以 conversation_id 与 generation_id 关联摘要并去重。现有 stop-only 配置仍可接收通知；在设置中点「修复」可补上摘要钩子。原生 error 映射为失败，aborted 不作为成功提醒。摘要仅在本机私有目录缓存（读取有效期 10 分钟、最多 256 条、每条 4096 字符；后续写入清理过期项），stop 读取后移除；可用时也会有界读取 transcript_path。首次检测到未接入工具会提示；「以后再说」仅存本机并停止重复提示。
 
-「发送测试」经过同一转发脚本和本机接收服务，送达后显示“测试通知已送达”；测试不会产生历史、未读或真实完成提醒。首页未接入、等待第一条、接入失效三个空状态分别引导接入、测试/管理、修复。损坏收件箱仍使用独立的确认重建流程。
+设置和首页不再显示「发送测试」。后端测试接口仍经过同一转发脚本和本机接收服务，不产生历史、未读或真实完成提醒。首页未接入、等待第一条、接入失效三个空状态分别引导接入、管理、修复。损坏收件箱仍使用独立的确认重建流程。
 
 仓库提供 [Codex](scripts/codex-notify.js)、[Claude Code](scripts/claude-notify.js)、[Cursor](scripts/cursor-notify.js)、[Grok](scripts/grok-notify.js)、[Copilot CLI](scripts/copilot-notify.js)、[Antigravity](scripts/antigravity-notify.js) 转发脚本。Claude 云端会话（`CLAUDE_CODE_REMOTE=true`）不会转发；Grok 触发的 Claude/Cursor 共用钩子由 Grok 脚本接管。
 
@@ -139,13 +139,13 @@ Manus 监听按账号保存分页检查点与待核验的结束事件；同账�
 
 ### AI 待操作提醒（开发版）
 
-**范围**：完成提醒可接入 Codex / Claude / Cursor / Grok / Copilot CLI / Antigravity。额度按各家能力矩阵展示（见设置列表）。等待输入/选择/授权目前主要覆盖 Claude（受限）；Codex、Cursor、Grok、Copilot CLI 与 Antigravity 尚未启用等待监听，不会用猜测或轮询冒充等待状态。
+**范围**：完成提醒可接入 Codex / Claude / Cursor / Grok / Copilot CLI / Antigravity。额度按各家已接入的数据来源展示。等待输入/选择/授权目前主要覆盖 Claude（受限）；Codex、Cursor、Grok、Copilot CLI 与 Antigravity 尚未启用等待监听，不会用猜测或轮询冒充等待状态。
 
-新的 v2 事件在同一回环接收地址上区分完成与等待输入、选择、授权。macOS 等待气泡采用 B 蓝色定稿（400×146，顶部 32px 黑区），Windows 为 384×114 顶部卡片。完成气泡保持原尺寸。等待摘要单行显示；敏感参数在落盘前隐藏，完整安全摘要在「设置 → AI 完成来源 → 待处理」查看。来源图标与状态独立。
+新的 v2 事件在同一回环接收地址上区分完成与等待输入、选择、授权。macOS 等待气泡采用 B 蓝色定稿（400×146，顶部 32px 黑区），Windows 为 384×114 顶部卡片。完成气泡保持原尺寸。等待摘要单行显示；敏感参数在落盘前隐藏，完整安全摘要在首页「AI 完成 → 待处理」列表查看。来源图标与状态独立。
 
-等待没有倒计时；单条常驻，有竞争时按 8 秒时隙与完成通知公平轮换。气泡 `+N` 统计当前展示项以外仍会再出现的条目（其他可见等待 + 完成队列），已隐藏的等待不计。悬停暂停，完成计时继续原剩余时间。点击主体/按钮仅返回来源，× 只隐藏这次提醒，均不算已回答。来源的匹配解决、取消或继续事件撤销请求，不额外弹已回答。首页 AI 完成组件有待处理入口；隐藏首页组件后仍可从设置访问，恢复被隐藏的提醒。Windows 原生能力关闭时提示「请返回来源软件」，点击仅隐藏，不加载 koffi。
+等待没有倒计时；单条常驻，有竞争时按 8 秒时隙与完成通知公平轮换。气泡 `+N` 统计当前展示项以外仍会再出现的条目（其他可见等待 + 完成队列），已隐藏的等待不计。悬停暂停，完成计时继续原剩余时间。点击主体/按钮仅返回来源，× 只隐藏这次提醒，均不算已回答。来源的匹配解决、取消或继续事件撤销请求，不额外弹已回答。首页 AI 完成组件的「待处理 · N」入口在首页打开小列表，可返回来源、重新弹出隐藏提醒；重启后未确认的请求仍可返回来源核实。存储损坏时，同一入口提供备份并修复操作。首页组件被隐藏时，可先从「设置 → 显示 → 首页」恢复 AI 完成组件。Windows 原生能力关闭时提示「请返回来源软件」，点击仅隐藏，不加载 koffi。
 
-等待状态只保存于本机 userData 下的 `ai-attention.json`，不进入完成历史、LocalStorage 或 NAS。身份包含来源、客户端 surface、会话、回合、请求；乱序解决事件留短期 tombstone。重启/断开后保留入口并标为需确认，不自动重弹或按超时宣布完成。存储损坏/外部修改会拒收，设置中可确认后先备份原文件再重建。
+等待状态只保存于本机 userData 下的 `ai-attention.json`，不进入完成历史、LocalStorage 或 NAS。身份包含来源、客户端 surface、会话、回合、请求；乱序解决事件留短期 tombstone。重启/断开后保留入口并标为需确认，不自动重弹或按超时宣布完成。存储损坏/外部修改会拒收，可从首页待处理入口确认后先备份原文件再重建。
 
 Claude 的一键接入/修复会预览并追加专用观察 hook（PreToolUse、PostToolUse、PostToolUseFailure、Notification、UserPromptSubmit、Stop、SessionEnd），stdout 为空，不回答、不授权。旧 Stop-only 接入提示「等待提醒需补全」。AskUserQuestion 关联精确 tool-use ID；`idle_prompt` 不提醒；没有稳定请求 ID 的授权/表单仅在明确的继续或结束边界收敛，不用无关工具返回猜解决。授权 Notification 可能约 6 秒后触发。授权请求优先使用来源的请求/通知身份，否则每次 hook 调用生成独立观察 ID；同一观察在当前回合内的网络重投合并，新调用（包括同命令再次请求）分别记录。缺少原生 ID 时无法可靠区分来源重复触发与新请求，因此仍为 partial。批量撤销一次原子提交，隐藏请求不计入气泡 +N；固定 npm install 脱敏预览支持中英文前缀，完整命令和参数不会转发。当前缺少 Claude Code 实机验收，能力为 partial；Codex 桌面端与 Cursor IDE 的等待事件未验证，未启用 watcher/bridge，不承诺覆盖现有弹框。详情见 [事件方案](docs/plans/2026-10-18-ai-notification-events.md) 和 [实施与验收记录](docs/plans/2026-10-18-ai-attention-implementation.md)。
 

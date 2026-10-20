@@ -48,9 +48,9 @@ async function run(contents){
     await until(()=>js('document.getElementById("ai-source-confirm").open'),'confirmation');
     await js('document.getElementById("ai-source-confirm-apply").click()');
     await until(()=>js(`NotchAiSources.getState().sources.find(row=>row.source==='${source}').state==='connected'`),'connected '+source);
-    assert.equal((await js(`NotchAiSources.test('${source}')`)).ok,true);
-    const note=await js(`document.querySelector('.ai-source-row[data-source="${source}"] .ai-source-capability').textContent`);
-    assert(note.includes(source==='copilot'?'Copilot CLI':'Antigravity'));
+    assert.equal((await js(`notchAPI.testAiSource('${source}')`)).ok,true);
+    assert.equal(await js(`document.querySelector('.ai-source-row[data-source="${source}"] .ai-source-capability')`),null,'capability explanations removed from settings UI');
+    assert.equal(await js(`NotchAiSources.getState().sources.find(row=>row.source==='${source}').completionCapability`),'partial','backend capabilities remain available');
   }
   assert.equal((await js('notchAPI.getTaskInbox()')).total,0,'marked tests create no history');
   fs.writeFileSync(path.join(output,'settings-connected.png'),(await contents.capturePage()).toPNG());
@@ -107,7 +107,7 @@ async function run(contents){
   await trigger('antigravity',{...anti,executionNum:44,fullyIdle:false});await trigger('antigravity',{...anti,executionNum:45,parentConversationId:'parent'});
   assert.equal((await js('notchAPI.getTaskInbox()')).total,before);
   await js(`PomeI18n.setState({preference:'en-US',effectiveLocale:'en-US'});window.dispatchEvent(new Event('pome:language-changed'));setActiveTab('settings')`);
-  await until(()=>js('document.querySelector(".ai-source-row[data-source=copilot] .ai-source-capability").textContent.includes("currently support Copilot CLI")'),'localized scope');
+  await until(()=>js('document.querySelector(".ai-source-row[data-source=copilot] .ai-source-actions").textContent.includes("Disconnect")'),'localized actions');
   for(const source of ['copilot','antigravity']){
     const result=await js(`(async()=>{const p=await notchAPI.previewAiSource('${source}','disconnect');return notchAPI.applyAiSource(p.preview.token)})()`);assert.equal(result.ok,true);
   }
