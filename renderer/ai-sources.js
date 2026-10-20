@@ -40,11 +40,23 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     try { localStorage.setItem(dismissKey, JSON.stringify(dismissed)); } catch {}
     announce();
   }
+  function compactPath(filePath) {
+    if (!filePath) return '';
+    return String(filePath)
+      .replace(/^\/Users\/[^/]+/i, '~')
+      .replace(/^[A-Za-z]:[\\/]Users[\\/][^\\/]+/i, '~')
+      // Fold remaining prefixes before known tool config directories (incl. test HOME under /tmp).
+      .replace(/^.*?(?=[\\/]\.(?:cursor|codex|claude|config)(?:[\\/]|$))/i, '~');
+  }
   function openSettings(source) {
     void setActiveTab('settings').then(() => {
-      const target = source ? list.querySelector(`[data-source="${source}"]`) : el('settings-ai-sources');
+      const row = list.querySelector(`[data-source="${source || 'codex'}"]`);
+      const target = source ? row : el('settings-ai-sources');
       target?.scrollIntoView({ block: source ? 'center' : 'start' });
-      list.querySelector(`[data-source="${source || 'codex'}"] button`)?.focus({ preventScroll: true });
+      const focusRow = source ? row : list.querySelector('[data-source="codex"]') || row;
+      const input = focusRow?.querySelector('input[type="password"], input:not([type="checkbox"])');
+      (input || focusRow?.querySelector('.ai-source-actions button') || focusRow?.querySelector('button'))
+        ?.focus({ preventScroll: true });
     });
   }
   function mergedRows() {
@@ -244,6 +256,37 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   // Keep provider/token DOM stable across status refreshes and language changes:
   // moving or recreating password inputs would lose focus and unsaved edits.
   const providerRows = new Map();
+  function renderActions(row, actions) {
+    const definitions = [];
+    if (row.hookable) {
+      if (row.state === 'connected') {
+        if (row.attentionHookMissing || row.summaryHookMissing) definitions.push(['repair', 'copy.repair.37a693']);
+        definitions.push(['disconnect', 'copy.disconnect.f33ac0']);
+      } else {
+        definitions.push(row.state === 'error' ? ['repair', 'copy.repair.37a693'] : ['connect', 'copy.connect.f3b392']);
+      }
+    }
+    // Updating busy or language must not detach the button anchoring a preview.
+    for (const child of [...actions.children]) {
+      if (!definitions.some(([action]) => child.dataset.sourceAction === action)) child.remove();
+    }
+    definitions.forEach(([action, key], index) => {
+      let button = actions.querySelector(`[data-source-action="${action}"]`);
+      if (!button) {
+        button = makeButton('', event => void request(row.source, action, event.currentTarget));
+        button.dataset.sourceAction = action;
+      }
+      button.textContent = pomeLocaleRendererAiSources.t(key);
+      button.classList.toggle('primary', action === 'connect');
+      button.disabled = busy || row.state === 'undetected' || (row.state === 'error' && !row.repairable);
+      if (actions.children[index] !== button) actions.insertBefore(button, actions.children[index] || null);
+    });
+    if (!row.hookable) {
+      const hint = document.createElement('small');
+      hint.textContent = pomeLocaleRendererAiSources.t(row.source === 'manus' ? 'settings.ai.manusHint' : 'settings.ai.noConnection');
+      actions.append(hint);
+    }
+  }
   function render() {
     const order = ['cursor', 'codex', 'grokbot', 'claude'];
     const rank = source => order.includes(source) ? order.indexOf(source) : order.length;
@@ -280,9 +323,13 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       heading.append(name, state);
       const file = document.createElement('small');
       // Compact display only; preview and confirmation keep the full target path.
-      file.textContent = row.filePath ? row.filePath.replace(/^.*?(?=[\\/]\.[^\\/]+[\\/])/, '~')
+      file.textContent = row.filePath ? compactPath(row.filePath)
         : row.source === 'manus' ? pomeLocaleRendererAiSources.t('settings.ai.tokenQuota') : row.message || row.ownership;
       file.title = row.filePath || row.ownership || '';
+      // Manus is API-managed (token + completion), not a hook "quota only" source.
+      if (row.source === 'manus' && row.state === 'catalogOnly') {
+        state.textContent = pomeLocaleRendererAiSources.t('settings.ai.apiManaged');
+      }
       copy.append(heading, file);
       if (row.state === 'connected' && restartSources.has(row.source)) {
         const hint = document.createElement('small'); hint.className = 'ai-source-restart-hint';
@@ -290,19 +337,32 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       }
       const note = item.querySelector('.ai-source-local-quota');
       if (note) note.textContent = pomeLocaleRendererAiSources.t(row.source === 'claude' ? 'settings.ai.localQuota' : 'settings.ai.cursorQuota');
-      const actions = item.querySelector('.ai-source-actions'); actions.replaceChildren();
-      if (row.hookable) {
-        if (row.state === 'connected') {
-          if (row.attentionHookMissing || row.summaryHookMissing) actions.append(makeButton(pomeLocaleRendererAiSources.t('copy.repair.37a693'), event => void request(row.source, 'repair', event.currentTarget)));
-          actions.append(makeButton(pomeLocaleRendererAiSources.t('copy.disconnect.f33ac0'), event => void request(row.source, 'disconnect', event.currentTarget)));
-        } else {
-          const connect = makeButton(pomeLocaleRendererAiSources.t(row.state === 'error' ? 'copy.repair.37a693' : 'copy.connect.f3b392'), event => void request(row.source, row.state === 'error' ? 'repair' : 'connect', event.currentTarget));
-          if (row.state !== 'error') connect.classList.add('primary');
-          connect.disabled = busy || row.state === 'undetected' || (row.state === 'error' && !row.repairable);
-          actions.append(connect);
+      renderActions(row, item.querySelector('.ai-source-actions'));
+    }
+  }
+  function localizeTokenCards() {
+    for (const id of TOKEN_PROVIDERS) {
+      const provider = catalog.get(id);
+      if (!provider) continue;
+      const input = el(`settings-${id}-token`);
+      if (input) pomeLocaleRendererAiSources.bind(input, 'placeholder', () => pomeLocaleRendererAiSources.t('copy.pasteToken.8a1c2d', { arg1: provider.label }));
+      const save = tokenHost?.querySelector(`[data-provider-save="${id}"]`);
+      const clear = tokenHost?.querySelector(`[data-provider-clear="${id}"]`);
+      if (save) pomeLocaleRendererAiSources.bind(save, 'textContent', () => pomeLocaleRendererAiSources.t('copy.save.a3030b'));
+      if (clear) pomeLocaleRendererAiSources.bind(clear, 'textContent', () => pomeLocaleRendererAiSources.t('copy.clear.bce237'));
+      if (id === 'grok' && el('settings-grok-team-label')) {
+        pomeLocaleRendererAiSources.bind(el('settings-grok-team-label'), 'textContent', () => pomeLocaleRendererAiSources.t('providers.teamId'));
+      }
+      if (id === 'manus') {
+        for (const [nodeId, key] of [
+          ['settings-manus-completion-hint', 'providers.manus.completionHint'],
+          ['settings-manus-completion-label', 'providers.manus.completionToggle'],
+          ['settings-manus-completion-check', 'providers.manus.check'],
+          ['settings-manus-completion-preview', 'providers.manus.preview'],
+        ]) {
+          const node = el(nodeId);
+          if (node) pomeLocaleRendererAiSources.bind(node, 'textContent', () => pomeLocaleRendererAiSources.t(key));
         }
-      } else {
-        const hint = document.createElement('small'); hint.textContent = pomeLocaleRendererAiSources.t('settings.ai.noConnection'); actions.append(hint);
       }
     }
   }
@@ -330,7 +390,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   }
   async function request(source, action = 'connect', from = null) {
     if (busy || dialog.open || !api?.previewAiSource) return;
-    busy = true;
+    busy = true; render();
     try {
       const result = await api.previewAiSource(source, action);
       if (!result?.ok) throw new Error(result?.message || pomeLocaleRendererAiSources.t("copy.couldnTPreviewConfiguration.6158dd"));
@@ -343,10 +403,12 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       pomeLocaleRendererAiSources.bind(el('ai-source-confirm-apply'), "textContent", () => (action === 'disconnect' ? pomeLocaleRendererAiSources.t("copy.backUpAndDisconnect.6abb4a") : action === 'repair' ? pomeLocaleRendererAiSources.t("copy.backUpAndRepair.9b2ea1") : pomeLocaleRendererAiSources.t("copy.backUpAndConnect.bda493")));
       dialog.showModal(); positionConfirmation();
     } catch (error) { status.textContent = error.message; window.showStatusToast?.(error.message); }
-    finally { busy = false; }
+    finally { busy = false; render(); }
   }
   el('ai-source-confirm-cancel')?.addEventListener('click', () => { dialog.close(); plan = null; anchor?.focus({ preventScroll: true }); });
-  dialog?.addEventListener('cancel', () => { plan = null; });
+  dialog?.addEventListener('cancel', event => {
+    event.preventDefault(); dialog.close(); plan = null; anchor?.focus({ preventScroll: true });
+  });
   el('ai-source-confirm-apply')?.addEventListener('click', async () => {
     if (!plan || busy) return;
     busy = true; el('ai-source-confirm-apply').disabled = true;
@@ -366,13 +428,13 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     if (event.detail.tab === 'settings' || (event.detail.tab === 'home' && !modeBusy && Date.now() - checkedAt > 30000)) void refresh();
   });
   window.addEventListener('resize', () => { if (dialog?.open) positionConfirmation(); });
-  window.addEventListener('pome:language-changed', render);
+  window.addEventListener('pome:language-changed', () => { localizeTokenCards(); render(); void refreshTokenStatuses(); });
   api?.onAiProviderTokenChanged?.((status) => {
     document.dispatchEvent(new CustomEvent('notch:ai-provider-token-changed', { detail: status }));
     void refreshTokenStatuses();
   });
   api?.onManusCompletionStatus?.(applyManusCompletionStatus);
-  window.NotchAiSources = Object.freeze({ refresh, request, openSettings, dismiss, icons,
+  window.NotchAiSources = Object.freeze({ refresh, request, openSettings, dismiss, icons, compactPath,
     getState: () => ({
       sources: mergedRows().filter(row => row.hookable || row.source === 'manus').map(row => ({ ...row })),
       providers: mergedRows().map((row) => ({ ...row })),

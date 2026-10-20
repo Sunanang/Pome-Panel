@@ -13,4 +13,4 @@
 - `copilot.svg`：GitHub Primer Octicons 的 [copilot-24](https://github.com/primer/octicons/blob/main/icons/copilot-24.svg)，MIT 许可证见 LICENSE-copilot.txt；填色改为白色。
 - `antigravity.svg`：[官方 favicon](https://www.antigravity.google/favicon.svg) 中的标志轮廓，去掉背景与颜色效果，裁切 viewBox 并改为白色，以用于通知蒙版。
 
-定稿源包：[AI 剩余额度 B 仪表盘](https://drive.google.com/file/d/17r9ApKIEm8M3XhLLLL2sgvxHp7bYHbW9/view)。Inter 字体同源，许可证位于 `../fonts/LICENSE-Inter.txt`，只用于额度模块。
+定稿源包：[AI 剩余额度 B 仪表盘](https://drive.google.com/file/d/17r9ApKIEm8M3XhLLLL2sgvxHp7bYHbW9/view)。额度模块与面板共用系统字体栈，不再单独挂载 Inter。

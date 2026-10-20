@@ -51,10 +51,20 @@ async function main() {
     await js('new Promise(r=>setTimeout(r,150))');
     await settle();
     const rect = await js(`(()=>{const r=document.getElementById('home-cursor').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`);
+    const scale = win.webContents.getZoomFactor?.() || 1;
+    const dpr = await js('window.devicePixelRatio||1');
+    const factor = scale * dpr;
+    const crop = {
+      x: Math.round(rect.x * factor),
+      y: Math.round(rect.y * factor),
+      width: Math.round(rect.width * factor),
+      height: Math.round(rect.height * factor),
+    };
     fs.mkdirSync(screenshots,{recursive:true});
-    fs.writeFileSync(path.join(screenshots,name+'-full.png'),(await win.webContents.capturePage()).toPNG());
-    fs.writeFileSync(path.join(screenshots,name+'.json'),JSON.stringify({rect,viewport:win.getContentSize()}));
-    fs.writeFileSync(path.join(screenshots,name+'.png'),(await win.webContents.capturePage()).crop(rect).toPNG());
+    const full = await win.webContents.capturePage();
+    fs.writeFileSync(path.join(screenshots,name+'-full.png'),full.toPNG());
+    fs.writeFileSync(path.join(screenshots,name+'.json'),JSON.stringify({rect,crop,factor,viewport:win.getContentSize()}));
+    fs.writeFileSync(path.join(screenshots,name+'.png'),full.crop(crop).toPNG());
   }
   async function inspect() {
     return js(`(()=>{
@@ -90,8 +100,9 @@ async function main() {
         assert.equal(view.ringsFit,true,`${size}/${count} ring clipping`);
         assert.equal(view.cellsFit,true,`${size}/${count} cell clipping`);
         assert.equal(view.percentagesFit,true,`${size}/${count} percentages fit`);
-        assert.equal(view.ids.length,size==='mini'&&count>4?3:size==='small'?Math.min(count,3):count);
+        assert.equal(view.ids.length,['mini','small'].includes(size)?Math.min(count,3):count);
         if (count===3) assert.deepEqual(view.ids,['cursor','codex','grokbot']);
+        // Warn (Claude 18%) precedes auth errors, followed by lowest ok remaining.
         if (count===5 && ['mini','small'].includes(size)) assert.deepEqual(view.ids,['claude','copilot','cursor']);
         if (count===5 && size==='mini') assert.equal(view.more,'+2');
         if (count===5 && size==='small') assert.equal(view.more,'+2 个来源');
@@ -99,6 +110,9 @@ async function main() {
           assert.equal(view.summary,true);assert.equal(view.cols,2);assert.equal(view.rows,3);
           assert.match(await js(`document.querySelector('.q-summary').textContent`),/Claude Code18%/);
           assert.match(await js(`document.querySelector('.q-summary').textContent`),/1 个来源需处理/);
+          // Pure auth-error (no local windows) keeps dashed track + alert.
+          assert.equal(await js(`document.querySelector('#ai-provider-copilot .q-ring-track').hasAttribute('stroke-dasharray')`),true);
+          assert.equal(await js(`document.querySelector('#ai-provider-copilot .q-alert')!=null`),true);
         }
         if (size==='medium') {assert.equal(view.cols,Math.min(count,3));assert.equal(view.gridScroll,false,'up to five providers fit simultaneously');}
 
@@ -113,6 +127,10 @@ async function main() {
     await supply({...three,claude});await resize('mini');
     assert.equal((await inspect()).ids.length,4);assert.equal((await inspect()).more,'');
     await capture('mini-4ai');
+    await supply({...five,grok:{ok:true,configured:true,primary:{currency:'USD',balance:12.34}}});await resize('large');
+    assert.equal((await inspect()).summary,false);assert.equal((await inspect()).rows,3);
+    assert.equal((await inspect()).ids.length,6);assert.equal((await inspect()).ringsFit,true);
+    await capture('large-6ai');
     // Every configured source remains reachable simultaneously at larger sizes, without a source switcher.
     const eight={...five,grok:{ok:true,configured:true,primary:{currency:'USD',balance:12.34}},manus:{ok:true,configured:true,primary:{unit:'credits',balance:60}},antigravity:{ok:true,detected:true,windows:[{label:'Gemini',percent:30}]}};
     await supply(eight);
@@ -127,6 +145,30 @@ async function main() {
     const brands=await js(`['grok','grokbot','manus'].map(id=>{const e=document.querySelector('#ai-provider-'+id+' .q-icon');return {id,mask:getComputedStyle(e.querySelector('i')).maskImage,bg:getComputedStyle(e).backgroundColor,tiled:e.classList.contains('q-icon-tiled')}})`);
     assert.equal(brands[0].tiled,false);assert.equal(brands[1].tiled,true);assert.notEqual(brands[0].bg,brands[1].bg);
     for(const icon of brands)assert(icon.mask.includes(icon.id+'.svg'));
+    // Currency and credits have no percentage denominator: show an alarm without inventing a 0% reading.
+    const depleted={grok:{ok:true,configured:true,primary:{currency:'USD',balance:0}},manus:{ok:true,configured:true,primary:{unit:'credits',balance:0}}};
+    await supply(depleted);
+    for(const size of ['mini','small','medium','large']) {
+      await resize(size);
+      assert.equal((await inspect()).overflow,false);assert.equal((await inspect()).ringsFit,true);
+      for(const [id,copy] of [['grok','余额已耗尽'],['manus','积分已耗尽']]) {
+        const alarm=await js(`(()=>{const p=document.getElementById('ai-provider-${id}');return {state:p.dataset.state,level:p.dataset.level,empty:p.dataset.balanceEmpty,title:p.title,aria:p.querySelector('.q-ring').getAttribute('aria-label'),percent:p.querySelector('.q-ring').hasAttribute('aria-valuenow'),alert:!!p.querySelector('.q-alert'),track:getComputedStyle(p.querySelector('.q-ring-track')).stroke,amount:getComputedStyle(p.querySelector('.q-mini-value, .q-pct')).color}})()`);
+        assert.equal(alarm.state,'critical');assert.equal(alarm.level,'critical');assert.equal(alarm.empty,'true');
+        assert.match(alarm.title,new RegExp(copy));assert.equal(alarm.percent,false);
+        assert.equal(alarm.track,'rgb(255, 123, 114)');assert.equal(alarm.amount,'rgb(255, 138, 128)');
+        if(size!=='mini') assert.equal(alarm.alert,true);
+      }
+      await capture(`depleted-${size}`);
+    }
+    await supply({...three,...depleted});await resize('large');
+    assert.match(await js(`document.querySelector('.q-summary').textContent`),/2 个来源需处理/);
+    await capture('depleted-large-5ai');
+    await js(`PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));window.dispatchEvent(new Event('pome:language-changed'))`);
+    assert.match(await js(`document.getElementById('ai-provider-grok').title`),/Balance depleted/);
+    assert.match(await js(`document.getElementById('ai-provider-manus').title`),/Credits depleted/);
+    await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);
+    await supply({grok:{...depleted.grok,primary:{currency:'USD',balance:1}},manus:{...depleted.manus,primary:{unit:'credits',balance:1}}});
+    assert.equal(await js(`[...document.querySelectorAll('.ai-usage-provider')].every(p=>p.dataset.state==='ok'&&p.dataset.balanceEmpty==='false'&&!p.querySelector('.q-alert'))`),true);
     // Ring uses every window, even when a compact view folds window details.
     await supply({cursor:{...cursor,auto:{percent:10},other:{percent:97}}});await resize('small');
     assert.equal(await js(`document.querySelector('#ai-provider-cursor .q-ring').getAttribute('aria-valuenow')`),'3');
@@ -165,6 +207,12 @@ async function main() {
     await supply({codex:{...codex,configured:true,manualTokenInvalid:true,authSource:'local'}});
     assert.match(await js(`document.getElementById('ai-provider-codex').title`),/Token 失效 · 已改用本机/);
     assert.equal(await js(`document.querySelector('#codex-usage-rows strong').textContent`),'41%');
+    assert.equal(await js(`document.getElementById('ai-provider-codex').dataset.state`),'error');
+    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring-track').hasAttribute('stroke-dasharray')`),true);
+    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring .q-pct').textContent`),'41%');
+    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-alert')`),null);
+    await resize('medium');
+    await capture('state-token-local');
     await supply({codex:{ok:true,detected:true,configured:true,manualTokenInvalid:true}});
     assert.equal(await js(`document.getElementById('ai-codex-source').textContent`),'Token 失效');
     await supply({codex:{...codex,authSource:'manual',configured:true,detected:false}});

@@ -71,13 +71,15 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       return { ...row, value, kind, display, short: row.windowUsage?.label && !row.windowUsage.labelIsFallback ? row.windowUsage.label : shortLabel(row.windowUsage, row.name), help: rowHelp(id, data, row.windowUsage) };
     });
     const remaining = D.lowestRemaining(data, id);
+    const exhausted = status === 'critical' && remaining == null;
     const lowest = values.filter(row => row.value != null).sort((a, b) => a.value - b.value)[0] || values[0];
     const source = sourceLabel(id, data);
     const stamp = D.timestamp(data);
     const updated = stamp == null ? '' : t('copy.updated.7114c0', { arg1: D.clock(new Date(stamp).toISOString()) });
-    const message = status === 'error' ? errorCopy(data) : status === 'stale' ? t('quota.stale') : '';
+    const message = status === 'error' ? errorCopy(data) : status === 'stale' ? t('quota.stale')
+      : exhausted ? t(lowest.kind === 'credits' ? 'quota.creditsDepleted' : 'quota.balanceDepleted') : '';
     const reset = [values.length > 1 ? lowest.short : '', lowest.help].filter(Boolean).join(' · ');
-    return { id, data, status, rows: values, remaining, lowest, source, updated, message, reset,
+    return { id, data, status, rows: values, remaining, exhausted, level: exhausted ? 'critical' : D.level(remaining), lowest, source, updated, message, reset,
       title: [registry.get(id).label, source, message, ...values.map(row => `${row.name}: ${row.display} · ${row.help}`),
         id === 'codex' && data?.plan ? D.planLabel(data.plan) : '',
         id === 'codex' && data?.credits ? `Credits: ${data.credits.unlimited ? t('copy.unlimited.8651f5') : data.credits.balance ?? '--'}` : '', updated].filter(Boolean).join('\n'),
@@ -88,15 +90,17 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const sw = size === 32 ? 3 : size <= 40 ? 3.5 : size >= 80 ? 6 : size >= 64 ? 5 : 4.5;
     const radius = (size - sw) / 2, c = size / 2, length = 2 * Math.PI * radius;
     const bad = m.status === 'error', unknown = m.remaining == null;
+    // Token/network error keeps dashed track, but still show local remaining when we have it.
+    const showPct = !unknown && (bad || m.status !== 'undetected');
     const dashed = bad || m.status === 'undetected' || unknown;
-    const center = size === 32 ? icon(m.id) : bad
+    const center = size === 32 ? icon(m.id) : ((bad && unknown) || m.exhausted)
       ? '<span class="q-alert" aria-hidden="true"></span>'
       : unknown ? `<span class="q-ring-unknown">${m.lowest.kind === 'unlimited' ? '∞' : '—'}</span>` : `<span class="q-pct">${pct(m.remaining)}</span>`;
     const label = t('copy.lowestRemainingQuota.775faf', { arg1: registry.get(m.id).label, arg2: D.formatPercent(m.remaining), arg3: m.message });
-    return `<div class="q-ring" style="--q-ring-size:${size}px" ${!bad && !unknown ? `role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.remaining}"` : 'role="img"'} aria-label="${escape(label)}">
+    return `<div class="q-ring" style="--q-ring-size:${size}px" ${showPct && !bad ? `role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.remaining}"` : 'role="img"'} aria-label="${escape(label)}">
       <svg class="q-ring-svg" viewBox="0 0 ${size} ${size}" aria-hidden="true"><defs><linearGradient id="quota-gradient-${m.id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="q-gradient-start"/><stop offset="1" class="q-gradient-end"/></linearGradient></defs>
       <circle class="q-ring-track" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke-width="${dashed ? sw * .7 : sw}"${dashed ? ' stroke-dasharray="2 3.2"' : ''}/>
-      ${dashed ? '' : `<circle class="q-ring-value" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke="url(#quota-gradient-${m.id})" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${length * m.remaining / 100} ${length}"${m.remaining === 0 ? ' visibility="hidden"' : ''}/>`}</svg><span class="q-ring-center">${center}</span></div>`;
+      ${dashed || unknown ? '' : `<circle class="q-ring-value" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke="url(#quota-gradient-${m.id})" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${length * m.remaining / 100} ${length}"${m.remaining === 0 ? ' visibility="hidden"' : ''}/>`}</svg><span class="q-ring-center">${center}</span></div>`;
   }
   function quotaRows(m) {
     return `<div class="cursor-usage-rows" id="${m.id}-usage-rows">${m.rows.map(row => {
@@ -112,19 +116,19 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const chip = m.status === 'error' ? m.source : m.message || m.source;
     const errorAction = m.status === 'error' ? `<button class="ai-inline-settings" type="button" data-quota-settings="${m.id}">${escape(t('copy.openSettings.93112c'))}</button>` : '';
     const foot = [m.status === 'error' && !m.expanded && D.invalidToken(m.data) ? t('copy.tokenExpired.22c3fe') : m.message, m.updated].filter(Boolean).join(' · ');
-    return `<section class="ai-usage-provider${m.vertical ? ' q-vertical' : ' q-horizontal'}" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-level="${D.level(m.remaining)}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}" title="${escape(m.title)}">
+    return `<section class="ai-usage-provider${m.vertical ? ' q-vertical' : ' q-horizontal'}" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-level="${m.level}" data-balance-empty="${m.exhausted}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}" title="${escape(m.title)}">
       ${ring(m, layout.ringSize)}<div class="q-provider-body">
       <div class="ai-usage-source">${icon(m.id)}<b>${escape(registry.get(m.id).label)}</b><span class="q-chip" id="ai-${m.id}-source">${escape(chip)}</span></div>
       ${quotaRows(m)}<div class="q-compact-caption">${escape(m.message || m.reset)}</div>
       <p class="cursor-usage-footnote" id="${m.id}-usage-footnote"><span>${escape(foot)}</span>${errorAction}</p></div>
-      <div class="q-mini-value">${m.status === 'error' ? escape(D.invalidToken(m.data) ? 'Token' : t('quota.error')) : m.remaining == null ? escape(m.lowest.display) : `<span class="q-pct">${pct(m.remaining)}</span>`}</div></section>`;
+      <div class="q-mini-value">${m.status === 'error' && m.remaining == null ? escape(D.invalidToken(m.data) ? 'Token' : t('quota.error')) : m.remaining == null ? escape(m.lowest.display) : `<span class="q-pct">${pct(m.remaining)}</span>`}</div></section>`;
   }
   function summary(models) {
     const low = models.filter(m => m.remaining != null).sort((a, b) => a.remaining - b.remaining)[0];
-    const errors = models.filter(m => m.status === 'error').length;
+    const attentionCount = models.filter(m => m.status === 'error' || m.exhausted).length;
     return `<div class="q-summary" data-level="${D.level(low?.remaining)}"><span class="q-caption">${escape(t('quota.lowest'))}</span>${low
       ? `<div class="ai-usage-source">${icon(low.id)}<b>${escape(registry.get(low.id).label)}</b></div><strong class="q-pct">${pct(low.remaining)}</strong><span class="q-caption">${escape(low.message || low.reset)}</span>`
-      : `<strong>—</strong>`}${errors ? `<button class="ai-inline-settings" data-quota-settings="" type="button">${escape(t('quota.sourcesNeedAttention', { count: errors }))}</button>` : ''}</div>`;
+      : `<strong>—</strong>`}${attentionCount ? `<button class="ai-inline-settings" data-quota-settings="" type="button">${escape(t('quota.sourcesNeedAttention', { count: attentionCount }))}</button>` : ''}</div>`;
   }
   function render() {
     const size = tile.dataset.widgetSize || 'small', layout = D.dashboard(state, size);
@@ -170,8 +174,10 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const api = window.notchAPI;
     if (inFlight) { queuedForce ||= force; return inFlight; }
     byId('cursor-usage-refresh')?.classList.add('is-loading');
+    const visible = usageVisible();
     inFlight = (async () => {
       await Promise.all(usageProviders().map(async ({ id, request }) => {
+        if (!D.shouldRefresh(state[id], { force, visible })) return;
         const revision = revisions[id];
         try {
           const result = api?.[request] ? await api[request]({ force }) : { detected: false };
@@ -201,7 +207,11 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   const usageVisible = () => document.visibilityState === 'visible' && document.getElementById('app')?.classList.contains('expanded')
     && document.getElementById('tab-button-home')?.classList.contains('active') && !tile.hidden;
   for (const event of ['visibilitychange', 'notch:modechange', 'notch:tabchange', 'notch:home-modules-changed']) {
-    document.addEventListener(event, () => { if (usageVisible()) refresh(); else scheduleRefresh(); });
+    document.addEventListener(event, () => {
+      syncTick();
+      if (usageVisible()) refresh();
+      else scheduleRefresh();
+    });
   }
   document.addEventListener('notch:cursor-token-changed', () => {
     // Bump revisions so any in-flight snapshot for the previous credential is dropped.
@@ -228,12 +238,43 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     revisions[id]++; state[id] = null; render();
     void refresh({ force: true });
   });
-  setInterval(render, 30_000);
+  // Soft tick: only while the home tile is visible; skips a full rebuild when nothing expired.
+  let tickTimer = null;
+  function softTick() {
+    if (!usageVisible()) return;
+    const now = Date.now();
+    const needs = usageProviders().some(({ id }) => {
+      const data = state[id];
+      if (!data || !D.available(data)) return false;
+      const next = D.status(data, id, now);
+      return next !== D.status(data, id, now - 30_000) || D.quotaRows(data, id).some(row => {
+        const resetMs = D.toMillis(row.windowUsage?.resetsAt);
+        return resetMs != null && resetMs > now - 30_000 && resetMs <= now;
+      });
+    });
+    if (needs) render();
+    else {
+      // Still refresh relative reset copy ("明天 …") once a minute without tearing the grid.
+      for (const el of tile.querySelectorAll('.ai-usage-provider')) {
+        const id = el.dataset.provider;
+        const m = model(id, tile.dataset.widgetSize || 'small', Number(tile.dataset.aiCount) || 1);
+        const caption = el.querySelector('.q-compact-caption');
+        const foot = el.querySelector('.cursor-usage-footnote > span');
+        if (caption) caption.textContent = m.message || m.reset;
+        if (foot && m.status !== 'error') foot.textContent = [m.message, m.updated].filter(Boolean).join(' · ');
+      }
+    }
+  }
+  function syncTick() {
+    clearInterval(tickTimer);
+    tickTimer = usageVisible() ? setInterval(softTick, 30_000) : null;
+  }
   function scheduleRefresh() {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => refresh({ force: usageVisible() }), D.refreshDelay(state, usageVisible()));
   }
   window.addEventListener('pome:language-changed', render);
   window.NotchAiUsage = { refresh, openSettings };
+  syncTick();
   refresh();
 })();

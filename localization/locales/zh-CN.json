@@ -1341,6 +1341,8 @@
   "settings.ai.subtitle": "接入本机完成提醒，并管理各家额度。",
   "settings.ai.footer": "仅修改本机工具配置；断开只移除 Pome 的项。",
   "settings.ai.noConnection": "无需接入",
+  "settings.ai.apiManaged": "API",
+  "settings.ai.manusHint": "下方配置 Token 与完成提醒",
   "settings.ai.localQuota": "额度来自本机 Claude OAuth 登录。",
   "settings.ai.cursorQuota": "额度来自 Cursor 登录态，无需单独配置 Token。",
   "settings.ai.tokenQuota": "Token 额度",
@@ -1351,5 +1353,7 @@
   "attention.closeList": "关闭待处理列表",
   "settings.ai.waitingForCompletion": "在来源工具中完成一个任务后，记录会显示在这里。",
   "settings.ai.connectedCount": "本机 · {arg1}/{arg2} 已接入",
-  "settings.ai.title": "AI 配置"
+  "settings.ai.title": "AI 配置",
+  "quota.balanceDepleted": "余额已耗尽",
+  "quota.creditsDepleted": "积分已耗尽"
 }

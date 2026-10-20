@@ -6,7 +6,11 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
-- Replace home AI quota tabs with the B dashboard mosaic: simultaneous provider rings and window bars, urgency-based compact folding, settings order in larger sizes, and a lowest-remaining summary for five-provider large cards. Critical now starts at ≤10%. Preserve balance/credit units, stale/error fallbacks, source and reset details; update Grok, Grok Bot and Manus branding.
+- Slim settings: merge completion and quota into one AI configuration card (inline tokens, no capability matrix or Send test UI); combine workspace/home display toggles; move language under Device & activation; open pending requests as an in-place home list. Primary column mirror → API → AI; secondary NAS → Display → Device.
+- Settings follow-ups: close the pending dialog on collapse/leave-home and when the list clears; focus token inputs when jumping to a source; compact paths with the user home prefix; label Manus as API-managed instead of “no setup”; disable other connect actions while a preview is open; refresh dynamic token copy on language changes.
+- Replace home AI quota tabs with the B dashboard mosaic: simultaneous provider rings and window bars, urgency-based compact folding, settings order in larger sizes, and a lowest-remaining summary for five-source large cards. Critical now starts at ≤10%. Preserve balance/credit units, stale/error fallbacks, source and reset details; update Grok, Grok Bot and Manus branding.
+- Quota mosaic follow-ups: normalize second/ms timestamps; retain critical → warn → error compact ordering and available local remaining on auth-error rings; show depleted balances/credits in red; show all four mini sources, fold five or more into three rings +N, and keep small at three; skip persistently absent providers in background polls; drop the dedicated Inter font.
+- Preserve the trigger button during connection preview rendering so the confirmation stays anchored and Cancel/Escape restores focus.
 
 ### Multi-AI providers (usage + completion matrix)
 

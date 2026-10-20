@@ -21,6 +21,9 @@
     section.style.left = `${Math.max(12, Math.min(innerWidth - section.offsetWidth - 12, rect.left))}px`;
     section.style.top = `${Math.max(12, Math.min(innerHeight - section.offsetHeight - 12, rect.bottom + 6))}px`;
   }
+  function dismissDialog() {
+    if (section.open) section.close();
+  }
   entry.addEventListener('click', () => {
     if (section.open) { section.close(); return; }
     actionError = ''; section.showModal(); entry.setAttribute('aria-expanded', 'true'); position(); void refresh();
@@ -32,6 +35,12 @@
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) section.close();
   });
   window.addEventListener('resize', position);
+  document.addEventListener('notch:modechange', event => {
+    if (event.detail?.expanded === false) dismissDialog();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') dismissDialog();
+  });
   let busy = false, queued = false, actionError = '';
   const t = (key, params) => locale.t(`attention.${key}`, params);
   function button(key, action) {
@@ -57,7 +66,13 @@
       }
       const rows = state.items || []; entry.hidden = rows.length === 0;
       entry.textContent = `${t('pending')} · ${rows.length}`;
-      if (!rows.length) { const empty = document.createElement('small'); empty.textContent = t('empty'); list.append(empty); }
+      if (!rows.length) {
+        if (section.open) section.close();
+        else {
+          const empty = document.createElement('small'); empty.textContent = t('empty'); list.append(empty);
+        }
+        return;
+      }
       for (const row of rows) {
         const item = document.createElement('div'); item.className = 'ai-attention-row'; item.dataset.key = row.key;
         const event = row.event, normalized = window.PomeNotification.normalize({ source: event.source });
@@ -80,7 +95,7 @@
   }
   api.onAiAttentionChanged?.(refresh);
   document.addEventListener('notch:tabchange', event => {
-    if (event.detail?.tab !== 'home' && section.open) section.close();
+    if (event.detail?.tab !== 'home') dismissDialog();
     void refresh();
   });
   window.addEventListener('pome:language-changed', refresh);

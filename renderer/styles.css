@@ -7319,8 +7319,7 @@ html[data-platform="win32"] .note-format-actions::-webkit-scrollbar {
 .sun-manual-error { margin: 0; color: #FF8D8D; font-size: 10.5px; }
 .sun-popover .foot { margin: 0; padding: 6px 9px 2px; color: var(--text-2); font-size: 10.5px; }
 
-@font-face { font-family: 'Pome Quota Inter'; src: url('assets/fonts/Inter-VF.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
-/* B · 仪表盘：同屏来源格，密度仅由首页组件尺寸控制。 */
+/* B · 仪表盘：同屏来源格，密度仅由首页组件尺寸控制。与面板共用 --font，避免单独挂载 Inter VF。 */
 .home-cursor {
   --q-ok-a: #6ea8ff; --q-ok-b: #8b7cff;
   --q-warn-a: #ffb454; --q-warn-b: #ff8a3d; --q-warn-t: #ffb16d;
@@ -7329,7 +7328,7 @@ html[data-platform="win32"] .note-format-actions::-webkit-scrollbar {
   --q-cell-line: rgba(255,255,255,.06); --q-icon-bg: rgba(255,255,255,.07);
   --q-caption: rgba(190,190,200,.62); --q-error: #ff9a92;
   --q-ring-font: 13px; --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
-  --q-font: 'Pome Quota Inter', var(--font);
+  --q-font: var(--font);
   font-family: var(--q-font);
   container: quota / size;
   padding: 12px; gap: 10px;
@@ -7415,6 +7414,8 @@ html[data-platform="win32"] .note-format-actions::-webkit-scrollbar {
 .ai-usage-provider[data-state='error'] .q-ring-track { stroke: rgba(255,93,108,.38); }
 .ai-usage-provider .ai-quota-row:has(.cursor-usage-track:not([aria-valuenow])) .cursor-usage-track { background: repeating-linear-gradient(90deg,rgba(255,255,255,.11) 0 4px,transparent 4px 8px); }
 .ai-usage-provider[data-state='error'] .ai-quota-row .cursor-usage-track { background: repeating-linear-gradient(90deg,rgba(255,93,108,.22) 0 4px,transparent 4px 8px); }
+.home-cursor .ai-usage-provider[data-balance-empty='true'] .q-ring-track { stroke: var(--q-crit-a); }
+.home-cursor .ai-usage-provider[data-balance-empty='true'] :is(.q-mini-value, .ai-quota-row .q-pct) { color: var(--q-crit-t); }
 .home-cursor[data-widget-size='mini'] { padding: 11px 12px 10px; gap: 8px; --q-ring-font: 10px; }
 .home-cursor[data-widget-size='mini'] .cursor-usage-head { min-height: 20px; }
 .home-cursor[data-widget-size='mini'] .cursor-usage-refresh { width: 20px; height: 20px; border-radius: 7px; }
@@ -7480,20 +7481,9 @@ html[data-platform="win32"] .note-format-actions::-webkit-scrollbar {
   .home-cursor .cursor-usage-track > i { transition: none; }
 }
 
-/* Both AI tools share one settings card and retain separate status and token actions. */
-.settings-ai-usage-card { --ai-settings-rule: rgba(255,255,255,.09); }
+/* Codex local status still sits above its inline token row in the merged AI card. */
 .settings-codex-token-card p { margin-top: 10px; }
 .settings-codex-token-card #settings-codex-local-status { color: var(--text-3); }
-.settings-ai-heading { padding-bottom: 14px; }
-.settings-ai-provider { min-width: 0; }
-.settings-ai-provider + .settings-ai-provider { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--ai-settings-rule); }
-.settings-ai-provider .settings-card-heading > div { flex-direction: row; align-items: baseline; gap: 8px; }
-.settings-ai-provider .settings-card-heading strong { font-size: 12px; }
-.settings-ai-provider .settings-card-heading > small { text-align: right; }
-.settings-ai-provider .settings-cursor-token-row { margin-top: 10px; }
-.settings-ai-provider .settings-cursor-token-hint { min-height: 0; }
-.settings-ai-provider .settings-cursor-token-hint:empty { display: none; }
-.settings-ai-provider p { margin-top: 8px; }
 
 /* Codex auth failures are confined to its provider and settings status. */
 #settings-codex-token-status[data-state='error'] { color: var(--ai-critical, #ff7b72); }
@@ -7645,8 +7635,6 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 .ai-attention-row > div:first-child { min-width: 0; display: grid; gap: 3px; }
 .ai-attention-row small,.ai-attention-status { color: var(--text-2, #A1A1A1); font-size: 11px; overflow-wrap: anywhere; }
 .ai-attention-actions { display: flex; gap: 6px; flex: none; }
-.ai-source-capabilities { margin-top: 3px; color: var(--text-3); font-size: var(--fs-caption); }
-.ai-source-capabilities summary { cursor: pointer; }
 .ai-attention-entry { margin: 4px 12px; border: 0; border-radius: 6px; padding: 5px 8px; background: rgba(67,140,255,.13); color: #8DB8FF; font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
 
 .home-cursor[data-widget-size='medium'][data-ai-density='dense'] .cursor-usage-rows { gap: 2px; }

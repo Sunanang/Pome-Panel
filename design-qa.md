@@ -2,6 +2,12 @@
 
 final result: passed
 
+2026-10-20 审查修复：紧凑排序恢复为 critical → warn → error → ok（最低剩余优先）→ stale → 未检测到。mini 四来源完整展示，五来源起为三环 +N；small 最多三来源；large 仅五来源放第六格摘要，六来源恢复 2×3。Grok/Manus 零余额或积分耗尽以红色虚线环、告急图标和红色金额展示，双语提示明确耗尽，不伪造百分比；五来源摘要的需处理数量也包含耗尽来源。
+
+macOS Electron 专项已覆盖以上边界、恢复正余额、双语和四尺寸无溢出。新截图位于 `dist.noindex/review-fixes/quota/`，包括 `mini-4ai.png`、`mini-5ai.png`、`large-6ai.png`、`depleted-{mini,small,medium,large}.png` 和 `depleted-large-5ai.png`。本轮仍使用隔离数据，不把样本截图当作真实账号联网或 Windows 真机验收。
+
+修复后的完整 `npm test` 通过：824 项 Node 测试中 823 通过、1 项平台专属跳过；27 次 Electron 场景/重启运行及全部语法、语言资源检查通过。日志 `dist.noindex/review-fixes/npm-test.log`。
+
 ## 视觉准绳与证据
 
 - 定稿：[Drive 文件夹](https://drive.google.com/drive/folders/1tjUIGrq6q2FyRJ0fSDCSej36KLXE46lv)。只实现 B 仪表盘，未使用 A 列表方向。源码与品牌 SVG 取自用户指定的 ai-quota-final-src.zip。
@@ -24,7 +30,7 @@ final result: passed
 
 ## 五项视觉检查与迭代
 
-1. 字体：模块内复用源包 Inter 变量字体及许可证；中文沿用系统回退。标题 11/500，来源 11.5–12.5/620，百分比 650/等宽数字，窗口文字 9.5–10.5；百分号为 0.62em。中文系统字体与定稿 Noto 有轻微字形差异，属于平台字体回退，不引入 17MB 中文字体。
+1. 字体：与面板共用系统字体栈（不再单独挂载 Inter VF，约 875KB）；中文沿用系统回退。标题 11/500，来源 11.5–12.5/620，百分比 650/等宽数字，窗口文字 9.5–10.5；百分号为 0.62em。
 2. 间距：格间 8px，格圆角 12px；保持原模块 18px 外壳、ECG 背景和尺寸。中号五来源减少格内间距，保证现有较矮首页也完整展示；超过六家时中号采用更紧凑的横向格，大号三列，不使用 Tab。
 3. 色彩：轨道、格底、渐变均按定稿；≤20% 偏低、≤10% 告急，按原始未取整值判断。过期环/细条半透明并直接标“数据过期”；Token 错误红色虚线，网络错误不会要求替换有效凭据。零剩余不画圆头小点。
 4. 图标：Cursor/Codex/Claude 复用仓库 SVG；Grok/Grok Bot 使用源包真标，Grok Bot 增强方底并按要求写注释；Manus 使用源包官方白色字形。图标为本地静态资源，无运行时请求。
@@ -42,7 +48,7 @@ final result: passed
 ## 本轮文件范围
 
 - 界面与规则：renderer/ai-usage.js、renderer/ai-usage-domain.js、renderer/styles.css、renderer/index.html。
-- 资产：renderer/assets/inbox/{grok,grokbot,manus}.svg、图标 README、assets/fonts/Inter-VF.ttf 及 LICENSE。
+- 资产：renderer/assets/inbox/{grok,grokbot,manus}.svg、图标 README。
 - 回归：tests/ai-usage.test.js、tests/ai-usage.electron.js、tests/provider-credentials.electron.js、tests/startup.electron.js。
 - 说明与中英文：README、CHANGELOG、localization/locales、桌面/NAS 自动生成资源、本报告。
 

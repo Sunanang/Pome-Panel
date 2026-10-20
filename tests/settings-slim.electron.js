@@ -72,6 +72,13 @@ async function run(c) {
   assert.equal(structure.columns,3); assert.equal(structure.homeColumns,2);
   assert.equal(structure.primaryColor,'rgb(67, 140, 255)');
   assert.equal(structure.quotaOnly,'solid'); assert.equal(structure.quotaAction,'无需接入'); assert.equal(structure.claudeButton,true);
+  assert.equal(await js(`document.querySelector('[data-source=manus] .ai-source-state').textContent`),'API');
+  assert.equal(await js(`document.querySelector('[data-source=manus] .ai-source-actions').textContent`),'下方配置 Token 与完成提醒');
+  await js(`NotchAiSources.openSettings('grok')`);
+  await until(`document.activeElement?.id==='settings-grok-token'`);
+  assert.equal(await js(`NotchAiSources.compactPath('/Users/demo/Library/Application Support/Claude/config.json')`),'~/Library/Application Support/Claude/config.json');
+  assert.equal(await js(`NotchAiSources.compactPath('C:\\\\Users\\\\demo\\\\.claude\\\\settings.json')`),'~\\.claude\\settings.json');
+  assert.equal(await js(`NotchAiSources.compactPath('/tmp/fixture-home/.cursor/hooks.json')`),'~/.cursor/hooks.json');
   // Detection, listener updates and localization may re-render rows while a user types.
   await js(`document.getElementById('settings-grok-token').value='unsaved-fixture';document.getElementById('settings-grok-team').value='unsaved-team';document.getElementById('settings-grok-team').dispatchEvent(new Event('input'));document.getElementById('settings-grok-token').focus();NotchAiSources.refresh()`);
   await until(`document.activeElement.id==='settings-grok-token'`);
@@ -81,8 +88,11 @@ async function run(c) {
   assert.equal(await js(`document.activeElement.id`),'settings-grok-token');
   assert.equal(await js(`document.querySelector('.settings-display-card > .settings-card-heading strong').textContent`),'Display');
   assert.equal(await js(`document.querySelector('[data-source=grokbot] .ai-source-actions').textContent`),'No setup needed');
+  assert.equal(await js(`document.querySelector('[data-source=manus] .ai-source-actions').textContent`),'Configure the token and completion alerts below');
   assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI configuration');
+  assert.equal(await js(`document.querySelector('[data-provider-save=grok]')?.textContent`),'Save');
   await js(`document.getElementById('settings-grok-token').value='';notchAPI.setLanguage('zh-CN')`); await until(`document.documentElement.lang==='zh-CN'`);
+  await until(`document.querySelector('[data-provider-save=grok]')?.textContent==='保存'`);
   if (output) {
     fs.mkdirSync(output,{recursive:true});
     // Only synthetic hook configurations in the temporary HOME are written.

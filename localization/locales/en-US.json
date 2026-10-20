@@ -1371,6 +1371,8 @@
   "settings.ai.subtitle": "Connect local completion alerts and manage each provider’s quota.",
   "settings.ai.footer": "Only local tool configuration changes; disconnecting removes Pome entries only.",
   "settings.ai.noConnection": "No setup needed",
+  "settings.ai.apiManaged": "API",
+  "settings.ai.manusHint": "Configure the token and completion alerts below",
   "settings.ai.localQuota": "Quota uses the local Claude OAuth sign-in.",
   "settings.ai.cursorQuota": "Quota uses Cursor sign-in; no separate token is needed.",
   "settings.ai.tokenQuota": "Token quota",
@@ -1381,5 +1383,7 @@
   "attention.closeList": "Close pending requests",
   "settings.ai.waitingForCompletion": "Complete a task in a connected tool to see it here.",
   "settings.ai.connectedCount": "Local · {arg1}/{arg2} connected",
-  "settings.ai.title": "AI configuration"
+  "settings.ai.title": "AI configuration",
+  "quota.balanceDepleted": "Balance depleted",
+  "quota.creditsDepleted": "Credits depleted"
 }

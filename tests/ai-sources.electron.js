@@ -34,10 +34,16 @@ async function run(c){
  await js(`setActiveTab('settings')`);await until(`document.querySelectorAll('.ai-source-row').length===8`);
  assert.equal(await js(`document.querySelectorAll('.ai-source-restart-hint').length`),0,'detection alone must not ask to restart');
  assert.equal(await js(`getComputedStyle(document.querySelector('.settings-column-primary')).overflowY`),'auto');
- await js(`document.querySelector('.ai-source-row[data-source="codex"] button').click()`);await until(`document.getElementById('ai-source-confirm').open`);
+ await js(`window.fixtureTrigger=document.querySelector('.ai-source-row[data-source="codex"] button');fixtureTrigger.scrollIntoView({block:'center'});fixtureTrigger.focus();fixtureTrigger.click()`);await until(`document.getElementById('ai-source-confirm').open && !fixtureTrigger.disabled`);
+ assert.equal(await js(`fixtureTrigger.isConnected && fixtureTrigger===document.querySelector('.ai-source-row[data-source="codex"] button')`),true,'busy renders must preserve the confirmation anchor');
  assert.equal(fs.readFileSync(config,'utf8'),original,'confirmation preview must not write');
- const bounds=await js(`(()=>{const d=document.getElementById('ai-source-confirm').getBoundingClientRect(),b=document.querySelector('.ai-source-row[data-source="codex"] button').getBoundingClientRect();return {top:d.top,bottom:d.bottom,left:d.left,right:d.right,h:innerHeight,w:innerWidth,buttonTop:b.top}})()`);assert(bounds.top>=0&&bounds.bottom<=bounds.h&&bounds.left>=0&&bounds.right<=bounds.w);assert(bounds.top<bounds.buttonTop,'confirmation floats above button');await capture('settings-confirm');
+ const bounds=await js(`(()=>{const d=document.getElementById('ai-source-confirm').getBoundingClientRect(),b=fixtureTrigger.getBoundingClientRect();return {top:d.top,bottom:d.bottom,left:d.left,right:d.right,h:innerHeight,w:innerWidth,buttonTop:b.top,expectedLeft:Math.max(12,Math.min(innerWidth-d.width-12,b.right-d.width))}})()`);assert(bounds.top>=0&&bounds.bottom<=bounds.h&&bounds.left>=0&&bounds.right<=bounds.w);assert(bounds.top<bounds.buttonTop,'confirmation floats above button');assert(Math.abs(bounds.left-bounds.expectedLeft)<1,'confirmation must align with its actual trigger');await capture('settings-confirm');
+ await js('NotchAiSources.refresh()');assert.equal(await js(`fixtureTrigger.isConnected && fixtureTrigger===document.querySelector('.ai-source-row[data-source="codex"] button')`),true,'status refresh must keep the open preview anchor');
  await js(`document.getElementById('ai-source-confirm-cancel').click()`);assert.equal(fs.readFileSync(config,'utf8'),original);
+ assert.equal(await js(`document.activeElement===fixtureTrigger`),true,'cancel restores focus to the connected trigger');
+ await js('fixtureTrigger.click()');await until(`document.getElementById('ai-source-confirm').open && !fixtureTrigger.disabled`);
+ await js(`document.getElementById('ai-source-confirm').dispatchEvent(new Event('cancel',{cancelable:true}))`);
+ assert.equal(await js(`!document.getElementById('ai-source-confirm').open && document.activeElement===fixtureTrigger`),true,'Escape restores focus to the connected trigger');
  assert.equal(await js(`document.querySelectorAll('.ai-source-restart-hint').length`),0,'cancelled preview must not ask to restart');
  async function assertRestartSources(expected){
   assert.deepEqual(await js(`Array.from(document.querySelectorAll('.ai-source-restart-hint'),hint=>({source:hint.closest('.ai-source-row').dataset.source,text:hint.textContent}))`),expected.map(source=>({source,text:source==='claude'?'已写入配置，请退出 Claude Code 并重新启动后生效':`已写入配置，请完全退出并重新打开 ${{codex:'Codex',claude:'Claude Code',cursor:'Cursor'}[source]} 后生效`})));

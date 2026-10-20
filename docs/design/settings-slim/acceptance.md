@@ -74,3 +74,18 @@ macOS 上运行当前 dev 的生产 Electron、preload 与主进程；测试 HOM
 - 最新截图目录为 `dist.noindex/settings-slim-r3/`，R2 目录只保留上一步验收历史。
 
 最终布局追加回归：`npm test` 全部通过（824 项 Node 测试中 823 通过、1 项平台专属跳过；27 次 Electron 场景/重启运行及全部语法/语言资源检查通过）。日志：`dist.noindex/settings-slim-r3/npm-test.log`。
+
+## 2026-10-20 跟进修复
+
+- 待处理 dialog：收起面板 / 离开首页 / 页面隐藏时关闭；列表清空后自动关闭。
+- 来源跳转优先聚焦 Token 输入；路径按 `/Users/…` 与 `C:\\Users\\…` 压成 `~`。
+- Manus 状态改为「API」+「下方配置 Token 与完成提醒」，不再显示「无需接入」。
+- 接入预览期间 `busy` 会立刻重绘以禁用其它接入按钮；语言切换重刷动态 Token 文案。
+- 清理已无 DOM 的 `.settings-ai-usage-card` / `.settings-ai-provider` / `.ai-source-capabilities` 样式；CHANGELOG 补记设置瘦身。
+
+## 2026-10-20 审查问题修复
+
+- 接入、修复、断开按钮按操作复用节点，预览期间的 busy 重绘和状态刷新不会移除确认框锚点；取消和 Esc 后恢复原按钮焦点。
+- 专项 Electron 回归覆盖按钮身份、实际右对齐位置、刷新后锚点、取消/Esc 焦点、预览不写配置；原有接入、修复、断开与重启提示条件回归通过。
+- 本轮截图：`dist.noindex/review-fixes/settings-confirm.png`；测试使用临时 HOME，不修改真实工具配置。
+- 完整 `npm test` 通过：824 项 Node 测试中 823 通过、1 项平台专属跳过；27 次 Electron 场景/重启运行及全部语法、语言资源检查通过。日志 `dist.noindex/review-fixes/npm-test.log`，真实配置前后哈希一致（同目录 `real-config-{before,after}.json`）。

@@ -38,6 +38,10 @@ test('dashboard folds only compact sizes and preserves settings order in larger 
   delete snapshots.grok;
   assert.equal(D.dashboard(snapshots, 'mini').shown.length, 4);
   assert.equal(D.dashboard(snapshots, 'mini').hidden.length, 0);
+  assert.equal(D.dashboard(snapshots, 'large').summary, false, 'four sources stay without a summary cell');
+  const six = D.dashboard({ cursor, codex, claude: { detected: true }, grokbot, grok: { configured: true }, copilot: { detected: true } }, 'large');
+  assert.equal(six.summary, false);
+  assert.equal(six.rows, 3);
 });
 test('compact urgency ranks critical, warn, error, ok by unrounded minimum, then stale', () => {
   const snapshots = {
@@ -53,12 +57,35 @@ test('compact urgency ranks critical, warn, error, ok by unrounded minimum, then
   assert.equal(D.status({ detected: false, configured: false }, 'manus'), 'undetected');
   assert.equal(D.status({ ...cursor, manualTokenInvalid: true }, 'cursor'), 'error');
   assert.equal(D.status({ ...cursor, fetchedAt: '2020-01-01T00:00:00Z' }, 'cursor'), 'stale');
+  assert.equal(D.status({ configured: true, ok: true, primary: { currency: 'USD', balance: 0 } }, 'grok'), 'critical');
+  assert.equal(D.urgencyRemaining({ configured: true, ok: true, primary: { unit: 'credits', balance: 0 } }, 'manus'), 0);
+  const balances = { grok: { configured: true, ok: true, primary: { currency: 'USD', balance: 0 } }, manus: { configured: true, ok: true, primary: { unit: 'credits', balance: 0 } } };
+  assert.deepEqual(D.dashboard({ ...snapshots, ...balances }, 'small').shown, ['grok', 'manus', 'grokbot'], 'exhausted balances precede low quota and errors');
+  assert.equal(D.status({ ...balances.grok, primary: { currency: 'USD', balance: 1 } }, 'grok'), 'ok');
+  assert.equal(D.status({ ...balances.manus, stale: true }, 'manus'), 'stale');
 });
 test('all eight sources stay present in medium and large, no tab state remains', () => {
   const data = Object.fromEntries(D.registry.ids().map(id => [id, { detected: true }]));
   for (const size of ['medium', 'large']) assert.equal(D.dashboard(data, size).shown.length, 8);
+  assert.equal(D.dashboard(data, 'large').summary, false);
   assert.equal('chooseTab' in D, false);
   assert.equal('TAB_KEY' in D, false);
+});
+test('timestamp and clock accept ISO, unix seconds, and millisecond epoch', () => {
+  const iso = '2026-10-20T08:00:00.000Z';
+  const sec = Date.parse(iso) / 1000;
+  const ms = Date.parse(iso);
+  assert.equal(D.timestamp({ fetchedAt: iso }), ms);
+  assert.equal(D.timestamp({ fetchedAt: sec }), ms);
+  assert.equal(D.timestamp({ fetchedAt: ms }), ms);
+  assert.equal(D.toMillis(sec), ms);
+  assert.equal(D.toMillis(ms), ms);
+  assert.equal(D.status({ detected: true, ok: true, auto: { percent: 10 }, fetchedAt: ms - 2 * 86400000 }, 'cursor'), 'stale');
+  assert.equal(D.clock(sec).includes(':'), true);
+  assert.equal(D.clock(ms).includes(':'), true);
+  assert.equal(D.shouldRefresh(null, { force: false, visible: false }), true);
+  assert.equal(D.shouldRefresh({ detected: false, configured: false, ok: true }, { force: false, visible: false }), false);
+  assert.equal(D.shouldRefresh({ detected: true, ok: true }, { force: false, visible: false }), true);
 });
 test('remaining presentation handles zero, full, excess, decimals and missing without changing used data', () => {
   for (const [used, remaining, text] of [[0, 100, '100%'], [100, 0, '0%'], [125, 0, '0%'],

@@ -143,6 +143,10 @@ async function run() {
   assert.equal(await mainEval(`document.querySelector('.tab-panel.active').id`),'tab-home','pending list stays on home');
   assert.equal(await mainEval(`document.querySelector('#settings-ai-sources .ai-attention-section')`),null);
   await capture(BrowserWindow.fromWebContents(mainContents), 'home-pending-list');
+  await mainEval(`document.dispatchEvent(new CustomEvent('notch:modechange',{detail:{expanded:false}}))`);
+  assert.equal(await mainEval(`document.querySelector('.ai-attention-section').open`),false,'collapse closes pending dialog');
+  await mainEval(`setMode(true);setActiveTab('home');document.querySelector('.ai-attention-entry').click()`);
+  assert.equal(await mainEval(`document.querySelector('.ai-attention-section').open`),true);
   await mainEval(`Array.from(document.querySelectorAll('.ai-attention-actions button')).find(b=>b.textContent===PomeI18n.t('attention.reopen')).click()`); await shown(hidden.question);
   await mainEval(`document.querySelector('.ai-attention-heading button').click()`);
   assert.notEqual(await evaluate(window(), 'currentNotification.eventId'), hiddenId, 'every display has a fresh generation');
