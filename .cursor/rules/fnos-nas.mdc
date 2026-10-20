@@ -1,0 +1,15 @@
+---
+description: Pome 相关 NAS 操作：优先飞牛 skill，再 SSH
+alwaysApply: true
+---
+
+# NAS 操作顺序
+
+对本仓库涉及飞牛 NAS / Pome Panel 伴侣的操作：
+
+1. **优先**用 fnos skill（`trim-cli`，profile `home`）。
+2. skill 做不到（例如读 `@appdata` 内 device-port、NAS 回环 health）再用 SSH。
+3. 禁止默认直接 SSH。
+
+SSH 回退：`Lando@192.168.1.13 -p 8022`（Mini 免密）。  
+trim-cli：`--host 192.168.1.138 --port 19528 --scheme http --allow-insecure-http --profile home`。
