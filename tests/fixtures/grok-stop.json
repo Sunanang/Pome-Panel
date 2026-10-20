@@ -1,0 +1,12 @@
+{
+  "hookEventName": "stop",
+  "hook_event_name": "Stop",
+  "sessionId": "grok-test-session",
+  "promptId": "grok-test-turn-1",
+  "reason": "end_turn",
+  "cwd": "/tmp/grok-project",
+  "workspaceRoot": "/tmp/grok-project",
+  "timestamp": "2026-10-20T01:00:00Z",
+  "lastAssistantMessage": "Implemented the requested change",
+  "stopHookActive": false
+}

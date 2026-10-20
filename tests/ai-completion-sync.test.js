@@ -38,6 +38,46 @@ async function cycle(server, client) {
   return plan;
 }
 
+test('Grok prompt turns sync through NAS, propagate reads and share history capacity', async t => {
+  const {a,b,server} = fixture(t);
+  const {grokCompletion} = require('../scripts/grok-notify');
+  const sample = require('./fixtures/grok-stop.json');
+  const accept = i => {
+    const event = grokCompletion({...sample,promptId:`prompt-${i}`,lastAssistantMessage:`Grok result ${i}`});
+    return a.inbox.accept({...event,title:event.last_assistant_message,window:{cwd:'/private/local-project'}});
+  };
+  assert.equal(accept(1).duplicate,false);assert.equal(accept(2).duplicate,false);assert.equal(accept(1).duplicate,true);
+  const built = buildWorkspaceEntities({aiCompletions:a.inbox.snapshotForSync(),commands:[{id:'unrelated',text:'Keep syncing commands'}]}).entities;
+  assert.equal(built.filter(row => row.collection==='aiCompletions').length,2);
+  assert.ok(built.some(row => row.entityId==='command:unrelated'));
+  await cycle(server,a);await cycle(server,b);
+  assert.equal(b.inbox.list().total,2);
+  const imported=b.inbox.list().items[0];assert.equal(imported.source,'grok');assert.equal(imported.window,null);
+  b.inbox.markRead(imported.id);await cycle(server,b);await cycle(server,a);
+  assert.equal(a.inbox.list().items.find(row => row.completionEventId===imported.completionEventId).readAt,100000);
+  for(let i=3;i<=110;i++)accept(i);
+  await cycle(server,a);await cycle(server,b);await cycle(server,a);
+  assert.equal(a.inbox.list().total,100);assert.equal(b.inbox.list().total,100);
+  assert.equal([...server.bucket('u').live.values()].filter(row => row.collection==='aiCompletions').length,100);
+  assert.deepEqual(new Set(a.inbox.snapshotForSync().map(completionSyncKey)),new Set(b.inbox.snapshotForSync().map(completionSyncKey)));
+});
+
+for (const source of ['copilot','antigravity']) test(`${source} rounds, retries, reads and overflow converge through NAS`, async t => {
+  const {a,b,server}=fixture(t);
+  const accept=i=>a.inbox.accept({source,eventId:`${source}-round-${i}`,title:`${source} result ${i}`,completedAt:i+1,
+    window:{app:source==='copilot'?'Terminal':'Antigravity',cwd:'/private/local-project'}});
+  accept(1);accept(2);assert.equal(accept(1).duplicate,true);
+  await cycle(server,a);await cycle(server,b);assert.equal(b.inbox.list().total,2);
+  const read=b.inbox.list().items[0];assert.equal(read.source,source);assert.equal(read.window,null);
+  b.inbox.markRead(read.id);await cycle(server,b);await cycle(server,a);
+  assert.equal(a.inbox.list().items.find(row=>row.completionEventId===read.completionEventId).readAt,100000);
+  for(let i=3;i<=115;i++)accept(i);
+  await cycle(server,a);await cycle(server,b);await cycle(server,a);
+  assert.equal(a.inbox.list().total,100);assert.equal(b.inbox.list().total,100);
+  assert.equal([...server.bucket('u').live.values()].filter(row=>row.collection==='aiCompletions').length,100);
+  assert.deepEqual(new Set(a.inbox.snapshotForSync().map(completionSyncKey)),new Set(b.inbox.snapshotForSync().map(completionSyncKey)));
+});
+
 test('two devices sync completions through NAS HTTP, dedupe events, propagate reads and retain only 100', async t => {
   const {a,b,server,filePath} = fixture(t);
   const local = a.inbox.accept({...nativeEvent(1),window:{app:'Codex',cwd:'/private/local-project',title:'Local window'}}).record;

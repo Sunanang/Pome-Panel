@@ -375,16 +375,19 @@ function taskNotificationContent(payload, source) {
     sessionTitle: clean(firstPayloadText(payload, ['sessionTitle', 'session_title', 'thread_name']), 256) };
 }
 
+const TASK_TERMINAL_APPS = ['Terminal', '终端', 'iTerm', 'iTerm2', 'Warp', 'Ghostty', 'WezTerm', 'Alacritty', 'kitty', 'WindowsTerminal', 'PowerShell', 'cmd'];
 const TASK_SOURCE_APPS = {
   codex: ['ChatGPT', 'Codex'], cursor: ['Cursor'],
-  claude: ['Terminal', '终端', 'iTerm', 'iTerm2', 'Warp', 'Ghostty', 'WezTerm', 'Alacritty', 'kitty', 'WindowsTerminal', 'PowerShell', 'cmd'],
+  claude: TASK_TERMINAL_APPS, grok: TASK_TERMINAL_APPS, copilot: TASK_TERMINAL_APPS,
+  // Desktop IDE by default; CLI Stop payloads set window.app to Terminal and match via identity.app.
+  antigravity: ['Antigravity', 'Antigravity IDE', ...TASK_TERMINAL_APPS],
 };
 
 function normalizeTaskNotificationWindow(payload, source) {
   const data = payload?.window && typeof payload.window === 'object' ? payload.window : {};
   const clean = (value, max) => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max) || null : null;
   return {
-    app: clean(data.app, 160) || (source === 'codex' ? 'ChatGPT' : source === 'cursor' ? 'Cursor' : null),
+    app: clean(data.app, 160) || ({ codex: 'ChatGPT', cursor: 'Cursor', antigravity: 'Antigravity' }[source] || null),
     bundleId: clean(data.bundleId, 240),
     cwd: clean(firstPayloadText(payload, ['cwd', 'working_directory', 'working-directory']) || data.cwd, 4096),
   };

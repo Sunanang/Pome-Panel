@@ -28,13 +28,26 @@ function readConfig(filePath, source) {
   const ast = source === 'codex' ? toml.parseTOML(text) : null;
   const value = ast ? toml.getStaticTOMLValue(ast) : JSON.parse(text);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(pomeLocaleAiSourceHooks.t("copy.configurationMustBeAnObject.5af957"));
+  if (source === 'copilot') {
+    if (value.version !== undefined && value.version !== 1) throw new Error('unsupported_copilot_hooks_version');
+    for (const event of ['agentStop', 'errorOccurred']) if (value.hooks?.[event] !== undefined && !Array.isArray(value.hooks[event])) throw new Error('invalid_copilot_hooks');
+  }
+  if (source === 'antigravity' && value['pome-panel'] !== undefined) {
+    const owned = value['pome-panel'];
+    if (!owned || typeof owned !== 'object' || Array.isArray(owned)
+      || (owned.Stop !== undefined && !Array.isArray(owned.Stop))) throw new Error('invalid_antigravity_hooks');
+  }
   if (source === 'codex' && value.notify !== undefined && (!Array.isArray(value.notify) || value.notify.some(v => typeof v !== 'string'))) throw new Error(pomeLocaleAiSourceHooks.t("copy.notifyMustBeAnArrayOfCommand.1e7bea"));
   if (source !== 'codex') {
     if (value.hooks !== undefined && (!value.hooks || typeof value.hooks !== 'object' || Array.isArray(value.hooks))) throw new Error(pomeLocaleAiSourceHooks.t("copy.hooksMustBeAnObject.7eb631"));
     if (source === 'cursor' && value.hooks?.afterAgentResponse !== undefined && !Array.isArray(value.hooks.afterAgentResponse)) throw new Error(pomeLocaleAiSourceHooks.t("copy.afteragentresponseHooksMustBeAnArray.a92e31"));
-    const hooks = value.hooks?.[source === 'claude' ? 'Stop' : 'stop'];
+    const stopKey = source === 'claude' || source === 'grok' ? 'Stop' : 'stop';
+    const hooks = value.hooks?.[stopKey];
     if (hooks !== undefined && !Array.isArray(hooks)) throw new Error(pomeLocaleAiSourceHooks.t("copy.completionHooksMustBeAnArray.e6d762"));
-    if (source === 'claude' && hooks?.some(group => !group || !Array.isArray(group.hooks))) throw new Error(pomeLocaleAiSourceHooks.t("copy.theStopHookFormatIsDamaged.4e806a"));
+    if ((source === 'claude' || source === 'grok') && hooks?.some(group => !group || !Array.isArray(group.hooks))) throw new Error(pomeLocaleAiSourceHooks.t("copy.theStopHookFormatIsDamaged.4e806a"));
+    if (source === 'grok' && value.hooks?.StopFailure !== undefined && (!Array.isArray(value.hooks.StopFailure) || value.hooks.StopFailure.some(group => !group || !Array.isArray(group.hooks)))) {
+      throw new Error(pomeLocaleAiSourceHooks.t("copy.theStopHookFormatIsDamaged.4e806a"));
+    }
     if (source === 'cursor' && value.version !== undefined && value.version !== 1) throw new Error(pomeLocaleAiSourceHooks.t("copy.unsupportedCursorHooksVersion.349156"));
   }
   return { text, ast, value, exists, hash: digest(exists ? text : '<absent>') };
@@ -79,14 +92,94 @@ function originalNotify(command) {
   return value;
 }
 
-function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runtimePath = process.execPath,
+function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runtimePath = process.execPath, env = process.env,
   platform = process.platform, now = Date.now, runtimeCheck } = {}) {
   const previews = new Map();
   let runtimePromise;
-  const files = { codex: path.join(homeDir, '.codex/config.toml'), claude: path.join(homeDir, '.claude/settings.json'), cursor: path.join(homeDir, '.cursor/hooks.json') };
+  const grokHome = typeof env.GROK_HOME === 'string' && env.GROK_HOME.trim()
+    ? path.resolve(env.GROK_HOME) : path.join(homeDir, '.grok');
+  const copilotHome = typeof env.COPILOT_HOME === 'string' && env.COPILOT_HOME.trim() ? path.resolve(env.COPILOT_HOME) : path.join(homeDir, '.copilot');
+  const geminiHome = path.join(homeDir, '.gemini');
+  const files = {
+    codex: path.join(homeDir, '.codex/config.toml'),
+    claude: path.join(homeDir, '.claude/settings.json'),
+    cursor: path.join(homeDir, '.cursor/hooks.json'),
+    grok: path.join(grokHome, 'hooks', 'pome-panel.json'),
+    copilot: path.join(copilotHome, 'hooks', 'pome-panel.json'),
+    antigravity: path.join(geminiHome, 'config', 'hooks.json'),
+  };
   const script = source => path.join(appDir, 'scripts', source === 'claude-attention' ? 'claude-attention.js' : `${source}-notify.js`);
   const hookMarker = source => platform === 'win32' ? `pome-panel-hook=${source}` : marker(source);
   const supported = source => { if (!SOURCES.includes(source)) throw new Error(pomeLocaleAiSourceHooks.t("copy.unsupportedAiSource.25257a")); };
+  const newEvents = { copilot: ['agentStop', 'errorOccurred'], antigravity: ['Stop'] };
+  const eventPath = (source, event) => source === 'antigravity' ? ['pome-panel', event] : ['hooks', event];
+  const eventItems = (config, source, event) => source === 'antigravity' ? config.value['pome-panel']?.[event] || [] : config.value.hooks?.[event] || [];
+  function newEntry(source, event) {
+    return source === 'copilot' ? { type: 'command', exec: runtimePath, args: [script(source), marker(source)],
+      env: { ELECTRON_RUN_AS_NODE: '1', POME_COMPLETION_EVENT: event }, timeoutSec: 5 }
+      : { type: 'command', command: shellCommand(source), timeout: 5 };
+  }
+  function newMatches(config, source) {
+    if ((source === 'copilot' && config.value.version !== 1)
+      || (source === 'antigravity' && config.value['pome-panel']?.enabled === false)) return false;
+    return newEvents[source].every(event => {
+      const items = eventItems(config, source, event).filter(item => isOwned(item, source)), expected = newEntry(source, event);
+      return items.length === 1 && Object.keys(expected).every(key => JSON.stringify(items[0][key]) === JSON.stringify(expected[key]))
+        && !items[0].matcher && !items[0].bash && !items[0].powershell && !items[0].windows && !items[0].linux && !items[0].osx
+        && (source !== 'copilot' || !items[0].command);
+    });
+  }
+  function editNew(config, source, disconnect) {
+    if (!disconnect && newMatches(config, source)) return config.text;
+    let text = config.text;
+    for (const event of newEvents[source]) {
+      const keyPath = eventPath(source, event), items = eventItems(config, source, event);
+      const marked = items.map((item, i) => isOwned(item, source) ? i : -1).filter(i => i >= 0);
+      for (const i of marked.reverse()) text = editJson(text, [...keyPath, i], undefined);
+      const remaining = source === 'antigravity' ? JSON.parse(text)['pome-panel']?.[event] : JSON.parse(text).hooks?.[event];
+      if (!disconnect) text = editJson(text, Array.isArray(remaining) ? [...keyPath, -1] : keyPath, Array.isArray(remaining) ? newEntry(source, event) : [newEntry(source, event)]);
+      else if (marked.length && remaining?.length === 0) text = editJson(text, keyPath, undefined);
+    }
+    if (!disconnect && source === 'copilot') text = editJson(text, ['version'], 1);
+    if (!disconnect && source === 'antigravity' && config.value['pome-panel']?.enabled === false) text = editJson(text, ['pome-panel', 'enabled'], true);
+    const container = source === 'antigravity' ? 'pome-panel' : 'hooks';
+    if (disconnect && installedItems(config, source).length && Object.keys(JSON.parse(text)[container] || {}).length === 0) text = editJson(text, [container], undefined);
+    return text;
+  }
+  function grokOwnedGroups(config, event) {
+    const groups = config.value.hooks?.[event] || [];
+    return groups.flatMap((group, i) => (group.hooks || []).flatMap((hook, j) => (isOwned(hook, 'grok') ? [{ group, hook, path: ['hooks', event, i, 'hooks', j] }] : [])));
+  }
+  function grokMatches(config, expected) {
+    return ['Stop', 'StopFailure'].every((event) => {
+      const owned = grokOwnedGroups(config, event);
+      return owned.length === 1 && owned[0].hook.type === 'command' && owned[0].hook.command === expected
+        && !owned[0].group.matcher && owned[0].hook.timeout === 5;
+    });
+  }
+  function editGrok(config, command, disconnect) {
+    if (!disconnect && grokMatches(config, command)) return config.text;
+    let text = config.text;
+    for (const event of ['Stop', 'StopFailure']) {
+      const groups = config.value.hooks?.[event] || [];
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const marked = groups[i].hooks.map((hook, j) => isOwned(hook, 'grok') ? j : -1).filter(j => j >= 0);
+        if (marked.length && marked.length === groups[i].hooks.length) text = editJson(text, ['hooks', event, i], undefined);
+        else for (const j of marked.reverse()) text = editJson(text, ['hooks', event, i, 'hooks', j], undefined);
+      }
+      const remaining = JSON.parse(text).hooks?.[event];
+      if (!disconnect) {
+        const entry = { hooks: [{ type: 'command', command, timeout: 5 }] };
+        text = editJson(text, Array.isArray(remaining) ? ['hooks', event, -1] : ['hooks', event], Array.isArray(remaining) ? entry : [entry]);
+      } else if (remaining?.length === 0 && grokOwnedGroups(config, event).length) {
+        text = editJson(text, ['hooks', event], undefined);
+      }
+    }
+    if (disconnect && installedItems(config, 'grok').length && Object.keys(JSON.parse(text).hooks || {}).length === 0) {
+      text = editJson(text, ['hooks'], undefined);
+    }
+    return text;
+  }
   async function runtimeReady() {
     if (!runtimePromise) runtimePromise = (async () => {
       try {
@@ -112,10 +205,13 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
     return platform === 'win32' ? `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${quote(path.join(appDir, 'scripts/pome-hook-runtime.ps1'), platform)} ${args}` : `ELECTRON_RUN_AS_NODE=1 ${args}`;
   }
   function isOwned(item, source) {
+    if (source === 'copilot' && Array.isArray(item?.args) && item.args.includes(marker(source))) return true;
     return typeof item?.command === 'string' && new RegExp(`(?:^|[\\s"'])(?:--)?pome-panel-hook=${source}(?:$|[\\s"'])`).test(item.command);
   }
   function installedItems(config, source) {
+    if (newEvents[source]) return newEvents[source].flatMap(event => eventItems(config, source, event).filter(item => isOwned(item, source)));
     if (source === 'codex') return config.value.notify?.some(value => [marker(source), `pome-panel-hook=${source}`].includes(value)) ? [config.value.notify] : [];
+    if (source === 'grok') return ['Stop', 'StopFailure'].flatMap((event) => grokOwnedGroups(config, event).map((row) => row.hook));
     const groups = config.value.hooks?.[source === 'claude' ? 'Stop' : 'stop'] || [];
     return (source === 'claude' ? groups.flatMap(g => g.hooks) : groups).filter(item => isOwned(item, source));
   }
@@ -137,7 +233,7 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
       : 'unsupported';
     const attention = connected && complete ? (staticCaps.attention || 'unsupported') : 'unsupported';
     return {
-      surface: source === 'claude' ? 'cli' : source === 'cursor' ? 'ide' : 'desktop',
+      surface: catalog.get(source)?.surface || 'desktop',
       providerVersion: 'unverified',
       usage: staticCaps.usage || 'unsupported',
       completion,
@@ -150,14 +246,33 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
   }
   async function status(source) {
     supported(source);
-    const filePath = files[source], detected = fs.existsSync(path.dirname(filePath));
+    const filePath = files[source];
+    const detected = source === 'grok' ? fs.existsSync(grokHome) : source === 'copilot' ? fs.existsSync(copilotHome)
+      : source === 'antigravity' ? ['antigravity', 'antigravity-cli', 'antigravity-ide'].some(dir => fs.existsSync(path.join(geminiHome, dir))) : fs.existsSync(path.dirname(filePath));
     const base = { source, label: LABELS[source], filePath, detected, attentionCapabilities: capabilities(source, false, false) };
     if (!detected) return { ...base, state: 'undetected', message: pomeLocaleAiSourceHooks.t("copy.localToolDirectoryNotDetected.c78222") };
     try {
       const config = readConfig(filePath, source), items = installedItems(config, source);
-      if (!(await runtimeReady()) || !fs.existsSync(runtimePath) || !fs.existsSync(script(source)) || source === 'claude' && !fs.existsSync(script('claude-attention'))) return { ...base, state: 'error', message: pomeLocaleAiSourceHooks.t("copy.theScriptPathIsMissingOrThe.a57f6c"), repairable: false };
-      if (!items.length) return { ...base, state: 'disconnected', message: source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.writeNotifyWhilePreservingAndForwardingThe.416e9e") : pomeLocaleAiSourceHooks.t("copy.appendTheHookWhilePreservingExistingConfiguration.429226", { arg1: (source === 'claude' ? 'Stop' : 'stop') }) };
+      if (!(await runtimeReady()) || !fs.existsSync(runtimePath) || !fs.existsSync(script(source))
+        || (newEvents[source] || source === 'grok') && !fs.existsSync(path.join(appDir, 'scripts/completion-forwarder.js'))
+        || source === 'claude' && !fs.existsSync(script('claude-attention'))) {
+        return { ...base, state: 'error', message: pomeLocaleAiSourceHooks.t("copy.theScriptPathIsMissingOrThe.a57f6c"), repairable: false };
+      }
+      if (newEvents[source]) {
+        const matches = newMatches(config, source);
+        return { ...base, state: matches ? 'connected' : items.length ? 'error' : 'disconnected', repairable: true,
+          attentionCapabilities: capabilities(source, matches, false),
+          message: matches ? pomeLocaleAiSourceHooks.t('copy.connectedListeningForLocalCompletionEvents.256f7f') : pomeLocaleAiSourceHooks.t('copy.appendTheHookWhilePreservingExistingConfiguration.429226', { arg1: newEvents[source].join(' + ') }) };
+      }
+      const eventLabel = source === 'claude' || source === 'grok' ? 'Stop' : 'stop';
+      if (!items.length) return { ...base, state: 'disconnected', message: source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.writeNotifyWhilePreservingAndForwardingThe.416e9e") : pomeLocaleAiSourceHooks.t("copy.appendTheHookWhilePreservingExistingConfiguration.429226", { arg1: (source === 'grok' ? 'Stop + StopFailure' : eventLabel) }) };
       const expected = source === 'codex' ? codexCommand(originalNotify(items[0])) : shellCommand(source);
+      if (source === 'grok') {
+        const matches = grokMatches(config, expected);
+        return { ...base, state: matches ? 'connected' : 'error', repairable: true,
+          attentionCapabilities: capabilities(source, matches, false),
+          message: matches ? pomeLocaleAiSourceHooks.t("copy.connectedListeningForLocalCompletionEvents.256f7f") : pomeLocaleAiSourceHooks.t("copy.thePomeHookPathOrRuntimeHas.8f7c1e") };
+      }
       const responseItems = source === 'cursor' ? (config.value.hooks?.afterAgentResponse || []).filter(item => isOwned(item, source)) : [];
       const responseMatches = !responseItems.length || responseItems.length === 1 && responseItems[0].command === expected && (!responseItems[0].type || responseItems[0].type === 'command');
       const matches = responseMatches && items.length === 1 && (source === 'codex' ? JSON.stringify(items[0]) === JSON.stringify(expected) : items[0].command === expected && (source === 'claude' ? items[0].type === 'command' : !items[0].type || items[0].type === 'command'));
@@ -178,7 +293,23 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
     if (action !== 'disconnect' && (current.state === 'error' && !current.repairable)) throw new Error(current.message);
     const config = readConfig(files[source], source), owned = installedItems(config, source);
     let text = config.text, added;
-    if (action === 'disconnect' && !owned.length && !(source === 'claude' && hasAttentionHooks(config)) && !(source === 'cursor' && config.value.hooks?.afterAgentResponse?.some(item => isOwned(item, source)))) {
+    if (newEvents[source]) {
+      text = editNew(config, source, action === 'disconnect');
+      added = `${newEvents[source].join(' + ')} → ${action === 'disconnect' ? pomeLocaleAiSourceHooks.t('copy.removeThePomeHook.da37ec') : source === 'copilot' ? runtimePath + ' ' + script(source) : shellCommand(source)}`;
+    } else if (source === 'grok') {
+      const expected = shellCommand('grok');
+      text = editGrok(config, expected, action === 'disconnect');
+      if (action === 'disconnect') {
+        if (!config.exists || !owned.length) {
+          text = config.text;
+          added = pomeLocaleAiSourceHooks.t("copy.noPomeConfigurationFoundNoChangesNeeded.4861fe");
+        } else {
+          added = pomeLocaleAiSourceHooks.t("copy.removeThePomeHook.da37ec");
+        }
+      } else {
+        added = `Stop + StopFailure → ${expected}`;
+      }
+    } else if (action === 'disconnect' && !owned.length && !(source === 'claude' && hasAttentionHooks(config)) && !(source === 'cursor' && config.value.hooks?.afterAgentResponse?.some(item => isOwned(item, source)))) {
       added = pomeLocaleAiSourceHooks.t("copy.noPomeConfigurationFoundNoChangesNeeded.4861fe");
     } else if (source === 'codex') {
       const previous = owned.length ? originalNotify(owned[0]) : config.value.notify ?? null;
@@ -260,10 +391,12 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
     }
     if (source === 'codex') toml.parseTOML(text); else JSON.parse(text);
     const token = randomUUID(), backupPath = `${files[source]}.pome-backup-${new Date(now()).toISOString().replace(/[:.]/g, '-')}-${token}`;
-    const plan = { source, action, filePath: files[source], backupPath, token, added, hash: config.hash, text, existed: config.exists, expires: now() + 300000 };
+    const removeFile = action === 'disconnect' && config.exists && owned.length > 0 && (source === 'grok' && Object.keys(JSON.parse(text)).length === 0
+      || source === 'copilot' && Object.keys(JSON.parse(text)).every(key => key === 'version'));
+    const plan = { source, action, filePath: files[source], backupPath, token, added, hash: config.hash, text, existed: config.exists, expires: now() + 300000, removeFile };
     previews.set(token, plan);
     for (const [id, row] of previews) if (row.expires < now()) previews.delete(id);
-    return { source, action, filePath: plan.filePath, backupPath, token, added, unchanged: text === config.text, message: source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.quitAndReopenCodexToApplyThe.46b626") : pomeLocaleAiSourceHooks.t("copy.restartTheToolAfterSavingToReload.2a0689") };
+    return { source, action, filePath: plan.filePath, backupPath, token, added, unchanged: text === config.text && !plan.removeFile, message: source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.quitAndReopenCodexToApplyThe.46b626") : pomeLocaleAiSourceHooks.t("copy.restartTheToolAfterSavingToReload.2a0689") };
   }
   async function apply(token) {
     const plan = previews.get(token); previews.delete(token);
@@ -275,23 +408,30 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
       }
       const config = readConfig(plan.filePath, plan.source);
       if (config.hash !== plan.hash) return { ok: false, error: 'preview_expired', message: pomeLocaleAiSourceHooks.t("copy.theConfigurationFileHasChangedReviewAnd.a3ef34") };
-      if (plan.text !== config.text) {
+      const changing = plan.removeFile || plan.text !== config.text;
+      if (changing) {
         const original = config.exists ? Buffer.from(config.text) : Buffer.alloc(0);
         writeAtomic(plan.backupPath, original);
         if (!fs.readFileSync(plan.backupPath).equals(original)) throw new Error(pomeLocaleAiSourceHooks.t("copy.backupVerificationFailedConfigurationWasNotChanged.0a6000"));
-        writeAtomic(plan.filePath, plan.text);
+        if (plan.removeFile) {
+          fs.unlinkSync(plan.filePath);
+        } else {
+          fs.mkdirSync(path.dirname(plan.filePath), { recursive: true, mode: 0o700 });
+          writeAtomic(plan.filePath, plan.text);
+        }
       }
-      return { ok: true, source: plan.source, action: plan.action, backupPath: plan.text !== config.text ? plan.backupPath : null, message: plan.source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.quitAndReopenCodexToApplyThe.46b626") : pomeLocaleAiSourceHooks.t("copy.sourceConfigurationUpdated.3181cd"), statuses: await list() };
+      return { ok: true, source: plan.source, action: plan.action, backupPath: changing ? plan.backupPath : null, message: plan.source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.quitAndReopenCodexToApplyThe.46b626") : pomeLocaleAiSourceHooks.t("copy.sourceConfigurationUpdated.3181cd"), statuses: await list() };
     } catch (error) { return { ok: false, error: 'config_write_failed', message: error.message }; }
   }
   async function runTest(source, { token, port = 43821 } = {}) {
     const current = await status(source);
     if (current.state !== 'connected') throw new Error(pomeLocaleAiSourceHooks.t("copy.theSourceIsnTConnectedCorrectlyConnect.e3cf69"));
+    const stopName = source === 'claude' || source === 'grok' ? 'Stop' : 'stop';
     const payload = JSON.stringify({ _pome_test: true, _pome_test_token: token, event_id: token,
-      title: pomeLocaleAiSourceHooks.t("copy.connectionTest.dd9a12", { arg1: (LABELS[source]) }), session_id: token, conversation_id: token, generation_id: token, hook_event_name: source === 'claude' ? 'Stop' : 'stop' });
+      title: pomeLocaleAiSourceHooks.t("copy.connectionTest.dd9a12", { arg1: (LABELS[source]) }), session_id: token, sessionId: token, conversationId: token, conversation_id: token, generation_id: token, hook_event_name: stopName, hookEventName: stopName });
     await new Promise((resolve, reject) => {
       const child = spawn(runtimePath, [script(source), marker(source), ...(source === 'codex' ? [payload] : [])], {
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', POME_NOTIFY_PORT: String(port) }, stdio: ['pipe', 'ignore', 'pipe'], windowsHide: true,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', POME_NOTIFY_PORT: String(port), ...(source === 'grok' ? { GROK_HOOK_EVENT: 'Stop' } : {}) }, stdio: ['pipe', 'ignore', 'pipe'], windowsHide: true,
       });
       const timer = setTimeout(() => { child.kill(); reject(new Error(pomeLocaleAiSourceHooks.t("copy.testNotificationTimedOut.d2c1f5"))); }, 5000);
       child.on('error', error => { clearTimeout(timer); reject(error); });

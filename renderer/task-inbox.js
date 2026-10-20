@@ -16,11 +16,10 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
   const sourceSuggestion = document.createElement('div');
   sourceSuggestion.className = 'home-inbox-source-suggestion'; sourceSuggestion.hidden = true;
   tile.querySelector('.home-inbox-head').after(sourceSuggestion);
-  const sources = {
-    codex: { label: 'Codex', icon: 'assets/inbox/codex.svg' },
-    claude: { label: 'Claude', icon: 'assets/inbox/claude.svg' },
-    cursor: { label: 'Cursor', icon: 'assets/inbox/cursor.svg' },
-  };
+  const sources = Object.fromEntries(window.NotchAiProviders.completionIds().map(id => {
+    const row = window.NotchAiProviders.get(id);
+    return [id, { label: id === 'claude' ? 'Claude' : row.label, icon: row.icon }];
+  }));
   const statusLabels = { get completed() { return pomeLocaleRendererTaskInbox.t("copy.completed.f28461"); }, get failed() { return pomeLocaleRendererTaskInbox.t("copy.failed.01ad2b"); }, get awaiting() { return pomeLocaleRendererTaskInbox.t("copy.awaitingConfirmation.e5d218"); }, get due() { return pomeLocaleRendererTaskInbox.t("copy.dueSoon.ea0afa"); } };
   const recordStatus = row => statusLabels[row?.status] ? row.status : 'completed';
   function pageSizeForWidget() { return { mini: 1, small: 3, medium: 5, large: 10 }[tile.dataset.widgetSize] || 5; }
@@ -165,7 +164,7 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     updateBadge();
     if (activeId) list.querySelector(`[data-id="${CSS.escape(activeId)}"]`)?.focus({preventScroll:true});
   }
-  function openLabel(source) { return { codex: pomeLocaleRendererTaskInbox.t("copy.openCodex.ce0a1f"), cursor: pomeLocaleRendererTaskInbox.t("copy.openCursor.4a1fe1"), claude: pomeLocaleRendererTaskInbox.t("copy.openTerminal.b89a0e") }[source] || pomeLocaleRendererTaskInbox.t("copy.sourceAppUnavailable.a2e5df"); }
+  function openLabel(source) { return { codex: pomeLocaleRendererTaskInbox.t("copy.openCodex.ce0a1f"), cursor: pomeLocaleRendererTaskInbox.t("copy.openCursor.4a1fe1"), claude: pomeLocaleRendererTaskInbox.t("copy.openTerminal.b89a0e"), grok: pomeLocaleRendererTaskInbox.t("copy.openTerminal.b89a0e"), copilot: pomeLocaleRendererTaskInbox.t('copy.openTerminal.b89a0e'), antigravity: pomeLocaleRendererTaskInbox.t('sources.openProvider', { source: 'Antigravity' }) }[source] || pomeLocaleRendererTaskInbox.t("copy.sourceAppUnavailable.a2e5df"); }
   async function openRecord(row) {
     if (!row || opening) return;
     opening = true;

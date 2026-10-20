@@ -6,7 +6,7 @@ const domain = require('../renderer/notification-domain');
 test('notification source names remain normalized without enabling new hook endpoints', () => {
   for (const [input, key, label] of [
     ['CODEX','codex','Codex'], ['Claude Code','claude','Claude'], ['claude-code','claude','Claude'],
-    [' Cursor ','cursor','Cursor'], ['gpt','gpt','GPT'], ['task','task','任务'], ['todo','todo','待办'], ['unknown','task','任务'],
+    [' Cursor ','cursor','Cursor'], [' Grok ','grok','Grok'], ['gpt','gpt','GPT'], ['task','task','任务'], ['todo','todo','待办'], ['unknown','task','任务'],
   ]) {
     const value = domain.normalize({ source: input });
     assert.equal(value.sourceKey, key);
@@ -32,6 +32,7 @@ test('notification copy shows actual work, falls back by source, and has no repe
   assert.equal(domain.normalize({ source: 'codex' }).title, 'Codex 已完成任务');
   assert.equal(domain.normalize({ source: 'claude', title: '  ' }).title, 'Claude 已完成任务');
   assert.equal(domain.normalize({ source: 'cursor' }).title, 'Cursor 已完成任务');
+  assert.equal(domain.normalize({ source: 'grok' }).title, 'Grok 已完成任务');
   assert.equal(domain.normalize({ source: 'gpt' }).project, '');
   assert.equal(domain.normalize('导出账单').title, '导出账单');
   assert.equal(domain.normalize(null).title, '任务已完成');

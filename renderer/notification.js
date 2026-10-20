@@ -20,7 +20,8 @@ const platformName = String(capabilities?.platform || api?.platform || 'darwin')
 if (/^[a-z0-9]+$/.test(platformName)) document.documentElement.dataset.platform = platformName;
 const canFocusWindows = () => capabilities?.features?.windowFocus === true;
 function applyShellLabel() {
-  openButton.setAttribute('aria-label', canFocusWindows() ? pomeLocaleRendererNotification.t("copy.openTheSourceApp.ce1839") : pomeLocaleRendererNotification.t("copy.dismissTaskNotification.30ec6c"));
+  // Completion can still launch Terminal / the source app without windowFocus.
+  openButton.setAttribute('aria-label', pomeLocaleRendererNotification.t("copy.openTheSourceApp.ce1839"));
   if (currentNotification?.attentionKind) renderAttention();
 }
 api?.onCapabilitiesChanged?.(next => { capabilities = next; applyShellLabel(); });
@@ -115,8 +116,7 @@ function showNotification(payload) {
   shell.classList.remove('has-activation-error');
   shell.dataset.source = notification.sourceKey;
   shell.dataset.status = notification.status;
-  const brandPath = ['codex','claude','cursor'].includes(notification.sourceKey)
-    ? `./assets/inbox/${notification.sourceKey}.svg` : `./assets/notification/${notification.sourceKey}.svg`;
+  const brandPath = `./${domain.iconPath(notification.sourceKey)}`;
   document.getElementById('notification-brand').style.setProperty('--nb-brand', `url("${brandPath}")`);
   document.getElementById('attention-brand').src = brandPath;
   if (notification.attentionKind) renderAttention();
@@ -203,7 +203,13 @@ function renderAttention() {
 async function activateNotification() {
   if (!isVisible || isHiding || activating) return;
   const eventId = currentNotification.eventId;
-  if (canFocusWindows() && api?.activateTaskNotification) {
+  const isAttention = Boolean(currentNotification.attentionKind);
+  // Attention return needs an existing window focus path; completion can launch.
+  if (isAttention && !canFocusWindows()) {
+    dismissNotification();
+    return;
+  }
+  if (api?.activateTaskNotification) {
     activating = true;
     let result;
     try { result = await api.activateTaskNotification(eventId); } catch { result = { ok: false }; }
@@ -216,18 +222,18 @@ async function activateNotification() {
       detailElement.hidden = false;
       document.getElementById('notification-separator').hidden = false;
       shell.classList.add('has-activation-error');
-      if (currentNotification.attentionKind) document.getElementById('attention-hint').textContent = detailElement.textContent;
+      if (isAttention) document.getElementById('attention-hint').textContent = detailElement.textContent;
       reportHover(true);
       return;
     }
-    if (currentNotification.attentionKind) {
+    if (isAttention) {
       activationError = false;
       shell.classList.remove('has-activation-error');
       renderAttention();
       api?.taskNotificationHover?.(isHovering, eventId);
     }
   }
-  if (currentNotification?.eventId === eventId && (!currentNotification.attentionKind || !canFocusWindows())) dismissNotification();
+  if (currentNotification?.eventId === eventId && !isAttention) dismissNotification();
 }
 openButton.addEventListener('click', activateNotification);
 document.getElementById('attention-action').addEventListener('click', event => { event.stopPropagation(); void activateNotification(); });

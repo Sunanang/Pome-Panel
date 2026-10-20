@@ -1,11 +1,14 @@
 const pomeLocaleRendererNotificationDomain = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
+const pomeNotificationProviders = typeof module === 'object' && module.exports ? require('../aiProviderCatalog') : globalThis.NotchAiProviders;
 (function (root, factory) {
   const domain = factory();
   if (typeof module === 'object' && module.exports) module.exports = domain;
   else root.PomeNotification = domain;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const sources = { codex: 'Codex', claude: 'Claude', cursor: 'Cursor', gpt: 'GPT', get task() { return pomeLocaleRendererNotificationDomain.t("copy.task.525304"); }, get todo() { return pomeLocaleRendererNotificationDomain.t("copy.tasks.52fdbb"); } };
+  const providers = Object.fromEntries(pomeNotificationProviders.completionIds().map(id => [id, pomeNotificationProviders.get(id)]));
+  const sources = { ...Object.fromEntries(Object.entries(providers).map(([id, row]) => [id, row.label])), claude: 'Claude', gpt: 'GPT', get task() { return pomeLocaleRendererNotificationDomain.t("copy.task.525304"); }, get todo() { return pomeLocaleRendererNotificationDomain.t("copy.tasks.52fdbb"); } };
+  const iconPath = source => providers[source]?.icon || `assets/notification/${sourceKey(source)}.svg`;
   function sourceKey(value) {
     const key = String(value || '').trim().toLowerCase();
     if (key === 'claude-code' || key === 'claude code') return 'claude';
@@ -74,5 +77,5 @@ const pomeLocaleRendererNotificationDomain = typeof module === 'object' && modul
       queueCount: queueCount(data.queueCount ?? data.pendingCount ?? data.pending),
     };
   }
-  return { sourceKey, statusKey, fallbackTitle, concreteTitle, eventTime, relativeTime, queueCount, attentionKind, attentionCopy, normalize };
+  return { sourceKey, statusKey, fallbackTitle, concreteTitle, eventTime, relativeTime, queueCount, attentionKind, attentionCopy, normalize, iconPath };
 });

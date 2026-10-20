@@ -1,7 +1,7 @@
 'use strict';
 const { createHash } = require('node:crypto');
 const AI_COMPLETION_LIMIT = 100;
-const sources = new Set(['codex', 'claude', 'cursor', 'gpt']);
+const sources = new Set(['codex', 'claude', 'cursor', 'grok', 'copilot', 'antigravity', 'gpt']);
 const statuses = new Set(['completed', 'failed', 'awaiting', 'due']);
 const clean = (value, max) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');

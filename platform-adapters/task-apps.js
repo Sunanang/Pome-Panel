@@ -6,9 +6,20 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
+const catalog = require('../aiProviderCatalog');
 
-const LABELS = { codex: 'Codex', cursor: 'Cursor', get claude() { return pomeLocalePlatformAdaptersTaskApps.t("copy.terminal.e2a76e"); } };
-const APP_NAMES = { codex: ['Codex', 'ChatGPT'], cursor: ['Cursor'], claude: ['Terminal'] };
+const TERMINAL_SOURCES = new Set(['claude', 'grok', 'copilot']);
+const providerLabels = catalog.labels();
+const terminalLabel = () => pomeLocalePlatformAdaptersTaskApps.t("copy.terminal.e2a76e");
+const LABELS = {
+  codex: providerLabels.codex,
+  cursor: providerLabels.cursor,
+  antigravity: providerLabels.antigravity,
+  get claude() { return terminalLabel(); },
+  get grok() { return terminalLabel(); },
+  get copilot() { return terminalLabel(); },
+};
+const APP_NAMES = { codex: ['Codex', 'ChatGPT'], cursor: ['Cursor'], claude: ['Terminal'], grok: ['Terminal'], copilot: ['Terminal'], antigravity: ['Antigravity', 'Antigravity IDE'] };
 const TERMINAL_TABS_JXA = `
 function run() {
   const terminal = Application('Terminal');
@@ -55,11 +66,12 @@ function validateCwd(value, platform, disk = fs) {
   } catch { throw new Error('invalid_cwd'); }
 }
 
-function windowsAppPaths(source, env) {
+function windowsAppPaths(source, env, appName) {
   const roots = [env.LOCALAPPDATA && path.win32.join(env.LOCALAPPDATA, 'Programs'), env.ProgramFiles || env.PROGRAMFILES, env['ProgramFiles(x86)']].filter(Boolean);
-  if (source === 'codex' || source === 'cursor') {
-    const name = source === 'codex' ? 'Codex' : 'Cursor';
-    const paths = roots.map(root => path.win32.join(root, name, `${name}.exe`));
+  if (['codex', 'cursor', 'antigravity'].includes(source)) {
+    const names = source === 'antigravity' && appName === 'Antigravity IDE' ? ['Antigravity IDE', 'Antigravity']
+      : [{ codex: 'Codex', cursor: 'Cursor', antigravity: 'Antigravity' }[source]];
+    const paths = names.flatMap(name => roots.map(root => path.win32.join(root, name, `${name}.exe`)));
     if (source === 'codex' && env.LOCALAPPDATA) paths.push(path.win32.join(env.LOCALAPPDATA, 'Microsoft', 'WindowsApps', 'Codex.exe'));
     return paths;
   }
@@ -74,15 +86,19 @@ function createTaskApps(platform, options = {}) {
   const run = options.runFile || runFile, start = options.startFile || startFile;
   const exists = file => { try { return disk.statSync(file).isFile(); } catch { return false; } };
 
-  async function macBundle(source) {
-    if (source !== 'claude' && options.resolveTaskApp) {
+  async function macBundle(source, terminal, window) {
+    if (!terminal && options.resolveTaskApp) {
       try {
-        const app = await options.resolveTaskApp(source);
+        // Only the known Antigravity surface is a routing hint. Historical or
+        // supplied native bundle IDs must never select an arbitrary app.
+        const hint = source === 'antigravity' && ['Antigravity', 'Antigravity IDE'].includes(window?.app) ? { app: window.app } : undefined;
+        const app = await options.resolveTaskApp(source, { window: hint });
         if (app?.bundleId && /^[\w.-]+$/.test(app.bundleId)) return app.bundleId;
       } catch {}
     }
-    const roots = source === 'claude' ? ['/System/Applications/Utilities', '/Applications/Utilities'] : ['/Applications', path.posix.join(options.homeDir || os.homedir(), 'Applications')];
-    for (const root of roots) for (const name of APP_NAMES[source]) {
+    const roots = terminal ? ['/System/Applications/Utilities', '/Applications/Utilities'] : ['/Applications', path.posix.join(options.homeDir || os.homedir(), 'Applications')];
+    const names = terminal ? ['Terminal'] : source === 'antigravity' && window?.app === 'Antigravity IDE' ? ['Antigravity IDE', 'Antigravity'] : APP_NAMES[source];
+    for (const root of roots) for (const name of names) {
       const plist = path.posix.join(root, `${name}.app`, 'Contents', 'Info.plist');
       if (!exists(plist)) continue;
       try {
@@ -114,19 +130,20 @@ function createTaskApps(platform, options = {}) {
   async function open(record) {
     const source = record?.source, label = LABELS[source];
     if (!label) return { ok: false, error: 'unsupported_source', message: pomeLocalePlatformAdaptersTaskApps.t("copy.thisRecordHasNoAppToOpen.0ddec0") };
+    const terminalSource = TERMINAL_SOURCES.has(source) || source === 'antigravity' && record.window?.app === 'Terminal';
     let cwd;
-    try { cwd = source === 'claude' ? validateCwd(record.window?.cwd ?? record.cwd, platform, disk) : null; }
+    try { cwd = terminalSource ? validateCwd(record.window?.cwd ?? record.cwd, platform, disk) : null; }
     catch { return { ok: false, error: 'invalid_cwd', message: pomeLocalePlatformAdaptersTaskApps.t("copy.theWorkingDirectoryIsInvalidOrNo.9c7fb1") }; }
     try {
       if (platform === 'darwin') {
-        const bundleId = await macBundle(source);
+        const bundleId = await macBundle(source, terminalSource, record.window);
         if (!bundleId) return { ok: false, error: 'app_not_installed', message: pomeLocalePlatformAdaptersTaskApps.t("copy.couldnTFind.9d877a", { arg1: (label) }) };
         // Use argv for the directory; never compose a shell cd command.
-        if (source !== 'claude' || !cwd || !await reuseTerminal(cwd)) {
+        if (!terminalSource || !cwd || !await reuseTerminal(cwd)) {
           await run('/usr/bin/open', ['-b', bundleId, ...(cwd ? [cwd] : [])]);
         }
       } else if (platform === 'win32') {
-        const files = windowsAppPaths(source, env).filter(exists);
+        const files = windowsAppPaths(terminalSource ? 'claude' : source, env, record.window?.app).filter(exists);
         if (!files.length) return { ok: false, error: 'app_not_installed', message: pomeLocalePlatformAdaptersTaskApps.t("copy.couldnTFind.9d877a", { arg1: (label) }) };
         let launched = false;
         for (const file of files) {
@@ -137,7 +154,7 @@ function createTaskApps(platform, options = {}) {
           // inside encoded PowerShell data even though we never invoke a shell.
           const powershell = files.find(candidate => /[\\/]powershell\.exe$/i.test(candidate));
           if (terminal && cwd?.includes(';') && !powershell) continue;
-          const args = source !== 'claude' ? [] : terminal ? cwd?.includes(';')
+          const args = !terminalSource ? [] : terminal ? cwd?.includes(';')
             ? ['new-tab', powershell, ...powershellArgs] : cwd ? ['-d', cwd] : [] : powershellArgs;
           try { await start(file, args); launched = true; break; } catch { /* Try another install or PowerShell. */ }
         }

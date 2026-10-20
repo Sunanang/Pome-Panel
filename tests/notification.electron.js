@@ -119,6 +119,39 @@ async function run(mainContents) {
     await dismiss(win, source === 'cursor');
     assert.equal(activated.length, count + (source === 'cursor' && process.platform === 'darwin' ? 1 : 0), '× must never activate an app');
   }
+  // Use the real forwarder, not a hand-authored completion envelope: promptId,
+  // teardown and subagent filtering must survive the complete delivery chain.
+  const sample = require('./fixtures/grok-stop.json');
+  const triggerGrok = payload => new Promise((resolve, reject) => {
+    const child = require('node:child_process').spawn(process.execPath, [path.join(__dirname, '../scripts/grok-notify.js')], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', POME_NOTIFY_PORT: String(port), GROK_HOOK_EVENT: payload.hookEventName },
+      stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true,
+    });
+    child.on('error', reject); child.on('exit', code => code === 0 ? resolve() : reject(new Error('Grok forwarder failed')));
+    child.stdin.end(JSON.stringify({ ...payload, cwd: profile }));
+  });
+  const grokStart = JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length;
+  for (const [promptId, message, failure] of [['one', 'Grok 第一轮完成'], ['two', 'Grok 第二轮完成'], ['three', 'Grok 请求失败', true]]) {
+    const payload = { ...sample, promptId, lastAssistantMessage: message,
+      hookEventName: failure ? 'stop_failure' : 'stop', hook_event_name: failure ? 'StopFailure' : 'Stop' };
+    await triggerGrok(payload);
+    const win = await shown(message);
+    assert.equal(await evaluate(win, 'sourceElement.textContent'), 'Grok');
+    assert.equal(await evaluate(win, 'currentNotification.sourceKey'), 'grok');
+    assert.equal(await evaluate(win, 'currentNotification.status'), failure ? 'failed' : 'completed');
+    assert((await evaluate(win, 'getComputedStyle(document.getElementById("notification-brand")).maskImage')).includes('/inbox/grok.svg'));
+    await until(async () => (await mainContents.executeJavaScript('document.querySelector(".home-inbox-source-wrap[data-source=grok] img")?.getAttribute("src")')) === 'assets/inbox/grok.svg', 'Grok inbox icon');
+    await capture(win, `grok-${promptId}`);
+    const count = activated.length;
+    await dismiss(win, true);
+    assert.equal(activated.length, count + (process.platform === 'darwin' ? 1 : 0));
+    await triggerGrok(payload); // Retrying the same real event must remain silent.
+  }
+  await triggerGrok({ ...sample, promptId: 'nested', hookEventName: 'stop_failure', subagentType: 'explore' });
+  await triggerGrok({ ...sample, promptId: undefined, reason: 'shutdown' });
+  const grokRecords = JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records;
+  assert.equal(grokRecords.length, grokStart + 3);
+  assert.equal(grokRecords.filter(row => row.source === 'grok').length, 3);
   // A failed launch retains the actionable notification and preserves its error.
   if (process.platform === 'darwin') {
     launchFailure = true;
@@ -224,6 +257,9 @@ async function previewVariants() {
       ['task-completed','darwin',{source:'task',title:'导出 10 月账单 CSV',project:'Pome-Panel'}],
       ['windows-codex-completed','win32',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:3}],
       ['windows-codex-completed-hover','win32',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:3},true],
+      ['windows-grok-native-off','win32',{source:'grok',title:'Grok 完成测试',project:'Pome-Panel'}],
+      ['windows-copilot-native-off','win32',{source:'copilot',title:'Copilot 完成测试',project:'Pome-Panel'}],
+      ['windows-antigravity-native-off','win32',{source:'antigravity',title:'Antigravity 完成测试',project:'Pome-Panel'}],
     ];
     for (const [name, platform, fixture, hover] of specs) {
       const caps = {platform,features:{windowFocus:false}};
@@ -242,6 +278,16 @@ async function previewVariants() {
       assert.equal(await evaluate(preview, 'timeElement.textContent'), name.startsWith('gpt') ? '5 分钟前':'刚刚');
       if (name.startsWith('gpt')) assert.equal(await evaluate(preview,'document.getElementById("notification-separator").hidden'),true);
       if (platform==='win32') assert.equal(await evaluate(preview,'getComputedStyle(document.querySelector(".notification-cap")).display'),'none');
+      if (name.endsWith('-native-off')) {
+        assert.equal(await evaluate(preview, 'sourceElement.textContent'), require('../aiProviderCatalog').get(fixture.source).label);
+        assert.equal(await evaluate(preview, 'openButton.getAttribute("aria-label")'), '打开任务对应窗口');
+        const count = activated.length;
+        await evaluate(preview, 'openButton.click()');
+        // Preview windows are not the live notificationWindow, so activate IPC is rejected
+        // before taskApps.open. The renderer must still attempt open (not silent-dismiss).
+        assert.equal(activated.length, count);
+        assert.equal(await evaluate(preview, 'activationError'), true);
+      }
       // Reduced motion keeps every piece of content and uses only a fade.
       preview.webContents.debugger.attach('1.3');
       await preview.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});

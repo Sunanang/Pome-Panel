@@ -958,7 +958,7 @@
   "copy.localRecording.895688": "Local recording",
   "copy.recordWhenYouChooseWithOptionalLive.466e17": "Record when you choose, with optional live transcription.",
   "copy.aiNotifications.d94669": "AI notifications",
-  "copy.localTaskNotificationsFromCodexClaudeCode.8c8b56": "Local task notifications from Codex, Claude Code and Cursor.",
+  "copy.localTaskNotificationsFromCodexClaudeCode.8c8b56": "Local task notifications from Codex, Claude Code, Cursor, Grok, Copilot CLI and Antigravity.",
   "copy.yourDataStaysLocal.076404": "Your data stays local",
   "copy.yourWorkStaysOnYourOwnComputer.635445": "Your work stays on your own computer.",
   "copy.fourWorkflowsYouCanRenameSortedBy.cfe3e2": "Four workflows you can rename, sorted by deadline, with reminders an hour before due time.",
@@ -1302,7 +1302,7 @@
   "attention.unverified": "Return to the source app to confirm",
   "attention.reopen": "Show again",
   "attention.open": "Return to source",
-  "attention.scopeSummary": "Completion reminders can connect Codex / Claude / Cursor. Usage follows each provider’s capability matrix; Grok Bot depends on Cursor sign-in, while Grok is a standalone xAI account. Waiting for input/choice/approval currently covers Claude only (partial).",
+  "attention.scopeSummary": "Completion reminders support Codex / Claude / Cursor / Grok / Copilot CLI / Antigravity. Usage follows each provider’s capability matrix; input/choice/approval reminders currently cover Claude only (partial).",
   "attention.hooksMissing": "Completion connected; add waiting reminder hooks",
   "attention.repairHooks": "Add waiting reminders",
   "attention.partialClaude": "Input/choice/approval: partial (CLI, version unverified). Approval notifications may be delayed about 6 seconds. Without a native request ID, another trigger of the same command may appear separately and closes only after a confirmed continuation or end.",
@@ -1331,5 +1331,8 @@
   "providers.tokenRequired": "Enter a token first.",
   "providers.tokenSaveFailed": "Could not update credentials. Please retry.",
   "providers.quotaUnavailable": "No measured quota is available for this account.",
-  "providers.availableCredits": "Available credits"
+  "providers.availableCredits": "Available credits",
+  "sources.openProvider": "Open {source}",
+  "providers.completionScope.copilot": "Completion reminders currently support Copilot CLI; VS Code and cloud sessions are not connected.",
+  "providers.completionScope.antigravity": "Supports Antigravity App, IDE and CLI. Completion summaries use a default title; attention reminders are not enabled."
 }

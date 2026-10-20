@@ -92,6 +92,38 @@ async function run(c) {
   assert.equal(await js('receivedCompletions'),1);
   inbox = await js('window.notchAPI.getTaskInbox({limit:100})');
   assert.equal(inbox.total,100);assert.equal(inbox.items.filter(row => row.title==='本机新完成').length,1);
+  phase = 'Grok native prompt identity and NAS sync';
+  const {grokCompletion} = require('../scripts/grok-notify'), grokSample = require('./fixtures/grok-stop.json');
+  for(const [index,i] of [1,2,2].entries()) {
+    const grok = grokCompletion({...grokSample,cwd:profile,promptId:`nas-grok-${i}`,lastAssistantMessage:`Grok 同步 ${i}`,timestamp:new Date().toISOString()});
+    const response=await fetch(`http://127.0.0.1:${port}/notify/grok`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(grok)});
+    assert.equal(response.status,202);assert.equal((await response.json()).result,index===2?'duplicate':'queued');
+  }
+  await js('window.notchAPI.syncRetry()');
+  assert.equal(live().length,100);assert.equal(live().filter(row=>row.payload.source==='grok').length,2);
+  inbox=await js('window.notchAPI.getTaskInbox({limit:100})');
+  assert.equal(inbox.items.filter(row=>row.source==='grok').length,2);
+  const grokRow=inbox.items.find(row=>row.source==='grok');
+  await js(`window.notchAPI.markTaskRead(${JSON.stringify(grokRow.id)})`);await js('window.notchAPI.syncRetry()');
+  assert.notEqual(store.bucket('u').live.get(`completion:${completionSyncKey(grokRow)}`).payload.readAt,null);
+  phase = 'Copilot and Antigravity completion sync';
+  const {copilotCompletion}=require('../scripts/copilot-notify'),{antigravityCompletion}=require('../scripts/antigravity-notify');
+  for(const [source,payload] of [
+    ['copilot',copilotCompletion({...require('./fixtures/copilot-stop.json'),cwd:profile,timestamp:Date.now(),transcriptPath:''},{event:'agentStop'})],
+    ['antigravity',antigravityCompletion({...require('./fixtures/antigravity-stop.json'),workspacePaths:[profile]})],
+  ]) {
+    for(let i=0;i<2;i++) {
+      const response=await fetch(`http://127.0.0.1:${port}/notify/${source}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      assert.equal(response.status,202);assert.equal((await response.json()).result,i?'duplicate':'queued');
+    }
+    await js('window.notchAPI.syncRetry()');
+    const stored=live().find(row=>row.payload.source===source);assert(stored,`${source} must reach NAS`);
+    assert.equal(stored.payload.window,undefined);assert.equal(stored.payload.cwd,undefined);
+    const local=(await js('window.notchAPI.getTaskInbox({limit:100})')).items.find(row=>row.source===source);
+    await js(`window.notchAPI.markTaskRead(${JSON.stringify(local.id)})`);await js('window.notchAPI.syncRetry()');
+    assert.notEqual(store.bucket('u').live.get(`completion:${completionSyncKey(local)}`).payload.readAt,null);
+    assert.equal(live().length,100);
+  }
   phase = 'NAS authority and completion during migration';
   duringCommit = async () => {
     const response = await fetch(`http://127.0.0.1:${port}/notify/codex`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event_id:'during-migration',title:'同步期间的新完成',completed_at:Date.now()})});

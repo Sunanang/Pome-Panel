@@ -72,6 +72,8 @@ function cursorCompletion(payload, options = {}) {
     last_assistant_message: summary, title: payload.title || '' };
 }
 function main() {
+  // Grok Build also loads Cursor hooks; leave those sessions to grok-notify.
+  if (process.env.GROK_HOOK_EVENT) return;
   let input = ''; const timer = setTimeout(() => process.exit(0), 2000);
   process.stdin.on('data', chunk => { if (input.length < 1024 * 1024) input += chunk; });
   process.stdin.on('end', () => {

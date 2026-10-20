@@ -193,6 +193,11 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         matrix.append(line);
       }
       copy.append(heading, file, ownership, matrix);
+      const noteKey = catalog.get(row.source)?.completionNoteKey;
+      if (noteKey) {
+        const note = document.createElement('small'); note.className = 'ai-source-capability';
+        note.textContent = pomeLocaleRendererAiSources.t(noteKey); copy.append(note);
+      }
       if (row.state === 'connected' && row.attentionHookMissing) {
         const capability = document.createElement('small'); capability.className = 'ai-source-capability';
         capability.textContent = pomeLocaleRendererAiSources.t('attention.hooksMissing');

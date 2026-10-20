@@ -8,13 +8,19 @@
 
 ### 多 AI 提供商（额度与完成矩阵）
 
+- 新增 Copilot CLI 与 Antigravity 完成接入，支持设置接入/修复/断开/测试、气泡与历史、平台来源打开和 NAS 同步。Copilot 使用当前结果身份，过滤子代理与可恢复错误；Antigravity 检查后台任务全部结束和明确停止原因，摘要暂用默认标题。能力保持受限；Grok Bot、Manus 和 Copilot VS Code/云端尚未接入。
+
+- 修复 Grok 同会话后续轮次被去重丢弃、子代理失败与会话退出误报、NAS 同步来源校验遗漏及来源显示/打开缺失。接入尊重 `GROK_HOME`，连接、修复和断开只增删 Pome hook，保留其他配置；补齐双设备已读同步、100 条裁剪、真实转发与 Windows 回退回归。
+
+- Grok 完成提醒接入官方 `~/.grok/hooks` 的 Stop / StopFailure：一键写入 `pome-panel.json`、本机转发脚本与 HTTP 白名单；Grok 会话触发的 Claude/Cursor 共用钩子不再误报为那两家完成。能力标为 partial，等待操作仍未启用。
+
 - 修复 Copilot 无限额度被误判耗尽及顶层重置时间遗漏，全部无限时显示“无限制”；Grok Bot 支持 ISO 与秒/毫秒时间并按重置时间刷新；Antigravity 支持 summary 包装、名称别名与 tagged remainingFraction。新增参考项目响应样本及界面回归。
 
 - 修复 Copilot 凭据主机归属、Grok 团队 ID 与账本金额解析、Antigravity 分组额度与空数据误报、认证失效缓存复活、Claude 钩子能力判断和 Token 卡语言更新；补齐提供商密钥设置读取白名单及进程重启验证。Manus 改用官方 v2 可用积分接口与 API Key 请求头，按 total_credits 显示余额，不虚构百分比。
 
 - 新增统一 `aiProviderCatalog`：稳定 ID 覆盖 Cursor / Codex / Claude / Grok Bot / Grok / Copilot / Antigravity / Manus；额度与完成能力分列，未验证能力保持 `partial`/`unsupported`。
 - 首页额度 UI 支持 N 家动态面板与切换；Grok Bot 从 Cursor 主额度拆出独立卡（依赖 Cursor 登录）；Grok 标明 xAI 独立归属。
-- 新增 Claude / Copilot / Grok / Antigravity / Manus 用量适配（本机凭据或 safeStorage Token、host 白名单）；完成 HTTP 白名单仍仅 Codex / Claude / Cursor，目录化驱动。
+- 新增 Claude / Copilot / Grok / Antigravity / Manus 用量适配（本机凭据或 safeStorage Token、host 白名单）；完成 HTTP 白名单为 Codex / Claude / Cursor / Grok，目录化驱动。
 - 设置页同一列表展示完成与额度能力；补充归属说明、图标与中英文文案。致谢参考仓接口知识，不嵌入第三方菜单栏 App。
 
 ### 历史记录清理

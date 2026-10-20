@@ -8,13 +8,19 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ### Multi-AI providers (usage + completion matrix)
 
+- Add partial completion integration for Copilot CLI and Antigravity, including configuration lifecycle/test, bubbles/history, platform source opening and NAS sync. Copilot deduplicates current results and filters child/recoverable errors. Antigravity requires full idle and an explicit outcome, with a default summary title. Grok Bot, Manus and Copilot VS Code/cloud remain unsupported.
+
+- Fix Grok turn deduplication, subagent/teardown false notifications, NAS source validation, source branding and terminal opening. Honor `GROK_HOME` and preserve unrelated configuration when connecting, repairing or disconnecting. Cover two-device read sync, latest-100 retention, real forwarding and Windows fallback.
+
+- Wire Grok completion through official `~/.grok/hooks` Stop / StopFailure into a owned `pome-panel.json`, local forwarder, and HTTP allowlist. Claude/Cursor hooks that Grok also loads no longer report as those sources. Marked partial; attention remains unsupported.
+
 - Correct Copilot unlimited buckets and root reset dates; show Unlimited when every reported bucket is unlimited. Parse Grok Bot ISO and epoch timestamps for reset scheduling, and Antigravity summary wrappers, aliases and tagged remaining fractions. Add representative response fixtures and UI regression coverage.
 
 - Fix host-scoped Copilot credentials, xAI team configuration and posted USD balance, grouped Antigravity quotas, invalid-auth cache recovery, Claude hook capability gates and token-card localization. Preserve encrypted provider settings across writes and restart. Use the official Manus v2 availableCredits endpoint and API key header; display authoritative spendable credits without fabricating a percentage.
 
 - Added a shared `aiProviderCatalog` covering Cursor / Codex / Claude / Grok Bot / Grok / Copilot / Antigravity / Manus with separate usage and completion capability bits; unverified capabilities stay `partial`/`unsupported`.
 - Home AI quota UI supports N providers with dynamic panels/tabs; Grok Bot is a separate card from Cursor’s main pools (requires Cursor sign-in); Grok is labeled as standalone xAI.
-- Added Claude / Copilot / Grok / Antigravity / Manus usage adapters (local credentials or safeStorage tokens, host allowlists). Completion HTTP still accepts only Codex / Claude / Cursor, now catalog-driven.
+- Added Claude / Copilot / Grok / Antigravity / Manus usage adapters (local credentials or safeStorage tokens, host allowlists). Completion HTTP accepts Codex / Claude / Cursor / Grok, catalog-driven.
 - Settings shows completion and usage capabilities on one provider list, with ownership notes, icons, and zh/en copy. Reference repos are credited for endpoint knowledge only—no embedded menu-bar apps.
 
 ### History retention

@@ -934,7 +934,7 @@
   "copy.localRecording.895688": "本地录音",
   "copy.recordWhenYouChooseWithOptionalLive.466e17": "主动开启，可选实时转写。",
   "copy.aiNotifications.d94669": "AI 完成提醒",
-  "copy.localTaskNotificationsFromCodexClaudeCode.8c8b56": "Codex、Claude Code 与 Cursor 的本机任务通知。",
+  "copy.localTaskNotificationsFromCodexClaudeCode.8c8b56": "Codex、Claude Code、Cursor、Grok、Copilot CLI 与 Antigravity 的本机任务通知。",
   "copy.yourDataStaysLocal.076404": "数据留在本机",
   "copy.yourWorkStaysOnYourOwnComputer.635445": "工作内容留在自己的电脑。",
   "copy.fourWorkflowsYouCanRenameSortedBy.cfe3e2": "四个可改名工作流，按截止时间排序，并在到期前一小时提醒。",
@@ -1278,7 +1278,7 @@
   "attention.unverified": "需返回来源软件确认",
   "attention.reopen": "重新显示",
   "attention.open": "返回来源",
-  "attention.scopeSummary": "完成提醒可接入 Codex / Claude / Cursor。额度按各家能力矩阵展示；Grok Bot 依赖 Cursor 登录，Grok 为 xAI 独立账号。等待输入/选择/授权目前主要覆盖 Claude（受限）。",
+  "attention.scopeSummary": "完成提醒可接入 Codex / Claude / Cursor / Grok / Copilot CLI / Antigravity。额度按各家能力矩阵展示；等待输入/选择/授权目前主要覆盖 Claude（受限）。",
   "attention.hooksMissing": "完成已接入，等待提醒需补全",
   "attention.repairHooks": "补全等待提醒",
   "attention.partialClaude": "等待输入/选择/授权：受限（CLI，版本未验证）。授权通知可能延迟约 6 秒；无原生请求 ID 时，同一命令再次触发可能分别显示，仅在明确继续或结束后收起。",
@@ -1307,5 +1307,8 @@
   "providers.tokenRequired": "请先填写 Token。",
   "providers.tokenSaveFailed": "凭据操作失败，请重试。",
   "providers.quotaUnavailable": "该账号暂未返回可用额度。",
-  "providers.availableCredits": "可用积分"
+  "providers.availableCredits": "可用积分",
+  "sources.openProvider": "打开 {source}",
+  "providers.completionScope.copilot": "完成提醒目前支持 Copilot CLI；VS Code 与云端会话暂未接入。",
+  "providers.completionScope.antigravity": "支持 Antigravity App、IDE 与 CLI；完成摘要暂显示默认标题，待操作提醒尚未启用。"
 }

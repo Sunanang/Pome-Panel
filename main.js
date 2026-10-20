@@ -35,6 +35,7 @@ let aiSourceHooks;
 function getAiSourceHooks() {
   if (!aiSourceHooks) aiSourceHooks = createAiSourceHooks({
     homeDir: process.env.POME_HOOK_TEST_HOME || (process.env.TODO_TEST_USER_DATA ? path.join(app.getPath('userData'), 'hook-home') : require('node:os').homedir()),
+    env: process.env.TODO_TEST_USER_DATA || process.env.POME_HOOK_TEST_HOME ? {} : process.env,
   });
   return aiSourceHooks;
 }
@@ -2439,6 +2440,8 @@ ipcMain.handle('tasks:rebuild', async (event) => {
 ipcMain.handle('tasks:read', (event, id) => { requireWorkspaceOwner(event); return getTaskInbox().markRead(String(id || '')); });
 ipcMain.handle('tasks:open-source', async (event, id) => {
   requireWorkspaceOwner(event);
+  // Launching Terminal / source apps does not need windowFocus; that flag only
+  // gates focusing an already-open window via accessibility / native bindings.
   const record = getTaskInbox().get(String(id || ''));
   if (!record) return { ok: false, message: PomeI18n.t("copy.recordNotFound.0c312b") };
   return platformAdapter.taskApps.open(record);
@@ -2681,7 +2684,10 @@ ipcMain.handle('windows:focus', async (event, windowId) => {
 async function activateActiveTaskNotification(eventId = null) {
   const notification = activeTaskNotification;
   if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return { ok: false, message: PomeI18n.t("copy.thisTaskReminderIsNoLongerAvailable.f287da") };
-  if (!platformCapabilities.features.windowFocus) return { ok: false, message: PomeI18n.t("copy.canTOpenTheSourceAppRight.3c21d3") };
+  // Attention return still needs focus; completion can launch the source app without it.
+  if (notification.attentionKey && !platformCapabilities.features.windowFocus) {
+    return { ok: false, message: PomeI18n.t("copy.canTOpenTheSourceAppRight.3c21d3") };
+  }
   notification.activationPending = true;
   setTaskNotificationPaused(true);
   let result;

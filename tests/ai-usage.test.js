@@ -101,7 +101,7 @@ test('registry catalogs eight providers and dynamic model rows participate in re
   assert.deepEqual(D.registry.ids(), ['cursor', 'codex', 'claude', 'grokbot', 'grok', 'copilot', 'antigravity', 'manus']);
   assert.equal(D.registry.get('cursor').pools.length, 2);
   assert.equal(D.registry.get('grokbot').capabilities.completion, 'unsupported');
-  assert.deepEqual(D.registry.completionIds(), ['cursor', 'codex', 'claude']);
+  assert.deepEqual(D.registry.completionIds(), ['cursor', 'codex', 'claude', 'grok', 'copilot', 'antigravity']);
   const data = { windows: [{ id: 'spark', label: 'Spark', percent: 98, windowMinutes: 300 }] };
   assert.equal(D.quotaRows(data, 'codex')[0].name, 'Spark · 5 小时额度');
   assert.equal(D.lowestRemaining(data, 'codex'), 2);

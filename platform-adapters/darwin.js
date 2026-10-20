@@ -403,10 +403,11 @@ function createDarwinAdapter(options = {}) {
 
   async function resolveTaskApp(source, { window, senderPid } = {}) {
     const apps = JSON.parse(await runJxa(RUNNING_APPS_JXA) || '[]');
-    // Claude runs inside a terminal (or an editor's integrated terminal).
+    // CLI sources run inside a terminal (or an editor's integrated terminal).
     // Walk its hook process ancestry instead of capturing an unrelated foreground app.
     const pid = Number(senderPid);
-    if (source === 'claude' && Number.isSafeInteger(pid) && pid > 1) {
+    const terminalSource = ['claude', 'grok', 'copilot'].includes(source) || source === 'antigravity' && window?.app === 'Terminal';
+    if (terminalSource && Number.isSafeInteger(pid) && pid > 1) {
       const parents = await new Promise(resolve => (options.execFile || execFile)('/bin/ps', ['-axo', 'pid=,ppid='], { timeout: 1000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout) => {
         resolve(new Map(error ? [] : String(stdout).trim().split('\n').map(line => line.trim().split(/\s+/).map(Number))));
       }));
@@ -420,7 +421,7 @@ function createDarwinAdapter(options = {}) {
     const candidates = apps.filter(row => taskAppMatches({ source, window }, row));
     // With no sender identity, prefer an exact terminal title later instead of
     // assigning an arbitrary terminal when several are running.
-    if (source === 'claude' && !window?.app && !window?.bundleId && candidates.length !== 1) return null;
+    if (terminalSource && !window?.app && !window?.bundleId && candidates.length !== 1) return null;
     return candidates[0] || null;
   }
 

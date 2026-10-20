@@ -43,7 +43,9 @@ test('Darwin resolves Claude origin from the hook process ancestry, including an
     { pid: process.ppid, appName: 'Editor terminal', bundleId: 'runtime.origin' },
     { pid: 987654321, appName: 'Terminal', bundleId: 'unrelated.terminal' },
   ]) });
-  assert.equal((await adapter.windows.resolveTaskApp('claude', { senderPid: process.pid })).bundleId, 'runtime.origin');
+  for (const source of ['claude', 'grok', 'copilot']) {
+    assert.equal((await adapter.windows.resolveTaskApp(source, { senderPid: process.pid })).bundleId, 'runtime.origin');
+  }
 });
 
 // 适配层的形状是 main.js 的唯一契约（方案 §2.5）：IPC 一律走这些方法，
