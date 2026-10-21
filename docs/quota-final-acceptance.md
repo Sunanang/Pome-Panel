@@ -36,3 +36,7 @@
 - 改前：`dist.noindex/quota-final/before/panel-refresh.webm`；改后：`dist.noindex/quota-final/animation-after/panel-refresh.webm`，同目录含录屏抽帧和 rAF 时间采样。
 
 仅在 macOS Electron 与隔离临时配置中验收。未测试 Windows 真机、真实账号的在线额度刷新或 MINI 安装；没有打包或发布。测试夹具不读写用户实际凭据或工作区。
+
+## 后续间距修正
+
+各 AI 独立测量本家最长窗口标题，共享列宽仅限同一家；标题与轨道间距缩至 2px，固定百分比列不变。Cursor 的 Auto/Other 不再缩短 Codex、Claude 等短标题来源的轨道。同家多条轨道左右端仍一致，0/8/100% 与动画中不伸缩。新增 Electron 断言验证独立宽度和标题文字末端到轨道的距离；截图在 `dist.noindex/quota-provider-tracks/`。 35 项领域/动画单测，以及 ai-usage、ai-usage-final、quota-refresh 三组 Electron 回归通过。

@@ -233,11 +233,16 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const diameter = size === 'mini' ? 30 : Math.max(10, Math.min(layout.ringSize, width - 2 * number('--q-cell-pad-x'), height - fixed));
     tile.style.setProperty('--q-render-size', `${Math.floor(diameter * 10) / 10}px`);
     tile.style.setProperty('--q-ring-font', `${size === 'mini' ? 10 : diameter * (['small','medium'].includes(size) && layout.ids.length >= 5 ? .3 : .25)}px`);
-    const labelStyle = grid.querySelector('.q-window-short');
-    const labelFont = labelStyle && getComputedStyle(labelStyle);
-    measure.font = labelFont ? `${labelFont.fontWeight} ${labelFont.fontSize} ${labelFont.fontFamily}` : `${number('--q-window-font')}px ${css.fontFamily}`;
-    const labelWidth = Math.max(8, ...models.flatMap(m => m.rows.map(row => measure.measureText(row.short || row.name).width)));
-    tile.style.setProperty('--q-window-label-width', `${Math.ceil(Math.min(labelWidth + 2, Math.max(12, width * .36)))}px`);
+    // Each provider shares one label column across its windows. A long Cursor
+    // label must not shorten another provider's tracks.
+    for (const m of models) {
+      const card = byId(`ai-provider-${m.id}`);
+      const labels = [...card.querySelectorAll('.q-inline-rows .q-window-short')];
+      const labelFont = labels[0] && getComputedStyle(labels[0]);
+      measure.font = labelFont ? `${labelFont.fontWeight} ${labelFont.fontSize} ${labelFont.fontFamily}` : `${number('--q-window-font')}px ${css.fontFamily}`;
+      const labelWidth = Math.max(8, ...labels.map(label => measure.measureText(label.textContent).width));
+      card.style.setProperty('--q-window-label-width', `${Math.ceil(Math.min(labelWidth + 1, Math.max(12, card.clientWidth * .36)))}px`);
+    }
   }
   function animatePositions(previous, models) {
     for (const m of models) {

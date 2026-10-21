@@ -87,6 +87,10 @@ async function main(){
   await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);
   // Equal grids cannot change track lengths while values acquire more digits.
   await supply(fixture(4,'warn'));await size('medium',actual);
+  const providerTracks=await js(`Object.fromEntries([...document.querySelectorAll('#home-cursor .ai-usage-provider')].map(card=>[card.dataset.provider,card.querySelector('.cursor-usage-track').getBoundingClientRect().width]))`);
+  assert(providerTracks.codex>providerTracks.cursor+5,'short Codex labels reclaim width independently of Cursor');
+  assert(providerTracks.grokbot>providerTracks.codex,'a single short label leaves the longest available track');
+  assert.equal(await js(`[...document.querySelectorAll('#home-cursor .ai-usage-provider')].every(card=>{const labels=[...card.querySelectorAll('.q-inline-rows .q-window-short')],end=Math.max(...labels.map(label=>{const range=document.createRange();range.selectNodeContents(label);return range.getBoundingClientRect().right})),track=card.querySelector('.cursor-usage-track').getBoundingClientRect();return track.left-end>=1&&track.left-end<=4.5})`),true,'provider-local longest label stays close to its tracks');
   await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
   const tracks=()=>js(`[...document.querySelectorAll('#home-cursor .q-inline-rows .cursor-usage-track')].map(n=>n.getBoundingClientRect().width)`);
   const widths=await tracks();

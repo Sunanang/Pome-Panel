@@ -72,13 +72,13 @@
 #home-cursor .q-alert { flex:none; width:clamp(9px,calc(var(--q-render-size) * .23),22px); height:clamp(9px,calc(var(--q-render-size) * .23),22px); }
 #home-cursor .q-inline-rows {
   grid-column:1; grid-row:6; display:grid; grid-template-columns:var(--q-window-label-width) minmax(0,1fr) var(--q-window-value-width);
-  grid-auto-rows:var(--q-window-line); column-gap:3px; row-gap:var(--q-window-gap);
+  grid-auto-rows:var(--q-window-line); column-gap:2px; row-gap:var(--q-window-gap);
   align-content:center; width:100%; min-width:0; height:var(--q-window-height); max-height:none;
   overflow:auto; scrollbar-width:thin;
 }
 #home-cursor .q-inline-rows .ai-quota-row {
   display:grid; grid-column:1/-1; grid-template-columns:subgrid; grid-template-rows:var(--q-window-line);
-  gap:0 3px; align-items:center; min-width:0; padding:0; margin:0;
+  gap:0 2px; align-items:center; min-width:0; padding:0; margin:0;
 }
 #home-cursor .q-inline-rows .cursor-usage-meta { display:contents; }
 #home-cursor .q-inline-rows .q-window-short {
