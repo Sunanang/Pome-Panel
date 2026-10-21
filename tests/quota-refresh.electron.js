@@ -29,7 +29,14 @@ async function main() {
     assert.equal(await js(`[...document.querySelectorAll('#home-cursor .q-compact-caption')].filter(n=>n.checkVisibility()).every(n=>n.scrollHeight<=n.clientHeight+1)`),true,`${name} explanation lines do not clip`);
     if(out && saveImage){fs.mkdirSync(out,{recursive:true});const rect=await js(`(()=>{const r=document.getElementById('home-cursor').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`);const shot=await win.webContents.capturePage();const dpr=await js('devicePixelRatio');const crop=Object.fromEntries(Object.entries(rect).map(([k,v])=>[k,Math.round(v*dpr)]));fs.writeFileSync(path.join(out,name+'.png'),shot.crop(crop).toPNG());}
   }
-  for(const args of [['mini',196,118],['small',196,248],['medium',404,248],['large',404,510]])await size(...args);
+  for(const args of [['mini',196,118],['small',196,248],['medium',404,248],['large',404,510]]) {
+    await size(...args);
+    const strike=await js(`(()=>{const p=document.querySelector('#ai-provider-codex '+(document.getElementById('home-cursor').dataset.widgetSize==='mini'?'.q-mini-value':'.q-ring-center')+' .q-pct'),line=getComputedStyle(p,'::after');return {native:getComputedStyle(p).textDecorationLine,percent:getComputedStyle(p.querySelector('small')).textDecorationLine,content:line.content,width:parseFloat(line.width),box:p.getBoundingClientRect().width,top:parseFloat(line.top),height:p.getBoundingClientRect().height}})()`);
+    assert.equal(strike.native,'none',args[0]+' no separate font-metric strikes');
+    assert.equal(strike.percent,'none');assert.equal(strike.content,'""');
+    assert(Math.abs(strike.width-strike.box)<1,args[0]+' one line spans number and percent');
+    assert(Math.abs(strike.top-strike.height/2)<1,args[0]+' line has a single shared height');
+  }
   assert.equal(await js(`document.getElementById('ai-provider-codex').dataset.depleted`),'true');
   assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring').getAttribute('aria-valuenow')`),'100');
   await js(`fixture.codex.primary.percent=50;NotchAiUsage.refresh({force:true})`);

@@ -7843,7 +7843,10 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 .home-cursor .ai-usage-provider[data-depleted='true'] .q-ring-value { stroke:var(--q-depleted); }
 .home-cursor .ai-usage-provider[data-depleted='true'] .q-ring-track { stroke:var(--q-depleted-track); }
 .home-cursor .ai-usage-provider[data-depleted='true'] :is(.q-ring-center,.q-mini-value) { opacity:.48; }
-.home-cursor .ai-usage-provider[data-depleted='true'] :is(.q-ring-center,.q-mini-value) .q-pct { text-decoration:line-through; text-decoration-color:var(--q-crit-t); color:var(--q-depleted); }
+.home-cursor :is(.q-ring-center,.q-mini-value) .q-pct { position:relative; display:inline-block; }
+/* A single overlay keeps the number and smaller percent sign on one strike line. */
+.home-cursor .ai-usage-provider[data-depleted='true'] :is(.q-ring-center,.q-mini-value) .q-pct { text-decoration:none; color:var(--q-depleted); }
+.home-cursor .ai-usage-provider[data-depleted='true'] :is(.q-ring-center,.q-mini-value) .q-pct::after { content:''; position:absolute; left:0; right:0; top:50%; height:1px; transform:translateY(-50%); background:var(--q-crit-t); pointer-events:none; }
 .home-cursor .ai-usage-provider[data-depleted='true'] .q-inline-rows { opacity:.5; }
 .home-cursor[data-widget-size='mini'] .q-bottleneck { display:block; width:6px; height:6px; top:-1px; right:-1px; padding:0; font-size:0; background:var(--q-warn-a); box-shadow:0 0 0 2px var(--bg-base); }
 .home-cursor[data-widget-size='mini'] .q-bottleneck[data-level='critical'] { background:var(--q-crit-a); }
