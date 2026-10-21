@@ -67,6 +67,10 @@ async function main() {
     fs.writeFileSync(path.join(screenshots,name+'-full.png'),full.toPNG());
     fs.writeFileSync(path.join(screenshots,name+'.json'),JSON.stringify({rect,crop,factor,viewport:win.getContentSize()}));
     fs.writeFileSync(path.join(screenshots,name+'.png'),full.crop(crop).toPNG());
+    if(name.startsWith('naming-')&&name.endsWith('-overview')){
+      const card=await js(`(()=>{const r=document.getElementById('ai-provider-copilot').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`);
+      fs.writeFileSync(path.join(screenshots,name+'-copilot.png'),full.crop(Object.fromEntries(Object.entries(card).map(([k,v])=>[k,Math.round(v*factor)]))).toPNG());
+    }
     const focus=await js(`(()=>{const p=document.querySelector('.cursor-usage-rows:popover-open');if(!p)return null;const r=p.getBoundingClientRect(),t=document.getElementById('home-cursor').getBoundingClientRect();const x=Math.max(0,Math.min(r.left,t.left)-8),y=Math.max(0,Math.min(r.top,t.top)-8);return {x,y,width:Math.min(innerWidth,Math.max(r.right,t.right)+8)-x,height:Math.min(innerHeight,Math.max(r.bottom,t.bottom)+8)-y}})()`);
     if(focus)fs.writeFileSync(path.join(screenshots,name+'-focus.png'),full.crop(Object.fromEntries(Object.entries(focus).map(([k,v])=>[k,Math.round(v*factor)]))).toPNG());
     const popup=await js(`(()=>{const p=document.querySelector('.cursor-usage-rows:popover-open');if(!p)return null;const r=p.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`);
@@ -125,6 +129,9 @@ async function main() {
       assert.deepEqual((await inspect()).contentOverflow,[],locale+' eight named sources stay inside their cells');
       assert.equal(await js(`document.querySelector('#ai-provider-copilot .q-main-scope')===null`),true,'an unreported period is not replaced by a pool identity in the ring');
       await capture(`naming-${locale}-overview`);
+      assert.equal(await js(`document.querySelector('#ai-provider-copilot .ai-usage-source b').textContent`),'Copilot');
+      const poolClipping=await js(`(()=>{const rows=document.querySelector('#ai-provider-copilot .q-inline-rows'),bounds=rows.getBoundingClientRect();return [...rows.querySelectorAll('.ai-quota-row')].flatMap(row=>[...row.querySelectorAll('.q-window-short,.q-pct,.cursor-usage-track')].filter(n=>n.checkVisibility()).flatMap(n=>{const r=n.getBoundingClientRect();return r.top<bounds.top-.5||r.bottom>bounds.bottom+.5?[{pool:row.dataset.pool,node:n.className,top:r.top-bounds.top,bottom:r.bottom-bounds.top,viewport:bounds.height,rowHeight:row.getBoundingClientRect().height,lineHeight:getComputedStyle(n).lineHeight}]:[]}))})()`);
+      assert.deepEqual(poolClipping,[],locale+' all three Copilot pool rows fit without scrolling or clipping');
       await supply({cursor:labelFixtures.cursor,codex:labelFixtures.codex,grokbot:labelFixtures.grokbot,claude:labelFixtures.claude});
       for(const size of ['mini','small','medium','large']){
         await resize(size);await capture(`naming-${locale}-${size}`);

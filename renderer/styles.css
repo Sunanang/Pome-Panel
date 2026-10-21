@@ -7961,3 +7961,7 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 .home-cursor[data-widget-size='large'][data-ai-many='true'] .ai-usage-provider .q-inline-rows { gap:2px; max-height:34px; }
 .home-cursor[data-widget-size='large'][data-ai-many='true'] .ai-usage-provider .q-inline-rows :is(.q-window-short,.q-pct) { font-size:8px; line-height:10px; }
 .home-cursor[data-widget-size='large'][data-ai-many='true'] .q-compact-caption { line-height:10px; }
+
+/* A fixed inherited line-height on the smaller percent sign adds extra row
+   height, clipping the third pool in compact stacks. Keep its line box local. */
+.home-cursor .q-inline-rows .q-pct small { line-height:1; }

@@ -154,6 +154,7 @@ test('dynamic quota labels use actual cadence including weekly-only primary and 
 test('registry catalogs eight providers and dynamic model rows participate in remaining quota', () => {
   assert.deepEqual(D.registry.ids(), ['cursor', 'codex', 'claude', 'grokbot', 'grok', 'copilot', 'antigravity', 'manus']);
   assert.equal(D.registry.get('cursor').pools.length, 2);
+  assert.equal(D.registry.get('copilot').label, 'Copilot');
   assert.equal(D.registry.get('grokbot').capabilities.completion, 'unsupported');
   assert.deepEqual(D.registry.completionIds(), ['cursor', 'codex', 'claude', 'grok', 'copilot', 'antigravity', 'manus']);
   const data = { windows: [{ id: 'spark', label: 'Spark', percent: 98, windowMinutes: 300 }] };

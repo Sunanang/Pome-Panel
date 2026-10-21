@@ -95,7 +95,7 @@
     }),
     provider({
       id: 'copilot',
-      label: 'GitHub Copilot',
+      label: 'Copilot',
       ownership: 'GitHub Copilot plan quota',
       ownershipKey: 'providers.ownership.copilot',
       icon: 'assets/inbox/copilot.svg',
