@@ -1433,7 +1433,7 @@
   "ui.welcome.layoutFailed": "无法保存首页布局，请检查本机存储后重试。",
   "quota.status.invalid": "失效",
   "quota.status.error": "失败",
-  "quota.repair": "设置",
+  "quota.repair": "去设置",
   "quota.windowRemaining": "{source} · {window} · {remaining}{message}",
   "quota.windowSummary": "{source} · {window}{remaining}",
   "quota.overview": "额度概览",

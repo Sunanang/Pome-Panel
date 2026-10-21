@@ -92,7 +92,7 @@ async function main() {
         cols:getComputedStyle(grid).gridTemplateColumns.split(' ').length,
         rows:getComputedStyle(grid).gridTemplateRows.split(' ').length,
         summary:!!grid.querySelector('.q-summary'),
-        more:tile.querySelector('.q-more-ring')?.textContent||tile.querySelector('#ai-usage-footer button')?.textContent||'',
+        more:tile.querySelector('.q-more-ring')?.textContent||(!tile.querySelector('#ai-usage-more').hidden?tile.querySelector('#ai-usage-more').textContent:'')||'',
         title:tile.querySelector('#ai-usage-title').textContent,
         percentagesFit:items.every(el=>[...el.querySelectorAll('.q-pct')].every(v=>v.clientWidth===0||v.scrollWidth<=v.clientWidth+1))};
     })()`);
@@ -236,13 +236,13 @@ async function main() {
         assert.equal(view.cellsFit,true,`${size}/${count} cell clipping`);
         assert.deepEqual(view.contentOverflow,[],`${size}/${count} content crosses source cell bounds`);
         assert.equal(view.percentagesFit,true,`${size}/${count} percentages fit`);
-        assert.equal(view.ids.length,size==='mini'&&count>4?3:count);
+        assert.equal(view.ids.length,size==='mini'&&count>4?3:size==='small'?Math.min(4,count):count);
         if (count===3) assert.deepEqual(view.ids,['mini','small'].includes(size)?['cursor','codex','grokbot']:['cursor','codex','grokbot']);
-        // Invalid credentials precede all quota states; small now keeps all five equal cells.
+        // Invalid credentials precede all quota states; small retains the four most urgent sources.
         if (count===5 && size==='mini') assert.deepEqual(view.ids,['copilot','claude','cursor']);
-        if (count===5 && size==='small') assert.deepEqual(view.ids,['copilot','claude','cursor','codex','grokbot']);
+        if (count===5 && size==='small') assert.deepEqual(view.ids,['copilot','claude','cursor','codex']);
         if (count===5 && size==='mini') assert.equal(view.more,'+2');
-        if (count===5 && size==='small') assert.equal(view.more,'');
+        if (count===5 && size==='small') assert.equal(view.more,'+1');
         if (count===5 && size==='large') {
           assert.equal(view.summary,false);assert.equal(view.cols,3);assert.equal(view.rows,2);
           // Pure auth-error (no local windows) keeps dashed track + alert.
@@ -276,7 +276,7 @@ async function main() {
     await resize('small',currentSizes);
     assert.deepEqual((await inspect()).contentOverflow,[],'stale and local-fallback values stay in their cells');
     assert.equal(await js(`!!document.querySelector('#ai-provider-cursor .q-ring .q-pct')&&!!document.querySelector('#ai-provider-codex .q-alert')`),true,'status text must not squeeze remaining values into an unreadable row');
-    assert.equal(await js(`(()=>{const f=document.querySelector('#ai-provider-codex .cursor-usage-footnote');return f.textContent==='失效设置'&&f.scrollWidth<=f.clientWidth+1})()`),true,'fallback status and repair action remain complete');
+    assert.equal(await js(`(()=>{const f=document.querySelector('#ai-provider-codex .cursor-usage-footnote');return f.textContent==='失效去设置'&&f.scrollWidth<=f.clientWidth+1})()`),true,'fallback status and repair action remain complete');
     await capture('small-status-regression');
     await supply({...five,copilot:absent});await resize('mini');
     assert.equal(await js(`(()=>{const f=document.getElementById('ai-usage-footer');return f.scrollWidth<=f.clientWidth+1&&f.title.includes('Claude Code')&&f.getAttribute('aria-label')===f.title})()`),true,'mini summary fits with full details available');
@@ -356,7 +356,7 @@ async function main() {
     const oldTime=new Date(Date.now()-120000).toISOString();
     await supply({cursor:{...cursor,stale:true,fetchedAt:oldTime}});await resize('medium');
     assert.equal(await js(`document.getElementById('ai-provider-cursor').dataset.state`),'stale');
-    assert.equal(await js(`getComputedStyle(document.querySelector('#ai-provider-cursor .q-ring')).opacity`),'0.45');
+    assert.equal(await js(`getComputedStyle(document.querySelector('#ai-provider-cursor .q-gauge-group')).opacity`),'0.45');
     assert.equal(await js(`getComputedStyle(document.querySelector('#ai-provider-cursor .q-compact-caption')).display`),'flex');
     assert.equal(await js(`document.getElementById('cursor-usage-other-pct').textContent`),'41%');
     assert.match(await js(`document.getElementById('ai-provider-cursor').title`),/数据过期/);

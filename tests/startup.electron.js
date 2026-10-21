@@ -208,7 +208,7 @@ async function checkCodexTokenFlow(contents) {
   assert.equal(invalid.status.manualTokenInvalid, true);
   assert.equal(invalid.label, 'Token 失效'); assert.equal(invalid.percent, '33%', 'failed refresh preserves the previous successful quota');
   assert.equal(invalid.guideVisible, true);
-  assert.equal(invalid.footer, '失效设置');
+  assert.equal(invalid.footer, '失效去设置');
   assert.match(invalid.detailTitle, /Token/);
   assert.match(invalid.repairLabel, /Codex.*去设置/);
   codexTelemetry = { ok:true, detected:true, updatedAt:new Date(Date.now()-60000).toISOString(),

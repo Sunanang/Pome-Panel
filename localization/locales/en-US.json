@@ -1463,7 +1463,7 @@
   "ui.welcome.layoutFailed": "Could not save the home layout. Check local storage and retry.",
   "quota.status.invalid": "Invalid",
   "quota.status.error": "Error",
-  "quota.repair": "Fix",
+  "quota.repair": "Settings",
   "quota.windowRemaining": "{source} · {window} · {remaining}{message}",
   "quota.windowSummary": "{source} · {window}{remaining}",
   "quota.overview": "Quota overview",

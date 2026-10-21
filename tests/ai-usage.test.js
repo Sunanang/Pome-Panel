@@ -28,7 +28,7 @@ test('dashboard folds only compact sizes and preserves settings order in larger 
   assert.deepEqual(D.dashboard(snapshots, 'mini').shown, ['grokbot', 'codex', 'claude']);
   assert.deepEqual(D.dashboard(snapshots, 'mini').hidden, ['cursor', 'grok']);
   assert.equal(D.dashboard(snapshots, 'mini').columns, 4);
-  assert.equal(D.dashboard(snapshots, 'small').shown.length, 5);
+  assert.equal(D.dashboard(snapshots, 'small').shown.length, 4);
   assert.equal(D.dashboard({cursor,codex}, 'small').columns, 2);
   for (const size of ['medium', 'large']) assert.deepEqual(D.dashboard(snapshots, size).shown, ['cursor', 'codex', 'claude', 'grokbot', 'grok']);
   assert.equal(D.dashboard(snapshots, 'medium').columns, 3);
@@ -288,19 +288,19 @@ test('provider names share one quota vocabulary without losing pool identities o
 });
 
 
-test('final grids keep every small source through six, equal columns and no filler tile', () => {
+test('final grids keep four urgent small sources and all larger sources, equal columns and no filler tile', () => {
   for (const count of [3,4,5,6]) {
     const data=Object.fromEntries(D.registry.ids().slice(0,count).map(id=>[id,{ok:true,detected:true,primary:{percent:30}}]));
     for(const size of ['small','medium','large']) {
       const layout=D.dashboard(data,size);
-      assert.equal(layout.shown.length,count);
+      assert.equal(layout.shown.length,size==='small'?Math.min(4,count):count);
       assert.equal(layout.columns,size==='small'?2:count<=4?count:3);
-      assert.equal(layout.rows,Math.ceil(count/layout.columns));
+      assert.equal(layout.rows,Math.ceil(layout.shown.length/layout.columns));
       assert.equal(layout.summary,false);
     }
-    assert.equal(D.dashboard(data,'small').ringSize,count<=4?40:26);
-    assert.equal(D.dashboard(data,'medium').ringSize,count===3?56:count===4?46:30);
-    assert.equal(D.dashboard(data,'large').ringSize,count===3?118:count===4?96:58);
+    assert.equal(D.dashboard(data,'small').ringSize,38);
+    assert.equal(D.dashboard(data,'medium').ringSize,count===3?72:count===4?60:32);
+    assert.equal(D.dashboard(data,'large').ringSize,count===3?140:count===4?120:80);
   }
 });
 test('invalid mini summary wins over depleted and critical without replacing the shortest window', () => {
@@ -370,4 +370,24 @@ test('quota percentages use the same terse copy at zero and above zero, without 
     assert.doesNotMatch(D.miniSummary({grok:balance,codex:{ok:true,detected:true,primary:{percent:95}}}).text,/%|已用完/,'mixed monetary and critical quotas retain their units');
   }
   I.setState(I.snapshot('zh-CN',['zh-CN']));
+});
+
+test('v9 compact rows omit the shortest window and single-window duplication, keeping genuine large rows', () => {
+  const data={ok:true,detected:true,primary:{percent:0,windowMinutes:300},secondary:{percent:100,windowMinutes:10080,resetsAt:2000000000}};
+  for(const size of ['small','medium'])assert.deepEqual(D.inlineRows(data,'codex',size).map(row=>row.key),['secondary']);
+  assert.deepEqual(D.inlineRows(data,'codex','large').map(row=>row.key),['primary','secondary']);
+  const single={ok:true,detected:true,primary:{percent:20,windowMinutes:10080}};
+  for(const size of ['small','medium'])assert.deepEqual(D.inlineRows(single,'grokbot',size),[]);
+  assert.equal(D.inlineRows(single,'grokbot','large').length,1);
+  const cursor={ok:true,detected:true,auto:{percent:0,windowMinutes:43200},other:{percent:100,windowMinutes:43200}};
+  assert.deepEqual(D.inlineRows(cursor,'cursor','small').map(row=>row.key),['other']);
+  for(const size of ['small','medium','large'])assert.deepEqual(D.inlineRows({...data,manualTokenInvalid:true},'codex',size),[]);
+  assert.equal(D.displayRemaining(data,'codex'),100);assert.equal(D.status(data,'codex'),'depleted');
+});
+test('v9 small keeps the four most urgent providers while mini ordering and wider settings order remain intact', () => {
+  const data={cursor:{ok:true,detected:true,auto:{percent:10}},codex:{ok:true,detected:true,primary:{percent:100}},claude:{ok:true,detected:true,primary:{percent:95}},grokbot:{ok:true,detected:true,primary:{percent:81}},copilot:{ok:false,configured:true,status:401},antigravity:{ok:true,detected:true,primary:{percent:40}}};
+  assert.deepEqual(D.dashboard(data,'small').shown,['copilot','codex','claude','grokbot']);
+  assert.equal(D.dashboard(data,'small').hidden.length,2);
+  assert.deepEqual(D.dashboard(data,'mini').shown,['copilot','codex','claude']);
+  assert.deepEqual(D.dashboard(data,'medium').shown,D.providers(data));
 });

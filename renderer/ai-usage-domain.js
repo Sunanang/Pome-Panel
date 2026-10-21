@@ -162,7 +162,7 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
       }]));
       ids.sort((a, b) => meta[a].rank - meta[b].rank || meta[a].rem - meta[b].rem);
     }
-    const limit = size === 'mini' ? ids.length <= 4 ? 4 : 3 : size === 'small' ? 6 : ids.length;
+    const limit = size === 'mini' ? ids.length <= 4 ? 4 : 3 : size === 'small' ? 4 : ids.length;
     const shown = ids.slice(0, limit), hidden = ids.slice(limit);
     const columns = size === 'mini' ? shown.length + (hidden.length ? 1 : 0)
       : size === 'small' ? Math.min(2, ids.length)
@@ -170,9 +170,17 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     const summary = false;
     return { ids, shown, hidden, columns: Math.max(1, columns), summary,
       rows: Math.ceil((shown.length + Number(summary)) / Math.max(1, columns)),
-      ringSize: size === 'mini' ? 30 : size === 'small' ? ids.length <= 4 ? 40 : 26
-        : size === 'medium' ? ids.length <= 3 ? 56 : ids.length === 4 ? 46 : 30
-          : ids.length <= 3 ? 118 : ids.length === 4 ? 96 : 58 };
+      ringSize: size === 'mini' ? 30 : size === 'small' ? 38
+        : size === 'medium' ? ids.length <= 3 ? 72 : ids.length === 4 ? 60 : 32
+          : ids.length <= 3 ? 140 : ids.length === 4 ? 120 : 80 };
+  }
+  function inlineRows(data, id, size) {
+    const rows = quotaRows(data, id);
+    if (status(data, id) === 'error') return [];
+    if (size === 'large' || size === 'mini') return rows;
+    if (rows.length <= 1) return [];
+    const primary = displayRow(data, id);
+    return rows.filter(row => row.key !== primary?.key);
   }
   function formatPercent(value) { const n = percent(value); return n == null ? '--%' : `${Math.round(n)}%`; }
   function clock(value) {
@@ -283,5 +291,5 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     if (force || visible || data == null) return true;
     return available(data) || Boolean(data.configured || data.manualTokenConfigured || data.ok === false);
   }
-  return { windowShortLabel, bottleneck, bottleneckInfo, miniSummary, recoveryTime, isStale, staleSummary, registry, windowLabel, quotaRows, refreshDelay, FALLBACK, available, providers, title, remaining, displayRow, displayRemaining, urgencyRemaining, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots, invalidToken, timestamp, toMillis, status, dashboard, shouldRefresh };
+  return { windowShortLabel, bottleneck, bottleneckInfo, miniSummary, recoveryTime, isStale, staleSummary, registry, windowLabel, quotaRows, inlineRows, refreshDelay, FALLBACK, available, providers, title, remaining, displayRow, displayRemaining, urgencyRemaining, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots, invalidToken, timestamp, toMillis, status, dashboard, shouldRefresh };
 });

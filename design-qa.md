@@ -1,3 +1,20 @@
+# AI 额度 v9 排布验收 · 2026-10-22
+
+final result: passed
+
+本节覆盖下方旧额度布局结论。对照 [v9 总览与标注](https://drive.google.com/drive/folders/1O2GTtBCbpFxsZLCu8-BZPVOz-v440q0d)，未重出的状态用 v8，颜色与基础间距用 v5；mini 不改样式。原图 29 张与来源清单在 `dist.noindex/quota-v9/references/`。
+
+- 以相同外框裁切并归一原图与 Electron 截图，左右合成对照全部 24 个非 mini 状态组合，另验现有实机尺寸、英文、失败与缺失时间。合图在 `dist.noindex/quota-v9/comparisons/`，四尺寸实机图在 `four-sizes.png`。设计示例时间不照抄，使用夹具真实字段；实际外框沿用现有 Bento，空间不足时同卡环统一缩小。
+- 修正迭代：small 粗体名称测量与内部头部高度；large 进度条偏高、隐式网格列导致条未拉满、环线宽偏细；过期读数转灰而非仅降低饱和色透明度。复核字体/行高、留白、对齐、圆角、颜色、状态与键盘/重试/详情交互，未余留阻断布局问题。
+- 非 mini 去掉气泡及预留行；small 最多四家、刷新左侧 +N；无条格独立居中。每家独立标题列、固定 100% 数字列与 3/4px 列间距，同格轨道等长；在 0/8/100% 和逐帧过渡时不变。small/medium 不重复主窗口；large Grok Bot 保留真实周条与首条对齐；底部只显示真实时间。失效居中、脚注对齐，灰环与单条贯穿划线均通过。
+- 最短窗口显示与跨窗口瓶颈等级/排序/过期规则分离，旧阈值不变。mini 改前/改后内容区像素一致，保留此前百分比简写。Grok Bot 核实为 Cursor Sand 会话池，说明包含实际凭据方式。品牌资源直接复用；工作区已有头像修正单独保留，未混入提交。
+- 原动画模块 SHA-256 未变；复用 720ms rAF 与颜色过渡、60ms 逐行、缓存显示刷新、30 秒防抖、首次从 0、失败/同值不重播、当前帧续接与 reduced-motion。改前/后录像与四帧解码自查在 `before/`、`animation-after/`；mini 像素对照为 `mini-before-after.png`。
+- 相关领域/动画单测 40 项通过。工作区完整 `npm test`：855 pass / 0 fail / 1 Windows-only skip；仅含本次拟提交内容的副本完整 `npm test`：852 pass / 0 fail / 1 Windows-only skip。两者均完成 31 次 Electron 运行、语言和语法检查。副本证据在 `delivery-after/`、`delivery-animation/`，全量日志在本次证据目录。
+
+未做 Windows 真机、安装包安装、真实账号联网刷新。无打包/推送/main 合并。改动文件、尺寸差异、逐状态结果、录像和来源说明见 [v9 验收记录](docs/quota-v9-acceptance.md)。
+
+---
+
 # 额度残留修正与文案统一 · 2026-10-21
 
 final result: passed
