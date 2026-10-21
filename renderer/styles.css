@@ -7879,7 +7879,7 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 .home-cursor:is([data-widget-size='medium'],[data-widget-size='large']) .q-inline-rows { display:flex; flex-direction:column; gap:5px; }
 .home-cursor .q-inline-rows .ai-quota-row { display:grid; grid-template-columns:28px minmax(0,1fr) 27px; gap:5px; padding:0; }
 .home-cursor .q-inline-rows .cursor-usage-meta { display:contents; }
-.home-cursor .q-inline-rows .q-window-short { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; }
+.home-cursor .q-inline-rows .q-window-short { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; text-align:left; }
 .home-cursor .q-inline-rows :is(.q-window-full,.ai-quota-help) { display:none; }
 .home-cursor .q-inline-rows .q-pct { grid-column:3; grid-row:1; font-size:9px; text-align:right; white-space:nowrap; }
 .home-cursor .q-inline-rows .cursor-usage-track { grid-column:2; grid-row:1; height:4px; align-self:center; }

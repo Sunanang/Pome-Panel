@@ -132,6 +132,7 @@ async function main() {
       assert.equal(await js(`document.querySelector('#ai-provider-copilot .ai-usage-source b').textContent`),'Copilot');
       const poolClipping=await js(`(()=>{const rows=document.querySelector('#ai-provider-copilot .q-inline-rows'),bounds=rows.getBoundingClientRect();return [...rows.querySelectorAll('.ai-quota-row')].flatMap(row=>[...row.querySelectorAll('.q-window-short,.q-pct,.cursor-usage-track')].filter(n=>n.checkVisibility()).flatMap(n=>{const r=n.getBoundingClientRect();return r.top<bounds.top-.5||r.bottom>bounds.bottom+.5?[{pool:row.dataset.pool,node:n.className,top:r.top-bounds.top,bottom:r.bottom-bounds.top,viewport:bounds.height,rowHeight:row.getBoundingClientRect().height,lineHeight:getComputedStyle(n).lineHeight}]:[]}))})()`);
       assert.deepEqual(poolClipping,[],locale+' all three Copilot pool rows fit without scrolling or clipping');
+      assert.deepEqual(await js(`[...document.querySelectorAll('#ai-provider-copilot .q-inline-rows .ai-quota-row')].map(row=>[getComputedStyle(row.querySelector('.q-window-short')).textAlign,getComputedStyle(row.querySelector('.q-pct')).textAlign])`),[['left','right'],['left','right'],['left','right']],locale+' pool labels align left and percentages align right');
       await supply({cursor:labelFixtures.cursor,codex:labelFixtures.codex,grokbot:labelFixtures.grokbot,claude:labelFixtures.claude});
       for(const size of ['mini','small','medium','large']){
         await resize(size);await capture(`naming-${locale}-${size}`);
