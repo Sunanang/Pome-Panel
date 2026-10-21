@@ -220,8 +220,8 @@ test('Copilot all-unlimited has no false exhausted or critical window', () => {
   const data = buildCopilot({ quota_snapshots: { chat: { unlimited: true, remaining: 0, entitlement: 0, percent_remaining: 0 }, completions: { unlimited: true } } });
   assert.equal(data.unlimited, true); assert.deepEqual(data.windows, []);
   const domain = require('../renderer/ai-usage-domain');
-  assert.equal(domain.lowestRemaining(data, 'copilot'), null);
-  assert.equal(domain.level(domain.lowestRemaining(data, 'copilot')), 'ok');
+  assert.equal(domain.displayRemaining(data, 'copilot'), null);
+  assert.equal(domain.level(domain.displayRemaining(data, 'copilot')), 'ok');
   assert.equal(buildCopilot({}).unlimited, false, 'missing fields do not imply unlimited');
 });
 

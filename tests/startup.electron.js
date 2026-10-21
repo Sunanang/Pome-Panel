@@ -169,6 +169,7 @@ async function checkCodexTokenFlow(contents) {
     button.click();
     for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
     await window.NotchAiUsage.refresh({ force: true });
+    await new Promise(r=>setTimeout(r,850));
     for (let i = 0; i < 50 && !/^更新于/.test(document.getElementById('codex-usage-footnote')?.textContent || ''); i++) {
       await new Promise(r => setTimeout(r, 40));
     }
@@ -200,16 +201,21 @@ async function checkCodexTokenFlow(contents) {
       label: document.getElementById('ai-codex-source').textContent,
       percent: document.querySelector('#codex-usage-rows strong').textContent,
       guideVisible: !document.getElementById('settings-codex-token-guide').hidden,
-      footer: document.getElementById('codex-usage-footnote').textContent };
+      footer: document.getElementById('codex-usage-footnote').textContent,
+      detailTitle: document.getElementById('ai-provider-codex').title,
+      repairLabel: document.querySelector('#codex-usage-footnote button').getAttribute('aria-label') };
   })()`);
   assert.equal(invalid.status.manualTokenInvalid, true);
-  assert.equal(invalid.label, 'Token 失效'); assert.equal(invalid.percent, '--%');
+  assert.equal(invalid.label, 'Token 失效'); assert.equal(invalid.percent, '33%', 'failed refresh preserves the previous successful quota');
   assert.equal(invalid.guideVisible, true);
-  assert.match(invalid.footer, /Token 失效.*去设置/);
+  assert.equal(invalid.footer, '失效设置');
+  assert.match(invalid.detailTitle, /Token/);
+  assert.match(invalid.repairLabel, /Codex.*去设置/);
   codexTelemetry = { ok:true, detected:true, updatedAt:new Date(Date.now()-60000).toISOString(),
     primary:{percent:45}, secondary:{percent:15}, plan:'plus' };
   const fallback = await contents.executeJavaScript(`(async () => {
     await window.NotchAiUsage.refresh({force:true});
+    await new Promise(r=>setTimeout(r,850));
     return { label:document.getElementById('ai-codex-source').textContent,
       percent:document.querySelector('#codex-usage-rows strong').textContent };
   })()`);

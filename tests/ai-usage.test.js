@@ -44,7 +44,7 @@ test('dashboard folds only compact sizes and preserves settings order in larger 
   assert.equal(six.summary, false);
   assert.equal(six.rows, 3);
 });
-test('compact urgency ranks critical, warn, error, ok by unrounded minimum, then stale', () => {
+test('compact urgency ranks critical, warn, error, ok by unrounded displayed window, then stale', () => {
   const snapshots = {
     cursor: { ...cursor, auto: { percent: 40 }, other: { percent: 0 } },
     codex: { ...codex, primary: { percent: 0 }, secondary: { percent: 0 } },
@@ -58,7 +58,7 @@ test('compact urgency ranks critical, warn, error, ok by unrounded minimum, then
   assert.equal(D.status({ detected: false, configured: false }, 'manus'), 'undetected');
   assert.equal(D.status({ ...cursor, manualTokenInvalid: true }, 'cursor'), 'error');
   assert.equal(D.status({ ...cursor, fetchedAt: '2020-01-01T00:00:00Z' }, 'cursor'), 'stale');
-  assert.equal(D.status({ configured: true, ok: true, primary: { currency: 'USD', balance: 0 } }, 'grok'), 'critical');
+  assert.equal(D.status({ configured: true, ok: true, primary: { currency: 'USD', balance: 0 } }, 'grok'), 'depleted');
   assert.equal(D.urgencyRemaining({ configured: true, ok: true, primary: { unit: 'credits', balance: 0 } }, 'manus'), 0);
   const balances = { grok: { configured: true, ok: true, primary: { currency: 'USD', balance: 0 } }, manus: { configured: true, ok: true, primary: { unit: 'credits', balance: 0 } } };
   assert.deepEqual(D.dashboard({ ...snapshots, ...balances }, 'small').shown, ['grok', 'manus', 'grokbot'], 'exhausted balances precede low quota and errors');
@@ -99,8 +99,8 @@ test('remaining presentation handles zero, full, excess, decimals and missing wi
     assert.equal(D.formatPercent(D.remaining(used)), '--%');
   }
   const snapshot = JSON.stringify({ cursor, codex });
-  assert.equal(D.lowestRemaining(cursor, 'cursor'), 55);
-  assert.equal(D.lowestRemaining(codex, 'codex'), 14);
+  assert.equal(D.displayRemaining(cursor, 'cursor'), 70);
+  assert.equal(D.displayRemaining(codex, 'codex'), 14);
   D.dashboard({ cursor, codex }, 'small');
   assert.equal(JSON.stringify({ cursor, codex }), snapshot);
 });
@@ -109,11 +109,11 @@ test('remaining warning thresholds and dashboard urgency use unrounded values', 
     assert.equal(D.level(remaining), level);
   }
   for (const [used, level] of [[79.9, 'ok'], [80, 'warn'], [89.9, 'warn'], [90, 'critical'], [101, 'critical']]) {
-    assert.equal(D.level(D.lowestRemaining({ primary: { percent: used } }, 'codex')), level);
-    assert.equal(D.level(D.lowestRemaining({ auto: { percent: used } }, 'cursor')), level);
+    assert.equal(D.level(D.displayRemaining({ primary: { percent: used } }, 'codex')), level);
+    assert.equal(D.level(D.displayRemaining({ auto: { percent: used } }, 'cursor')), level);
   }
-  assert.equal(D.lowestRemaining({}, 'codex'), null);
-  assert.equal(D.lowestRemaining({ ok: false, primary: { percent: 100 } }, 'codex'), null);
+  assert.equal(D.displayRemaining({}, 'codex'), null);
+  assert.equal(D.displayRemaining({ ok: false, primary: { percent: 100 } }, 'codex'), null);
   assert.equal(D.level(D.remaining(79.6)), 'ok', 'rounded display must not create an early warning');
 });
 test('expired quota copy uses the record reset time without pretending to refresh', () => {
@@ -158,7 +158,7 @@ test('registry catalogs eight providers and dynamic model rows participate in re
   assert.deepEqual(D.registry.completionIds(), ['cursor', 'codex', 'claude', 'grok', 'copilot', 'antigravity', 'manus']);
   const data = { windows: [{ id: 'spark', label: 'Spark', percent: 98, windowMinutes: 300 }] };
   assert.equal(D.quotaRows(data, 'codex')[0].name, 'Spark · 5 小时额度');
-  assert.equal(D.lowestRemaining(data, 'codex'), 2);
+  assert.equal(D.displayRemaining(data, 'codex'), 2);
 });
 test('quota refresh adapts to reset time and visibility without retrying expired snapshots in a loop', () => {
   const data = { codex: { primary: { resetsAt: 1001 } } };
@@ -169,7 +169,86 @@ test('quota refresh adapts to reset time and visibility without retrying expired
 
 test('balances and unlimited windows never manufacture a percent or a minimum', () => {
   for (const [id, window] of [['grok', { currency: 'USD', balance: 12, percent: 100 }], ['manus', { unit: 'credits', balance: 80, percent: 100 }], ['copilot', { unlimited: true, percent: 100 }]]) {
-    assert.equal(D.lowestRemaining({ ok: true, primary: window }, id), null);
+    assert.equal(D.displayRemaining({ ok: true, primary: window }, id), null);
   }
-  assert.equal(D.lowestRemaining({ windows: [{ unlimited: true, percent: 100 }, { percent: 30 }] }, 'copilot'), 70);
+  assert.equal(D.displayRemaining({ windows: [{ unlimited: true, percent: 100 }, { percent: 30 }] }, 'copilot'), 70);
+});
+
+
+test('dashboard selects the smallest reported time window rather than the lowest remaining value', () => {
+  const data = { detected: true, primary: { percent: 20, windowMinutes: 300 }, secondary: { percent: 99, windowMinutes: 10080 } };
+  const original = JSON.stringify(data);
+  assert.equal(D.displayRow(data, 'codex').key, 'primary');
+  assert.equal(D.displayRemaining(data, 'codex'), 80);
+  assert.equal(D.status(data, 'codex'), 'critical');
+  assert.equal(D.displayRemaining({ ...data, secondary: { ...data.secondary, percent: 100 } }, 'codex'), 80);
+  assert.equal(JSON.stringify(data), original, 'selection must not mutate source data');
+  const reversed = { ...data, primary: data.secondary, secondary: data.primary };
+  assert.equal(D.displayRow(reversed, 'codex').key, 'secondary');
+  assert.equal(D.displayRemaining(reversed, 'codex'), 80, 'primary/secondary order cannot override measured cadence');
+  const models = { windows: [{ id: 'week', percent: 99, windowMinutes: 10080 }, { id: 'five-hour', percent: 10, windowMinutes: 300 }, { id: 'other-five-hour', percent: 95, windowMinutes: 300 }] };
+  assert.equal(D.displayRow(models, 'codex').key, 'five-hour');
+  assert.equal(D.displayRemaining(models, 'codex'), 90, 'equal windows retain source order without falling back to the lowest balance');
+});
+
+test('bottleneck drives urgency and expiry independently of the displayed window', () => {
+  const now = Date.now();
+  const codex = { detected: true, primary: { percent: 20, windowMinutes: 300, resetsAt: (now + 3600000) / 1000 }, secondary: { percent: 99, windowMinutes: 10080, resetsAt: (now - 1000) / 1000 } };
+  assert.equal(D.status(codex, 'codex', now), 'stale', 'the bottleneck reset controls staleness');
+  assert.equal(D.urgencyRemaining(codex, 'codex'), 1);
+  assert.deepEqual(D.dashboard({ codex, claude: { detected: true, primary: { percent: 85, windowMinutes: 300 } } }, 'small', now).shown, ['claude', 'codex']);
+  const depleted = { ...codex, primary: { ...codex.primary, percent: 95 } };
+  assert.equal(D.status(depleted, 'codex', now), 'stale');
+  assert.equal(D.displayRemaining({ ...codex, primary: { ...codex.primary, percent: null } }, 'codex'), null, 'missing five-hour usage stays unknown instead of substituting the week');
+  assert.equal(D.status({ ...codex, primary: { ...codex.primary, resetsAt: (now - 1000) / 1000 } }, 'codex', now), 'stale');
+});
+
+test('weekly-only and unknown-cadence sources keep a stable reported scope', () => {
+  assert.equal(D.displayRemaining({ primary: { percent: 60, windowMinutes: 10080 } }, 'codex'), 40);
+  assert.equal(D.displayRow({ primary: { windowMinutes: null }, secondary: { windowMinutes: 0 } }, 'codex').key, 'primary');
+  assert.equal(D.displayRemaining({ auto: { percent: 20 }, other: { percent: 99 } }, 'cursor'), 80);
+  assert.equal(D.displayRow({ windows: [{ id: 'invalid', windowMinutes: -1 }, { id: 'short', windowMinutes: '300' }, { id: 'bad', windowMinutes: 'invalid' }] }, 'antigravity').key, 'short');
+  assert.equal(D.displayRow({}, 'codex'), null);
+  assert.equal(D.displayRow({ auto: null, other: { percent: 25 } }, 'cursor').key, 'other');
+});
+
+
+test('all reset labels use minute precision even when the timestamp includes seconds', () => {
+  const now = new Date(2026, 9, 28, 8).getTime();
+  const reset = new Date(2026, 9, 28, 13, 4, 9).getTime();
+  assert.equal(D.resetText({ resetsAt: reset / 1000 }, now), '13:04 重置');
+  assert.equal(D.clock(reset), '13:04');
+  assert.equal(D.resetText({ resetsAt: 'invalid' }, now), '重置时间未知');
+});
+
+
+test('a full five-hour ring can be constrained by a depleted weekly quota', () => {
+  const data = { ok: true, detected: true, primary: { percent: 0, windowMinutes: 300 }, secondary: { percent: 100, windowMinutes: 10080, resetsAt: 2000000000 } };
+  assert.equal(D.displayRemaining(data, 'codex'), 100);
+  assert.equal(D.urgencyRemaining(data, 'codex'), 0);
+  assert.equal(D.status(data, 'codex', 1000000000), 'depleted');
+  const b = D.bottleneckInfo(data, 'codex');
+  assert.equal(b.name, '周');assert.equal(b.remaining, 0);assert.equal(b.badge, true);assert.equal(b.resetAt, 2000000000000);
+  assert.equal(D.bottleneckInfo({ ...data, secondary: { ...data.secondary, resetsAt: null } }, 'codex').resetAt, null);
+});
+test('mini summarizes multiple, all, mixed and critical constraints without invented reset times', () => {
+  const now = new Date(2026, 9, 21, 8).getTime(), later = now + 86400000;
+  const data = remaining => ({ ok:true, detected:true, primary: { percent:0, windowMinutes:300 }, secondary: { percent:100-remaining, windowMinutes:10080, resetsAt:later } });
+  const all = { claude:data(0), codex:data(0), cursor:{ok:true, detected:true, auto:{percent:0}} };
+  assert.match(D.miniSummary(all, now).text, /^2 家额度已用完 · 最早/);
+  assert.match(D.miniSummary({claude:data(0),codex:data(0)}, now).text, /^全部额度已用完 · 最早/);
+  assert.equal(D.miniSummary({claude:data(0),codex:data(6)}, now).text, 'Claude 已用完 · 另 1 家告急');
+  assert.equal(D.miniSummary({claude:data(8),codex:data(6)}, now).text, '2 家告急 · 最低 Codex 6%');
+  const noTime={...data(0),secondary:{percent:100,windowMinutes:10080}};
+  assert.equal(D.miniSummary({codex:noTime}, now).text, '全部额度已用完');
+  assert.equal(D.bottleneckInfo(noTime,'codex').resetAt, null);
+});
+test('Cursor same-cycle pools have no corner badge, but Other still constrains tone and order', () => {
+  const data={ok:true,detected:true,auto:{percent:0,windowMinutes:43200},other:{percent:100,windowMinutes:43200}};
+  assert.equal(D.bottleneckInfo(data,'cursor').badge,false);
+  assert.equal(D.bottleneckInfo(data,'cursor').name,'Other');assert.equal(D.status(data,'cursor'),'depleted');
+  assert.equal(D.bottleneckInfo({...data,other:{percent:100,windowMinutes:86400}},'cursor').badge,true);
+  const snapshots={cursor:data,codex:{detected:true,primary:{percent:95}},claude:{detected:true,primary:{percent:81}}};
+  assert.deepEqual(D.dashboard(snapshots,'mini').ids,['cursor','codex','claude']);
+  assert.deepEqual(D.dashboard(snapshots,'large').ids,['cursor','codex','claude']);
 });

@@ -85,8 +85,10 @@ async function run(c) {
   assert.match(await js(`document.querySelector('#grok-usage-rows strong').textContent`),/10\.00/);
   assert.equal(await js(`document.querySelector('#grok-usage-rows .cursor-usage-track').hidden`),true);
   assert.equal(await js(`document.querySelectorAll('#copilot-usage-rows .ai-quota-row').length`),1);
+  await until(`document.querySelector('#copilot-usage-rows strong')?.textContent==='50%'`);
   assert.equal(await js(`document.querySelector('#copilot-usage-rows strong').textContent`),'50%');
   assert.equal(await js(`document.getElementById('ai-provider-copilot').dataset.level`),'ok');
+  await until(`document.querySelector('#antigravity-usage-rows strong')?.textContent==='50%'`);
   assert.equal(await js(`document.querySelector('#antigravity-usage-rows strong').textContent`),'50%');
   assert.equal(await js(`document.querySelector('#grokbot-usage-rows .ai-quota-help').textContent.includes(PomeI18n.t('copy.resetTimeUnknown.2446e1'))`),false);
   assert.equal(await js(`document.querySelector('#home-cursor [role=tab]')`),null);
