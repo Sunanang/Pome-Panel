@@ -250,12 +250,12 @@ test('mini summarizes multiple, all, mixed and critical constraints without inve
   const now = new Date(2026, 9, 21, 8).getTime(), later = now + 86400000;
   const data = remaining => ({ ok:true, detected:true, primary: { percent:0, windowMinutes:300 }, secondary: { percent:100-remaining, windowMinutes:10080, resetsAt:later } });
   const all = { claude:data(0), codex:data(0), cursor:{ok:true, detected:true, auto:{percent:0}} };
-  assert.match(D.miniSummary(all, now).text, /^2 家额度已用完 · 最早/);
-  assert.match(D.miniSummary({claude:data(0),codex:data(0)}, now).text, /^全部额度已用完 · 最早/);
-  assert.equal(D.miniSummary({claude:data(0),codex:data(6)}, now).text, 'Claude 已用完 · 另 1 家告急');
+  assert.match(D.miniSummary(all, now).text, /^2 家额度 0% · 最早/);
+  assert.match(D.miniSummary({claude:data(0),codex:data(0)}, now).text, /^全部额度 0% · 最早/);
+  assert.equal(D.miniSummary({claude:data(0),codex:data(6)}, now).text, 'Claude 0% · 另 1 家告急');
   assert.equal(D.miniSummary({claude:data(8),codex:data(6)}, now).text, '2 家告急 · 最低 Codex 6%');
   const noTime={...data(0),secondary:{percent:100,windowMinutes:10080}};
-  assert.equal(D.miniSummary({codex:noTime}, now).text, '全部额度已用完');
+  assert.equal(D.miniSummary({codex:noTime}, now).text, '全部额度 0%');
   assert.equal(D.bottleneckInfo(noTime,'codex').resetAt, null);
 });
 test('Cursor same-cycle pools have no corner badge, but Other still constrains tone and order', () => {
@@ -310,7 +310,7 @@ test('invalid mini summary wins over depleted and critical without replacing the
   assert.deepEqual(summary,{text:'Copilot 失效 · 去设置',severity:'error',repair:'copilot'});
   assert.equal(D.dashboard(snapshots,'mini').shown[0],'copilot');
   delete snapshots.copilot;
-  assert.equal(D.miniSummary(snapshots).text,'Claude 已用完 · 另 1 家告急');
+  assert.equal(D.miniSummary(snapshots).text,'Claude 0% · 另 1 家告急');
   assert.equal(D.displayRemaining(snapshots.claude,'claude'),100);
 });
 test('freshness retains its existing age threshold and gray age copy independently of urgency', () => {
@@ -326,4 +326,48 @@ test('freshness retains its existing age threshold and gray age copy independent
   assert.equal(D.status({...stale,primary:{percent:82}},'codex',now),'warn');
   assert.equal(D.status({...stale,manualTokenInvalid:true,primary:{percent:100}},'codex',now),'error');
   assert.equal(D.staleSummary({codex:{...stale,fetchedAt:null}},true,now).hours,null,'unknown age is not invented');
+});
+
+test('failed requests differ from expired credentials in mini summaries in both languages', () => {
+  const I=require('../localization/runtime');
+  for (const [locale,failed,invalid] of [['zh-CN','Cursor 获取失败 · 重试','Copilot 失效 · 去设置'],['en-US','Cursor failed · Retry','Copilot invalid · Settings']]) {
+    I.setState(I.snapshot(locale,[locale]));
+    const network={ok:false,detected:true,error:'network'};
+    assert.deepEqual(D.miniSummary({cursor:network}),{text:failed,severity:'error',retry:'cursor'});
+    assert.equal(D.miniSummary({cursor:network,copilot:{ok:false,configured:true,status:401}}).text,invalid,'credential failures retain the highest repair priority');
+  }
+  I.setState(I.snapshot('zh-CN',['zh-CN']));
+});
+test('recent stale data never claims zero hours or invents an unknown age', () => {
+  const I=require('../localization/runtime'),now=Date.now();
+  const source={ok:true,detected:true,stale:true,fetchedAt:new Date(now-20*60000).toISOString(),primary:{percent:20}};
+  for (const locale of ['zh-CN','en-US']) {
+    I.setState(I.snapshot(locale,[locale]));
+    for(const compact of [true,false]) {
+      const recent=D.staleSummary({codex:source},compact,now);
+      assert.equal(recent.hours,0);
+      assert.match(recent.text,locale==='zh-CN'?/不足 1 小时/:/<1h/);
+      assert.doesNotMatch(recent.text,/0 小时|0h/);
+      const hour=D.staleSummary({codex:{...source,fetchedAt:new Date(now-3600000).toISOString()}},compact,now);
+      assert.match(hour.text,locale==='zh-CN'?/1 小时/:/1h/);
+      assert.equal(D.staleSummary({codex:{...source,fetchedAt:null}},compact,now).text,I.t('quota.stale'));
+    }
+    assert.match(I.t('quota.windowDepleted',{window:'Other'}),/^Other /,'Latin pool identity stays separated from the localized sentence');
+  }
+  I.setState(I.snapshot('zh-CN',['zh-CN']));
+});
+
+test('quota percentages use the same terse copy at zero and above zero, without changing balance units', () => {
+  const I=require('../localization/runtime');
+  for(const locale of ['zh-CN','en-US']) {
+    I.setState(I.snapshot(locale,[locale]));
+    const name=locale==='zh-CN'?'周':'Week';
+    assert.equal(I.t('quota.windowDepleted',{window:name}),name+' 0%');
+    assert.equal(I.t('quota.windowLeft',{window:name,value:18}),name+' 18%');
+    assert.doesNotMatch(I.t('quota.windowRemaining',{source:'Codex',window:name,remaining:'18%',message:''}),/剩|remaining/i);
+    const balance={ok:true,configured:true,primary:{currency:'USD',balance:0}};
+    assert.doesNotMatch(D.miniSummary({grok:balance}).text,/%|已用完/,'a currency amount has no fabricated percentage denominator');
+    assert.doesNotMatch(D.miniSummary({grok:balance,codex:{ok:true,detected:true,primary:{percent:95}}}).text,/%|已用完/,'mixed monetary and critical quotas retain their units');
+  }
+  I.setState(I.snapshot('zh-CN',['zh-CN']));
 });

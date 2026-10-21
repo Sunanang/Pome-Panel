@@ -137,8 +137,10 @@ async function main() {
   await js(`window.detachedPaints=0;window.detachedObserver=new MutationObserver(records=>detachedPaints+=records.length);detachedObserver.observe(detachedCodex,{subtree:true,childList:true,attributes:true,characterData:true})`);
   await sleep(850);
   assert.equal(await js('detachedPaints'),0,'a disconnected card has no remaining animation callbacks');
-  await js(`detachedObserver.disconnect();fixture.codex=connectedCodex;NotchAiUsage.refresh({force:true})`);
+  await js(`detachedObserver.disconnect();window.realQuotaRaf=requestAnimationFrame;window.realQuotaCancel=cancelAnimationFrame;window.heldQuotaFrames=new Map();window.heldQuotaFrameId=0;window.requestAnimationFrame=cb=>{heldQuotaFrames.set(++heldQuotaFrameId,cb);return heldQuotaFrameId};window.cancelAnimationFrame=id=>heldQuotaFrames.delete(id);fixture.codex=connectedCodex;NotchAiUsage.refresh({force:true})`);
   assert.equal(await js(`document.querySelector('#ai-provider-codex [data-main-number]').textContent`),'0%','a disconnected source releases cached animation values');
+  await js(`(()=>{const frames=[...heldQuotaFrames.values()];heldQuotaFrames.clear();window.requestAnimationFrame=realQuotaRaf;window.cancelAnimationFrame=realQuotaCancel;const end=performance.now()+1200;frames.forEach(frame=>frame(end))})()`);
+  assert.equal(await js(`document.querySelector('#ai-provider-codex [data-main-number]').textContent`),'50%','reconnect reaches its new reading after the controlled frame');
   if(!win.webContents.debugger.isAttached())win.webContents.debugger.attach('1.3');
   await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   await js(`fixture.codex.primary.percent=7;NotchAiUsage.refresh({force:true})`);

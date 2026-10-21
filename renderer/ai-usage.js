@@ -178,13 +178,18 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const compactReset = D.toMillis(reset) != null && !(typeof reset === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(reset))
       ? t('quota.resetAt', { time:D.recoveryTime(reset) }) : m.selected.help;
     if (m.size === 'large' && tile.clientWidth < 600) return m.constraintLine ? [m.constraintLine, m.constraintTime] : [compactReset];
-    return m.size === 'small'
-      ? [m.constraintLine ? m.constraintTime || m.constraintLine : compactReset]
-      : [m.constraintLine || (m.size === 'large' ? m.selected.scopeShort || selectedCaption : selectedCaption), m.constraintLine ? m.constraintTime : m.selected.help];
+    if (m.size === 'small') {
+      if (!m.constraintLine) return [compactReset];
+      const lines = parseFloat(getComputedStyle(tile).getPropertyValue('--q-caption-lines'));
+      return lines >= 2 ? [m.constraintLine, m.constraintTime] : [m.constraintTime || m.constraintLine];
+    }
+    return [m.constraintLine || (m.size === 'large' ? m.selected.scopeShort || selectedCaption : selectedCaption), m.constraintLine ? m.constraintTime : m.selected.help];
   }
   function provider(m, layout, reserved) {
     const error = m.status === 'error', caption = captionLines(m);
-    const repair = error ? `<button class="ai-inline-settings" type="button" data-quota-settings="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t('copy.openSettings.93112c')}`)}">${escape(t('quota.repair'))}</button>` : '';
+    const invalid = D.invalidToken(m.data), errorLabel = t(invalid ? 'quota.status.invalid' : 'quota.status.error');
+    const settings = invalid || m.data?.error === 'grok_team_required';
+    const repair = error ? `<button class="ai-inline-settings" type="button" data-quota-${settings ? 'settings' : 'retry'}="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t(settings ? 'copy.openSettings.93112c' : 'ui.retry')}`)}">${escape(t(settings ? 'quota.repair' : 'ui.retry'))}</button>` : '';
     return `<section class="ai-usage-provider q-vertical" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-stale="${m.stale}" data-level="${m.level}" data-unit="${m.selected.kind}" data-quota-window="${escape(m.selected.key)}" data-balance-empty="${m.exhausted}" data-badge-row="${reserved}" data-depleted="${!error && visualStates.get(`${m.id}/depleted`) === true}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}" title="${escape(m.title)}">
       <button class="q-detail-toggle" data-quota-toggle="${m.id}" type="button" aria-controls="${m.id}-usage-rows" aria-expanded="false" aria-label="${escape(t('ui.quota.details', { source: registry.get(m.id).label }))}"></button>
       <div class="q-provider-body">
@@ -192,9 +197,9 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         <div class="q-badge-slot" data-state-fade="${m.status}">${bottleneckBadge(m)}</div>
         ${ring(m, layout.ringSize)}${quotaRows(m, true)}
         <div class="q-compact-caption" data-state-fade="${m.status}" title="${escape(caption.filter(Boolean).join(' · '))}">${caption.filter(Boolean).map(line => `<span>${escape(line)}</span>`).join('')}</div>
-        <p class="cursor-usage-footnote" id="${m.id}-usage-footnote">${error ? `<span>${escape(t('quota.status.invalid'))}</span>${repair}` : escape(m.updated)}</p>
+        <p class="cursor-usage-footnote" id="${m.id}-usage-footnote">${error ? `<span>${escape(errorLabel)}</span>${repair}` : escape(m.updated)}</p>
       </div>${quotaRows(m)}
-      <div class="q-mini-value">${error ? escape(t('quota.status.invalid')) : m.remaining == null ? `<span data-main-amount>${escape(m.selected.display)}</span>` : `<span class="q-pct" data-main-number>${pct(m.remaining)}</span>`}</div></section>`;
+      <div class="q-mini-value">${error ? escape(errorLabel) : m.remaining == null ? `<span data-main-amount>${escape(m.selected.display)}</span>` : `<span class="q-pct" data-main-number>${pct(m.remaining)}</span>`}</div></section>`;
   }
 
   function fadeState(node, key, next) {
@@ -366,9 +371,13 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       : size === 'large' ? escape(t('quota.refreshOrder')) : [layout.hidden.length ? `<button class="ai-inline-settings" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}">${escape(t('quota.moreSources', { count: layout.hidden.length }))}</button>` : escape(t('quota.compactOrder')), escape(updated)].filter(Boolean).join(' · ');
     footer.title = size === 'mini' && first ? `${first.selected.name}: ${first.selected.display}\n${first.title}` : [footer.textContent, updated].filter(Boolean).join(' · ');
     delete footer.dataset.quotaSettings;
+    delete footer.dataset.quotaRetry;
     if (size === 'mini' && miniSummary.repair) {
       delete footer.dataset.quotaToggle; footer.dataset.quotaSettings = miniSummary.repair; footer.tabIndex = 0; footer.setAttribute('role', 'button');
       footer.removeAttribute('aria-controls'); footer.setAttribute('aria-label', miniSummary.text);
+    } else if (size === 'mini' && miniSummary.retry) {
+      delete footer.dataset.quotaToggle; footer.dataset.quotaRetry = miniSummary.retry; footer.tabIndex = 0; footer.setAttribute('role', 'button');
+      footer.removeAttribute('aria-controls'); footer.setAttribute('aria-label', miniSummary.text); footer.title = miniSummary.text;
     } else if (size === 'mini' && first) {
       footer.dataset.quotaToggle = first.id; footer.tabIndex = 0; footer.setAttribute('role', 'button');
       footer.setAttribute('aria-controls', `${first.id}-usage-rows`); footer.setAttribute('aria-label', footer.title);
@@ -376,7 +385,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       delete footer.dataset.quotaToggle; footer.removeAttribute('tabindex'); footer.removeAttribute('role');
       footer.removeAttribute('aria-controls'); footer.removeAttribute('aria-label');
     }
-    if (size === 'mini' && first) footer.setAttribute('aria-expanded', String(pinnedDetails === first.id));
+    if (size === 'mini' && footer.dataset.quotaToggle) footer.setAttribute('aria-expanded', String(pinnedDetails === first.id));
     else footer.removeAttribute('aria-expanded');
     if (focused !== undefined) [...tile.querySelectorAll('[data-quota-settings]')].find(el => el.dataset.quotaSettings === focused)?.focus({ preventScroll: true });
     syncGeometry(layout, visible);
@@ -418,6 +427,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   }
   byId('cursor-usage-refresh')?.addEventListener('click', (event) => { event.stopPropagation(); refresh({ force: true }); });
   tile.addEventListener('click', (event) => {
+    if (event.target.closest('[data-quota-retry]')) { event.stopPropagation(); void refresh({ force:true }); return; }
     const action = event.target.closest('[data-quota-settings]');
     if (action) { event.stopPropagation(); void openSettings(action.dataset.quotaSettings || undefined); }
   });

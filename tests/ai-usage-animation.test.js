@@ -72,4 +72,8 @@ test('disconnect pruning cancels stale sinks while keeping other sources and cac
   assert.equal(retained, 60);
   h.store.prune(() => false);
   assert.equal(h.store.value('cursor/auto/main'), undefined);
+  const reconnected = [];
+  h.store.set('codex/5h/main', 50, value => reconnected.push(value));
+  assert.equal(reconnected[0], 0, 'reconnection starts fresh before any frame runs');
+  h.tick(1440); assert.equal(reconnected.at(-1), 50);
 });

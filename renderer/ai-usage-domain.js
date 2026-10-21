@@ -103,8 +103,10 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
   }
   function miniSummary(snapshots, now = Date.now()) {
     const ids = dashboard(snapshots, 'mini', now).ids;
-    const invalid = ids.find(id => status(snapshots[id], id, now) === 'error');
+    const errors = ids.filter(id => status(snapshots[id], id, now) === 'error');
+    const invalid = errors.find(id => invalidToken(snapshots[id]));
     if (invalid) return { text: pomeLocaleRendererAiUsageDomain.t('quota.invalidSummary', { source: registry.get(invalid).label }), severity: 'error', repair: invalid };
+    if (errors.length) return { text: pomeLocaleRendererAiUsageDomain.t('quota.failedSummary', { source: registry.get(errors[0]).label }), severity: 'error', retry: errors[0] };
     const valid = ids.filter(id => !['error', 'stale'].includes(status(snapshots[id], id, now)));
     const depleted = valid.filter(id => urgencyRemaining(snapshots[id], id) === 0);
     const critical = valid.filter(id => { const n = urgencyRemaining(snapshots[id], id); return n > 0 && n <= 10; });
@@ -115,9 +117,10 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     let text = '', severity = 'ok';
     if (depleted.length) {
       severity = 'depleted';
-      if (depleted.length > 1 || depleted.length === ids.length) text = t(depleted.length === ids.length ? 'quota.allDepleted' : 'quota.manyDepleted', { count: depleted.length }) + (time ? t('quota.earliest', { time }) : '');
-      else if (critical.length) text = t('quota.depletedAndCritical', { source: label(depleted[0]), count: critical.length });
-      else { const b = bottleneckInfo(snapshots[depleted[0]], depleted[0]); text = t('quota.oneDepleted', { source: label(depleted[0]), window: b.name }) + (time ? t('quota.recovers', { time }) : ''); }
+      const percentages = depleted.every(id => { const w = bottleneck(snapshots[id], id)?.windowUsage; return !w?.currency && w?.unit !== 'credits'; });
+      if (depleted.length > 1 || depleted.length === ids.length) text = t(depleted.length === ids.length ? percentages ? 'quota.allDepleted' : 'quota.allZero' : percentages ? 'quota.manyDepleted' : 'quota.manyZero', { count: depleted.length }) + (time ? t('quota.earliest', { time }) : '');
+      else if (critical.length) text = t(percentages ? 'quota.depletedAndCritical' : 'quota.zeroAndCritical', { source: label(depleted[0]), count: critical.length });
+      else { const b = bottleneckInfo(snapshots[depleted[0]], depleted[0]); text = t(percentages ? 'quota.oneDepleted' : 'quota.oneZero', { source: label(depleted[0]), window: b.name }) + (time ? t('quota.recovers', { time }) : ''); }
     } else if (critical.length > 1) { severity = 'critical'; text = t('quota.manyCritical', { count: critical.length, source: label(critical[0]), value: Math.round(urgencyRemaining(snapshots[critical[0]], critical[0])) }); }
     else if (valid.some(id => { const n = urgencyRemaining(snapshots[id], id); return n != null && n <= 20; })) {
       const id = valid[0], b = bottleneckInfo(snapshots[id], id);
@@ -139,7 +142,8 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     const ids = providers(snapshots).filter(id => isStale(snapshots[id], id, now));
     const stamps = ids.map(id => timestamp(snapshots[id])).filter(n => n != null);
     const hours = stamps.length ? Math.max(0, Math.floor((now - Math.min(...stamps)) / 3600000)) : null;
-    return { stale: ids.length > 0, hours, text: !ids.length ? '' : pomeLocaleRendererAiUsageDomain.t(hours == null ? 'quota.stale' : compact ? 'quota.staleShort' : 'quota.staleAge', { hours }) };
+    const key = hours == null ? 'quota.stale' : hours === 0 ? compact ? 'quota.staleRecentShort' : 'quota.staleRecent' : compact ? 'quota.staleShort' : 'quota.staleAge';
+    return { stale: ids.length > 0, hours, text: !ids.length ? '' : pomeLocaleRendererAiUsageDomain.t(key, { hours }) };
   }
   function status(data, id, now = Date.now()) {
     if (!available(data)) return 'undetected';

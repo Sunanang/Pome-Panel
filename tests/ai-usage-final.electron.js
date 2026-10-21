@@ -66,7 +66,7 @@ async function main(){
       if(name==='large')assert.equal(await js(`getComputedStyle(document.querySelector('#home-cursor .q-compact-caption')).justifyContent`),format==='reference'?'center':'flex-end',prefix+' explanation group matches the available width');
       if(name==='mini'&&state==='error')assert.match(await js(`document.getElementById('ai-usage-footer').textContent`),/^Copilot 失效 · 去设置$/);
       if(name==='mini'&&state==='error')assert.equal(await js(`document.querySelector('#ai-provider-copilot .cursor-usage-footnote').checkVisibility()`),false,'mini uses one invalid label below the ring');
-      if(name==='mini'&&state==='all-out')assert.match(await js(`document.getElementById('ai-usage-footer').textContent`),/^全部额度已用完/);
+      if(name==='mini'&&state==='all-out')assert.match(await js(`document.getElementById('ai-usage-footer').textContent`),/^全部额度 0%/);
       if(name==='mini'&&['out','multi-out','all-out','critical','warn'].includes(state))assert.notEqual(await js(`getComputedStyle(document.getElementById('ai-usage-footer')).color`),await js(`getComputedStyle(document.getElementById('ai-usage-updated')).color`),'urgent mini summary retains its status color');
       if(state==='stale'){assert.equal(await js(`document.getElementById('ai-usage-updated').textContent`),name==='mini'||name==='small'?'已过期 3 小时':'数据已过期 · 3 小时前');assert.equal(await js(`getComputedStyle(document.querySelector('.ai-usage-provider .q-ring')).opacity`),'0.45');}
     }
@@ -82,6 +82,43 @@ async function main(){
       assert.deepEqual(v.cards.flatMap(c=>c.overflow),[],`English ${name}/${count} cell content`);
       assert.deepEqual(await js(`[...document.querySelectorAll('#home-cursor .q-compact-caption')].filter(n=>n.checkVisibility({checkVisibilityCSS:true})&&n.scrollHeight>n.clientHeight+1).map(n=>({text:n.textContent,scroll:n.scrollHeight,height:n.clientHeight}))`),[],`English ${name}/${count} complete explanation lines`);
       assert.deepEqual(await js(`[...document.querySelectorAll('#home-cursor .q-window-short')].filter(n=>n.checkVisibility()&&n.textContent.length<=5&&n.scrollWidth>n.clientWidth+1).map(n=>({text:n.textContent,font:getComputedStyle(n).font,width:n.clientWidth,scroll:n.scrollWidth,label:n.closest('.home-tile')?.style.getPropertyValue('--q-window-label-width')}))`),[],`English ${name}/${count} short window names remain readable`);
+    }
+  }
+  await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);
+  // Credential expiry, transient failures and recent stale data use distinct copy.
+  for (const locale of ['zh-CN','en-US']) {
+    await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'))`);
+    await supply({});
+    await supply({cursor:{ok:false,detected:true,error:'network'}});
+    for(const name of ['mini','small','medium','large']) {
+      await size(name,actual);await capture(`${name}-network-${locale}`);
+      const copy=await js(`({value:document.querySelector('#ai-provider-cursor .q-mini-value').textContent,foot:document.getElementById('cursor-usage-footnote').textContent,summary:document.getElementById('ai-usage-footer').textContent,title:document.getElementById('ai-provider-cursor').title})`);
+      assert.equal(copy.value,locale==='zh-CN'?'失败':'Error');
+      assert.match(copy.foot,locale==='zh-CN'?/^失败重试$/:/^ErrorRetry$/);
+      assert.doesNotMatch(copy.title+copy.summary,/失效|invalid|expired/i);
+      if(name==='mini') {
+        assert.equal(await js(`document.getElementById('ai-usage-footer').dataset.quotaRetry`),'cursor');
+        assert.equal(await js(`document.getElementById('ai-usage-footer').hasAttribute('data-quota-settings')`),false);
+        await js(`window.retryQuotaCalls=0;notchAPI.getCursorUsage=async()=>{retryQuotaCalls++;return fixture.cursor};document.getElementById('ai-usage-footer').click();NotchAiUsage.refresh({force:true})`);
+      } else await js(`document.querySelector('#cursor-usage-footnote [data-quota-retry]').click();NotchAiUsage.refresh({force:true})`);
+      assert(await js('retryQuotaCalls>0'),'failure action actually retries');
+      assert.equal(await js(`activeTab`),'home','network errors never send the user to credential settings');
+    }
+    const recent={...snapshot(55),stale:true,fetchedAt:new Date(now-20*60000).toISOString()};
+    await supply({codex:recent});
+    for(const name of ['mini','small','medium','large']) {
+      await size(name,actual);await capture(`${name}-recent-stale-${locale}`);
+      const text=await js(`document.getElementById('ai-usage-updated').textContent`);
+      assert.match(text,locale==='zh-CN'?/不足 1 小时/:/<1h/);assert.doesNotMatch(text,/0 小时|0h/);
+    }
+    for(const count of [3,4,5,6]) {
+      const data=fixture(count,'out');await supply(data);await size('small',actual);
+      const spans=await js(`[...document.querySelectorAll('#ai-provider-codex .q-compact-caption>span')].map(n=>n.textContent)`);
+      assert.equal(spans.length,count<=4?2:1,'small uses its actual caption line budget');
+      if(count<=4)assert.match(spans[0],locale==='zh-CN'?/周 0%/:/Week 0%/);
+      assert.match(spans.at(-1),locale==='zh-CN'?/恢复$/:/^Recovers /);
+      assert.equal(await js(`(()=>{const n=document.querySelector('#ai-provider-codex .q-compact-caption');return n.scrollHeight<=n.clientHeight+1})()`),true,'both bottleneck and recovery fit');
+      await capture(`small-${count}ai-two-line-${locale}`);
     }
   }
   await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);

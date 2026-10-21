@@ -1,3 +1,19 @@
+# 额度残留修正与文案统一 · 2026-10-21
+
+final result: passed
+
+本节覆盖下方历史文案：百分比统一为「周 0%」「周 18%」「Other 0%」，额度 UI 的数值说明、摘要、来源与刷新提示不再使用「剩」或「已用完」；金额、积分保留真实单位。布局与此前 final 相同，small 有两行空间时同时显示瓶颈及恢复时间。
+
+- 网络/通用失败与认证失效分开；卡片和 mini 摘要一致，前者提供实际重试动作，后者提供设置入口；认证失效摘要优先。
+- 不足一小时的过期年龄显示「不足 1 小时」，未知年龄不编造，不改过期阈值。
+- 清理已不生成的 q-summary、q-main-scope、q-horizontal、q-caption 样式；保留有效的明细、基础布局与动画。重连通过可控帧验证 0% 起点与 50% 终点，消除测试 rAF 竞态；原动画实现未重写。
+- 38 项额度/动画单测通过；完整 `npm test`：853 pass / 0 fail / 1 platform skip，31 次 Electron、i18n 与语法检查通过。最终 quota-only 副本另验语言资源、领域/动画单测及布局/刷新 Electron，防止混入其他工作区修改。
+- 目视与交互：四尺寸中英文矩阵、失败按钮/mini 摘要重试不跳设置、小号 3–4 家双行与 5–6 家单行、近期过期、0% 简写、金额单位、固定轨道及居中图标均通过。证据：`dist.noindex/quota-residual/`，合图 `residual-summary.png`；详见 [验收说明](docs/quota-final-acceptance.md)。
+
+未做 Windows 真机、真实账号在线刷新。原有 UI 简化与 Cursor/NAS messageKey 等未提交改动独立保留。
+
+---
+
 # Final 额度卡片验收 · 2026-10-21
 
 final result: passed
