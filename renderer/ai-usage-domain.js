@@ -99,10 +99,12 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     const d = new Date(ms), today = new Date(now);
     const sameDay = d.toDateString() === today.toDateString();
     const day = sameDay ? '' : d.toLocaleDateString(pomeLocaleRendererAiUsageDomain.getState().formatLocale, { weekday: 'short' });
-    return `${day}${clock(ms)}`;
+    return [day, clock(ms)].filter(Boolean).join(' ');
   }
   function miniSummary(snapshots, now = Date.now()) {
     const ids = dashboard(snapshots, 'mini', now).ids;
+    const invalid = ids.find(id => status(snapshots[id], id, now) === 'error');
+    if (invalid) return { text: pomeLocaleRendererAiUsageDomain.t('quota.invalidSummary', { source: registry.get(invalid).label }), severity: 'error', repair: invalid };
     const valid = ids.filter(id => !['error', 'stale'].includes(status(snapshots[id], id, now)));
     const depleted = valid.filter(id => urgencyRemaining(snapshots[id], id) === 0);
     const critical = valid.filter(id => { const n = urgencyRemaining(snapshots[id], id); return n > 0 && n <= 10; });
@@ -117,42 +119,56 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
       else if (critical.length) text = t('quota.depletedAndCritical', { source: label(depleted[0]), count: critical.length });
       else { const b = bottleneckInfo(snapshots[depleted[0]], depleted[0]); text = t('quota.oneDepleted', { source: label(depleted[0]), window: b.name }) + (time ? t('quota.recovers', { time }) : ''); }
     } else if (critical.length > 1) { severity = 'critical'; text = t('quota.manyCritical', { count: critical.length, source: label(critical[0]), value: Math.round(urgencyRemaining(snapshots[critical[0]], critical[0])) }); }
-    else if (valid.length) {
+    else if (valid.some(id => { const n = urgencyRemaining(snapshots[id], id); return n != null && n <= 20; })) {
       const id = valid[0], b = bottleneckInfo(snapshots[id], id);
       if (b) { severity = b.level; text = t('quota.lowestWindow', { source: label(id), window: b.name, value: Math.round(b.remaining) }) + (b.resetAt != null ? ` · ${recoveryTime(b.resetAt, now)}` : ''); }
+    } else if (staleSummary(snapshots, true, now).stale) {
+      severity = 'stale'; text = staleSummary(snapshots, true, now).text;
+    } else if (valid.length) {
+      const id = valid[0], b = bottleneckInfo(snapshots[id], id);
+      if (b) text = t('quota.lowestWindow', { source: label(id), window: b.name, value: Math.round(b.remaining) });
     }
     return { text, severity };
+  }
+  function isStale(data, id, now = Date.now()) {
+    if (!available(data) || invalidToken(data) || data?.ok === false) return false;
+    const stamp = timestamp(data);
+    return Boolean(data?.stale || expired(bottleneck(data, id)?.windowUsage, now) || stamp != null && now - stamp > 86400000);
+  }
+  function staleSummary(snapshots, compact = false, now = Date.now()) {
+    const ids = providers(snapshots).filter(id => isStale(snapshots[id], id, now));
+    const stamps = ids.map(id => timestamp(snapshots[id])).filter(n => n != null);
+    const hours = stamps.length ? Math.max(0, Math.floor((now - Math.min(...stamps)) / 3600000)) : null;
+    return { stale: ids.length > 0, hours, text: !ids.length ? '' : pomeLocaleRendererAiUsageDomain.t(hours == null ? 'quota.stale' : compact ? 'quota.staleShort' : 'quota.staleAge', { hours }) };
   }
   function status(data, id, now = Date.now()) {
     if (!available(data)) return 'undetected';
     if (invalidToken(data) || data?.ok === false) return 'error';
-    const stamp = timestamp(data);
-    if (data?.stale || expired(bottleneck(data, id)?.windowUsage, now)
-      || stamp != null && now - stamp > 86400000) return 'stale';
     const rem = urgencyRemaining(data, id);
-    return rem === 0 ? 'depleted' : rem == null ? 'ok' : level(rem);
+    if (rem != null && rem <= 20) return rem === 0 ? 'depleted' : level(rem);
+    return isStale(data, id, now) ? 'stale' : 'ok';
   }
   function dashboard(snapshots, size = 'small', now = Date.now()) {
     const ids = providers(snapshots);
     if (['mini', 'small'].includes(size)) {
-      const rank = { depleted: 0, critical: 1, warn: 2, error: 3, ok: 4, stale: 5, undetected: 6 };
+      const rank = { error: 0, depleted: 1, critical: 2, warn: 3, stale: 4, ok: 5, undetected: 6 };
       const meta = Object.fromEntries(ids.map((id) => [id, {
         rank: rank[status(snapshots[id], id, now)] ?? 9,
         rem: urgencyRemaining(snapshots[id], id) ?? Infinity,
       }]));
       ids.sort((a, b) => meta[a].rank - meta[b].rank || meta[a].rem - meta[b].rem);
     }
-    const limit = size === 'mini' ? ids.length <= 4 ? 4 : 3 : size === 'small' ? 3 : ids.length;
+    const limit = size === 'mini' ? ids.length <= 4 ? 4 : 3 : size === 'small' ? 6 : ids.length;
     const shown = ids.slice(0, limit), hidden = ids.slice(limit);
     const columns = size === 'mini' ? shown.length + (hidden.length ? 1 : 0)
-      : size === 'small' && ids.length <= 2 ? ids.length
-      : size === 'medium' ? Math.min(3, ids.length) : size === 'large' && ids.length >= 7 ? 3 : size === 'large' && ids.length >= 5 ? 2 : 1;
-    const summary = size === 'large' && ids.length === 5;
+      : size === 'small' ? Math.min(2, ids.length)
+      : ids.length <= 4 ? ids.length : 3;
+    const summary = false;
     return { ids, shown, hidden, columns: Math.max(1, columns), summary,
       rows: Math.ceil((shown.length + Number(summary)) / Math.max(1, columns)),
-      ringSize: size === 'mini' ? 32 : size === 'small' ? ids.length <= 2 ? 46 : 36
-        : size === 'medium' ? ids.length <= 2 ? 64 : ids.length === 3 ? 52 : ids.length > 6 ? 22 : 28
-          : ids.length <= 2 ? 84 : ids.length === 3 ? 66 : 50 };
+      ringSize: size === 'mini' ? 30 : size === 'small' ? ids.length <= 4 ? 40 : 26
+        : size === 'medium' ? ids.length <= 3 ? 56 : ids.length === 4 ? 46 : 30
+          : ids.length <= 3 ? 118 : ids.length === 4 ? 96 : 58 };
   }
   function formatPercent(value) { const n = percent(value); return n == null ? '--%' : `${Math.round(n)}%`; }
   function clock(value) {
@@ -263,5 +279,5 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     if (force || visible || data == null) return true;
     return available(data) || Boolean(data.configured || data.manualTokenConfigured || data.ok === false);
   }
-  return { windowShortLabel, bottleneck, bottleneckInfo, miniSummary, recoveryTime, registry, windowLabel, quotaRows, refreshDelay, FALLBACK, available, providers, title, remaining, displayRow, displayRemaining, urgencyRemaining, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots, invalidToken, timestamp, toMillis, status, dashboard, shouldRefresh };
+  return { windowShortLabel, bottleneck, bottleneckInfo, miniSummary, recoveryTime, isStale, staleSummary, registry, windowLabel, quotaRows, refreshDelay, FALLBACK, available, providers, title, remaining, displayRow, displayRemaining, urgencyRemaining, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots, invalidToken, timestamp, toMillis, status, dashboard, shouldRefresh };
 });

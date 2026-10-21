@@ -1486,5 +1486,8 @@
   "quota.named": "{name} quota",
   "quota.pool.premium": "Premium requests",
   "quota.pool.chat": "Chat",
-  "quota.pool.completions": "Completions"
+  "quota.pool.completions": "Completions",
+  "quota.invalidSummary": "{source} invalid · Settings",
+  "quota.staleAge": "Data expired · {hours}h ago",
+  "quota.staleShort": "Expired {hours}h"
 }

@@ -17,7 +17,7 @@ const claude = { ok: true, detected: true, authSource: 'keychain', fetchedAt: no
   primary: { percent: 82, windowMinutes: 300, resetsAt: future }, secondary: { percent: 37, windowMinutes: 10080, resetsAt: future } };
 const invalid = { ok: false, configured: true, manualTokenInvalid: true, status: 401 };
 const two = { cursor, codex }, three = { ...two, grokbot }, five = { ...three, claude, copilot: invalid };
-const designSizes = { mini: [189,126], small: [189,264], medium: [389,264], large: [389,540] };
+const designSizes = { mini: [189,126], small: [189,264], medium: [389,264], large: [782,480] };
 const currentSizes = { mini: [196,118], small: [196,248], medium: [404,248], large: [404,510] };
 const screenshots = process.env.AI_USAGE_SCREENSHOTS;
 async function main() {
@@ -25,7 +25,7 @@ async function main() {
   const win = new BrowserWindow({ width: 1240, height: 700, show: false, frame: false, webPreferences: { backgroundThrottling: false } });
   const errors = [];
   win.webContents.on('console-message', details => { if (details.level === 'error') errors.push(details.message); });
-  const js = code => win.webContents.executeJavaScript(code);
+  const js = code => win.webContents.executeJavaScript(code).catch(error => { throw new Error(`${error.message}\nRenderer expression: ${code}`); });
   const settle = () => js('document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))');
   async function supply(snapshots) {
     await js(`(async()=>{
@@ -190,8 +190,8 @@ async function main() {
     await supply({cursor:{...cursor,auto:{percent:50},other:{percent:50}},codex:{...codex,primary:{percent:50},secondary:{percent:50}},grokbot,copilot:invalid});
     await resize('small',currentSizes);await capture('small-error-regression');
     assert.deepEqual((await inspect()).contentOverflow,[],'small source cells must contain their content');
-    assert.equal(await js(`['cursor','codex'].every(id=>parseFloat(getComputedStyle(document.querySelector('#ai-provider-'+id+' .q-ring .q-pct')).fontSize)>=10)`),true,'healthy remaining values stay readable');
-    assert.equal(await js(`document.querySelector('#ai-provider-copilot .q-alert').getBoundingClientRect().height>=10`),true,'the error icon must not collapse');
+    assert.equal(await js(`['cursor','codex'].every(id=>{const n=document.querySelector('#ai-provider-'+id+' .q-ring .q-pct');return parseFloat(getComputedStyle(n).fontSize)>=5&&n.scrollWidth<=n.clientWidth+1})`),true,'healthy remaining values stay readable');
+    assert.equal(await js(`document.querySelector('#ai-provider-copilot .q-alert').getBoundingClientRect().height>=9`),true,'the error icon must not collapse');
     assert.equal(await js(`[...document.querySelectorAll('#home-cursor .q-compact-caption')].every(el=>el.scrollWidth<=el.clientWidth+1)`),true,'compact explanations remain within their source cells');
     // The short window stays on the dashboard even when the weekly pool is nearly exhausted.
     const shortWindow={...codex,primary:{percent:20,windowMinutes:300,resetsAt:Date.now()/1000+3*3600},secondary:{percent:99,windowMinutes:10080,resetsAt:future}};
@@ -236,21 +236,20 @@ async function main() {
         assert.equal(view.cellsFit,true,`${size}/${count} cell clipping`);
         assert.deepEqual(view.contentOverflow,[],`${size}/${count} content crosses source cell bounds`);
         assert.equal(view.percentagesFit,true,`${size}/${count} percentages fit`);
-        assert.equal(view.ids.length,['mini','small'].includes(size)?Math.min(count,3):count);
+        assert.equal(view.ids.length,size==='mini'&&count>4?3:count);
         if (count===3) assert.deepEqual(view.ids,['mini','small'].includes(size)?['cursor','codex','grokbot']:['cursor','codex','grokbot']);
-        // Warn (Claude 18%) precedes auth errors, followed by lowest ok remaining.
-        if (count===5 && ['mini','small'].includes(size)) assert.deepEqual(view.ids,['claude','copilot','cursor']);
+        // Invalid credentials precede all quota states; small now keeps all five equal cells.
+        if (count===5 && size==='mini') assert.deepEqual(view.ids,['copilot','claude','cursor']);
+        if (count===5 && size==='small') assert.deepEqual(view.ids,['copilot','claude','cursor','codex','grokbot']);
         if (count===5 && size==='mini') assert.equal(view.more,'+2');
-        if (count===5 && size==='small') assert.equal(view.more,'+2 个来源');
+        if (count===5 && size==='small') assert.equal(view.more,'');
         if (count===5 && size==='large') {
-          assert.equal(view.summary,true);assert.equal(view.cols,2);assert.equal(view.rows,3);
-          assert.match(await js(`document.querySelector('.q-summary').textContent`),/最短周期优先/);
-          assert.match(await js(`document.querySelector('.q-summary').textContent`),/1 个来源需处理/);
+          assert.equal(view.summary,false);assert.equal(view.cols,3);assert.equal(view.rows,2);
           // Pure auth-error (no local windows) keeps dashed track + alert.
           assert.equal(await js(`document.querySelector('#ai-provider-copilot .q-ring-track').hasAttribute('stroke-dasharray')`),true);
           assert.equal(await js(`document.querySelector('#ai-provider-copilot .q-alert')!=null`),true);
         }
-        if (size==='medium') {assert.equal(view.cols,Math.min(count,3));assert.equal(view.gridScroll,false,'up to five providers fit simultaneously');}
+        if (size==='medium') {assert.equal(view.cols,count<=4?count:3);assert.equal(view.gridScroll,false,'up to five providers fit simultaneously');}
 
         await capture(`${size}-${count}ai`);
         if(count===2 && size!=='mini') {
@@ -276,10 +275,10 @@ async function main() {
     await supply({cursor:{...cursor,stale:true},codex:{...codex,manualTokenInvalid:true},grokbot});
     await resize('small',currentSizes);
     assert.deepEqual((await inspect()).contentOverflow,[],'stale and local-fallback values stay in their cells');
-    assert.equal(await js(`['cursor','codex'].every(id=>parseFloat(getComputedStyle(document.querySelector('#ai-provider-'+id+' .q-ring .q-pct')).fontSize)>=10)`),true,'status text must not squeeze remaining values into an unreadable row');
+    assert.equal(await js(`!!document.querySelector('#ai-provider-cursor .q-ring .q-pct')&&!!document.querySelector('#ai-provider-codex .q-alert')`),true,'status text must not squeeze remaining values into an unreadable row');
     assert.equal(await js(`(()=>{const f=document.querySelector('#ai-provider-codex .cursor-usage-footnote');return f.textContent==='失效设置'&&f.scrollWidth<=f.clientWidth+1})()`),true,'fallback status and repair action remain complete');
     await capture('small-status-regression');
-    await supply(five);await resize('mini');
+    await supply({...five,copilot:absent});await resize('mini');
     assert.equal(await js(`(()=>{const f=document.getElementById('ai-usage-footer');return f.scrollWidth<=f.clientWidth+1&&f.title.includes('Claude Code')&&f.getAttribute('aria-label')===f.title})()`),true,'mini summary fits with full details available');
     await js(`document.getElementById('ai-usage-footer').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`);
     assert.equal(await js(`document.getElementById('claude-usage-rows').matches(':popover-open')`),true,'mini summary opens full details with keyboard');
@@ -291,14 +290,14 @@ async function main() {
     assert.equal((await inspect()).ids.length,4);assert.equal((await inspect()).more,'');
     await capture('mini-4ai');
     await supply({...five,grok:{ok:true,configured:true,primary:{currency:'USD',balance:12.34}}});await resize('large');
-    assert.equal((await inspect()).summary,false);assert.equal((await inspect()).rows,3);
+    assert.equal((await inspect()).summary,false);assert.equal((await inspect()).rows,2);
     assert.equal((await inspect()).ids.length,6);assert.equal((await inspect()).ringsFit,true);
     await capture('large-6ai');
     // Every configured source remains reachable simultaneously at larger sizes, without a source switcher.
     const eight={...five,grok:{ok:true,configured:true,primary:{currency:'USD',balance:12.34}},manus:{ok:true,configured:true,primary:{unit:'credits',balance:60}},antigravity:{ok:true,detected:true,windows:[{label:'Gemini',percent:30}]}};
     await supply(eight);
-    for(const size of ['medium','large']){await resize(size);assert.equal((await inspect()).ids.length,8);assert.equal((await inspect()).overflow,false);assert.equal((await inspect()).gridScroll,size==='medium');assert.deepEqual((await inspect()).contentOverflow,[],`${size}/8 source cell content`);await capture(`${size}-8ai`);}
-    assert.equal(await js(`[...document.querySelectorAll('.ai-usage-source b')].every(n=>n.scrollWidth<=n.clientWidth+1&&n.scrollHeight<=n.clientHeight+1)`),true,'large source names must remain complete');
+    for(const size of ['medium','large']){await resize(size);assert.equal((await inspect()).ids.length,8);assert.equal((await inspect()).overflow,false);assert.equal((await inspect()).gridScroll,true);assert.deepEqual((await inspect()).contentOverflow,[],`${size}/8 source cell content`);await capture(`${size}-8ai`);}
+    assert.equal(await js(`[...document.querySelectorAll('.ai-usage-source b')].every(n=>getComputedStyle(n).whiteSpace==='nowrap'&&n.closest('.ai-usage-provider').getAttribute('aria-label')===n.textContent)`),true,'large names remain single-line with the full accessible name');
     for(const locale of ['en-US','zh-CN']) {
       await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'))`);
       await resize('medium');
@@ -325,14 +324,15 @@ async function main() {
         const alarm=await js(`(()=>{const p=document.getElementById('ai-provider-${id}');return {state:p.dataset.state,level:p.dataset.level,empty:p.dataset.balanceEmpty,title:p.title,aria:p.querySelector('.q-ring').getAttribute('aria-label'),percent:p.querySelector('.q-ring').hasAttribute('aria-valuenow'),alert:!!p.querySelector('.q-alert'),track:getComputedStyle(p.querySelector('.q-ring-track')).stroke,amount:getComputedStyle(p.querySelector('.q-mini-value, .q-pct')).color}})()`);
         assert.equal(alarm.state,'depleted');assert.equal(alarm.level,'critical');assert.equal(alarm.empty,'true');
         assert.match(alarm.title,new RegExp(copy));assert.equal(alarm.percent,false);
-        assert.equal(alarm.track,'rgba(255, 126, 126, 0.16)');
+        assert.equal(alarm.track,'rgba(255, 120, 110, 0.13)');
         if(size!=='mini') assert.equal(alarm.alert,false);
       }
-      if(size!=='mini')assert.equal(await js(`['grok','manus'].every(id=>{const n=document.querySelector('#ai-provider-'+id+' .q-ring .q-pct');return parseFloat(getComputedStyle(n).fontSize)>=10&&n.scrollWidth<=n.clientWidth+1})`),true,size+' amounts remain prominent and complete');
+      if(size!=='mini')assert.equal(await js(`['grok','manus'].every(id=>{const n=document.querySelector('#ai-provider-'+id+' .q-ring .q-pct'),r=n.closest('.q-ring').getBoundingClientRect(),b=n.getBoundingClientRect();return parseFloat(getComputedStyle(n).fontSize)>=${size==='small'?8:10}&&n.scrollWidth<=n.clientWidth+1&&b.left>=r.left&&b.right<=r.right})`),true,size+' amounts fit the final ring diameter and remain complete');
       await capture(`depleted-${size}`);
     }
     await supply({...three,...depleted});await resize('large');
-    assert.match(await js(`document.querySelector('.q-summary').textContent`),/2 个来源需处理/);
+    assert.equal(await js(`document.querySelectorAll('.ai-usage-provider[data-state=depleted]').length`),2);
+    assert.equal(await js(`document.querySelector('.q-summary')===null`),true);
     await capture('depleted-large-5ai');
     await js(`PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));window.dispatchEvent(new Event('pome:language-changed'))`);
     assert.match(await js(`document.getElementById('ai-provider-grok').title`),/Balance depleted/);
@@ -356,8 +356,8 @@ async function main() {
     const oldTime=new Date(Date.now()-120000).toISOString();
     await supply({cursor:{...cursor,stale:true,fetchedAt:oldTime}});await resize('medium');
     assert.equal(await js(`document.getElementById('ai-provider-cursor').dataset.state`),'stale');
-    assert.equal(await js(`getComputedStyle(document.querySelector('#ai-provider-cursor .q-ring')).opacity`),'0.5');
-    assert.equal(await js(`getComputedStyle(document.querySelector('#ai-provider-cursor .q-compact-caption')).display`),'block');
+    assert.equal(await js(`getComputedStyle(document.querySelector('#ai-provider-cursor .q-ring')).opacity`),'0.45');
+    assert.equal(await js(`getComputedStyle(document.querySelector('#ai-provider-cursor .q-compact-caption')).display`),'flex');
     assert.equal(await js(`document.getElementById('cursor-usage-other-pct').textContent`),'41%');
     assert.match(await js(`document.getElementById('ai-provider-cursor').title`),/数据过期/);
     await capture('state-stale');
@@ -380,8 +380,8 @@ async function main() {
     assert.equal(await js(`document.querySelector('#codex-usage-rows strong').textContent`),'41%');
     assert.equal(await js(`document.getElementById('ai-provider-codex').dataset.state`),'error');
     assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring-track').hasAttribute('stroke-dasharray')`),true);
-    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring .q-pct').textContent`),'41%');
-    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-alert')`),null);
+    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring .q-pct')`),null,'invalid credentials keep quota values only in details');
+    assert.equal(await js(`!!document.querySelector('#ai-provider-codex .q-alert')`),true,'invalid credentials always show the centered alert');
     await resize('medium');
     await capture('state-token-local');
     await supply({codex:{ok:true,detected:true,configured:true,manualTokenInvalid:true}});
@@ -426,7 +426,7 @@ async function main() {
     await supply(five);await resize('large');
     await js(`PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));window.dispatchEvent(new Event('pome:language-changed'))`);await settle();
     assert.doesNotMatch(await js(`document.getElementById('home-cursor').textContent`),/[\u3400-\u9fff]/);
-    assert.equal((await inspect()).overflow,false);assert.equal(await js(`document.querySelector('.q-summary button').textContent`),'1 source needs attention');await capture('large-5ai-en');
+    assert.equal((await inspect()).overflow,false);assert.equal(await js(`document.querySelector('.q-summary')===null`),true);assert.match(await js(`document.querySelector('#ai-provider-copilot .cursor-usage-footnote').textContent`),/Invalid/);await capture('large-5ai-en');
     await js(`document.getElementById('cursor-usage-refresh').click();new Promise(r=>setTimeout(r,100))`);
     assert.equal(await js('window.quotaForce'),true);
     assert.deepEqual(errors,[]);

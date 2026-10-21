@@ -42,7 +42,8 @@
     }
     function remove(key) { entries.get(key)?.stop?.(); entries.delete(key); }
     return { set, value: key => entries.get(key)?.value, running: key => Boolean(entries.get(key)?.running),
-      remove, clear: () => { for (const key of entries.keys()) remove(key); } };
+      remove, prune: keep => { for (const key of entries.keys()) if (!keep(key)) remove(key); },
+      clear: () => { for (const key of entries.keys()) remove(key); } };
   }
   function shouldRefreshOnShow(lastRequest, now) { return lastRequest == null || now - lastRequest >= 30000; }
   return { animateValue, createValueStore, shouldRefreshOnShow, DURATION };

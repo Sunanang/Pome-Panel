@@ -28,23 +28,23 @@ test('dashboard folds only compact sizes and preserves settings order in larger 
   assert.deepEqual(D.dashboard(snapshots, 'mini').shown, ['grokbot', 'codex', 'claude']);
   assert.deepEqual(D.dashboard(snapshots, 'mini').hidden, ['cursor', 'grok']);
   assert.equal(D.dashboard(snapshots, 'mini').columns, 4);
-  assert.equal(D.dashboard(snapshots, 'small').shown.length, 3);
+  assert.equal(D.dashboard(snapshots, 'small').shown.length, 5);
   assert.equal(D.dashboard({cursor,codex}, 'small').columns, 2);
   for (const size of ['medium', 'large']) assert.deepEqual(D.dashboard(snapshots, size).shown, ['cursor', 'codex', 'claude', 'grokbot', 'grok']);
   assert.equal(D.dashboard(snapshots, 'medium').columns, 3);
   assert.equal(D.dashboard(snapshots, 'medium').rows, 2);
-  assert.equal(D.dashboard(snapshots, 'large').columns, 2);
-  assert.equal(D.dashboard(snapshots, 'large').rows, 3);
-  assert.equal(D.dashboard(snapshots, 'large').summary, true);
+  assert.equal(D.dashboard(snapshots, 'large').columns, 3);
+  assert.equal(D.dashboard(snapshots, 'large').rows, 2);
+  assert.equal(D.dashboard(snapshots, 'large').summary, false);
   delete snapshots.grok;
   assert.equal(D.dashboard(snapshots, 'mini').shown.length, 4);
   assert.equal(D.dashboard(snapshots, 'mini').hidden.length, 0);
   assert.equal(D.dashboard(snapshots, 'large').summary, false, 'four sources stay without a summary cell');
   const six = D.dashboard({ cursor, codex, claude: { detected: true }, grokbot, grok: { configured: true }, copilot: { detected: true } }, 'large');
   assert.equal(six.summary, false);
-  assert.equal(six.rows, 3);
+  assert.equal(six.rows, 2);
 });
-test('compact urgency ranks critical, warn, error, ok by unrounded displayed window, then stale', () => {
+test('compact urgency ranks invalid, depleted, critical, warn, stale, normal by the bottleneck', () => {
   const snapshots = {
     cursor: { ...cursor, auto: { percent: 40 }, other: { percent: 0 } },
     codex: { ...codex, primary: { percent: 0 }, secondary: { percent: 0 } },
@@ -54,16 +54,16 @@ test('compact urgency ranks critical, warn, error, ok by unrounded displayed win
     copilot: { detected: true, windows: [{ percent: 39.9 }] },
     antigravity: { detected: true, stale: true, windows: [{ percent: 99 }] },
   };
-  assert.deepEqual(D.dashboard(snapshots, 'small').ids, ['grokbot', 'claude', 'grok', 'cursor', 'copilot', 'codex', 'antigravity']);
+  assert.deepEqual(D.dashboard(snapshots, 'small').ids, ['grok', 'antigravity', 'grokbot', 'claude', 'cursor', 'copilot', 'codex']);
   assert.equal(D.status({ detected: false, configured: false }, 'manus'), 'undetected');
   assert.equal(D.status({ ...cursor, manualTokenInvalid: true }, 'cursor'), 'error');
   assert.equal(D.status({ ...cursor, fetchedAt: '2020-01-01T00:00:00Z' }, 'cursor'), 'stale');
   assert.equal(D.status({ configured: true, ok: true, primary: { currency: 'USD', balance: 0 } }, 'grok'), 'depleted');
   assert.equal(D.urgencyRemaining({ configured: true, ok: true, primary: { unit: 'credits', balance: 0 } }, 'manus'), 0);
   const balances = { grok: { configured: true, ok: true, primary: { currency: 'USD', balance: 0 } }, manus: { configured: true, ok: true, primary: { unit: 'credits', balance: 0 } } };
-  assert.deepEqual(D.dashboard({ ...snapshots, ...balances }, 'small').shown, ['grok', 'manus', 'grokbot'], 'exhausted balances precede low quota and errors');
+  assert.deepEqual(D.dashboard({ ...snapshots, ...balances }, 'small').shown.slice(0,3), ['grok', 'manus', 'antigravity'], 'exhausted balances precede low quota while invalid remains the highest priority');
   assert.equal(D.status({ ...balances.grok, primary: { currency: 'USD', balance: 1 } }, 'grok'), 'ok');
-  assert.equal(D.status({ ...balances.manus, stale: true }, 'manus'), 'stale');
+  assert.equal(D.status({ ...balances.manus, stale: true }, 'manus'), 'depleted');
 });
 test('all eight sources stay present in medium and large, no tab state remains', () => {
   const data = Object.fromEntries(D.registry.ids().map(id => [id, { detected: true }]));
@@ -195,13 +195,15 @@ test('dashboard selects the smallest reported time window rather than the lowest
 test('bottleneck drives urgency and expiry independently of the displayed window', () => {
   const now = Date.now();
   const codex = { detected: true, primary: { percent: 20, windowMinutes: 300, resetsAt: (now + 3600000) / 1000 }, secondary: { percent: 99, windowMinutes: 10080, resetsAt: (now - 1000) / 1000 } };
-  assert.equal(D.status(codex, 'codex', now), 'stale', 'the bottleneck reset controls staleness');
+  assert.equal(D.status(codex, 'codex', now), 'critical', 'critical is more urgent than freshness'
+  );
+  assert.equal(D.isStale(codex, 'codex', now), true, 'the bottleneck reset still controls freshness');
   assert.equal(D.urgencyRemaining(codex, 'codex'), 1);
-  assert.deepEqual(D.dashboard({ codex, claude: { detected: true, primary: { percent: 85, windowMinutes: 300 } } }, 'small', now).shown, ['claude', 'codex']);
+  assert.deepEqual(D.dashboard({ codex, claude: { detected: true, primary: { percent: 85, windowMinutes: 300 } } }, 'small', now).shown, ['codex', 'claude']);
   const depleted = { ...codex, primary: { ...codex.primary, percent: 95 } };
-  assert.equal(D.status(depleted, 'codex', now), 'stale');
+  assert.equal(D.status(depleted, 'codex', now), 'critical');
   assert.equal(D.displayRemaining({ ...codex, primary: { ...codex.primary, percent: null } }, 'codex'), null, 'missing five-hour usage stays unknown instead of substituting the week');
-  assert.equal(D.status({ ...codex, primary: { ...codex.primary, resetsAt: (now - 1000) / 1000 } }, 'codex', now), 'stale');
+  assert.equal(D.isStale({ ...codex, primary: { ...codex.primary, resetsAt: (now - 1000) / 1000 } }, 'codex', now), true);
 });
 
 test('weekly-only and unknown-cadence sources keep a stable reported scope', () => {
@@ -231,6 +233,18 @@ test('a full five-hour ring can be constrained by a depleted weekly quota', () =
   const b = D.bottleneckInfo(data, 'codex');
   assert.equal(b.name, '周');assert.equal(b.remaining, 0);assert.equal(b.badge, true);assert.equal(b.resetAt, 2000000000000);
   assert.equal(D.bottleneckInfo({ ...data, secondary: { ...data.secondary, resetsAt: null } }, 'codex').resetAt, null);
+});
+test('recovery copy separates weekday and clock in both locales without inventing a date', () => {
+  const I = require('../localization/runtime'), before = I.getState();
+  const now = new Date(2026, 9, 21, 8).getTime(), later = new Date(2026, 9, 26, 16, 58, 42).getTime();
+  try {
+    for (const locale of ['zh-CN', 'en-US']) {
+      I.setState(I.snapshot(locale, [locale]));
+      assert.equal(D.recoveryTime(now, now), '08:00');
+      assert.equal(D.recoveryTime(later, now), locale === 'zh-CN' ? '周一 16:58' : 'Mon 16:58');
+      assert.equal(D.recoveryTime(null, now), '');
+    }
+  } finally { I.setState({ ...before, revision: I.getState().revision + 1 }); }
 });
 test('mini summarizes multiple, all, mixed and critical constraints without invented reset times', () => {
   const now = new Date(2026, 9, 21, 8).getTime(), later = now + 86400000;
@@ -271,4 +285,45 @@ test('provider names share one quota vocabulary without losing pool identities o
   assert.equal(D.quotaRows({primary:{currency:'USD',balance:10}},'grok')[0].name,'已入账预付余额');
   assert.equal(D.quotaRows({windows:[{unit:'credits',balance:100,label:'Credits'}]},'manus')[0].name,'可用积分');
   assert.equal(D.windowLabel({period:'month'}),'月额度');assert.equal(D.windowShortLabel({period:'month'}),'月');
+});
+
+
+test('final grids keep every small source through six, equal columns and no filler tile', () => {
+  for (const count of [3,4,5,6]) {
+    const data=Object.fromEntries(D.registry.ids().slice(0,count).map(id=>[id,{ok:true,detected:true,primary:{percent:30}}]));
+    for(const size of ['small','medium','large']) {
+      const layout=D.dashboard(data,size);
+      assert.equal(layout.shown.length,count);
+      assert.equal(layout.columns,size==='small'?2:count<=4?count:3);
+      assert.equal(layout.rows,Math.ceil(count/layout.columns));
+      assert.equal(layout.summary,false);
+    }
+    assert.equal(D.dashboard(data,'small').ringSize,count<=4?40:26);
+    assert.equal(D.dashboard(data,'medium').ringSize,count===3?56:count===4?46:30);
+    assert.equal(D.dashboard(data,'large').ringSize,count===3?118:count===4?96:58);
+  }
+});
+test('invalid mini summary wins over depleted and critical without replacing the shortest window', () => {
+  const data = value => ({ok:true,detected:true,primary:{percent:0,windowMinutes:300},secondary:{percent:100-value,windowMinutes:10080}});
+  const snapshots={codex:data(6),claude:data(0),copilot:{ok:false,configured:true,status:401}};
+  const summary=D.miniSummary(snapshots);
+  assert.deepEqual(summary,{text:'Copilot 失效 · 去设置',severity:'error',repair:'copilot'});
+  assert.equal(D.dashboard(snapshots,'mini').shown[0],'copilot');
+  delete snapshots.copilot;
+  assert.equal(D.miniSummary(snapshots).text,'Claude 已用完 · 另 1 家告急');
+  assert.equal(D.displayRemaining(snapshots.claude,'claude'),100);
+});
+test('freshness retains its existing age threshold and gray age copy independently of urgency', () => {
+  const now=Date.now(), source={ok:true,detected:true,fetchedAt:new Date(now-3*3600000).toISOString(),primary:{percent:20}};
+  assert.equal(D.isStale(source,'codex',now),false);
+  assert.equal(D.isStale(source,'codex',now+22*3600000),true);
+  assert.equal(D.staleSummary({codex:source},false,now).text,'');
+  const stale={...source,stale:true};
+  assert.equal(D.staleSummary({codex:stale},false,now).text,'数据已过期 · 3 小时前');
+  assert.equal(D.miniSummary({codex:stale},now).text,'已过期 3 小时');
+  assert.equal(D.status({...stale,primary:{percent:100}},'codex',now),'depleted');
+  assert.equal(D.status({...stale,primary:{percent:94}},'codex',now),'critical');
+  assert.equal(D.status({...stale,primary:{percent:82}},'codex',now),'warn');
+  assert.equal(D.status({...stale,manualTokenInvalid:true,primary:{percent:100}},'codex',now),'error');
+  assert.equal(D.staleSummary({codex:{...stale,fetchedAt:null}},true,now).hours,null,'unknown age is not invented');
 });

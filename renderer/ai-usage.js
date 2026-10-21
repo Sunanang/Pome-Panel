@@ -15,6 +15,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   const animation = A.createValueStore();
   const visualStates = new Map();
   let lastRequest = null;
+  let renderedSize = null, renderedOrder = '';
   let pinnedDetails = null;
   function closeDetails() {
     tile.querySelectorAll('.cursor-usage-rows:popover-open').forEach(node => node.hidePopover());
@@ -46,7 +47,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const provider = event.target.closest('.ai-usage-provider');
     if (!pinnedDetails && provider && !provider.contains(event.relatedTarget)) closeDetails();
   });
-  tile.addEventListener('keydown', event => { if (event.target.matches('#ai-usage-footer[data-quota-toggle]') && ['Enter', ' '].includes(event.key)) { event.preventDefault(); event.target.click(); } if (event.key === 'Escape') { pinnedDetails = null; closeDetails(); event.stopPropagation(); } });
+  tile.addEventListener('keydown', event => { if (event.target.matches('#ai-usage-footer[role=button]') && ['Enter', ' '].includes(event.key)) { event.preventDefault(); event.target.click(); } if (event.key === 'Escape') { pinnedDetails = null; closeDetails(); event.stopPropagation(); } });
   document.addEventListener('pointerdown', event => { if (!tile.contains(event.target)) { pinnedDetails = null; closeDetails(); } });
   for (const name of ['notch:tabchange', 'notch:modechange']) document.addEventListener(name, () => { pinnedDetails = null; closeDetails(); });
   const revisions = Object.fromEntries(usageProviders().map(({ id }) => [id, 0]));
@@ -107,7 +108,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         value = null; kind = w.currency === 'USD' ? 'currency' : 'credits';
         display = I.number(w.balance, kind === 'currency' ? { style: 'currency', currency: 'USD' } : {});
       } else display = D.formatPercent(value);
-      return { ...row, value, kind, display, short: row.short || row.name, help: rowHelp(id, data, row.windowUsage) };
+      const repeated = rows.filter(item => item.short === row.short).length > 1;
+      return { ...row, value, kind, display, short: repeated && row.scopeShort ? row.scopeShort : row.short || row.name, help: rowHelp(id, data, row.windowUsage) };
     });
     const remaining = D.displayRemaining(data, id);
     const bottleneck = D.bottleneckInfo(data, id);
@@ -124,7 +126,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const constraintLine = constrained ? t(bottleneck.remaining === 0 ? 'quota.windowDepleted' : 'quota.windowLeft', { window: bottleneck.name, value: Math.round(bottleneck.remaining) }) : '';
     const constraintTime = constrained && bottleneck.resetAt != null ? t(bottleneck.remaining === 0 ? 'quota.recoveryAt' : 'quota.resetAt', { time: D.recoveryTime(bottleneck.resetAt) }) : '';
     const reset = [values.length > 1 ? selected.scopeShort : '', selected.help].filter(Boolean).join(' · ');
-    return { id, data, status, rows: values, remaining, exhausted, depleted, bottleneck, level: depleted ? 'critical' : D.level(bottleneck?.remaining), selected, source, updated, message, reset, constraintLine, constraintTime,
+    return { id, size, data, status, stale: D.isStale(data, id), rows: values, remaining, exhausted, depleted, bottleneck, level: depleted ? 'critical' : D.level(bottleneck?.remaining), selected, source, updated, message, reset, constraintLine, constraintTime,
       title: [registry.get(id).label, source, message, ...values.map(row => `${row.name}: ${row.display} · ${row.help}`),
         id === 'codex' && data?.plan ? D.planLabel(data.plan) : '',
         id === 'codex' && data?.credits ? `Credits: ${data.credits.unlimited ? t('copy.unlimited.8651f5') : data.credits.balance ?? '--'}` : '', updated].filter(Boolean).join('\n'),
@@ -133,22 +135,31 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   }
   function ring(m, size) {
     const amount = m.selected.kind === 'currency' ? I.number(m.selected.windowUsage.balance, { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' }) : m.selected.display;
-    const sw = size === 32 ? 3 : size <= 40 ? 3.5 : size >= 80 ? 6 : size >= 64 ? 5 : 4.5;
+    const priorValue = animation.value(`${m.id}/${m.selected.key}/${['currency', 'credits'].includes(m.selected.kind) ? 'amount' : 'main'}`);
+    const priorAmount = priorValue == null ? '' : m.selected.kind === 'currency' ? I.number(priorValue, { style:'currency', currency:'USD', currencyDisplay:'narrowSymbol' }) : m.selected.kind === 'credits' ? I.number(Math.round(priorValue)) : `${Math.round(priorValue)}%`;
+    const valueLength = Math.max(3, [...String(amount)].length, [...priorAmount].length);
+    const sw = m.size === 'mini' ? 3 : size <= 40 ? 3.5 : size >= 80 ? 6 : size >= 64 ? 5 : 4.5;
     const radius = (size - sw) / 2, c = size / 2, length = 2 * Math.PI * radius;
     const bad = m.status === 'error', unknown = m.remaining == null;
-    // Token/network error keeps dashed track, but still show local remaining when we have it.
-    const showPct = !unknown && (bad || m.status !== 'undetected');
+    const showPct = !unknown && m.status !== 'undetected';
     const dashed = bad || m.status === 'undetected' || unknown;
-    const center = size === 32 ? icon(m.id) : ((bad && unknown) || m.exhausted)
-      ? m.exhausted ? `<span class="q-pct" data-main-amount>${escape(amount)}</span>` : '<span class="q-alert" aria-hidden="true"></span>'
+    const center = bad ? '<span class="q-alert" aria-hidden="true"></span>'
+      : m.size === 'mini' ? icon(m.id)
+      : m.exhausted ? `<span class="q-pct" data-main-amount>${escape(amount)}</span>`
       : unknown ? `<span class="q-ring-unknown"${['currency','credits'].includes(m.selected.kind) ? ' data-main-amount' : ''}>${m.selected.kind === 'unlimited' ? '∞' : ['currency','credits'].includes(m.selected.kind) ? escape(amount) : '—'}</span>` : `<span class="q-pct" data-main-number>${pct(m.remaining)}</span>`;
     const label = t('quota.windowRemaining', { source: registry.get(m.id).label, window: m.selected.name, remaining: m.selected.display, message: m.message ? ` · ${m.message}` : '' });
-    return `<div class="q-ring" style="--q-ring-size:${size}px;--q-value-length:${Math.max(3, [...String(amount)].length)}" ${showPct && !bad ? `role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.remaining}"` : 'role="img"'} aria-label="${escape(label)}">
+    return `<div class="q-ring" style="--q-ring-size:${size}px;--q-value-length:${valueLength}" ${showPct && !bad ? `role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.remaining}"` : 'role="img"'} aria-label="${escape(label)}">
       <svg class="q-ring-svg" viewBox="0 0 ${size} ${size}" aria-hidden="true"><defs><linearGradient id="quota-gradient-${m.id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="q-gradient-start"/><stop offset="1" class="q-gradient-end"/></linearGradient></defs>
       <circle class="q-ring-track" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke-width="${dashed ? sw * .7 : sw}"${dashed ? ' stroke-dasharray="2 3.2"' : ''}/>
-      ${dashed || unknown ? '' : `<circle class="q-ring-value" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke="url(#quota-gradient-${m.id})" stroke-width="${sw}" stroke-linecap="round" data-length="${length}" stroke-dasharray="${length} ${length}" stroke-dashoffset="${length * (1 - m.remaining / 100)}"${m.remaining === 0 ? ' visibility="hidden"' : ''}/>`}</svg><span class="q-ring-center">${center}${size >= 46 && m.remaining != null && m.selected.scopeShort ? `<small class="q-main-scope">${escape(m.selected.scopeShort)}</small>` : ''}</span>
-      ${m.bottleneck && m.bottleneck.remaining <= 20 ? `<span class="q-bottleneck" data-state-fade="${m.status}" data-badge="${m.bottleneck.badge}" data-level="${m.bottleneck.level}" aria-hidden="true">${escape(m.bottleneck.name)} ${Math.round(m.bottleneck.remaining)}%</span>` : ''}</div>`;
+      ${dashed || unknown ? '' : `<circle class="q-ring-value" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke="url(#quota-gradient-${m.id})" stroke-width="${sw}" stroke-linecap="round" data-length="${length}" stroke-dasharray="${length} ${length}" stroke-dashoffset="${length * (1 - m.remaining / 100)}"${m.remaining === 0 ? ' visibility="hidden"' : ''}/>`}</svg><span class="q-ring-center">${center}</span>
+      ${m.size === 'mini' ? bottleneckBadge(m, true) : ''}</div>`;
   }
+  function bottleneckBadge(m, dot = false) {
+    const b = m.bottleneck;
+    if (!b || m.status === 'error' || b.remaining > 20 || !dot && !b.badge) return '';
+    return `<span class="q-bottleneck"${dot ? ` data-state-fade="${m.status}"` : ''} data-badge="${b.badge}" data-level="${b.level}" aria-hidden="true">${dot ? '' : `${escape(b.name)} ${Math.round(b.remaining)}%`}</span>`;
+  }
+
   function quotaRows(m, inline = false) {
     return `<div class="cursor-usage-rows${inline ? ' q-inline-rows' : ''}" ${inline ? 'aria-hidden="true"' : `popover="manual" id="${m.id}-usage-rows"`}>${m.rows.map(row => {
       const name = row.kind === 'currency' ? t('providers.prepaidBalance') : row.kind === 'credits' ? t('providers.availableCredits') : row.name;
@@ -159,22 +170,31 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         <small class="ai-quota-help">${escape(row.help)}</small></div>`;
     }).join('')}</div>`;
   }
-  function provider(m, layout) {
-    const chip = m.status === 'error' ? m.source : m.message || m.source;
-    const compactError = t(D.invalidToken(m.data) ? 'quota.status.invalid' : 'quota.status.error');
-    const errorAction = m.status === 'error' ? `<button class="ai-inline-settings" type="button" data-quota-settings="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t('copy.openSettings.93112c')}`)}">${escape(t('quota.repair'))}</button>` : '';
-    const foot = [m.status === 'error' && !m.expanded && D.invalidToken(m.data) ? t('copy.tokenExpired.22c3fe') : m.message, m.updated].filter(Boolean).join(' · ');
-    return `<section class="ai-usage-provider${m.vertical ? ' q-vertical' : ' q-horizontal'}" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-level="${m.level}" data-unit="${m.selected.kind}" data-quota-window="${escape(m.selected.key)}" data-balance-empty="${m.exhausted}" data-depleted="false" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}" title="${escape(m.title)}">
-      <button class="q-detail-toggle" data-quota-toggle="${m.id}" type="button" aria-controls="${m.id}-usage-rows" aria-expanded="false" aria-label="${escape(t('ui.quota.details', { source: registry.get(m.id).label }))}"></button>
-      ${ring(m, layout.ringSize)}<div class="q-provider-body">
-      <div class="ai-usage-source">${icon(m.id)}<b>${escape(registry.get(m.id).label)}</b><span class="q-chip" id="ai-${m.id}-source">${escape(chip)}</span></div>
-      ${quotaRows(m, true)}<div class="q-compact-caption" data-state-fade="${m.status}">${m.constraintLine ? `<span>${escape(m.constraintLine)}</span>${m.constraintTime ? `<span>${escape(m.constraintTime)}</span>` : ''}` : escape(m.message || m.reset)}</div>
-      <p class="cursor-usage-footnote" id="${m.id}-usage-footnote"><span title="${escape(foot)}">${escape(m.status === 'error' ? compactError : foot)}</span>${errorAction}</p></div>${quotaRows(m)}
-      <div class="q-mini-value">${m.status === 'error' && m.remaining == null ? escape(D.invalidToken(m.data) ? 'Token' : t('quota.error')) : m.remaining == null ? `<span data-main-amount>${escape(m.selected.display)}</span>` : `<span class="q-pct" data-main-number>${pct(m.remaining)}</span>`}</div></section>`;
+  function captionLines(m) {
+    const selectedCaption = m.selected.kind === 'percent' && m.remaining != null
+      ? t('quota.windowLeft', { window: m.selected.scopeShort || m.selected.short, value: Math.round(m.remaining) })
+      : m.selected.kind === 'percent' ? '' : m.selected.name;
+    const reset = m.selected.windowUsage?.resetsAt;
+    const compactReset = D.toMillis(reset) != null && !(typeof reset === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(reset))
+      ? t('quota.resetAt', { time:D.recoveryTime(reset) }) : m.selected.help;
+    if (m.size === 'large' && tile.clientWidth < 600) return m.constraintLine ? [m.constraintLine, m.constraintTime] : [compactReset];
+    return m.size === 'small'
+      ? [m.constraintLine ? m.constraintTime || m.constraintLine : compactReset]
+      : [m.constraintLine || (m.size === 'large' ? m.selected.scopeShort || selectedCaption : selectedCaption), m.constraintLine ? m.constraintTime : m.selected.help];
   }
-  function summary(models) {
-    const attentionCount = models.filter(m => m.status === 'error' || m.depleted).length;
-    return `<div class="q-summary"><span class="q-caption">${escape(t('quota.overview'))}</span><strong>${escape(t('quota.sourceCount', { count: models.length }))}</strong><span class="q-caption">${escape(t('quota.shortestWindow'))}</span>${attentionCount ? `<button class="ai-inline-settings" data-quota-settings="" type="button">${escape(t('quota.sourcesNeedAttention', { count: attentionCount }))}</button>` : ''}</div>`;
+  function provider(m, layout, reserved) {
+    const error = m.status === 'error', caption = captionLines(m);
+    const repair = error ? `<button class="ai-inline-settings" type="button" data-quota-settings="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t('copy.openSettings.93112c')}`)}">${escape(t('quota.repair'))}</button>` : '';
+    return `<section class="ai-usage-provider q-vertical" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-stale="${m.stale}" data-level="${m.level}" data-unit="${m.selected.kind}" data-quota-window="${escape(m.selected.key)}" data-balance-empty="${m.exhausted}" data-badge-row="${reserved}" data-depleted="${!error && visualStates.get(`${m.id}/depleted`) === true}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}" title="${escape(m.title)}">
+      <button class="q-detail-toggle" data-quota-toggle="${m.id}" type="button" aria-controls="${m.id}-usage-rows" aria-expanded="false" aria-label="${escape(t('ui.quota.details', { source: registry.get(m.id).label }))}"></button>
+      <div class="q-provider-body">
+        <div class="ai-usage-source">${icon(m.id)}<b style="--q-name-length:${registry.get(m.id).label.length}">${escape(registry.get(m.id).label)}</b><span class="q-chip" id="ai-${m.id}-source">${escape(m.source)}</span></div>
+        <div class="q-badge-slot" data-state-fade="${m.status}">${bottleneckBadge(m)}</div>
+        ${ring(m, layout.ringSize)}${quotaRows(m, true)}
+        <div class="q-compact-caption" data-state-fade="${m.status}" title="${escape(caption.filter(Boolean).join(' · '))}">${caption.filter(Boolean).map(line => `<span>${escape(line)}</span>`).join('')}</div>
+        <p class="cursor-usage-footnote" id="${m.id}-usage-footnote">${error ? `<span>${escape(t('quota.status.invalid'))}</span>${repair}` : escape(m.updated)}</p>
+      </div>${quotaRows(m)}
+      <div class="q-mini-value">${error ? escape(t('quota.status.invalid')) : m.remaining == null ? `<span data-main-amount>${escape(m.selected.display)}</span>` : `<span class="q-pct" data-main-number>${pct(m.remaining)}</span>`}</div></section>`;
   }
 
   function fadeState(node, key, next) {
@@ -187,6 +207,51 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       node.animate([{ opacity: .15 }, { opacity: 1 }], { duration: 240, easing: 'ease-out' });
     }
     visualStates.set(key, { state: next, html: node.innerHTML.replace(/<span class="q-fade-previous"[\s\S]*$/, '') });
+  }
+  let currentLayout = null, currentModels = [];
+  const measure = document.createElement('canvas').getContext('2d');
+  function syncGeometry(layout = currentLayout, models = currentModels) {
+    currentLayout = layout; currentModels = models;
+    if (!layout || !models.length) return;
+    const size = tile.dataset.widgetSize || 'small';
+    tile.dataset.quotaTight = String(tile.clientHeight < 260);
+    tile.dataset.quotaNarrow = String(tile.clientWidth < 600);
+    const grid = byId('ai-usage-providers'), css = getComputedStyle(tile);
+    const number = name => parseFloat(css.getPropertyValue(name)) || 0;
+    const first = grid.querySelector('.ai-usage-provider');
+    if (!first) return;
+    const cell = first.getBoundingClientRect();
+    const width = cell.width, height = cell.height;
+    const bars = size === 'large' || size === 'medium' && layout.ids.length <= 4;
+    const rows = Math.min(3, Math.max(1, ...models.filter(m => m.status !== 'error').map(m => m.rows.length)));
+    const windowHeight = bars ? rows * number('--q-window-line') + (rows - 1) * number('--q-window-gap') : 0;
+    tile.style.setProperty('--q-window-height', `${windowHeight}px`);
+    // Always budget for a badge when choosing the shared diameter. Rows that
+    // have no badge divide the spare lane between the two flexible spacers.
+    const fixed = 2 * number('--q-cell-pad-y') + number('--q-name-line') + number('--q-badge-height') + number('--q-badge-gap')
+      + windowHeight + number('--q-caption-line') * number('--q-caption-lines');
+    const diameter = size === 'mini' ? 30 : Math.max(10, Math.min(layout.ringSize, width - 2 * number('--q-cell-pad-x'), height - fixed));
+    tile.style.setProperty('--q-render-size', `${Math.floor(diameter * 10) / 10}px`);
+    tile.style.setProperty('--q-ring-font', `${size === 'mini' ? 10 : diameter * (['small','medium'].includes(size) && layout.ids.length >= 5 ? .3 : .25)}px`);
+    const labelStyle = grid.querySelector('.q-window-short');
+    const labelFont = labelStyle && getComputedStyle(labelStyle);
+    measure.font = labelFont ? `${labelFont.fontWeight} ${labelFont.fontSize} ${labelFont.fontFamily}` : `${number('--q-window-font')}px ${css.fontFamily}`;
+    const labelWidth = Math.max(8, ...models.flatMap(m => m.rows.map(row => measure.measureText(row.short || row.name).width)));
+    tile.style.setProperty('--q-window-label-width', `${Math.ceil(Math.min(labelWidth + 2, Math.max(12, width * .36)))}px`);
+  }
+  function animatePositions(previous, models) {
+    for (const m of models) {
+      const node = byId(`ai-provider-${m.id}`)?.querySelector('.q-ring'), before = previous.get(m.id);
+      if (!node || !before) continue;
+      const after = node.getBoundingClientRect();
+      if (Math.abs(before.width - after.width) > .5) continue;
+      const dx = before.left - after.left, dy = before.top - after.top;
+      if (Math.abs(dx) < .5 && Math.abs(dy) < .5) continue;
+      // Reuse the existing value store for FLIP adaptation; a second refresh
+      // measures the current visual frame before rebinding the new DOM.
+      animation.remove(`${m.id}/position`);
+      animation.set(`${m.id}/position`, 0, value => { node.style.transform = value ? `translate(${dx * value}px,${dy * value}px)` : ''; }, { from:1, reduced:motion.matches });
+    }
   }
   function animateModels(models) {
     const palette = getComputedStyle(tile);
@@ -206,7 +271,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     for (const m of models) {
       const el = byId(`ai-provider-${m.id}`);
       const reduced = motion.matches;
-      const priorDepleted = visualStates.get(`${m.id}/depleted`) === true;
+      const priorDepleted = m.status !== 'error' && visualStates.get(`${m.id}/depleted`) === true;
       el.dataset.depleted = String(priorDepleted);
       const finish = () => { el.dataset.animating = 'false'; };
       animation.set(`${m.id}/depletion`, Number(m.depleted), () => {}, { reduced,
@@ -239,12 +304,17 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         }, { reduced, delay: index * 60 });
       });
       animateTone(m.id, m.level, [el], reduced);
-      el.querySelectorAll('[data-state-fade]').forEach((node, index) => fadeState(node, `${m.id}/label-${index}`, `${m.status}/${Boolean(m.bottleneck?.badge)}`));
+      el.querySelectorAll('[data-state-fade]').forEach(node => fadeState(node, `${m.id}/label/${node.className}`, `${m.status}/${Boolean(m.bottleneck?.badge)}`));
     }
   }
   function render() {
     const size = tile.dataset.widgetSize || 'small', layout = D.dashboard(state, size);
     const ids = layout.ids;
+    // Keep hidden compact sources cached, but release detached DOM sinks and
+    // pending frames as soon as a source is disconnected.
+    const connected = new Set(ids);
+    animation.prune(key => connected.has(key.split('/')[0]));
+    for (const key of visualStates.keys()) if (key !== 'footer' && !connected.has(key.split('/')[0])) visualStates.delete(key);
     tile.dataset.aiSources = ids.length === 2 ? ids.join('-') : ids.length > 2 ? `n-${ids.length}` : (ids[0] || 'none');
     tile.dataset.aiCount = String(ids.length);
     tile.dataset.aiDensity = ids.length >= 4 ? 'dense' : ids.length === 3 ? 'three' : 'few';
@@ -256,11 +326,17 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const visible = layout.shown.map(id => models.find(m => m.id === id));
     const providers = byId('ai-usage-providers');
     const focused = tile.contains(document.activeElement) ? document.activeElement?.dataset.quotaSettings : undefined;
+    const order = visible.map(m => m.id).join('/');
+    const sameLayout = renderedSize === size && renderedOrder === order;
+    if (!sameLayout) animation.prune(key => !key.endsWith('/position'));
+    const oldRings = sameLayout ? new Map([...providers.querySelectorAll('.ai-usage-provider')].map(el => [el.dataset.provider, el.querySelector('.q-ring').getBoundingClientRect()])) : new Map();
+    renderedSize = size; renderedOrder = order;
     const scroll = providers.scrollTop;
     const rowScroll = new Map([...providers.querySelectorAll('.cursor-usage-rows')].map(el => [el.id, el.scrollTop]));
     providers.style.setProperty('--q-columns', layout.columns);
     providers.style.setProperty('--q-rows', layout.rows);
-    providers.innerHTML = visible.map(m => provider(m, layout)).join('') + (layout.summary ? summary(models) : '')
+    const rowBadges = visible.map((m, index) => visible.slice(Math.floor(index / layout.columns) * layout.columns, (Math.floor(index / layout.columns) + 1) * layout.columns).some(item => item.status !== 'error' && item.bottleneck?.badge));
+    providers.innerHTML = visible.map((m, index) => provider(m, layout, rowBadges[index])).join('')
       + (size === 'mini' && layout.hidden.length ? `<button class="q-more-ring" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}" aria-label="${escape(t('quota.moreSources', { count: layout.hidden.length }))}">+${layout.hidden.length}</button>` : '');
     if (pinnedDetails) showDetails(pinnedDetails);
     providers.scrollTop = scroll;
@@ -272,17 +348,23 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     tile.querySelector('.ai-empty-body').textContent = size === 'mini' ? D.FALLBACK.miniBody : D.FALLBACK.body;
     const stamps = models.map(m => D.timestamp(m.data)).filter(n => n != null);
     const updated = stamps.length ? t('copy.updated.7114c0', { arg1: D.clock(new Date(Math.min(...stamps)).toISOString()) }) : '';
-    byId('ai-usage-updated').textContent = updated;
+    const stale = D.staleSummary(state, ['mini', 'small'].includes(size));
+    tile.dataset.stale = String(stale.stale);
+    byId('ai-usage-updated').textContent = stale.text || updated;
     byId('ai-usage-updated').title = models.map(m => `${registry.get(m.id).label}: ${m.updated || '--'}`).join('\n');
     const footer = byId('ai-usage-footer');
-    footer.hidden = !ids.length || size === 'medium' || size === 'large' && ids.length >= 4;
+    footer.hidden = !ids.length || size !== 'mini' && !(size === 'small' && layout.hidden.length);
     const first = visible[0];
     const miniSummary = D.miniSummary(state);
     footer.dataset.severity = size === 'mini' ? miniSummary.severity : 'ok';
     footer.innerHTML = size === 'mini' ? escape(miniSummary.text || (first ? t('quota.windowSummary', { source: registry.get(first.id).label, window: D.percent(first.selected.windowUsage?.windowMinutes) > 0 ? `${first.selected.scopeShort || first.selected.short} · ` : '', remaining: first.status === 'error' ? t(D.invalidToken(first.data) ? 'quota.status.invalid' : 'quota.status.error') : first.selected.display }) : ''))
       : size === 'large' ? escape(t('quota.refreshOrder')) : [layout.hidden.length ? `<button class="ai-inline-settings" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}">${escape(t('quota.moreSources', { count: layout.hidden.length }))}</button>` : escape(t('quota.compactOrder')), escape(updated)].filter(Boolean).join(' · ');
     footer.title = size === 'mini' && first ? `${first.selected.name}: ${first.selected.display}\n${first.title}` : [footer.textContent, updated].filter(Boolean).join(' · ');
-    if (size === 'mini' && first) {
+    delete footer.dataset.quotaSettings;
+    if (size === 'mini' && miniSummary.repair) {
+      delete footer.dataset.quotaToggle; footer.dataset.quotaSettings = miniSummary.repair; footer.tabIndex = 0; footer.setAttribute('role', 'button');
+      footer.removeAttribute('aria-controls'); footer.setAttribute('aria-label', miniSummary.text);
+    } else if (size === 'mini' && first) {
       footer.dataset.quotaToggle = first.id; footer.tabIndex = 0; footer.setAttribute('role', 'button');
       footer.setAttribute('aria-controls', `${first.id}-usage-rows`); footer.setAttribute('aria-label', footer.title);
     } else {
@@ -292,7 +374,9 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     if (size === 'mini' && first) footer.setAttribute('aria-expanded', String(pinnedDetails === first.id));
     else footer.removeAttribute('aria-expanded');
     if (focused !== undefined) [...tile.querySelectorAll('[data-quota-settings]')].find(el => el.dataset.quotaSettings === focused)?.focus({ preventScroll: true });
+    syncGeometry(layout, visible);
     animateModels(visible);
+    animatePositions(oldRings, visible);
     fadeState(footer, 'footer', miniSummary.severity);
     document.dispatchEvent(new CustomEvent('notch:ai-usage-updated', { detail: { ...state, ids } }));
   }
@@ -310,7 +394,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
           const result = api?.[request] ? await api[request]({ force }) : { detected: false };
           const hasReading = D.quotaRows(result, id).some(row => D.percent(row.windowUsage?.percent) != null || Number.isFinite(row.windowUsage?.balance) || row.windowUsage?.unlimited);
           const failed = result?.ok === false || Boolean(result?.remoteError && !hasReading);
-          if (revisions[id] === revision) state[id] = failed && state[id]?.ok
+          if (revisions[id] === revision) state[id] = failed && state[id]?.ok && D.available(state[id])
             ? { ...state[id], stale: true, refreshError: result.error || result.remoteError || 'request_failed', manualTokenInvalid: result.manualTokenInvalid ?? state[id].manualTokenInvalid, status: result.status ?? state[id].status } : result;
         } catch {
           if (revisions[id] === revision) state[id] = state[id]?.ok ? { ...state[id], stale: true, refreshError: 'ipc_failed' }
@@ -334,6 +418,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   });
   tile.querySelector('.ai-open-settings')?.addEventListener('click', () => openSettings());
   new MutationObserver(render).observe(tile, { attributes: true, attributeFilter: ['data-widget-size'] });
+  new ResizeObserver(() => syncGeometry()).observe(tile);
   const usageVisible = () => document.visibilityState === 'visible' && document.getElementById('app')?.classList.contains('expanded')
     && document.getElementById('tab-button-home')?.classList.contains('active') && !tile.hidden;
   for (const event of ['visibilitychange', 'notch:modechange', 'notch:tabchange', 'notch:home-modules-changed']) {
@@ -381,20 +466,22 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       const data = state[id];
       if (!data || !D.available(data)) return false;
       const next = D.status(data, id, now);
-      return next !== D.status(data, id, now - 30_000) || D.quotaRows(data, id).some(row => {
+      return next !== D.status(data, id, now - 30_000) || D.isStale(data, id, now) !== D.isStale(data, id, now - 30_000) || D.quotaRows(data, id).some(row => {
         const resetMs = D.toMillis(row.windowUsage?.resetsAt);
         return resetMs != null && resetMs > now - 30_000 && resetMs <= now;
       });
     });
     if (needs) render();
     else {
+      const stale = D.staleSummary(state, ['mini','small'].includes(tile.dataset.widgetSize));
+      if (stale.stale) byId('ai-usage-updated').textContent = stale.text;
       // Still refresh relative reset copy ("明天 …") once a minute without tearing the grid.
       for (const el of tile.querySelectorAll('.ai-usage-provider')) {
         const id = el.dataset.provider;
         const m = model(id, tile.dataset.widgetSize || 'small', Number(tile.dataset.aiCount) || 1);
         const caption = el.querySelector('.q-compact-caption');
         const foot = el.querySelector('.cursor-usage-footnote > span');
-        if (caption) caption.innerHTML = m.constraintLine ? [m.constraintLine, m.constraintTime].filter(Boolean).map(text => `<span>${escape(text)}</span>`).join('') : escape(m.message || m.reset);
+        if (caption) caption.innerHTML = captionLines(m).filter(Boolean).map(text => `<span>${escape(text)}</span>`).join('');
         if (foot && m.status !== 'error') foot.textContent = [m.message, m.updated].filter(Boolean).join(' · ');
       }
     }

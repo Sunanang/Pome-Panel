@@ -56,3 +56,20 @@ test('an unknown reading clears the tween without replacing unknown UI with a ca
   assert.equal(h.store.set('x', null, () => assert.fail('unknown must not paint a previous value')),false);
   assert.equal(h.store.value('x'),undefined);
 });
+
+test('disconnect pruning cancels stale sinks while keeping other sources and cached frames', () => {
+  const h = harness(); let detachedFrames = 0, retained;
+  h.store.set('codex/5h/main', 80, () => detachedFrames++);
+  h.store.set('cursor/auto/main', 60, value => retained = value);
+  h.tick(100);
+  const before = detachedFrames, current = retained;
+  h.store.prune(key => key.startsWith('cursor/'));
+  assert.equal(h.store.value('codex/5h/main'), undefined);
+  assert.equal(h.store.value('cursor/auto/main'), current);
+  assert.equal(h.frames.size, 1);
+  h.tick(720);
+  assert.equal(detachedFrames, before, 'a detached source must never paint another frame');
+  assert.equal(retained, 60);
+  h.store.prune(() => false);
+  assert.equal(h.store.value('cursor/auto/main'), undefined);
+});

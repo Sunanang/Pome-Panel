@@ -14,3 +14,5 @@
 - `antigravity.svg`：[官方 favicon](https://www.antigravity.google/favicon.svg) 中的标志轮廓，去掉背景与颜色效果，裁切 viewBox 并改为白色，以用于通知蒙版。
 
 定稿源包：[AI 剩余额度 B 仪表盘](https://drive.google.com/file/d/17r9ApKIEm8M3XhLLLL2sgvxHp7bYHbW9/view)。额度模块与面板共用系统字体栈，不再单独挂载 Inter。
+
+- `clock.svg`：Lucide 官方 [clock](https://github.com/lucide-icons/lucide/blob/main/icons/clock.svg)，许可证同 LICENSE-alert，用于额度数据过期提示。

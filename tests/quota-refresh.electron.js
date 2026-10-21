@@ -21,13 +21,24 @@ async function main() {
     window.notchAPI=Object.fromEntries(NotchAiProviders.usageProviders().map(({id,request})=>[request,async()=>{window.calls++;await new Promise(r=>setTimeout(r,80));return failQuota?{ok:false,detected:true,error:'offline'}:fixture[id]||{ok:true,detected:false};}]));
     NotchAiUsage.refresh({force:true})`);
   await sleep(900);
-  async function size(name, w, h, saveImage = true) {
+  async function size(name, w, h, saveImage = true, imageName = name) {
     await js(`Object.assign(document.getElementById('home-cursor').style,{position:'fixed',left:'24px',top:'110px',width:'${w}px',height:'${h}px',display:'flex',visibility:'visible'});document.getElementById('home-cursor').dataset.widgetSize='${name}';document.getElementById('ui-capsule-hint').hidden=true`);
     await sleep(100);
-    const bounds=await js(`(()=>{const tile=document.getElementById('home-cursor'),t=tile.getBoundingClientRect();return [...tile.querySelectorAll('.ai-usage-provider')].flatMap(el=>{const c=el.getBoundingClientRect();return [...el.querySelectorAll('.q-ring,.ai-usage-source,.q-compact-caption,.q-bottleneck')].filter(n=>n.checkVisibility()).flatMap(n=>{const r=n.getBoundingClientRect();return r.left<c.left-1||r.right>c.right+1||r.top<c.top-7||r.bottom>c.bottom+1?[el.dataset.provider+':'+n.className]:[]})})})()`);
+    const bounds=await js(`(()=>{const tile=document.getElementById('home-cursor'),t=tile.getBoundingClientRect();return [...tile.querySelectorAll('.ai-usage-provider')].flatMap(el=>{const c=el.getBoundingClientRect();return [...el.querySelectorAll('.q-ring,.ai-usage-source,.q-compact-caption,.q-bottleneck')].filter(n=>n.checkVisibility()).flatMap(n=>{const r=n.getBoundingClientRect();return r.left<c.left-1||r.right>c.right+1||r.top<c.top-7||r.bottom>c.bottom+1?[{provider:el.dataset.provider,node:n.className,left:r.left-c.left,right:r.right-c.left,top:r.top-c.top,bottom:r.bottom-c.top,cellWidth:c.width,cellHeight:c.height}]:[]})})})()`);
     assert.deepEqual(bounds,[],`${name} content fits`);
     assert.equal(await js(`[...document.querySelectorAll('#home-cursor .q-compact-caption')].filter(n=>n.checkVisibility()).every(n=>n.scrollHeight<=n.clientHeight+1)`),true,`${name} explanation lines do not clip`);
-    if(out && saveImage){fs.mkdirSync(out,{recursive:true});const rect=await js(`(()=>{const r=document.getElementById('home-cursor').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`);const shot=await win.webContents.capturePage();const dpr=await js('devicePixelRatio');const crop=Object.fromEntries(Object.entries(rect).map(([k,v])=>[k,Math.round(v*dpr)]));fs.writeFileSync(path.join(out,name+'.png'),shot.crop(crop).toPNG());}
+    if(name!=='mini'){
+      assert.deepEqual(await js(`[...document.querySelectorAll('#home-cursor .q-bottleneck')].filter(n=>n.checkVisibility()).flatMap(b=>{const badge=b.getBoundingClientRect(),ring=b.closest('[data-provider]').querySelector('svg').getBoundingClientRect(),card=b.closest('[data-provider]').getBoundingClientRect();return badge.bottom>ring.top-1||badge.top<card.top+2||Math.abs((badge.left+badge.right-ring.left-ring.right)/2)>.5?[{id:b.closest('[data-provider]').dataset.provider,top:badge.top-card.top,bottom:badge.bottom-ring.top,center:(badge.left+badge.right-ring.left-ring.right)/2}]:[]})`),[],`${imageName} centered badges have card padding and never cover the ring`);
+      assert.deepEqual(await js(`[...document.querySelectorAll('#home-cursor .q-ring-center > [data-main-number],#home-cursor .q-ring-center > [data-main-amount]')].filter(n=>n.checkVisibility()).flatMap(n=>{const text=n.getBoundingClientRect(),ring=n.closest('.q-ring').getBoundingClientRect(),circle=n.closest('.q-ring').querySelector('.q-ring-track'),stroke=Number(circle.getAttribute('stroke-width'))*ring.width/Number(n.closest('.q-ring').querySelector('svg').getAttribute('viewBox').split(' ')[2]),cx=ring.left+ring.width/2,cy=ring.top+ring.height/2,corner=Math.hypot(Math.max(Math.abs(text.left-cx),Math.abs(text.right-cx)),Math.max(Math.abs(text.top-cy),Math.abs(text.bottom-cy)));return corner>ring.width/2-stroke-1?[{id:n.closest('[data-provider]').dataset.provider,text:n.textContent,width:text.width,height:text.height,diameter:ring.width,corner,interior:ring.width/2-stroke-1}]:[]})`),[],`${imageName} values including currency fit entirely inside the ring stroke`);
+    }
+    if(out && saveImage){fs.mkdirSync(out,{recursive:true});const rect=await js(`(()=>{const r=document.getElementById('home-cursor').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`);const shot=await win.webContents.capturePage();const dpr=await js('devicePixelRatio');const crop=Object.fromEntries(Object.entries(rect).map(([k,v])=>[k,Math.round(v*dpr)]));fs.writeFileSync(path.join(out,imageName+'.png'),shot.crop(crop).toPNG());
+      if(name==='medium'&&imageName.endsWith('8ai')){
+        const scroll=await js(`document.getElementById('ai-usage-providers').scrollTop`);
+        await js(`document.getElementById('ai-usage-providers').scrollTop=140`);await sleep(100);
+        fs.writeFileSync(path.join(out,imageName+'-middle.png'),(await win.webContents.capturePage()).crop(crop).toPNG());
+        await js(`document.getElementById('ai-usage-providers').scrollTop=${scroll}`);
+      }
+    }
   }
   for(const args of [['mini',196,118],['small',196,248],['medium',404,248],['large',404,510]]) {
     await size(...args);
@@ -39,6 +50,33 @@ async function main() {
   }
   assert.equal(await js(`document.getElementById('ai-provider-codex').dataset.depleted`),'true');
   assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring').getAttribute('aria-valuenow')`),'100');
+  // Unknown/long reset copy and the longest corner badge must fit in both
+  // languages, in two-column small cards and the eight-source dense layouts.
+  await js(`window.savedFixture=structuredClone(fixture)`);
+  for(const locale of ['en-US','zh-CN'])for(const count of [2,8]){
+    const crowded={codex:source(100,0),claude:source(80,18)};
+    if(count===8)Object.assign(crowded,{
+      cursor:{ok:true,detected:true,auto:{percent:0,windowMinutes:43200},other:{percent:100,windowMinutes:86400,resetsAt:future}},
+      grokbot:source(80,18),
+      copilot:{ok:true,configured:true,windows:[{id:'premium',percent:20},{id:'chat',percent:20},{id:'completions',percent:20}]},
+      antigravity:{ok:true,detected:true,windows:[{id:'short',label:'Gemini',percent:0,windowMinutes:300},{id:'long',label:'Gemini',percent:100,windowMinutes:10080,resetsAt:future}]},
+      grok:{ok:true,configured:true,primary:{currency:'USD',balance:10}},manus:{ok:true,configured:true,windows:[{unit:'credits',balance:0}]}
+    });
+    await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'));fixture=${JSON.stringify(crowded)};NotchAiUsage.refresh({force:true})`);
+    await sleep(950);
+    for(const args of [['mini',196,118],['small',196,248],['medium',404,248],['large',404,510]])await size(...args,true,`${args[0]}-${locale}-${count}ai`);
+  }
+  await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'));fixture=savedFixture;NotchAiUsage.refresh({force:true})`);
+  await sleep(950);
+  await size('medium',404,248,false);
+  const ringPosition=()=>js(`(()=>{const r=document.querySelector('#ai-provider-codex .q-ring').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()`);
+  const constrainedPosition=await ringPosition();
+  await js(`fixture.codex.secondary.percent=70;NotchAiUsage.refresh({force:true})`);
+  assert.deepEqual((await ringPosition()).slice(2),constrainedPosition.slice(2),'a disappearing row badge does not change ring diameter');
+  await js(`fixture.codex.secondary.percent=100;NotchAiUsage.refresh({force:true})`);
+  assert.deepEqual((await ringPosition()).slice(2),constrainedPosition.slice(2),'a returning badge keeps the shared diameter while the existing value store animates position');
+  await sleep(950);
+  await size('large',404,510,false);
   await js(`fixture.codex.primary.percent=50;NotchAiUsage.refresh({force:true})`);
   await sleep(150);
   const before=await js(`Number(document.querySelector('#ai-provider-codex [data-main-number]').firstChild.textContent)`);
@@ -91,6 +129,16 @@ async function main() {
     review.shots.forEach((shot,i)=>fs.writeFileSync(path.join(out,`motion-frame-${i}.png`),Buffer.from(shot,'base64')));
     fs.writeFileSync(path.join(out,'video-review.json'),JSON.stringify({width:review.width,height:review.height}));
   }
+  // Removing a source mid-tween must stop painting its detached card. Reconnect
+  // starts a new reading rather than continuing an old account's cached value.
+  await js(`fixture.codex.primary.percent=50;NotchAiUsage.refresh({force:true})`);
+  await sleep(120);
+  await js(`window.detachedCodex=document.getElementById('ai-provider-codex');window.connectedCodex=structuredClone(fixture.codex);fixture.codex={ok:true,detected:false};NotchAiUsage.refresh({force:true})`);
+  await js(`window.detachedPaints=0;window.detachedObserver=new MutationObserver(records=>detachedPaints+=records.length);detachedObserver.observe(detachedCodex,{subtree:true,childList:true,attributes:true,characterData:true})`);
+  await sleep(850);
+  assert.equal(await js('detachedPaints'),0,'a disconnected card has no remaining animation callbacks');
+  await js(`detachedObserver.disconnect();fixture.codex=connectedCodex;NotchAiUsage.refresh({force:true})`);
+  assert.equal(await js(`document.querySelector('#ai-provider-codex [data-main-number]').textContent`),'0%','a disconnected source releases cached animation values');
   if(!win.webContents.debugger.isAttached())win.webContents.debugger.attach('1.3');
   await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   await js(`fixture.codex.primary.percent=7;NotchAiUsage.refresh({force:true})`);

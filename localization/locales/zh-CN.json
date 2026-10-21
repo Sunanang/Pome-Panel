@@ -1456,5 +1456,8 @@
   "quota.named": "{name}额度",
   "quota.pool.premium": "高级请求",
   "quota.pool.chat": "聊天",
-  "quota.pool.completions": "补全"
+  "quota.pool.completions": "补全",
+  "quota.invalidSummary": "{source} 失效 · 去设置",
+  "quota.staleAge": "数据已过期 · {hours} 小时前",
+  "quota.staleShort": "已过期 {hours} 小时"
 }
