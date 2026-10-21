@@ -48,6 +48,7 @@ async function main(){
       await capture(`${name}-${count}ai-${state}${format==='actual'?'-real':''}`);
       const v=await inspect(),prefix=`${format}/${name}/${count}/${state}`;
       assert.equal(v.overflow,false,prefix+' tile overflow');
+      assert.equal(await js(`(()=>{const b=document.getElementById('cursor-usage-refresh').getBoundingClientRect(),s=document.querySelector('#cursor-usage-refresh svg').getBoundingClientRect();return Math.abs((s.left+s.right-b.left-b.right)/2)<.5&&Math.abs((s.top+s.bottom-b.top-b.bottom)/2)<.5&&s.left>=b.left&&s.right<=b.right})()`),true,prefix+' refresh icon stays centered inside its button');
       assert.equal(v.cards.length,name==='mini'&&count>4?3:count,prefix+' sources stay present');
       assert.deepEqual(v.cards.flatMap(c=>c.overflow),[],prefix+' cell content');
       assert(v.cards.every(c=>Math.abs(c.ring.width-v.cards[0].ring.width)<.5),prefix+' shared diameter');

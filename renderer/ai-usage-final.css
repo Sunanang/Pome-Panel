@@ -1,4 +1,6 @@
 /* Final quota composition. These tokens apply only to the quota widget. */
+#home-cursor .cursor-usage-refresh { padding:0; }
+#home-cursor .cursor-usage-refresh svg { display:block; }
 #home-cursor {
   --q-ok-a:#30d978; --q-ok-b:#65d9a1;
   --q-warn-a:#ffb454; --q-warn-b:#ff9352; --q-warn-t:#ffb16d;
