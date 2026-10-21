@@ -143,12 +143,12 @@ test('fallback has calm copy for full and mini layouts', () => {
 });
 
 test('dynamic quota labels use actual cadence including weekly-only primary and unknown windows', () => {
-  assert.equal(D.windowLabel({ windowMinutes: 10080 }), '每周额度');
+  assert.equal(D.windowLabel({ windowMinutes: 10080 }), '周额度');
   assert.equal(D.windowLabel({ windowMinutes: 300 }), '5 小时额度');
   assert.equal(D.windowLabel({ windowMinutes: 60 }), '1 小时额度');
-  assert.equal(D.windowLabel({ windowMinutes: 1440 }), '每日额度');
+  assert.equal(D.windowLabel({ windowMinutes: 1440 }), '日额度');
   const rows = D.quotaRows({ primary: { percent: 20, windowMinutes: 10080 }, secondary: null }, 'codex');
-  assert.equal(rows.length, 1); assert.equal(rows[0].name, '每周额度');
+  assert.equal(rows.length, 1); assert.equal(rows[0].name, '周额度');
   assert.equal(D.quotaRows({ primary: {} }, 'codex')[0].name, '主要额度');
 });
 test('registry catalogs eight providers and dynamic model rows participate in remaining quota', () => {
@@ -251,4 +251,23 @@ test('Cursor same-cycle pools have no corner badge, but Other still constrains t
   const snapshots={cursor:data,codex:{detected:true,primary:{percent:95}},claude:{detected:true,primary:{percent:81}}};
   assert.deepEqual(D.dashboard(snapshots,'mini').ids,['cursor','codex','claude']);
   assert.deepEqual(D.dashboard(snapshots,'large').ids,['cursor','codex','claude']);
+});
+
+
+test('provider names share one quota vocabulary without losing pool identities or inventing cadence', () => {
+  const claude=require('../claude-usage').buildSnapshot({five_hour:{utilization:20},seven_day:{utilization:40}});
+  assert.deepEqual(D.quotaRows(claude,'claude').map(r=>[r.name,r.short]),[['5 小时额度','5h'],['周额度','周']]);
+  assert.equal(D.quotaRows({primary:{percent:20,windowMinutes:10080}},'codex')[0].name,'周额度');
+  const bot=require('../grokbot-usage').buildSnapshot({usagePercent:20},{});
+  assert.equal(D.quotaRows(bot,'grokbot')[0].name,'周额度');assert.equal(D.bottleneckInfo(bot,'grokbot').name,'周');
+  const cursor={auto:{percent:20},other:{percent:40},billing:{cycleStart:'2026-10-01T00:00:00Z',cycleEnd:'2026-11-01T00:00:00Z'}};
+  assert.deepEqual(D.quotaRows(cursor,'cursor').map(r=>[r.name,r.short,r.scopeShort]),[['Auto · 月额度','Auto','月'],['Other · 月额度','Other','月']]);
+  assert.equal(D.quotaRows(cursor,'cursor')[0].windowUsage.windowMinutes,44640,'actual measured duration stays intact');
+  assert.deepEqual(D.quotaRows({windows:[{id:'premium',label:'Premium',percent:30},{id:'chat',label:'Chat',percent:30},{id:'completions',label:'Completions',percent:30}]},'copilot').map(r=>r.name),['高级请求额度','聊天额度','补全额度']);
+  assert.equal(D.quotaRows({windows:[{id:'model',label:'Gemini · Weekly',windowMinutes:10080,percent:20}]},'antigravity')[0].name,'Gemini · 周额度');
+  assert.equal(D.quotaRows({windows:[{id:'model',label:'Gemini',percent:20}]},'antigravity')[0].name,'Gemini额度');
+  assert.equal(D.quotaRows({windows:[{label:'Quota 1',percent:20}]},'antigravity')[0].name,'额度 1');
+  assert.equal(D.quotaRows({primary:{currency:'USD',balance:10}},'grok')[0].name,'已入账预付余额');
+  assert.equal(D.quotaRows({windows:[{unit:'credits',balance:100,label:'Credits'}]},'manus')[0].name,'可用积分');
+  assert.equal(D.windowLabel({period:'month'}),'月额度');assert.equal(D.windowShortLabel({period:'month'}),'月');
 });

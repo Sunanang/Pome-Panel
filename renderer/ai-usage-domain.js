@@ -88,11 +88,7 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     const a = percent(row.windowUsage?.windowMinutes), b = percent(display?.windowUsage?.windowMinutes);
     const sameCycle = id === 'cursor' && (a > 0 && b > 0 ? a === b
       : toMillis(row.windowUsage?.resetsAt) != null && toMillis(row.windowUsage.resetsAt) === toMillis(display?.windowUsage?.resetsAt));
-    const minutes = percent(row.windowUsage?.windowMinutes);
-    const name = id === 'cursor' ? row.name : minutes === 10080 ? pomeLocaleRendererAiUsageDomain.t('quota.week')
-      : minutes === 1440 ? pomeLocaleRendererAiUsageDomain.t('quota.day')
-      : row.windowUsage?.label && !row.windowUsage.labelIsFallback ? row.windowUsage.label
-      : minutes > 0 && minutes % 60 === 0 ? `${minutes / 60}h` : row.name;
+    const name = id === 'cursor' ? row.short : row.scopeShort || row.short;
     return { ...row, name, level: row.remaining === 0 ? 'depleted' : level(row.remaining),
       badge: row.key !== display?.key && row.remaining <= 20 && !sameCycle,
       resetAt: typeof row.windowUsage?.resetsAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.windowUsage.resetsAt) ? null : toMillis(row.windowUsage?.resetsAt) };
@@ -184,6 +180,7 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     return expired(window, now) ? pomeLocaleRendererAiUsageDomain.t("copy.resetAtHasPassedRefreshNeeded.84cb42", { arg1: (time) }) : pomeLocaleRendererAiUsageDomain.t("copy.resets.b9a32b", { arg1: (time) });
   }
   function windowLabel(window, fallback = pomeLocaleRendererAiUsageDomain.t("copy.quota.32ce9f")) {
+    if (window?.period === 'month') return pomeLocaleRendererAiUsageDomain.t('quota.monthly');
     const minutes = percent(window?.windowMinutes);
     if (!(minutes > 0)) return fallback;
     if (minutes === 10080) return pomeLocaleRendererAiUsageDomain.t("copy.weeklyQuota.475811");
@@ -191,6 +188,48 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     if (minutes % 1440 === 0) return pomeLocaleRendererAiUsageDomain.t("copy.dayQuota.9c5206", { arg1: (minutes / 1440) });
     if (minutes % 60 === 0) return pomeLocaleRendererAiUsageDomain.t("copy.hourQuota.d2ffb3", { arg1: (minutes / 60) });
     return pomeLocaleRendererAiUsageDomain.t("copy.minuteQuota.321677", { arg1: (minutes) });
+  }
+  function windowShortLabel(window, fallback = '') {
+    if (window?.period === 'month') return pomeLocaleRendererAiUsageDomain.t('quota.month');
+    const minutes = percent(window?.windowMinutes);
+    if (minutes === 10080) return pomeLocaleRendererAiUsageDomain.t('quota.week');
+    if (minutes === 1440) return pomeLocaleRendererAiUsageDomain.t('quota.day');
+    if (minutes > 0 && minutes % 1440 === 0) return `${minutes / 1440}d`;
+    if (minutes > 0 && minutes % 60 === 0) return `${minutes / 60}h`;
+    return minutes > 0 ? `${minutes}m` : fallback;
+  }
+  function isCadenceLabel(label, window) {
+    const text = String(label).trim().toLowerCase().replace(/(?:quota|额度)$/u, '').trim();
+    const minutes = percent(window?.windowMinutes);
+    if (minutes === 10080 && /^(?:每?周|week(?:ly)?|7\s*天|seven[_ -]day)$/.test(text)) return true;
+    if (minutes === 1440 && /^(?:每?日|daily|day)$/.test(text)) return true;
+    if (window?.period === 'month' && /^(?:每?月|month(?:ly)?)$/.test(text)) return true;
+    const units = text.replaceAll('-', ' ').match(/^(\d+(?:\.\d+)?)\s*(h|hours?|小时|d|days?|天|m|mins?|minutes?|分钟)$/);
+    return Boolean(units && Number(units[1]) * (/^(?:h|hour|小时)/.test(units[2]) ? 60 : /^(?:d|day|天)/.test(units[2]) ? 1440 : 1) === minutes);
+  }
+  // One vocabulary supplies full names, compact labels and scope captions. Raw
+  // model/pool identities stay intact; only redundant cadence aliases are removed.
+  function rowLabels(row, id) {
+    const t = (key, args) => pomeLocaleRendererAiUsageDomain.t(key, args);
+    const w = row.windowUsage;
+    if (w?.currency || w?.unit === 'credits') {
+      const name = t(w.currency ? 'providers.prepaidBalance' : 'providers.availableCredits');
+      return { ...row, name, short:name, scopeShort:'', periodLabel:'' };
+    }
+    const scope = id === 'cursor' ? { period:'month' } : id === 'grokbot' ? { windowMinutes:10080 } : w;
+    const periodLabel = windowLabel(scope, ''), scopeShort = windowShortLabel(scope);
+    if (id === 'cursor') return { ...row, name:`${row.name} · ${periodLabel}`, short:row.name, periodLabel, scopeShort };
+    if (id === 'grokbot') return { ...row, name:periodLabel, short:scopeShort, periodLabel, scopeShort };
+    const categories = { premium:'quota.pool.premium', chat:'quota.pool.chat', completions:'quota.pool.completions' };
+    const raw = id === 'copilot' && categories[row.key] ? t(categories[row.key])
+      : w?.labelIsFallback ? t('status.OtherQuota.1e9c5f') : String(w?.label || '').trim();
+    let identity = raw.split('·').map(part => part.trim()).filter(part => part && !isCadenceLabel(part, scope)).join(' · ');
+    const numbered = identity.match(/^quota\s+(\d+)$/i);
+    if (numbered) identity = `${t('copy.quota.32ce9f')} ${numbered[1]}`;
+    const quotaWord = /额度$|quota$|^(?:额度|quota) \d+$/i.test(identity);
+    const name = identity ? periodLabel ? `${identity} · ${periodLabel}` : quotaWord ? identity : t('quota.named', { name:identity })
+      : periodLabel || row.name || t('copy.quota.32ce9f');
+    return { ...row, name, short:identity || scopeShort || name, periodLabel, scopeShort };
   }
   function quotaRows(data, id) {
     const provider = registry.get(id);
@@ -203,13 +242,13 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
         windowUsage = { ...windowUsage, resetsAt: windowUsage.resetsAt ?? end,
           windowMinutes: windowUsage.windowMinutes ?? (start != null && end > start ? (end - start) / 60000 : null) };
       }
-      return { key, name, windowUsage };
+      return rowLabels({ key, name, windowUsage }, id);
     });
     if (Array.isArray(data?.windows) && data.windows.length) return data.windows.map((window, index) => ({
-      key: window.id || `window-${index}`, name: [window.labelIsFallback ? pomeLocaleRendererAiUsageDomain.t("status.OtherQuota.1e9c5f") : window.label, windowLabel(window)].filter(Boolean).join(' · '), windowUsage: window,
-    }));
+      key: window.id || `window-${index}`, name:pomeLocaleRendererAiUsageDomain.t('copy.quota.32ce9f'), windowUsage: window,
+    })).map(row => rowLabels(row, id));
     return ['primary', 'secondary'].filter(key => data?.[key]).map(key => ({ key,
-      name: windowLabel(data[key], key === 'primary' ? pomeLocaleRendererAiUsageDomain.t("copy.primaryQuota.b2a098") : pomeLocaleRendererAiUsageDomain.t("copy.secondaryQuota.0a9d1a")), windowUsage: data[key] }));
+      name: windowLabel(data[key], key === 'primary' ? pomeLocaleRendererAiUsageDomain.t("copy.primaryQuota.b2a098") : pomeLocaleRendererAiUsageDomain.t("copy.secondaryQuota.0a9d1a")), windowUsage: data[key] })).map(row => rowLabels(row, id));
   }
   function refreshDelay(snapshots, visible, now = Date.now()) {
     const normal = visible ? 5 * 60000 : 15 * 60000;
@@ -224,5 +263,5 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     if (force || visible || data == null) return true;
     return available(data) || Boolean(data.configured || data.manualTokenConfigured || data.ok === false);
   }
-  return { bottleneck, bottleneckInfo, miniSummary, recoveryTime, registry, windowLabel, quotaRows, refreshDelay, FALLBACK, available, providers, title, remaining, displayRow, displayRemaining, urgencyRemaining, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots, invalidToken, timestamp, toMillis, status, dashboard, shouldRefresh };
+  return { windowShortLabel, bottleneck, bottleneckInfo, miniSummary, recoveryTime, registry, windowLabel, quotaRows, refreshDelay, FALLBACK, available, providers, title, remaining, displayRow, displayRemaining, urgencyRemaining, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots, invalidToken, timestamp, toMillis, status, dashboard, shouldRefresh };
 });

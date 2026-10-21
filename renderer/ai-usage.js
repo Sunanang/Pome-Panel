@@ -90,13 +90,6 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     return t(D.invalidToken(data) ? 'quota.tokenRequired' : data?.error === 'antigravity_quota_unavailable'
       ? 'providers.quotaUnavailable' : data?.error === 'grok_team_required' ? 'providers.grokTeamRequired' : 'copy.usageUnavailableRefreshToRetry.1ceded');
   }
-  function shortLabel(window, fallback) {
-    const minutes = D.percent(window?.windowMinutes);
-    if (minutes === 10080) return t('quota.week');
-    if (minutes === 1440) return t('quota.day');
-    if (minutes > 0 && minutes % 60 === 0) return `${minutes / 60}h`;
-    return fallback;
-  }
   function rowHelp(id, data, window) {
     if (window?.resetsAt != null) return D.resetText(window);
     if (id === 'cursor' && date(data?.billing?.cycleEnd)) return t('copy.billingPeriodEnds.eae9ee', { arg1: date(data.billing.cycleEnd) });
@@ -105,7 +98,6 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   function model(id, size, count) {
     const data = state[id], status = D.status(data, id);
     const rows = D.quotaRows(data, id);
-    if (id === 'grokbot') rows.forEach(row => { row.name = t('copy.quota.32ce9f'); });
     if (!rows.length) rows.push({ key: 'primary', name: t('copy.quota.32ce9f'), windowUsage: data?.unlimited ? { unlimited: true } : null });
     const values = rows.map(row => {
       const w = data?.ok === false ? null : row.windowUsage;
@@ -115,7 +107,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         value = null; kind = w.currency === 'USD' ? 'currency' : 'credits';
         display = I.number(w.balance, kind === 'currency' ? { style: 'currency', currency: 'USD' } : {});
       } else display = D.formatPercent(value);
-      return { ...row, value, kind, display, short: id === 'cursor' ? row.name : row.windowUsage?.label && !row.windowUsage.labelIsFallback ? row.windowUsage.label : shortLabel(row.windowUsage, row.name), help: rowHelp(id, data, row.windowUsage) };
+      return { ...row, value, kind, display, short: row.short || row.name, help: rowHelp(id, data, row.windowUsage) };
     });
     const remaining = D.displayRemaining(data, id);
     const bottleneck = D.bottleneckInfo(data, id);
@@ -131,7 +123,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const constrained = bottleneck && bottleneck.remaining <= 20 && !exhausted;
     const constraintLine = constrained ? t(bottleneck.remaining === 0 ? 'quota.windowDepleted' : 'quota.windowLeft', { window: bottleneck.name, value: Math.round(bottleneck.remaining) }) : '';
     const constraintTime = constrained && bottleneck.resetAt != null ? t(bottleneck.remaining === 0 ? 'quota.recoveryAt' : 'quota.resetAt', { time: D.recoveryTime(bottleneck.resetAt) }) : '';
-    const reset = [values.length > 1 ? selected.short : '', selected.help].filter(Boolean).join(' · ');
+    const reset = [values.length > 1 ? selected.scopeShort : '', selected.help].filter(Boolean).join(' · ');
     return { id, data, status, rows: values, remaining, exhausted, depleted, bottleneck, level: depleted ? 'critical' : D.level(bottleneck?.remaining), selected, source, updated, message, reset, constraintLine, constraintTime,
       title: [registry.get(id).label, source, message, ...values.map(row => `${row.name}: ${row.display} · ${row.help}`),
         id === 'codex' && data?.plan ? D.planLabel(data.plan) : '',
@@ -154,7 +146,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     return `<div class="q-ring" style="--q-ring-size:${size}px;--q-value-length:${Math.max(3, [...String(amount)].length)}" ${showPct && !bad ? `role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.remaining}"` : 'role="img"'} aria-label="${escape(label)}">
       <svg class="q-ring-svg" viewBox="0 0 ${size} ${size}" aria-hidden="true"><defs><linearGradient id="quota-gradient-${m.id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="q-gradient-start"/><stop offset="1" class="q-gradient-end"/></linearGradient></defs>
       <circle class="q-ring-track" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke-width="${dashed ? sw * .7 : sw}"${dashed ? ' stroke-dasharray="2 3.2"' : ''}/>
-      ${dashed || unknown ? '' : `<circle class="q-ring-value" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke="url(#quota-gradient-${m.id})" stroke-width="${sw}" stroke-linecap="round" data-length="${length}" stroke-dasharray="${length} ${length}" stroke-dashoffset="${length * (1 - m.remaining / 100)}"${m.remaining === 0 ? ' visibility="hidden"' : ''}/>`}</svg><span class="q-ring-center">${center}${size >= 46 && m.remaining != null ? `<small class="q-main-scope">${escape(m.id === 'cursor' ? m.selected.short : shortLabel(m.selected.windowUsage, m.selected.short))}</small>` : ''}</span>
+      ${dashed || unknown ? '' : `<circle class="q-ring-value" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke="url(#quota-gradient-${m.id})" stroke-width="${sw}" stroke-linecap="round" data-length="${length}" stroke-dasharray="${length} ${length}" stroke-dashoffset="${length * (1 - m.remaining / 100)}"${m.remaining === 0 ? ' visibility="hidden"' : ''}/>`}</svg><span class="q-ring-center">${center}${size >= 46 && m.remaining != null && m.selected.scopeShort ? `<small class="q-main-scope">${escape(m.selected.scopeShort)}</small>` : ''}</span>
       ${m.bottleneck && m.bottleneck.remaining <= 20 ? `<span class="q-bottleneck" data-state-fade="${m.status}" data-badge="${m.bottleneck.badge}" data-level="${m.bottleneck.level}" aria-hidden="true">${escape(m.bottleneck.name)} ${Math.round(m.bottleneck.remaining)}%</span>` : ''}</div>`;
   }
   function quotaRows(m, inline = false) {
@@ -287,7 +279,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const first = visible[0];
     const miniSummary = D.miniSummary(state);
     footer.dataset.severity = size === 'mini' ? miniSummary.severity : 'ok';
-    footer.innerHTML = size === 'mini' ? escape(miniSummary.text || (first ? t('quota.windowSummary', { source: registry.get(first.id).label, window: D.percent(first.selected.windowUsage?.windowMinutes) > 0 ? `${shortLabel(first.selected.windowUsage, first.selected.short)} · ` : '', remaining: first.status === 'error' ? t(D.invalidToken(first.data) ? 'quota.status.invalid' : 'quota.status.error') : first.selected.display }) : ''))
+    footer.innerHTML = size === 'mini' ? escape(miniSummary.text || (first ? t('quota.windowSummary', { source: registry.get(first.id).label, window: D.percent(first.selected.windowUsage?.windowMinutes) > 0 ? `${first.selected.scopeShort || first.selected.short} · ` : '', remaining: first.status === 'error' ? t(D.invalidToken(first.data) ? 'quota.status.invalid' : 'quota.status.error') : first.selected.display }) : ''))
       : size === 'large' ? escape(t('quota.refreshOrder')) : [layout.hidden.length ? `<button class="ai-inline-settings" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}">${escape(t('quota.moreSources', { count: layout.hidden.length }))}</button>` : escape(t('quota.compactOrder')), escape(updated)].filter(Boolean).join(' · ');
     footer.title = size === 'mini' && first ? `${first.selected.name}: ${first.selected.display}\n${first.title}` : [footer.textContent, updated].filter(Boolean).join(' · ');
     if (size === 'mini' && first) {

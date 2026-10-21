@@ -69,6 +69,8 @@ async function main() {
     fs.writeFileSync(path.join(screenshots,name+'.png'),full.crop(crop).toPNG());
     const focus=await js(`(()=>{const p=document.querySelector('.cursor-usage-rows:popover-open');if(!p)return null;const r=p.getBoundingClientRect(),t=document.getElementById('home-cursor').getBoundingClientRect();const x=Math.max(0,Math.min(r.left,t.left)-8),y=Math.max(0,Math.min(r.top,t.top)-8);return {x,y,width:Math.min(innerWidth,Math.max(r.right,t.right)+8)-x,height:Math.min(innerHeight,Math.max(r.bottom,t.bottom)+8)-y}})()`);
     if(focus)fs.writeFileSync(path.join(screenshots,name+'-focus.png'),full.crop(Object.fromEntries(Object.entries(focus).map(([k,v])=>[k,Math.round(v*factor)]))).toPNG());
+    const popup=await js(`(()=>{const p=document.querySelector('.cursor-usage-rows:popover-open');if(!p)return null;const r=p.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`);
+    if(popup)fs.writeFileSync(path.join(screenshots,name+'-popover.png'),full.crop(Object.fromEntries(Object.entries(popup).map(([k,v])=>[k,Math.round(v*factor)]))).toPNG());
 
   }
   async function inspect() {
@@ -97,6 +99,44 @@ async function main() {
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
     await js(`setMode(true);PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'));new Promise(r=>setTimeout(r,550))`);
     await js(`document.documentElement.dataset.liquidGlass='0';document.querySelectorAll('.home-bento > [data-home-module]:not(#home-cursor)').forEach(el=>el.style.visibility='hidden');localStorage.setItem('notch-ai-usage-tab-v1','codex')`);
+    // Full names and compact scope labels come from one provider-independent formatter.
+    const labelFixtures={
+      cursor:{...cursor,billing:{cycleStart:new Date((future-30*86400)*1000).toISOString(),cycleEnd:new Date(future*1000).toISOString()}},
+      codex,
+      grokbot:{...grokbot,...require('../grokbot-usage').buildSnapshot({usagePercent:20,nextResetTimestampUtc:future},{})},
+      claude:{...claude,...require('../claude-usage').buildSnapshot({five_hour:{utilization:20,resets_at:new Date(future*1000).toISOString()},seven_day:{utilization:40,resets_at:new Date(future*1000).toISOString()}})},
+      copilot:{ok:true,configured:true,windows:[{id:'premium',label:'Premium',percent:20},{id:'chat',label:'Chat',percent:20},{id:'completions',label:'Completions',percent:20}]},
+      antigravity:{ok:true,detected:true,windows:[{id:'gemini-week',label:'Gemini · Weekly',windowMinutes:10080,percent:20,resetsAt:future}]},
+      grok:{ok:true,configured:true,primary:{currency:'USD',balance:12.34}},manus:{ok:true,configured:true,windows:[{label:'Credits',unit:'credits',balance:60}]},
+    };
+    for(const locale of ['zh-CN','en-US']){
+      await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'))`);
+      await supply(labelFixtures);await resize('large');
+      const copy=await js(`Object.fromEntries([...document.querySelectorAll('.ai-usage-provider')].map(p=>[p.dataset.provider,[...p.querySelectorAll('.cursor-usage-rows[popover] .q-window-full')].map(n=>n.firstChild.textContent.trim())]))`);
+      assert.deepEqual(copy.cursor,locale==='zh-CN'?['Auto · 月额度','Other · 月额度']:['Auto · Monthly quota','Other · Monthly quota']);
+      assert.deepEqual(copy.codex,locale==='zh-CN'?['5 小时额度','周额度']:['5-hour quota','Weekly quota']);
+      assert.deepEqual(copy.claude,copy.codex,'Claude cadence names must match Codex');
+      assert.deepEqual(copy.grokbot,[locale==='zh-CN'?'周额度':'Weekly quota']);
+      assert.deepEqual(copy.copilot,locale==='zh-CN'?['高级请求额度','聊天额度','补全额度']:['Premium requests quota','Chat quota','Completions quota']);
+      assert.deepEqual(copy.antigravity,[locale==='zh-CN'?'Gemini · 周额度':'Gemini · Weekly quota']);
+      assert.deepEqual(copy.grok,[locale==='zh-CN'?'已入账预付余额':'Posted prepaid balance']);
+      assert.deepEqual(copy.manus,[locale==='zh-CN'?'可用积分':'Available credits']);
+      assert.doesNotMatch(await js(`document.getElementById('home-cursor').textContent`),/账期|每周额度|每日额度|Billing period|7 天 ·/);
+      assert.deepEqual((await inspect()).contentOverflow,[],locale+' eight named sources stay inside their cells');
+      assert.equal(await js(`document.querySelector('#ai-provider-copilot .q-main-scope')===null`),true,'an unreported period is not replaced by a pool identity in the ring');
+      await capture(`naming-${locale}-overview`);
+      await supply({cursor:labelFixtures.cursor,codex:labelFixtures.codex,grokbot:labelFixtures.grokbot,claude:labelFixtures.claude});
+      for(const size of ['mini','small','medium','large']){
+        await resize(size);await capture(`naming-${locale}-${size}`);
+        assert.deepEqual((await inspect()).contentOverflow,[],locale+'/'+size+' standardized labels fit');
+      }
+      for(const id of ['cursor','codex','grokbot','claude']){
+        await js(`document.querySelector('#ai-provider-${id} [data-quota-toggle]').click()`);
+        assert.equal(await js(`document.querySelector('#${id}-usage-rows .q-window-full').checkVisibility()`),true,'full names remain visible in details');
+        await capture(`naming-${locale}-${id}-details`);
+        await js(`document.querySelector('#ai-provider-${id} [data-quota-toggle]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
+      }
+    }
     // Cursor billing and all provider reset labels share minute precision in the visible UI.
     const billingTime=new Date(2026,9,28,13,4,9).getTime();
     const billing=require('../cursor-usage').buildSnapshot({billingCycleEnd:billingTime},{}).billing;

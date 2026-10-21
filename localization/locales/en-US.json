@@ -279,8 +279,8 @@
   "copy.localSignIn.8c966e": "Local sign-in",
   "copy.weeklyReset.53a8a8": "Weekly reset {arg1}",
   "copy.weeklyResetTimeUnknown.3a21cf": "Weekly reset time unknown",
-  "copy.billingPeriodEnds.eae9ee": "Billing period ends {arg1}",
-  "copy.billingPeriodUnknown.dbb002": "Billing period unknown",
+  "copy.billingPeriodEnds.eae9ee": "Monthly quota resets {arg1}",
+  "copy.billingPeriodUnknown.dbb002": "Monthly quota reset time unknown",
   "copy.tokenExpiredAndLocalSignInIs.3cc6be": "Invalid token and local sign-in is unavailable",
   "copy.usageUnavailableRefreshToRetry.1ceded": "Usage unavailable. Refresh to retry",
   "copy.lastRefreshed.c4c148": "{arg1}Last refreshed {arg2}",
@@ -1480,5 +1480,11 @@
   "quota.windowDepleted": "{window} depleted",
   "quota.windowLeft": "{window} {value}% left",
   "quota.recoveryAt": "Recovers {time}",
-  "quota.resetAt": "Resets {time}"
+  "quota.resetAt": "Resets {time}",
+  "quota.monthly": "Monthly quota",
+  "quota.month": "Month",
+  "quota.named": "{name} quota",
+  "quota.pool.premium": "Premium requests",
+  "quota.pool.chat": "Chat",
+  "quota.pool.completions": "Completions"
 }

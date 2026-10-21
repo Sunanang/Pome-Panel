@@ -7942,3 +7942,22 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 .home-cursor[data-widget-size='medium'][data-ai-many='true'] .ai-usage-provider { flex-direction:column; }
 .home-cursor:is([data-widget-size='medium'],[data-widget-size='large']) .ai-usage-provider .q-inline-rows { max-height:44px; overflow:auto; }
 .home-cursor[data-widget-size='large']:not([data-ai-many='true']) .ai-usage-provider .q-inline-rows { max-height:72px; }
+
+/* Details use the same full quota names in every card size. Compact bars keep short labels. */
+.home-cursor .cursor-usage-rows:popover-open .ai-quota-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px; }
+.home-cursor .cursor-usage-rows:popover-open .cursor-usage-meta { display:contents; }
+.home-cursor .cursor-usage-rows:popover-open .q-window-short { display:none; }
+.home-cursor .cursor-usage-rows:popover-open .q-window-full { display:block; grid-column:1; grid-row:1; min-width:0; font-size:10.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.home-cursor .cursor-usage-rows:popover-open .q-window-reset { display:none; }
+.home-cursor .cursor-usage-rows:popover-open .cursor-usage-meta strong { grid-column:2; grid-row:1; }
+.home-cursor .cursor-usage-rows:popover-open .cursor-usage-track { grid-column:1/-1; grid-row:2; }
+.home-cursor .cursor-usage-rows:popover-open .ai-quota-help { display:block; grid-column:1/-1; grid-row:3; font-size:9.5px; line-height:13px; }
+
+/* A named pool can have several bars but no reported cadence; reserve the ring
+   caption for real scope labels and keep all dense source content inside its cell. */
+.home-cursor[data-widget-size='large'][data-ai-many='true'] .ai-usage-provider { gap:4px; padding:6px; }
+.home-cursor[data-widget-size='large'][data-ai-many='true'] .q-provider-body { gap:3px; }
+.home-cursor[data-widget-size='large'][data-ai-many='true'] .ai-usage-source b { font-size:10px; line-height:12px; }
+.home-cursor[data-widget-size='large'][data-ai-many='true'] .ai-usage-provider .q-inline-rows { gap:2px; max-height:34px; }
+.home-cursor[data-widget-size='large'][data-ai-many='true'] .ai-usage-provider .q-inline-rows :is(.q-window-short,.q-pct) { font-size:8px; line-height:10px; }
+.home-cursor[data-widget-size='large'][data-ai-many='true'] .q-compact-caption { line-height:10px; }
