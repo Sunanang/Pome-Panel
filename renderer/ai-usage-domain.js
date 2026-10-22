@@ -246,7 +246,7 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     }
     const scope = id === 'cursor' ? { period:'month' } : id === 'grokbot' ? { windowMinutes:10080 } : w;
     const periodLabel = windowLabel(scope, ''), scopeShort = windowShortLabel(scope);
-    if (id === 'cursor') return { ...row, name:`${row.name} · ${periodLabel}`, short:row.name, periodLabel, scopeShort };
+    if (id === 'cursor') return { ...row, name:`${row.name} · ${periodLabel}`, short:row.name, compactShort:({auto:'Cur',other:'Oth'})[row.key] || row.name, periodLabel, scopeShort };
     if (id === 'grokbot') return { ...row, name:periodLabel, short:scopeShort, periodLabel, scopeShort };
     const categories = { premium:'quota.pool.premium', chat:'quota.pool.chat', completions:'quota.pool.completions' };
     const raw = id === 'copilot' && categories[row.key] ? t(categories[row.key])

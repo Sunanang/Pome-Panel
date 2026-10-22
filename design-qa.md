@@ -1,3 +1,19 @@
+# 额度池名、长名与单行时间修复 · 2026-10-22
+
+final result: passed
+
+按最新要求保留英文池名，完整名称为 Cursor / Other，紧凑条用 Cur / Oth；auto / other 接口和缓存键不变。窄格使用 Claude / Antigrav，真实字形检查确保不因可变字体光学缩放出现意外省略，悬停和无障碍保留完整名称，宽度恢复后恢复全名。
+
+- 修复窄卡片底部只露出“置”：时间说明固定单行，超长从末尾省略；small 中文去空格并收紧 0.1px 字距（如「周日11:27重置」），标题保留完整格式，中大号和英文空格保留。核对 `dist.noindex/quota-polish/after/small-narrow-brand-aliases.png`，字体、颜色、环位置、轨道及底部说明均符合本轮反馈。
+- 四尺寸×3–6 家及各状态、中英文、166px 窄格/放宽恢复、详情池名、完整无障碍身份、同格轨道等长和 0%/8%/100% 动画采样通过。窄格说明不再被多行高度从上方裁切。
+- 独立清理 114 行已被覆盖的旧 CSS、14 张无引用 PNG（8,238,156 字节），保留实际 WebP、图标与许可证。删除未消费的旧文案计算、角标分支、模型字段和两个旧语言 key。CSS 对照及删除依据见 `docs/quota-cleanup-acceptance.md`；原有 dirty CSS 变更已校对保留。
+- 完整 npm test：856 pass / 0 fail / 1 Windows-only skip，31 次 Electron 运行、语言和语法检查通过。最新去空格调整后，额度矩阵、交互、刷新动画三组再次通过；43 项相关单测通过。全量与专项日志在 `dist.noindex/quota-polish/`。
+- 原动画模块文件未改；唤出/手动刷新录像及四张解码帧在 `animation/`，仍验证无缓存、同值、失败、中途更新、reduced-motion 与 30 秒防抖。
+
+清理与功能修复分别提交到 dev，原 UI-simplify、凭据文案与 Grok Bot 图标等未提交栈保留。文件清单和验证边界见 [验收记录](docs/quota-polish-acceptance.md)。使用隔离 userData 与接口夹具，未做 Windows 真机、真实账号联网或安装包验证；未推送、未改 main。
+
+---
+
 # 中号长条居中与进度行可见内容居中 · 2026-10-22
 
 final result: passed

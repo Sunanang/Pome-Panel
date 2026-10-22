@@ -9,7 +9,7 @@ const out = process.env.QUOTA_FINAL_EVIDENCE;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const reference = { mini:[189,126], small:[189,264], medium:[389,264], large:[782,480] };
 const actual = { mini:[196,118], small:[196,248], medium:[404,248], large:[404,510] };
-const now = Date.now(), future = (now + 3 * 86400000) / 1000;
+const now = Number(process.env.QUOTA_FIXTURE_NOW) || Date.now(), future = (now + 3 * 86400000) / 1000;
 const snapshot = (short, long = 88) => ({ok:true,detected:true,fetchedAt:new Date(now).toISOString(),primary:{percent:100-short,windowMinutes:300,resetsAt:future-3600},secondary:{percent:100-long,windowMinutes:10080,resetsAt:future}});
 function fixture(count, state) {
   const value = {cursor:{ok:true,detected:true,fetchedAt:new Date(now).toISOString(),auto:{percent:28,windowMinutes:43200,resetsAt:future},other:{percent:59,windowMinutes:43200,resetsAt:future}},codex:snapshot(41),grokbot:{ok:true,detected:true,primary:{percent:1,windowMinutes:10080,resetsAt:future}}};
@@ -57,6 +57,7 @@ async function main(){
       if(name==='mini'&&count>4)assert.equal(await js(`(()=>{const more=document.querySelector('#home-cursor .q-more-ring').getBoundingClientRect(),ring=document.querySelector('#home-cursor .q-ring').getBoundingClientRect();return Math.abs(more.y-ring.y)<.5})()`),true,prefix+' +N aligns with the provider rings');
       if(name!=='mini'){
         assert(v.cards.every(c=>!c.headerWrap),prefix+' names stay on one line');
+        assert.deepEqual(await js(`[...document.querySelectorAll('#home-cursor .ai-usage-source b')].filter(n=>{const r=document.createRange();r.selectNodeContents(n);return r.getBoundingClientRect().width>n.getBoundingClientRect().width+.05||n.getAttribute('aria-label')!==n.closest('[data-provider]').getAttribute('aria-label')||n.title!==n.getAttribute('aria-label')}).map(n=>({name:n.textContent,full:n.getAttribute('aria-label'),width:n.clientWidth,scroll:n.scrollWidth,font:getComputedStyle(n).font}))`),[],prefix+' names fit and retain full accessible identities');
         if(format==='reference')assert(Math.abs(v.cards[0].ring.width-(name==='small'?38:name==='medium'?count===3?72:count===4?60:32:count===3?140:count===4?120:80))<.5,prefix+' specified ring diameter');
         assert.equal(await js(`(()=>{return [...document.querySelectorAll('#home-cursor .q-inline-rows')].every(rows=>{const ring=rows.closest('[data-provider]').querySelector('.q-ring').getBoundingClientRect();if(rows.getBoundingClientRect().top<ring.bottom-.6)return false;return [...rows.querySelectorAll('.ai-quota-row')].every(row=>{const label=row.querySelector('.q-window-short').getBoundingClientRect(),bar=row.querySelector('.cursor-usage-track').getBoundingClientRect(),value=row.querySelector('.q-pct'),v=value.getBoundingClientRect();return Math.abs(bar.left-label.right-3)<.6&&Math.abs(v.left-bar.right-2)<.6&&getComputedStyle(value).fontSize===getComputedStyle(value.querySelector('small')).fontSize})})})()`),true,prefix+' progress rows stay below rings with fixed grid columns');
 
@@ -70,6 +71,7 @@ async function main(){
         assert.equal(await js(`!!document.querySelector('#home-cursor .q-summary')`),false,'no onboarding filler in the empty fifth-source slot');
       }
       if(name==='small')assert.equal(v.columns,2,prefix+' small two equal columns');
+      if(name==='small')assert.equal(await js(`[...document.querySelectorAll('#home-cursor .q-compact-caption > span')].every(n=>!(/\\s/.test(n.textContent))&&n.parentElement.title.length>=n.textContent.length)`),true,prefix+' Chinese small captions remove spaces while retaining the full tooltip');
       if(name==='large'||name==='medium')assert.equal(v.columns,count<=4?count:3,prefix+' final columns');
       if(name==='small')assert.equal(await js(`document.getElementById('ai-usage-more').hidden`),count<=4,prefix+' hidden sources use the header count');
       if(name==='mini'&&state==='error')assert.match(await js(`document.getElementById('ai-usage-footer').textContent`),/^Copilot 失效 · 去设置$/);
@@ -180,6 +182,16 @@ async function main(){
     assert.equal(await js(`(()=>{const number=document.querySelector('#ai-provider-codex .q-inline-rows [data-pool=secondary] .q-pct'),range=document.createRange();range.selectNodeContents(number);return Math.abs(number.getBoundingClientRect().width-range.getBoundingClientRect().width)<.6})()`),true,name+' fixed numeric column fits 100% with subpixel allowance only');
   }
   if(out)fs.writeFileSync(path.join(out,'spacing-check.json'),JSON.stringify(await js(`[...document.querySelectorAll('#home-cursor .q-inline-rows')].map(rows=>{const card=rows.closest('[data-provider]'),last=rows.querySelector('.ai-quota-row:last-child'),number=last.querySelector('.q-pct'),range=document.createRange();range.selectNodeContents(number);const text=range.getBoundingClientRect(),col=number.getBoundingClientRect(),track=last.querySelector('.cursor-usage-track').getBoundingClientRect();return {id:card.dataset.provider,value:number.textContent,column:col.width,glyphWidth:text.width,visibleGap:text.left-track.right,leftInset:last.querySelector('.q-window-short').getBoundingClientRect().left-card.getBoundingClientRect().left,rightInset:card.getBoundingClientRect().right-text.right}})`),null,2));
+  // Prefer readable aliases over clipping brands in unusually narrow cells.
+  await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+  await supply({claude:snapshot(80),antigravity:{ok:true,detected:true,windows:[{id:'primary',label:'Gemini',percent:20}]},codex:snapshot(80),cursor:fixture(4,'warn').cursor});
+  await size('small',{small:[166,248]});await capture('small-narrow-brand-aliases');
+  assert.deepEqual(await js(`[...document.querySelectorAll('#home-cursor .q-compact-caption > span')].filter(n=>getComputedStyle(n).whiteSpace!=='nowrap'||n.scrollHeight>n.parentElement.clientHeight+1||n.getBoundingClientRect().top<n.parentElement.getBoundingClientRect().top-.5).map(n=>({text:n.textContent,lines:n.scrollHeight,height:n.parentElement.clientHeight}))`),[],'narrow reset captions stay on one visible line instead of exposing a trailing character');
+  assert.equal(await js(`(()=>{const n=document.querySelector('#ai-provider-claude .ai-usage-source b');return n.textContent==='Claude'&&n.title==='Claude Code'&&n.scrollWidth<=n.clientWidth+1})()`),true,'narrow cells use a readable Claude alias with its full tooltip');
+  assert.equal(await js(`(()=>{const n=document.querySelector('#ai-provider-antigravity .ai-usage-source b');return n.textContent==='Antigrav'&&n.title==='Antigravity'&&n.scrollWidth<=n.clientWidth+1})()`),true,'narrow cells use a readable Antigravity alias with its full tooltip');
+  await size('small',{small:[330,248]});await capture('small-wide-brand-names');
+  assert.equal(await js(`document.querySelector('#ai-provider-claude .ai-usage-source b').textContent`),'Claude Code','resizing back restores the complete name');
+
   // Both the title icon and the invalid indicator share the geometric center.
   await supply(fixture(6,'error'));await size('mini',actual);await sleep(900);
   assert.deepEqual(await js(`[...document.querySelectorAll('#home-cursor .q-ring-center')].flatMap(center=>{const icon=center.querySelector('.q-icon,.q-alert'),r=center.getBoundingClientRect(),b=icon.getBoundingClientRect();return Math.abs((b.left+b.right-r.left-r.right)/2)>.5||Math.abs((b.top+b.bottom-r.top-r.bottom)/2)>.5?[center.closest('[data-provider]').dataset.provider]:[]})`),[],'mini icon/error centers');

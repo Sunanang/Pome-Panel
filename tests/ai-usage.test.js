@@ -276,7 +276,7 @@ test('provider names share one quota vocabulary without losing pool identities o
   const bot=require('../grokbot-usage').buildSnapshot({usagePercent:20},{});
   assert.equal(D.quotaRows(bot,'grokbot')[0].name,'周额度');assert.equal(D.bottleneckInfo(bot,'grokbot').name,'周');
   const cursor={auto:{percent:20},other:{percent:40},billing:{cycleStart:'2026-10-01T00:00:00Z',cycleEnd:'2026-11-01T00:00:00Z'}};
-  assert.deepEqual(D.quotaRows(cursor,'cursor').map(r=>[r.name,r.short,r.scopeShort]),[['Auto · 月额度','Auto','月'],['Other · 月额度','Other','月']]);
+  assert.deepEqual(D.quotaRows(cursor,'cursor').map(r=>[r.name,r.short,r.scopeShort]),[['Cursor · 月额度','Cursor','月'],['Other · 月额度','Other','月']]);
   assert.equal(D.quotaRows(cursor,'cursor')[0].windowUsage.windowMinutes,44640,'actual measured duration stays intact');
   assert.deepEqual(D.quotaRows({windows:[{id:'premium',label:'Premium',percent:30},{id:'chat',label:'Chat',percent:30},{id:'completions',label:'Completions',percent:30}]},'copilot').map(r=>r.name),['高级请求额度','聊天额度','补全额度']);
   assert.equal(D.quotaRows({windows:[{id:'model',label:'Gemini · Weekly',windowMinutes:10080,percent:20}]},'antigravity')[0].name,'Gemini · 周额度');
@@ -352,7 +352,6 @@ test('recent stale data never claims zero hours or invents an unknown age', () =
       assert.match(hour.text,locale==='zh-CN'?/1 小时/:/1h/);
       assert.equal(D.staleSummary({codex:{...source,fetchedAt:null}},compact,now).text,I.t('quota.stale'));
     }
-    assert.match(I.t('quota.windowDepleted',{window:'Other'}),/^Other /,'Latin pool identity stays separated from the localized sentence');
   }
   I.setState(I.snapshot('zh-CN',['zh-CN']));
 });
@@ -362,8 +361,6 @@ test('quota percentages use the same terse copy at zero and above zero, without 
   for(const locale of ['zh-CN','en-US']) {
     I.setState(I.snapshot(locale,[locale]));
     const name=locale==='zh-CN'?'周':'Week';
-    assert.equal(I.t('quota.windowDepleted',{window:name}),name+' 0%');
-    assert.equal(I.t('quota.windowLeft',{window:name,value:18}),name+' 18%');
     assert.doesNotMatch(I.t('quota.windowRemaining',{source:'Codex',window:name,remaining:'18%',message:''}),/剩|remaining/i);
     const balance={ok:true,configured:true,primary:{currency:'USD',balance:0}};
     assert.doesNotMatch(D.miniSummary({grok:balance}).text,/%|已用完/,'a currency amount has no fabricated percentage denominator');
@@ -390,4 +387,23 @@ test('v9 small keeps the four most urgent providers while mini ordering and wide
   assert.equal(D.dashboard(data,'small').hidden.length,2);
   assert.deepEqual(D.dashboard(data,'mini').shown,['copilot','codex','claude']);
   assert.deepEqual(D.dashboard(data,'medium').shown,D.providers(data));
+});
+
+
+test('Cursor pool display names and abbreviations preserve API keys across languages', () => {
+  const I=require('../localization/runtime');
+  const data={ok:true,detected:true,auto:{percent:0,windowMinutes:43200},other:{percent:100,windowMinutes:43200}};
+  try {
+    for(const locale of ['zh-CN','en-US']) {
+      I.setState(I.snapshot(locale,[locale]));
+      const rows=D.quotaRows(data,'cursor');
+      assert.deepEqual(rows.map(r=>[r.key,r.short,r.compactShort]),[['auto','Cursor','Cur'],['other','Other','Oth']]);
+      assert.equal(D.displayRow(data,'cursor').key,'auto');
+      assert.equal(D.displayRemaining(data,'cursor'),100);
+      assert.equal(D.bottleneckInfo(data,'cursor').key,'other');
+      assert.equal(D.bottleneckInfo(data,'cursor').name,'Other');
+      assert.equal(D.status(data,'cursor'),'depleted');
+      assert.equal(D.bottleneckInfo(data,'cursor').badge,false);
+    }
+  } finally { I.setState(I.snapshot('zh-CN',['zh-CN'])); }
 });

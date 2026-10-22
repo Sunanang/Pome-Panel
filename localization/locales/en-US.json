@@ -1477,8 +1477,6 @@
   "quota.recovers": " · Recovers {time}",
   "quota.manyCritical": "{count} critical · Lowest {source} {value}%",
   "quota.lowestWindow": "Lowest {source} {window} {value}%",
-  "quota.windowDepleted": "{window} 0%",
-  "quota.windowLeft": "{window} {value}%",
   "quota.recoveryAt": "Recovers {time}",
   "quota.resetAt": "Resets {time}",
   "quota.monthly": "Monthly quota",

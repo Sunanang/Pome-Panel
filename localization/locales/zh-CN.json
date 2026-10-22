@@ -1447,8 +1447,6 @@
   "quota.recovers": " · {time} 恢复",
   "quota.manyCritical": "{count} 家告急 · 最低 {source} {value}%",
   "quota.lowestWindow": "最低 {source} {window} {value}%",
-  "quota.windowDepleted": "{window} 0%",
-  "quota.windowLeft": "{window} {value}%",
   "quota.recoveryAt": "{time} 恢复",
   "quota.resetAt": "{time} 重置",
   "quota.monthly": "月额度",

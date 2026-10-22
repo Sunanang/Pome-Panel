@@ -96,7 +96,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     if (id === 'cursor' && date(data?.billing?.cycleEnd)) return t('copy.billingPeriodEnds.eae9ee', { arg1: date(data.billing.cycleEnd) });
     return D.resetText(window);
   }
-  function model(id, size, count) {
+  function model(id, size) {
     const data = state[id], status = D.status(data, id);
     const rows = D.quotaRows(data, id);
     if (!rows.length) rows.push({ key: 'primary', name: t('copy.quota.32ce9f'), windowUsage: data?.unlimited ? { unlimited: true } : null });
@@ -124,16 +124,10 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const updated = stamp == null ? '' : t('copy.updated.7114c0', { arg1: D.clock(new Date(stamp).toISOString()) });
     const message = status === 'error' ? errorCopy(data) : status === 'stale' ? t('quota.stale')
       : exhausted ? t(selected.kind === 'credits' ? 'quota.creditsDepleted' : 'quota.balanceDepleted') : '';
-    const constrained = bottleneck && bottleneck.remaining <= 20 && !exhausted;
-    const constraintLine = constrained ? t(bottleneck.remaining === 0 ? 'quota.windowDepleted' : 'quota.windowLeft', { window: bottleneck.name, value: Math.round(bottleneck.remaining) }) : '';
-    const constraintTime = constrained && bottleneck.resetAt != null ? t(bottleneck.remaining === 0 ? 'quota.recoveryAt' : 'quota.resetAt', { time: D.recoveryTime(bottleneck.resetAt) }) : '';
-    const reset = [values.length > 1 ? selected.scopeShort : '', selected.help].filter(Boolean).join(' · ');
-    return { id, size, data, status, stale: D.isStale(data, id), rows: values, inlineRows, remaining, exhausted, depleted, bottleneck, level: depleted ? 'critical' : D.level(bottleneck?.remaining), selected, source, updated, message, reset, constraintLine, constraintTime,
+    return { id, size, data, status, stale: D.isStale(data, id), rows: values, inlineRows, remaining, exhausted, depleted, bottleneck, level: depleted ? 'critical' : D.level(bottleneck?.remaining), selected, source, updated, message,
       title: [registry.get(id).label, source, message, ...values.map(row => `${row.name}: ${row.display} · ${row.help}`),
         id === 'codex' && data?.plan ? D.planLabel(data.plan) : '',
-        id === 'codex' && data?.credits ? `Credits: ${data.credits.unlimited ? t('copy.unlimited.8651f5') : data.credits.balance ?? '--'}` : '', updated].filter(Boolean).join('\n'),
-      vertical: size === 'medium' && count <= 6 || size === 'large' && count >= 4,
-      expanded: size === 'large' && count <= 3 };
+        id === 'codex' && data?.credits ? `Credits: ${data.credits.unlimited ? t('copy.unlimited.8651f5') : data.credits.balance ?? '--'}` : '', updated].filter(Boolean).join('\n') };
   }
   function ring(m, size) {
     const amount = m.selected.kind === 'currency' ? I.number(m.selected.windowUsage.balance, { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' }) : m.selected.display;
@@ -154,19 +148,19 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       <svg class="q-ring-svg" viewBox="0 0 ${size} ${size}" aria-hidden="true"><defs><linearGradient id="quota-gradient-${m.id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="q-gradient-start"/><stop offset="1" class="q-gradient-end"/></linearGradient></defs>
       <circle class="q-ring-track" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke-width="${dashed ? sw * .7 : sw}"${dashed ? ' stroke-dasharray="2 3.2"' : ''}/>
       ${dashed || unknown ? '' : `<circle class="q-ring-value" cx="${c}" cy="${c}" r="${radius}" fill="none" stroke="url(#quota-gradient-${m.id})" stroke-width="${sw}" stroke-linecap="round" data-length="${length}" stroke-dasharray="${length} ${length}" stroke-dashoffset="${length * (1 - m.remaining / 100)}"${m.remaining === 0 ? ' visibility="hidden"' : ''}/>`}</svg><span class="q-ring-center">${center}</span>
-      ${m.size === 'mini' ? bottleneckBadge(m, true) : ''}</div>`;
+      ${m.size === 'mini' ? bottleneckDot(m) : ''}</div>`;
   }
-  function bottleneckBadge(m, dot = false) {
+  function bottleneckDot(m) {
     const b = m.bottleneck;
-    if (!b || m.status === 'error' || b.remaining > 20 || !dot && !b.badge) return '';
-    return `<span class="q-bottleneck"${dot ? ` data-state-fade="${m.status}"` : ''} data-badge="${b.badge}" data-level="${b.level}" aria-hidden="true">${dot ? '' : `${escape(b.name)} ${Math.round(b.remaining)}%`}</span>`;
+    if (!b || m.status === 'error' || b.remaining > 20) return '';
+    return `<span class="q-bottleneck" data-state-fade="${m.status}" data-badge="${b.badge}" data-level="${b.level}" aria-hidden="true"></span>`;
   }
 
   function quotaRows(m, inline = false) {
     return `<div class="cursor-usage-rows${inline ? ' q-inline-rows' : ''}" ${inline ? 'aria-hidden="true"' : `popover="manual" id="${m.id}-usage-rows"`}>${inline ? '<div class="q-inline-content">' : ''}${(inline ? m.inlineRows : m.rows).map(row => {
       const name = row.kind === 'currency' ? t('providers.prepaidBalance') : row.kind === 'credits' ? t('providers.availableCredits') : row.name;
       const special = row.kind !== 'percent', value = special ? escape(row.display) : pct(row.value);
-      const short = inline && m.size !== 'mini' ? ({ Auto:'Au', Other:'Oth' }[row.short] || row.short) : row.short;
+      const short = inline && m.size !== 'mini' ? (row.compactShort || row.short) : row.short;
       return `<div class="cursor-usage-row ai-quota-row" data-pool="${escape(row.key)}" data-bottleneck="${row.key === m.bottleneck?.key}" data-level="${D.level(row.value)}" data-kind="${row.kind}" data-expired="${D.expired(row.windowUsage)}" title="${escape(`${name}: ${row.display} · ${row.help}`)}">
         <div class="cursor-usage-meta"><span class="q-window-short">${escape(special ? name : short)}</span><span class="q-window-full">${escape(name)} <small class="q-window-reset">${escape(row.help)}</small></span><strong class="q-pct"${!inline && m.id === 'cursor' ? ` id="cursor-usage-${escape(row.key)}-pct"` : ''}>${value}</strong></div>
         <div class="cursor-usage-track"${special ? ' hidden' : ` role="progressbar" aria-label="${escape(t('copy.remainingQuota.68dc7b', { arg1: `${registry.get(m.id).label} ${name}` }))}" aria-valuemin="0" aria-valuemax="100" aria-valuetext="${escape(row.display)}"${row.value == null ? '' : ` aria-valuenow="${row.value}"`}`}><i${!inline && m.id === 'cursor' ? ` id="cursor-usage-${escape(row.key)}-fill"` : ''} style="transform:scaleX(${(row.value ?? 0) / 100})"></i></div>
@@ -184,6 +178,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   }
   function provider(m, layout) {
     const error = m.status === 'error', caption = captionLines(m);
+    const compactCaption = m.size === 'small' && I.getState().effectiveLocale === 'zh-CN';
     const invalid = D.invalidToken(m.data), errorLabel = t(invalid ? 'quota.status.invalid' : 'quota.status.error');
     const settings = invalid || m.data?.error === 'grok_team_required';
     const repair = error ? `<button class="ai-inline-settings" type="button" data-quota-${settings ? 'settings' : 'retry'}="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t(settings ? 'copy.openSettings.93112c' : 'ui.retry')}`)}">${escape(t(settings ? 'quota.repair' : 'ui.retry'))}</button>` : '';
@@ -192,7 +187,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       <div class="q-provider-body">
         <div class="ai-usage-source">${icon(m.id)}<b style="--q-name-length:${registry.get(m.id).label.length}">${escape(registry.get(m.id).label)}</b><span class="q-chip" id="ai-${m.id}-source">${escape(m.source)}</span></div>
         <div class="q-gauge-group">${ring(m, layout.ringSize)}${m.inlineRows.length && !error ? quotaRows(m, true) : ''}</div>
-        <div class="q-compact-caption" data-state-fade="${m.status}" title="${escape(caption.filter(Boolean).join(' · '))}">${caption.filter(Boolean).map(line => `<span>${escape(line)}</span>`).join('')}</div>
+        <div class="q-compact-caption" data-state-fade="${m.status}" title="${escape(caption.filter(Boolean).join(' · '))}">${caption.filter(Boolean).map(line => `<span>${escape(compactCaption ? line.replace(/\s+/g, '') : line)}</span>`).join('')}</div>
         <p class="cursor-usage-footnote" id="${m.id}-usage-footnote">${error ? `<span>${escape(errorLabel)}</span>${repair}` : escape(m.updated)}</p>
       </div>${quotaRows(m)}
       <div class="q-mini-value">${error ? escape(errorLabel) : m.remaining == null ? `<span data-main-amount>${escape(m.selected.display)}</span>` : `<span class="q-pct" data-main-number>${pct(m.remaining)}</span>`}</div></section>`;
@@ -210,8 +205,9 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     visualStates.set(key, { state: next, html: node.innerHTML.replace(/<span class="q-fade-previous"[\s\S]*$/, '') });
   }
   let currentLayout = null, currentModels = [];
+  const compactNames = { claude:'Claude', antigravity:'Antigrav' };
   const measure = document.createElement('canvas').getContext('2d');
-  function percentTextWidth(style, text, cache) {
+  function textWidth(style, text, cache) {
     const properties = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariantNumeric', 'fontFeatureSettings', 'fontVariationSettings', 'letterSpacing'];
     const key = text + '|' + properties.map(name => style[name]).join('|');
     if (cache.has(key)) return cache.get(key);
@@ -233,7 +229,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const tall = size === 'medium' && layout.rows === 1 && models.length >= 3 && models.length <= 4;
     tile.dataset.quotaTall = String(tall);
     const css = getComputedStyle(tile);
-    const numericWidths = new Map();
+    const textWidths = new Map();
     const number = key => parseFloat(css.getPropertyValue(key)) || 0;
     const cells = models.map(m => byId(`ai-provider-${m.id}`)).filter(Boolean);
     const rowCounts = models.map((m,index) => Math.min(3, Math.max(0, ...models.slice(Math.floor(index/layout.columns)*layout.columns,(Math.floor(index/layout.columns)+1)*layout.columns).map(item=>item.inlineRows.length))));
@@ -242,10 +238,31 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       const m = models[index], rows = m.inlineRows.length ? rowCounts[index] : 0;
       if (size !== 'mini') {
         const name = card.querySelector('.ai-usage-source b'), header = card.querySelector('.ai-usage-source');
-        const font = getComputedStyle(name), target = number('--q-name-font');
-        measure.font = `${font.fontWeight} ${target}px ${font.fontFamily}`;
-        const available = header.clientWidth - number('--q-icon-size') - 3;
-        name.style.fontSize = `${Math.max(8, Math.min(target, target*available/(measure.measureText(name.textContent).width+1)))}px`;
+        const target = number('--q-name-font');
+        name.style.fontSize = `${target}px`;
+        const font = getComputedStyle(name);
+        const available = header.getBoundingClientRect().width - number('--q-icon-size') - 3 - .5;
+        const fullName = registry.get(m.id).label;
+        const readable = Math.min(target, 9.5);
+        const fullSize = target * available / (textWidth(font, fullName, textWidths) + .5);
+        const label = fullSize < readable && compactNames[m.id] ? compactNames[m.id] : fullName;
+        name.textContent = label;
+        name.title = fullName;
+        name.setAttribute('aria-label', fullName);
+        name.style.fontSize = `${Math.max(8, Math.min(target, target*available/(textWidth(font, label, textWidths)+.5)))}px`;
+        // Variable fonts can change optical metrics as their size shrinks.
+        // Check the actual text box as well, so a subpixel overflow cannot
+        // silently replace the last letters with an ellipsis.
+        const glyph = document.createRange();
+        glyph.selectNodeContents(name);
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const width = glyph.getBoundingClientRect().width;
+          const room = name.getBoundingClientRect().width;
+          if (width <= room + .01) break;
+          if (name.textContent === fullName && compactNames[m.id]) name.textContent = compactNames[m.id];
+          else name.style.fontSize = `${Math.max(8, parseFloat(getComputedStyle(name).fontSize) * (room - .75) / width)}px`;
+          glyph.selectNodeContents(name);
+        }
       }
       const rowHeight = rows ? rows*number('--q-window-line')+(rows-1)*number('--q-window-gap') : 0;
       card.style.setProperty('--q-window-height', `${rowHeight}px`);
@@ -266,14 +283,14 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       measure.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
       const labelWidth = Math.ceil(Math.max(...labels.map(label=>measure.measureText(label.textContent).width)));
       const valueStyle = getComputedStyle(card.querySelector('.q-inline-rows .q-pct'));
-      const valueWidth = Math.ceil(percentTextWidth(valueStyle, '100%', numericWidths) * 10) / 10 + .25;
+      const valueWidth = Math.ceil(textWidth(valueStyle, '100%', textWidths) * 10) / 10 + .25;
       card.style.setProperty('--q-window-label-width', `${Math.min(labelWidth, card.clientWidth*.36)}px`);
       card.style.setProperty('--q-window-value-width', `${valueWidth}px`);
       // Keep the 100% column and track widths fixed; center the visible row,
       // excluding its unused numeric reserve. Reuse the value store so a refresh
       // during this adjustment continues from the currently painted transform.
       const visibleWidth = Math.max(...m.inlineRows.map(row => row.kind === 'percent'
-        ? percentTextWidth(valueStyle, `${Math.round(row.value ?? 0)}%`, numericWidths) : valueWidth));
+        ? textWidth(valueStyle, `${Math.round(row.value ?? 0)}%`, textWidths) : valueWidth));
       const pad = number('--q-cell-pad-x'), inset = Math.min(pad, number('--q-window-end-inset'));
       const offset = (inset + Math.max(0, valueWidth - visibleWidth) - pad) / 2;
       const content = card.querySelector('.q-inline-content');
@@ -372,7 +389,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     more.textContent = `+${layout.hidden.length}`;
     more.setAttribute('aria-label',t('quota.moreSources',{count:layout.hidden.length}));
     tile.setAttribute('aria-label', D.title());
-    const models = ids.map(id => model(id, size, ids.length));
+    const models = ids.map(id => model(id, size));
     const visible = layout.shown.map(id => models.find(m => m.id === id));
     const providers = byId('ai-usage-providers');
     const focused = tile.contains(document.activeElement) ? document.activeElement?.dataset.quotaSettings : undefined;
@@ -532,7 +549,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       // Still refresh relative reset copy ("明天 …") once a minute without tearing the grid.
       for (const el of tile.querySelectorAll('.ai-usage-provider')) {
         const id = el.dataset.provider;
-        const m = model(id, tile.dataset.widgetSize || 'small', Number(tile.dataset.aiCount) || 1);
+        const m = model(id, tile.dataset.widgetSize || 'small');
         const caption = el.querySelector('.q-compact-caption');
         const foot = el.querySelector('.cursor-usage-footnote > span');
         if (caption) caption.innerHTML = captionLines(m).filter(Boolean).map(text => `<span>${escape(text)}</span>`).join('');

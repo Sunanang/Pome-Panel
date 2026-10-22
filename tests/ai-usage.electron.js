@@ -117,7 +117,8 @@ async function main() {
       await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'))`);
       await supply(labelFixtures);await resize('large');
       const copy=await js(`Object.fromEntries([...document.querySelectorAll('.ai-usage-provider')].map(p=>[p.dataset.provider,[...p.querySelectorAll('.cursor-usage-rows[popover] .q-window-full')].map(n=>n.firstChild.textContent.trim())]))`);
-      assert.deepEqual(copy.cursor,locale==='zh-CN'?['Auto · 月额度','Other · 月额度']:['Auto · Monthly quota','Other · Monthly quota']);
+      assert.deepEqual(copy.cursor,locale==='zh-CN'?['Cursor · 月额度','Other · 月额度']:['Cursor · Monthly quota','Other · Monthly quota']);
+      assert.deepEqual(await js(`[...document.querySelectorAll('#ai-provider-cursor .q-inline-rows .q-window-short')].map(n=>n.textContent)`),['Cur','Oth'],locale+' compact Cursor pools keep English abbreviations');
       assert.deepEqual(copy.codex,locale==='zh-CN'?['5 小时额度','周额度']:['5-hour quota','Weekly quota']);
       assert.deepEqual(copy.claude,copy.codex,'Claude cadence names must match Codex');
       assert.deepEqual(copy.grokbot,[locale==='zh-CN'?'周额度':'Weekly quota']);
@@ -297,7 +298,7 @@ async function main() {
     const eight={...five,grok:{ok:true,configured:true,primary:{currency:'USD',balance:12.34}},manus:{ok:true,configured:true,primary:{unit:'credits',balance:60}},antigravity:{ok:true,detected:true,windows:[{label:'Gemini',percent:30}]}};
     await supply(eight);
     for(const size of ['medium','large']){await resize(size);assert.equal((await inspect()).ids.length,8);assert.equal((await inspect()).overflow,false);assert.equal((await inspect()).gridScroll,true);assert.deepEqual((await inspect()).contentOverflow,[],`${size}/8 source cell content`);await capture(`${size}-8ai`);}
-    assert.equal(await js(`[...document.querySelectorAll('.ai-usage-source b')].every(n=>getComputedStyle(n).whiteSpace==='nowrap'&&n.closest('.ai-usage-provider').getAttribute('aria-label')===n.textContent)`),true,'large names remain single-line with the full accessible name');
+    assert.equal(await js(`[...document.querySelectorAll('.ai-usage-source b')].every(n=>getComputedStyle(n).whiteSpace==='nowrap'&&n.closest('.ai-usage-provider').getAttribute('aria-label')===n.getAttribute('aria-label'))`),true,'large names remain single-line with the full accessible name');
     for(const locale of ['en-US','zh-CN']) {
       await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'))`);
       await resize('medium');

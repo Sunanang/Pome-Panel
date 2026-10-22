@@ -41,7 +41,7 @@
       request: 'getCursorUsage',
       settingsCard: 'settings-cursor-token-card',
       pools: Object.freeze([
-        Object.freeze(['auto', 'auto', 'Auto']),
+        Object.freeze(['auto', 'auto', 'Cursor']),
         Object.freeze(['other', 'other', 'Other']),
       ]),
       capabilities: { usage: CAP.PARTIAL, completion: CAP.PARTIAL, attention: CAP.UNSUPPORTED },

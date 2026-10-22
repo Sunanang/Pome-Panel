@@ -12,13 +12,15 @@
 | Codex / Claude 5h | 5 小时额度 | 5h |
 | Codex / Claude 7d | 周额度 | 周 |
 | Grok Bot | 周额度 | 周 |
-| Cursor | Auto · 月额度 / Other · 月额度 | Auto / Other；环内周期为月 |
+| Cursor | Cursor · 月额度 / Other · 月额度 | Cur / Oth；环内周期为月 |
 | Copilot | 高级请求额度 / 聊天额度 / 补全额度 | 保留池名称 |
 | Antigravity | 模型名 · 已知周期额度；周期未知则模型名额度 | 保留模型名 |
 | Grok | 已入账预付余额 | 原货币单位 |
 | Manus | 可用积分 | 原积分单位 |
 
 - Claude 的“5 小时”“7 天”和模型池的“Weekly”等重复周期别名仅在与已报告周期相符时去掉。真正的模型/池身份保留。
+- Cursor 与 Other 池名在中英文界面均保留英文；上游 `auto` / `other` 字段和本机缓存键不变。
+- 来源名称优先完整显示；窄格使用 Claude / Antigrav 短名，悬停与无障碍标签仍给出 Claude Code / Antigravity。
 - Cursor 月额度是展示名称；底层真实周期起止时间、windowMinutes 和 resetAt 不修改，不把月份强制换成 30 天。
 - Grok Bot 的本机快照已报告 10080 分钟周期，展示时使用周额度，渲染层不再将其改成泛称“额度”。
 - 未报告周期的 Copilot / Antigravity 池不猜成周或月；余额、积分和无限额度不伪造周期或百分比。

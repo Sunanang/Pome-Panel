@@ -8,7 +8,7 @@
   --q-depleted:#9a9aa3; --q-depleted-track:rgba(255,120,110,.13);
   --q-grid-gap:5px; --q-name-font:9.5px; --q-name-line:12px; --q-icon-size:12px;
   --q-window-font:8px; --q-window-line:11px; --q-window-gap:4px;
-  --q-caption-font:8.5px; --q-caption-line:11px; --q-caption-lines:1;
+  --q-caption-font:8.5px; --q-caption-line:11px;
   --q-cell-pad-y:6px; --q-cell-pad-x:3px;
   --q-window-height:0px; --q-window-label-width:24px; --q-window-value-width:29px; --q-window-end-inset:3px;
   padding:11px 10px 10px; gap:6px;
@@ -92,10 +92,10 @@
 #home-cursor .q-compact-caption {
   grid-column:1; grid-row:3; display:flex; flex-direction:column; justify-content:flex-end; align-items:center;
   position:relative; width:100%; height:100%; min-height:0; max-width:100%; flex:none; margin:0;
-  font-size:var(--q-caption-font); line-height:var(--q-caption-line); text-align:center;
-  color:var(--q-caption); white-space:normal; overflow:hidden; overflow-wrap:anywhere;
+  font-size:var(--q-caption-font); line-height:var(--q-caption-line); letter-spacing:var(--q-caption-tracking,normal); text-align:center;
+  color:var(--q-caption); white-space:nowrap; overflow:hidden;
 }
-#home-cursor .q-compact-caption > span { display:block; max-width:100%; }
+#home-cursor .q-compact-caption > span { display:block; flex:none; width:100%; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
 #home-cursor .q-compact-caption > span + span::before { content:none; }
 #home-cursor .q-compact-caption:has(>span) { color:var(--q-caption); }
 #home-cursor .ai-usage-provider[data-level='warn'] .q-compact-caption { color:var(--q-warn-t); }
@@ -138,7 +138,7 @@
 #home-cursor:not([data-widget-size='mini']) .ai-usage-provider[data-stale='true'] :is(.q-ring,.q-inline-rows) { opacity:1; }
 #home-cursor .ai-usage-more { margin-left:auto; flex:none; color:var(--q-caption); padding:0; border:0; background:none; font:500 9px var(--q-font); cursor:pointer; }
 #home-cursor .ai-usage-more:not([hidden]) + .cursor-usage-refresh { margin-left:0; }
-#home-cursor[data-widget-size='small'] { gap:7px; }
+#home-cursor[data-widget-size='small'] { gap:7px; --q-caption-tracking:-.1px; }
 #home-cursor[data-widget-size='small'] .cursor-usage-head { min-height:20px; }
 #home-cursor[data-widget-size='small'] .cursor-usage-refresh { width:20px; height:20px; border-radius:7px; }
 #home-cursor[data-widget-size='small'] .cursor-usage-refresh svg { width:11px; height:11px; }
@@ -157,7 +157,6 @@
 #home-cursor[data-widget-size='large'] .ai-usage-updated { font-size:12px; }
 #home-cursor[data-widget-size='large'] .cursor-usage-refresh { width:30px; height:30px; }
 #home-cursor[data-widget-size='large'] .ai-usage-provider[data-has-bars='true'] .q-gauge-group { padding-bottom:8px; box-sizing:border-box; }
-#home-cursor[data-widget-size='large'] .q-inline-rows { align-content:start; }
 #home-cursor[data-widget-size='large'][data-ai-count='4'] { --q-name-font:14px; --q-cell-pad-x:14px; }
 #home-cursor[data-widget-size='large'][data-ai-density='dense']:not([data-ai-count='4']) { --q-name-font:13px; --q-name-line:18px; --q-icon-size:16px; --q-window-font:11px; --q-window-line:14px; --q-caption-font:10px; --q-caption-line:13px; --q-cell-pad-y:10px; --q-cell-pad-x:14px; }
 #home-cursor[data-widget-size='large'][data-ai-many='true'] .ai-usage-providers { grid-template-rows:repeat(var(--q-rows),minmax(210px,1fr)); overflow-y:auto; }
@@ -172,7 +171,7 @@
 #home-cursor[data-widget-size='mini'] .q-bottleneck { position:absolute; top:-1px; left:auto; right:-1px; transform:none; display:block; width:7px; height:7px; padding:0; border-radius:50%; font-size:0; background:var(--q-warn-t); box-shadow:0 0 0 2px var(--bg-base); }
 #home-cursor[data-widget-size='mini'] .q-bottleneck[data-level='critical'] { background:#ff746d; }
 #home-cursor[data-widget-size='mini'] .q-bottleneck[data-level='depleted'] { background:#9a9aa3; }
-#home-cursor[data-widget-size='mini'] :is(.ai-usage-source,.q-badge-slot,.q-inline-rows,.q-compact-caption,.cursor-usage-footnote) { display:none; }
+#home-cursor[data-widget-size='mini'] :is(.ai-usage-source,.q-inline-rows,.q-compact-caption,.cursor-usage-footnote) { display:none; }
 #home-cursor[data-widget-size='mini'] .ai-usage-provider[data-state='error'] .cursor-usage-footnote { display:none; }
 #home-cursor[data-widget-size='mini'] .q-mini-value { display:block; font-size:10px; line-height:11px; }
 #home-cursor[data-widget-size='mini'] .q-mini-value .q-pct { position:relative; display:inline-block; font-size:10px; line-height:11px; }
