@@ -284,7 +284,7 @@ async function main() {
     assert.equal(await js(`(()=>{const f=document.querySelector('#ai-provider-codex .cursor-usage-footnote');return f.textContent==='失效去设置'&&f.scrollWidth<=f.clientWidth+1})()`),true,'fallback status and repair action remain complete');
     await capture('small-status-regression');
     await supply({...five,copilot:absent});await resize('mini');
-    assert.equal(await js(`(()=>{const f=document.getElementById('ai-usage-footer');return f.scrollWidth<=f.clientWidth+1&&f.title.includes('Claude Code')&&f.getAttribute('aria-label')===f.title})()`),true,'mini summary fits with full details available');
+    assert.equal(await js(`(()=>{const f=document.getElementById('ai-usage-footer');return f.scrollWidth<=f.clientWidth+1&&!f.title&&f.getAttribute('aria-label')?.includes('Claude')})()`),true,'mini summary fits without native title tooltip');
     await js(`document.getElementById('ai-usage-footer').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`);
     assert.equal(await js(`document.getElementById('claude-usage-rows').matches(':popover-open')`),true,'mini summary opens full details with keyboard');
     assert.equal(await js(`(()=>{const rows=document.getElementById('claude-usage-rows'),help=rows.querySelector('.ai-quota-help');return rows.checkVisibility()&&rows.getBoundingClientRect().height>40&&help.checkVisibility()&&help.textContent.length>0})()`),true,'mini details and reset copy must actually be visible');

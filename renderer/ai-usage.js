@@ -209,8 +209,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       <div class="q-provider-body">
         <div class="ai-usage-source">${icon(m.id)}<b style="--q-name-length:${registry.get(m.id).label.length}">${escape(registry.get(m.id).label)}</b></div>
         <div class="q-gauge-group">${ring(m, layout.ringSize)}${m.inlineRows.length && !error ? quotaRows(m, true) : ''}</div>
-        <div class="q-compact-caption" data-state-fade="${m.status}" title="${escape(caption.title)}">${caption.html}</div>
-        <p class="cursor-usage-footnote" id="${m.id}-usage-footnote">${error ? `<span>${escape(errorLabel)}</span>${repair}` : escape(m.updated)}</p>
+        <div class="q-compact-caption" data-state-fade="${m.status}"${caption.title ? ` title="${escape(caption.title)}"` : ''}>${caption.html}</div>
+        <p class="cursor-usage-footnote" id="${m.id}-usage-footnote">${error ? `<span>${escape(errorLabel)}</span>${repair}` : ''}</p>
       </div>${quotaRows(m)}
       <div class="q-mini-value">${error ? escape(errorLabel) : m.remaining == null ? `<span data-main-amount>${escape(m.selected.display)}</span>` : `<span class="q-pct" data-main-number>${pct(m.remaining)}</span>`}</div></section>`;
   }
@@ -454,7 +454,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const miniSummary = size === 'mini' ? D.miniSummary(state) : { severity:'ok' };
     footer.dataset.severity = miniSummary.severity;
     footer.textContent = size === 'mini' ? miniSummary.text || (first ? t('quota.windowSummary', { source: registry.get(first.id).label, window: D.percent(first.selected.windowUsage?.windowMinutes) > 0 ? `${first.selected.scopeShort || first.selected.short} · ` : '', remaining: first.status === 'error' ? t(D.invalidToken(first.data) ? 'quota.status.invalid' : 'quota.status.error') : first.selected.display }) : '') : '';
-    footer.title = size === 'mini' && first ? `${first.selected.name}: ${first.selected.display}\n${first.title}` : '';
+    // No native title on the mini footer — full dump duplicated the progress popover.
+    footer.removeAttribute('title');
     delete footer.dataset.quotaSettings;
     delete footer.dataset.quotaRetry;
     if (size === 'mini' && miniSummary.repair) {
@@ -462,10 +463,11 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       footer.removeAttribute('aria-controls'); footer.setAttribute('aria-label', miniSummary.text);
     } else if (size === 'mini' && miniSummary.retry) {
       delete footer.dataset.quotaToggle; footer.dataset.quotaRetry = miniSummary.retry; footer.tabIndex = 0; footer.setAttribute('role', 'button');
-      footer.removeAttribute('aria-controls'); footer.setAttribute('aria-label', miniSummary.text); footer.title = miniSummary.text;
+      footer.removeAttribute('aria-controls'); footer.setAttribute('aria-label', miniSummary.text);
     } else if (size === 'mini' && first) {
       footer.dataset.quotaToggle = first.id; footer.tabIndex = 0; footer.setAttribute('role', 'button');
-      footer.setAttribute('aria-controls', `${first.id}-usage-rows`); footer.setAttribute('aria-label', footer.title);
+      footer.setAttribute('aria-controls', `${first.id}-usage-rows`);
+      footer.setAttribute('aria-label', `${registry.get(first.id).label}: ${first.selected.display}`);
     } else {
       delete footer.dataset.quotaToggle; footer.removeAttribute('tabindex'); footer.removeAttribute('role');
       footer.removeAttribute('aria-controls'); footer.removeAttribute('aria-label');
@@ -580,13 +582,12 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         const id = el.dataset.provider;
         const m = model(id, tile.dataset.widgetSize || 'small');
         const caption = el.querySelector('.q-compact-caption');
-        const foot = el.querySelector('.cursor-usage-footnote > span');
         if (caption) {
           const content = captionContent(m);
           if (caption.innerHTML !== content.html) caption.innerHTML = content.html;
-          caption.title = content.title;
+          if (content.title) caption.title = content.title;
+          else caption.removeAttribute('title');
         }
-        if (foot && m.status !== 'error') foot.textContent = [m.message, m.updated].filter(Boolean).join(' · ');
       }
     }
   }

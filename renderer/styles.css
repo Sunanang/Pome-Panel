@@ -7550,6 +7550,7 @@ html[data-platform="win32"] .note-format-actions::-webkit-scrollbar {
 .q-compact-caption, .home-cursor .cursor-usage-footnote, .ai-usage-footer { margin: 0; font-size: 9.5px; line-height: 13px; color: var(--q-caption); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .q-compact-caption { display: none; }
 .home-cursor .cursor-usage-footnote { display: none; }
+.home-cursor .cursor-usage-footnote:empty { display: none !important; }
 .ai-usage-footer { flex: none; }
 .q-mini-value { display: none; }
 .ai-inline-settings { border: 0; background: transparent; color: inherit; padding: 0; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
