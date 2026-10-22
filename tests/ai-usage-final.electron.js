@@ -102,7 +102,7 @@ async function main(){
     await supply({cursor:{ok:false,detected:true,error:'network'}});
     for(const name of ['mini','small','medium','large']) {
       await size(name,actual);await capture(`${name}-network-${locale}`);
-      const copy=await js(`({value:document.querySelector('#ai-provider-cursor .q-mini-value').textContent,foot:document.getElementById('cursor-usage-footnote').textContent,summary:document.getElementById('ai-usage-footer').textContent,title:document.getElementById('ai-provider-cursor').title})`);
+      const copy=await js(`({value:document.querySelector('#ai-provider-cursor .q-mini-value').textContent,foot:document.getElementById('cursor-usage-footnote').textContent,summary:document.getElementById('ai-usage-footer').textContent,title:document.getElementById('ai-provider-cursor').getAttribute('aria-description')||''})`);
       assert.equal(copy.value,locale==='zh-CN'?'失败':'Error');
       assert.match(copy.foot,locale==='zh-CN'?/^失败重试$/:/^ErrorRetry$/);
       assert.doesNotMatch(copy.title+copy.summary,/失效|invalid|expired/i);
@@ -133,7 +133,7 @@ async function main(){
   }
   await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);
   await supply({grokbot:{...fixture(3,'normal').grokbot,authSource:'manual'}});
-  assert.match(await js(`document.getElementById('ai-provider-grokbot').title`),/Cursor Sand.*手动 Token/,'Grok Bot identifies the Sand pool and actual credential source');
+  assert.match(await js(`document.getElementById('ai-provider-grokbot').getAttribute('aria-description')`),/Cursor Sand.*手动 Token/,'Grok Bot identifies the Sand pool and actual credential source');
   await supply({codex:{...snapshot(100,0),primary:{percent:0,windowMinutes:300},secondary:{percent:100,windowMinutes:10080}}});
   for(const name of ['small','medium','large']){await size(name,actual);assert.equal(await js(`document.querySelector('#ai-provider-codex .q-compact-caption').textContent`),'','missing provider reset data never invents a time');}
   // Removing a progress row releases space for the ring, rather than keeping an absolute center.

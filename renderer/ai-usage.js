@@ -176,15 +176,18 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   }
 
   function quotaRows(m, inline = false) {
+    const updated = !inline && m.updated
+      ? `<p class="ai-usage-detail-updated">${escape(m.updated)}</p>`
+      : '';
     return `<div class="cursor-usage-rows${inline ? ' q-inline-rows' : ''}" ${inline ? 'aria-hidden="true"' : `popover="manual" id="${m.id}-usage-rows"`}>${inline ? '<div class="q-inline-content">' : ''}${(inline ? m.inlineRows : m.rows).map(row => {
       const name = row.kind === 'currency' ? t('providers.prepaidBalance') : row.kind === 'credits' ? t('providers.availableCredits') : row.name;
       const special = row.kind !== 'percent', value = special ? escape(row.display) : pct(row.value);
       const short = inline && m.size !== 'mini' ? (row.compactShort || row.short) : row.short;
-      return `<div class="cursor-usage-row ai-quota-row" data-pool="${escape(row.key)}" data-bottleneck="${row.key === m.bottleneck?.key}" data-level="${D.level(row.value)}" data-kind="${row.kind}" data-expired="${D.expired(row.windowUsage)}" title="${escape(`${name}: ${row.display} · ${row.help}`)}">
+      return `<div class="cursor-usage-row ai-quota-row" data-pool="${escape(row.key)}" data-bottleneck="${row.key === m.bottleneck?.key}" data-level="${D.level(row.value)}" data-kind="${row.kind}" data-expired="${D.expired(row.windowUsage)}">
         <div class="cursor-usage-meta"><span class="q-window-short">${escape(special ? name : short)}</span><span class="q-window-full">${escape(name)} <small class="q-window-reset">${escape(row.help)}</small></span><strong class="q-pct"${!inline && m.id === 'cursor' ? ` id="cursor-usage-${escape(row.key)}-pct"` : ''}>${value}</strong></div>
         <div class="cursor-usage-track"${special ? ' hidden' : ` role="progressbar" aria-label="${escape(t('copy.remainingQuota.68dc7b', { arg1: `${registry.get(m.id).label} ${name}` }))}" aria-valuemin="0" aria-valuemax="100" aria-valuetext="${escape(row.display)}"${row.value == null ? '' : ` aria-valuenow="${row.value}"`}`}><i${!inline && m.id === 'cursor' ? ` id="cursor-usage-${escape(row.key)}-fill"` : ''} style="transform:scaleX(${(row.value ?? 0) / 100})"></i></div>
         <small class="ai-quota-help">${escape(row.help)}</small></div>`;
-    }).join('')}${inline ? '</div>' : ''}</div>`;
+    }).join('')}${updated}${inline ? '</div>' : ''}</div>`;
   }
   function captionLines(m) {
     if (m.size === 'mini') return [];
@@ -200,7 +203,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const invalid = D.invalidToken(m.data), errorLabel = t(invalid ? 'quota.status.invalid' : 'quota.status.error');
     const settings = invalid || m.data?.error === 'grok_team_required';
     const repair = error ? `<button class="ai-inline-settings" type="button" data-quota-${settings ? 'settings' : 'retry'}="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t(settings ? 'copy.openSettings.93112c' : 'ui.retry')}`)}">${escape(t(settings ? 'quota.repair' : 'ui.retry'))}</button>` : '';
-    return `<section class="ai-usage-provider" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-stale="${m.stale}" data-level="${m.level}" data-unit="${m.selected.kind}" data-quota-window="${escape(m.selected.key)}" data-balance-empty="${m.exhausted}" data-has-bars="${m.inlineRows.length > 0 && !error}" data-depleted="${!error && visualStates.get(`${m.id}/depleted`) === true}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}" title="${escape(m.title)}">
+    // No native title tooltip — details live in the progress popover (with updated time).
+    return `<section class="ai-usage-provider" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-stale="${m.stale}" data-level="${m.level}" data-unit="${m.selected.kind}" data-quota-window="${escape(m.selected.key)}" data-balance-empty="${m.exhausted}" data-has-bars="${m.inlineRows.length > 0 && !error}" data-depleted="${!error && visualStates.get(`${m.id}/depleted`) === true}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}">
       <button class="q-detail-toggle" data-quota-toggle="${m.id}" type="button" aria-controls="${m.id}-usage-rows" aria-expanded="false" aria-label="${escape(t('ui.quota.details', { source: registry.get(m.id).label }))}"></button>
       <div class="q-provider-body">
         <div class="ai-usage-source">${icon(m.id)}<b style="--q-name-length:${registry.get(m.id).label.length}">${escape(registry.get(m.id).label)}</b></div>

@@ -170,7 +170,7 @@ async function main() {
     for(const locale of ['zh-CN','en-US']) {
       await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'))`);
       await supply(minuteSources);await resize('large');
-      assert.equal(await js(`[...document.querySelectorAll('#home-cursor .ai-usage-provider')].every(p=>p.title.includes('13:04')&&!p.title.includes('13:04:09')&&[...p.querySelectorAll('.ai-quota-help')].every(n=>n.textContent.includes('13:04')&&!n.textContent.includes('13:04:09')))`),true,locale+' all six timed sources use the same minute precision');
+      assert.equal(await js(`[...document.querySelectorAll('#home-cursor .ai-usage-provider')].every(p=> (p.getAttribute('aria-description')||'').includes('13:04')&&!(p.getAttribute('aria-description')||'').includes('13:04:09')&&[...p.querySelectorAll('.ai-quota-help')].every(n=>n.textContent.includes('13:04')&&!n.textContent.includes('13:04:09')))`),true,locale+' all six timed sources use the same minute precision');
     }
     await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);
     await supply({cursor:minuteSources.cursor,codex:minuteSources.codex});await resize('large');
@@ -264,6 +264,8 @@ async function main() {
           assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`),false,'hover details wait before opening');
           await new Promise((r) => setTimeout(r, 2100));
           assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`),true);
+          assert.equal(await js(`!document.getElementById('ai-provider-cursor').title`),true,'native title tooltip must stay off');
+          assert.match(await js(`document.querySelector('#cursor-usage-rows .ai-usage-detail-updated')?.textContent || ''`),/更新于/);
           await js(`document.getElementById('ai-provider-cursor').dispatchEvent(new PointerEvent('pointerout',{bubbles:true,relatedTarget:document.body}))`);
           assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
         }
@@ -324,7 +326,7 @@ async function main() {
       await resize(size);
       assert.equal((await inspect()).overflow,false);assert.equal((await inspect()).ringsFit,true);
       for(const [id,copy] of [['grok','余额已耗尽'],['manus','积分已耗尽']]) {
-        const alarm=await js(`(()=>{const p=document.getElementById('ai-provider-${id}');return {state:p.dataset.state,level:p.dataset.level,empty:p.dataset.balanceEmpty,title:p.title,aria:p.querySelector('.q-ring').getAttribute('aria-label'),percent:p.querySelector('.q-ring').hasAttribute('aria-valuenow'),alert:!!p.querySelector('.q-alert'),track:getComputedStyle(p.querySelector('.q-ring-track')).stroke,amount:getComputedStyle(p.querySelector('.q-mini-value, .q-pct')).color}})()`);
+        const alarm=await js(`(()=>{const p=document.getElementById('ai-provider-${id}');return {state:p.dataset.state,level:p.dataset.level,empty:p.dataset.balanceEmpty,title:p.getAttribute('aria-description')||'',aria:p.querySelector('.q-ring').getAttribute('aria-label'),percent:p.querySelector('.q-ring').hasAttribute('aria-valuenow'),alert:!!p.querySelector('.q-alert'),track:getComputedStyle(p.querySelector('.q-ring-track')).stroke,amount:getComputedStyle(p.querySelector('.q-mini-value, .q-pct')).color}})()`);
         assert.equal(alarm.state,'depleted');assert.equal(alarm.level,'critical');assert.equal(alarm.empty,'true');
         assert.match(alarm.title,new RegExp(copy));assert.equal(alarm.percent,false);
         assert.equal(alarm.track,'rgba(255, 120, 110, 0.13)');
@@ -338,8 +340,8 @@ async function main() {
     assert.equal(await js(`document.querySelector('.q-summary')===null`),true);
     await capture('depleted-large-5ai');
     await js(`PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));window.dispatchEvent(new Event('pome:language-changed'))`);
-    assert.match(await js(`document.getElementById('ai-provider-grok').title`),/Balance depleted/);
-    assert.match(await js(`document.getElementById('ai-provider-manus').title`),/Credits depleted/);
+    assert.match(await js(`document.getElementById('ai-provider-grok').getAttribute('aria-description')`),/Balance depleted/);
+    assert.match(await js(`document.getElementById('ai-provider-manus').getAttribute('aria-description')`),/Credits depleted/);
     await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);
     await supply({grok:{...depleted.grok,primary:{currency:'USD',balance:1}},manus:{...depleted.manus,primary:{unit:'credits',balance:1}}});
     assert.equal(await js(`[...document.querySelectorAll('.ai-usage-provider')].every(p=>p.dataset.state==='ok'&&p.dataset.balanceEmpty==='false'&&!p.querySelector('.q-alert'))`),true);
@@ -362,7 +364,7 @@ async function main() {
     assert.equal(await js(`getComputedStyle(document.querySelector('#ai-provider-cursor .q-gauge-group')).opacity`),'0.45');
     assert.equal(await js(`getComputedStyle(document.querySelector('#ai-provider-cursor .q-compact-caption')).display`),'flex');
     assert.equal(await js(`document.getElementById('cursor-usage-other-pct').textContent`),'41%');
-    assert.match(await js(`document.getElementById('ai-provider-cursor').title`),/数据过期/);
+    assert.match(await js(`document.getElementById('ai-provider-cursor').getAttribute('aria-description')`),/数据过期/);
     await capture('state-stale');
     // IPC outages retain successful data without pretending a new fetch succeeded.
     await js(`notchAPI.getCursorUsage=async()=>{throw Error('fixture offline')};NotchAiUsage.refresh({force:true})`);
@@ -372,14 +374,14 @@ async function main() {
       await supply({cursor:invalid,codex:{...codex,stale:true},grokbot});await resize(size);
       const view=await inspect();assert.equal(view.overflow,false);assert.equal(view.ringsFit,true);
       assert.equal(await js(`document.querySelector('#ai-provider-cursor .q-ring-track').hasAttribute('stroke-dasharray')`),true);
-      assert.match(await js(`document.getElementById('ai-provider-cursor').title`),/需重新获取 Token/);
+      assert.match(await js(`document.getElementById('ai-provider-cursor').getAttribute('aria-description')`),/需重新获取 Token/);
       await capture(`states-${size}`);
     }
     await supply({cursor:invalid});await resize('large');
     await js(`document.querySelector('#ai-provider-cursor [data-quota-settings]').click();new Promise(r=>setTimeout(r,250))`);
     assert.equal(await js(`document.activeElement.id`),'settings-cursor-token');
     await supply({codex:{...codex,configured:true,manualTokenInvalid:true,authSource:'local'}});
-    assert.match(await js(`document.getElementById('ai-provider-codex').title`),/Token 失效 · 已改用本机/);
+    assert.match(await js(`document.getElementById('ai-provider-codex').getAttribute('aria-description')`),/Token 失效 · 已改用本机/);
     assert.equal(await js(`document.querySelector('#codex-usage-rows strong').textContent`),'41%');
     assert.equal(await js(`document.getElementById('ai-provider-codex').dataset.state`),'error');
     assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring-track').hasAttribute('stroke-dasharray')`),true);
@@ -388,11 +390,11 @@ async function main() {
     await resize('medium');
     await capture('state-token-local');
     await supply({codex:{ok:true,detected:true,configured:true,manualTokenInvalid:true}});
-    assert.match(await js(`document.getElementById('ai-provider-codex').title`),/Token 失效/);
+    assert.match(await js(`document.getElementById('ai-provider-codex').getAttribute('aria-description')`),/Token 失效/);
     await supply({codex:{...codex,authSource:'manual',configured:true,detected:false}});
-    assert.match(await js(`document.getElementById('ai-provider-codex').title`),/手动 Token/);
-    assert.match(await js(`document.getElementById('ai-provider-codex').title`),/Plus/);
-    assert.match(await js(`document.getElementById('ai-provider-codex').title`),/Credits: 20/);
+    assert.match(await js(`document.getElementById('ai-provider-codex').getAttribute('aria-description')`),/手动 Token/);
+    assert.match(await js(`document.getElementById('ai-provider-codex').getAttribute('aria-description')`),/Plus/);
+    assert.match(await js(`document.getElementById('ai-provider-codex').getAttribute('aria-description')`),/Credits: 20/);
     // A reset which has passed is stale on any provider, not just Codex.
     await supply({grokbot:{...grokbot,primary:{percent:1,resetsAt:Date.now()/1000-1}}});
     assert.equal(await js(`document.getElementById('ai-provider-grokbot').dataset.state`),'stale');
@@ -424,7 +426,7 @@ async function main() {
     await supply(three);await resize('medium');await js(`document.documentElement.dataset.liquidGlass='1'`);await capture('medium-3ai-glass');assert.equal((await inspect()).overflow,false);await js(`document.documentElement.dataset.liquidGlass='0'`);
     // A network failure must offer retry, never demand replacement credentials.
     await supply({cursor:{ok:false,detected:true,error:'network'}});await resize('medium');
-    assert.doesNotMatch(await js(`document.getElementById('ai-provider-cursor').title`),/需重新获取 Token/);
+    assert.doesNotMatch(await js(`document.getElementById('ai-provider-cursor').getAttribute('aria-description')`),/需重新获取 Token/);
     await capture('state-network');
     await supply(five);await resize('large');
     await js(`PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));window.dispatchEvent(new Event('pome:language-changed'))`);await settle();

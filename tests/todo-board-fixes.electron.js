@@ -152,6 +152,24 @@ async function main() {
   );
 
   assert.equal(await js(`!!document.querySelector('.todo-board-toolbar')`), false, 'top toolbar row must be gone');
+  const fill = await js(`(() => {
+    const tab = document.getElementById('tab-todo').getBoundingClientRect();
+    const sections = document.getElementById('todo-sections').getBoundingClientRect();
+    const cards = [...document.querySelectorAll('#todo-sections .quadrant')].map((el) => el.getBoundingClientRect());
+    const bottom = Math.max(...cards.map((r) => r.bottom));
+    const right = Math.max(...cards.map((r) => r.right));
+    return {
+      heightFill: sections.height / tab.height,
+      widthFill: sections.width / tab.width,
+      cardsReachBottom: (tab.bottom - bottom) <= 16,
+      cardsReachRight: (tab.right - right) <= 16,
+      cardCount: cards.length,
+    };
+  })()`);
+  assert.ok(fill.heightFill >= 0.92, `todo grid must fill tab height: ${JSON.stringify(fill)}`);
+  assert.ok(fill.widthFill >= 0.92, `todo grid must fill tab width: ${JSON.stringify(fill)}`);
+  assert.equal(fill.cardsReachBottom, true, `4 cards must reach panel bottom: ${JSON.stringify(fill)}`);
+  assert.equal(fill.cardsReachRight, true, `4 cards must reach panel right: ${JSON.stringify(fill)}`);
   const fab = await js(`(() => {
     const b = document.getElementById('todo-add-category');
     if (!b) return null;
