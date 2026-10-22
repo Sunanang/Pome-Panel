@@ -3672,40 +3672,16 @@ function setHomeModuleVisibleCore(moduleId, visible, force = false) {
   return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
 }
 
-function applyHomePreset(name, selected) {
-  if (homeLayoutReadOnly || window.NotchWorkspace?.isRecordingActive?.()) return { ok: false, error: 'layout_busy' };
-  const available = HOME_MODULE_REGISTRY.filter(id => !unavailableHomeModules.includes(id));
-  const ids = window.NotchUiDomain.presetIds(name, available, selected);
-  const old = { hidden: hiddenHomeModules, sizes: homeSizes, layout: homeWorkingLayout, order: homeOrder, inline: windowsInlineRequested };
-  if (ids.includes('windows')) windowsInlineRequested = true;
-  const nextHidden = HOME_MODULE_REGISTRY.filter(id => !ids.includes(id));
-  homeOrder = [...ids, ...HOME_MODULE_REGISTRY.filter(id => !ids.includes(id))];
-  const defaults = Object.fromEntries(ids.map(id => [id, HOME_SIZE_DEFAULTS[id]]));
-  homeSizes = { ...HOME_SIZE_DEFAULTS, ...window.NotchDomain.normalizeHomeWidgetSizes(defaults, defaults, '', 48) };
-  homeWorkingLayout = null;
-  const layout = resolveValidatedHomeLayout(nextHidden, homeOrder, homeSizes, { forcePack: true, sealGaps: true });
-  if (!layout) {
-    homeSizes = old.sizes; homeOrder = old.order; homeWorkingLayout = old.layout;
-    windowsInlineRequested = old.inline;
-    return { ok: false, error: 'layout_invalid' };
-  }
-  hiddenHomeModules = nextHidden;
-  stopMirror();
-  applyHomeLayout(layout, { reason: 'visibility' });
-  const visibilityPersisted = saveHiddenHomeModules();
-  const layoutPersisted = saveHomeLayout();
-  const persisted = visibilityPersisted && layoutPersisted;
-  if (windowsInlineRequested) { try { localStorage.setItem('pome-windows-inline-v1', '1'); } catch {} }
-  document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
-  document.dispatchEvent(new CustomEvent('notch:home-preset-applied', { detail: { name, custom: !!selected } }));
-  if (persisted) window.NotchUi?.clearError('home:layout');
-  return { ok: true, persisted };
-}
 window.NotchHome = Object.freeze({
   getVisibility: visibilitySnapshot,
   isVisible: (moduleId) => visibilitySnapshot().visibleIds.includes(String(moduleId || '')),
   setModuleVisible: setHomeModuleVisible,
-  applyPreset: applyHomePreset,
+  saveLayout: () => {
+    if (homeLayoutReadOnly) return { ok:false, error:'layout_read_only' };
+    const visibilitySaved = saveHiddenHomeModules();
+    const layoutSaved = saveHomeLayout();
+    return { ok:visibilitySaved && layoutSaved, error:visibilitySaved && layoutSaved ? null : 'home_layout_storage_unavailable' };
+  },
 });
 document.getElementById('home-inbox-placeholder')?.addEventListener('click', async () => {
   await setActiveTab('settings');

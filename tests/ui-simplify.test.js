@@ -1,12 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const D=require('../renderer/ui-simplify-domain');
-test('home presets filter unavailable modules and retain at least one',()=>{
- assert.deepEqual(D.presetIds('simple',['note','pomodoro','cursor','inbox','sun']),['note','pomodoro','cursor','inbox']);
- assert.deepEqual(D.presetIds('all',['note','sun']),['note','sun']);
- assert.deepEqual(D.presetIds('simple',['sun'],[]),['sun']);
- assert.deepEqual(D.presetIds('simple',['note','sun'],['sun','sun','unknown']),['sun']);
-});
 test('diagnostics remove secrets and URL authentication without discarding error codes',()=>{
  const value=D.diagnostic('ECONNREFUSED https://user:pass@nas.local/pome?token=abc#secret Bearer private-value api_key=sk-secret-value token="private" password=hidden');
  assert(value.includes('ECONNREFUSED'));assert(value.includes('https://nas.local/pome'));

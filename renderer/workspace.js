@@ -2851,7 +2851,6 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         messageKey,
         kind: ['layout_read_only', 'layout_invalid', 'dom_apply_failed'].includes(result?.error) ? 'error' : 'warning',
         scope: 'home:layout',
-        onRepair: () => document.getElementById('ui-home-presets')?.scrollIntoView({ block: 'center' }),
       });
       return;
     }

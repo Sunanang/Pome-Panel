@@ -151,7 +151,7 @@
     text(errorMessage, problem); text(repairCopy, options.repairKey || (layoutProblem ? 'ui.error.layoutRepair' : 'ui.error.repair'));
     raw.textContent = D.diagnostic(value);
     const source = ['claude','codex','cursor','manus','grok','copilot'].find(id => value.toLowerCase().includes(id));
-    repair = options.onRepair || (layoutProblem ? () => { void setActiveTab('settings').then(() => presets.scrollIntoView({ block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
+    repair = options.onRepair || (layoutProblem ? () => { void setActiveTab('settings').then(() => el('settings-home-module-list')?.scrollIntoView({ block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
     text(copy, 'ui.copyDiagnostic'); errorDetails.open = false;
     setErrorVisible(el('app').classList.contains('expanded'));
   }
@@ -165,33 +165,6 @@
     recordingOpen.hidden = settings?.features?.recordings === false;
   }
   api?.onAppSettingsChanged?.(quickEntries);
-
-  const presets = document.createElement('div'); presets.id = 'ui-home-presets'; presets.className = 'ui-home-presets';
-  let presetSelection = null;
-  function layoutSignature() {
-    return JSON.stringify([...document.querySelectorAll('[data-home-module]')].map(tile =>
-      [tile.dataset.homeModule, tile.hidden, tile.dataset.layoutColumn, tile.dataset.layoutRow,
-        tile.dataset.layoutWidth, tile.dataset.layoutHeight, tile.dataset.widgetSize]));
-  }
-  function syncPresets() {
-    const selected = presetSelection?.signature === layoutSignature() ? presetSelection.name : null;
-    presets.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.preset === selected)));
-  }
-  document.addEventListener('notch:home-layout-applied', syncPresets);
-  document.addEventListener('notch:home-modules-changed', syncPresets);
-  document.addEventListener('notch:home-preset-applied', e => {
-    presetSelection = e.detail.custom ? null : { name: e.detail.name, signature: layoutSignature() };
-    syncPresets();
-  });
-  for (const name of Object.keys(D.PRESETS)) {
-    const b = button('ui.preset.' + name, () => {
-      const result = window.NotchHome.applyPreset(name);
-      if (!result.ok) showError({ diagnostic: result.error, repairKey: 'ui.preset.busy' });
-    }); b.dataset.preset = name; b.setAttribute('aria-pressed', 'false'); presets.append(b);
-  }
-  el('settings-home-module-list')?.before(presets);
-  const layoutEntry = button('ui.preset.choose', () => { void setActiveTab('settings').then(() => { presets.scrollIntoView({ block: 'center' }); presets.querySelector('button')?.focus(); }); });
-  el('home-context-menu')?.append(layoutEntry);
 
   const welcome = document.createElement('dialog'); welcome.id = 'ui-welcome'; welcome.className = 'ui-welcome';
   welcome.setAttribute('aria-labelledby', 'ui-welcome-title');
@@ -213,8 +186,16 @@
   const back = button('ui.back', () => { welcomeError.hidden = true; step--; renderWelcome(); });
   const next = button('ui.next', () => {
     if (step === 2) {
-      const result = window.NotchHome.applyPreset('simple', [...body.querySelectorAll('input:checked')].map(n => n.value));
-      if (!result.ok) return showWelcomeError('ui.welcome.layoutFailed', result.error, false);
+      const inputs = [...body.querySelectorAll('input')];
+      const unavailable = window.NotchHome.getVisibility().unavailableIds;
+      // Enable selected widgets first so the existing last-widget guard stays valid.
+      for (const input of [...inputs.filter(n => n.checked), ...inputs.filter(n => !n.checked)]) {
+        if (unavailable.includes(input.value)) continue;
+        const result = window.NotchHome.setModuleVisible(input.value, input.checked);
+        if (!result.ok) return showWelcomeError('ui.welcome.layoutFailed', result.error, false);
+      }
+      const saved = window.NotchHome.saveLayout();
+      if (!saved.ok) return showWelcomeError('ui.welcome.layoutFailed', saved.error, false);
     }
     if (step === 3) void finishWelcome(); else { welcomeError.hidden = true; step++; renderWelcome(); }
   }, true);
@@ -242,8 +223,6 @@
         input.closest('label').hidden = state.unavailableIds.includes(id);
         input.addEventListener('change', () => { if (!grid.querySelector('input:checked')) input.checked = true; });
       });
-      const order = [...D.PRESETS.simple, ...D.PRESETS.all.filter(id => !D.PRESETS.simple.includes(id))];
-      [...grid.children].sort((a, b) => order.indexOf(a.querySelector('input').value) - order.indexOf(b.querySelector('input').value)).forEach(row => grid.append(row));
       body.append(grid);
     } else {
       const p = document.createElement('p'); text(p, 'ui.welcome.optional'); body.append(p);
@@ -273,12 +252,6 @@
     settings = value || {}; quickEntries(settings);
     firstWelcome = settings.onboardingPending === true;
     if (firstWelcome) {
-      // Apply once per profile; reopening an unfinished wizard preserves edits.
-      if (!localRead('pome-welcome-layout-v1')) {
-        const result = window.NotchHome.applyPreset('simple');
-        if (result.ok) localWrite('pome-welcome-layout-v1', '1');
-        else showWelcomeError('ui.welcome.layoutFailed', 'welcome_layout_storage_unavailable', false);
-      }
       renderWelcome();
       if (document.getElementById('app').classList.contains('expanded')) welcome.showModal();
     }

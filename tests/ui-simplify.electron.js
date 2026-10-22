@@ -53,7 +53,7 @@ let nativeError=true;
 const adapters=require('../platform-adapters'),load=adapters.loadAdapter;adapters.loadAdapter=(...args)=>{const adapter=load(...args);adapter.windows.list=async()=>({items:[],error:nativeError?'native_unavailable':null});return adapter;};
 const output=path.join(__dirname,'../dist.noindex/ui-simplify/flows');fs.mkdirSync(output,{recursive:true});
 let started=false;const errors=[];const timer=setTimeout(()=>{console.error('Simplification timed out',errors);app.exit(1);},150000);
-app.on('web-contents-created',(_event,c)=>{c.on('console-message',d=>{if(d.level==='error'&&!d.message.includes('ERR_'))errors.push(d.message);});c.once('did-finish-load',()=>{if(started||!c.getURL().endsWith('/renderer/index.html'))return;started=true;run(c).then(()=>{clearTimeout(timer);console.log('UI simplification: welcome/upgrade, presets, acquisition/save failures, diagnostics, dual entries, hidden tabs, confirmations, capsule hints and Windows fallback passed');app.exit(0);}).catch(e=>{console.error(e,errors);app.exit(1);});});});
+app.on('web-contents-created',(_event,c)=>{c.on('console-message',d=>{if(d.level==='error'&&!d.message.includes('ERR_'))errors.push(d.message);});c.once('did-finish-load',()=>{if(started||!c.getURL().endsWith('/renderer/index.html'))return;started=true;run(c).then(()=>{clearTimeout(timer);console.log('UI simplification: welcome/upgrade, independent widgets, acquisition/save failures, diagnostics, note save and recording entry, hidden tabs, confirmations, capsule hints and Windows fallback passed');app.exit(0);}).catch(e=>{console.error(e,errors);app.exit(1);});});});
 async function run(c){
  const js=code=>c.executeJavaScript(code),sleep=ms=>new Promise(r=>setTimeout(r,ms));
  async function until(expr){for(let i=0;i<350;i++){if(await js(expr).catch(()=>false))return;await sleep(20);}throw Error('Timeout '+expr);}
@@ -64,10 +64,26 @@ async function run(c){
   assert.deepEqual(await js('NotchHome.getVisibility().visibleIds'),JSON.parse(fs.readFileSync(path.join(output,'saved-visible.json'),'utf8')));
   return;
  }
+ // Fixture setup only: arbitrary widget sets replace the removed product presets.
+ function seedHomeFixture(ids = HOME_MODULE_REGISTRY.filter(id=>!unavailableHomeModules.includes(id))) {
+  if(ids.includes('windows'))windowsInlineRequested=true;
+  hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+  homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+  const defaults=Object.fromEntries(ids.map(id=>[id,HOME_SIZE_DEFAULTS[id]]));
+  homeSizes={...HOME_SIZE_DEFAULTS,...NotchDomain.normalizeHomeWidgetSizes(defaults,defaults,'',48)};
+  homeWorkingLayout=null;
+  const layout=resolveValidatedHomeLayout(hiddenHomeModules,homeOrder,homeSizes,{forcePack:true,sealGaps:true});
+  if(!layout)throw new Error('invalid home fixture');
+  applyHomeLayout(layout,{reason:'visibility'});saveHiddenHomeModules();saveHomeLayout();
+  document.dispatchEvent(new CustomEvent('notch:home-modules-changed',{detail:NotchHome.getVisibility()}));
+ }
+ await js(`window.fixtureHome=${seedHomeFixture.toString()};void 0`);
  assert.equal((await js('notchAPI.getAppSettings()')).onboardingPending,true);
  await until(`document.getElementById('ui-welcome').open`);await capture('welcome-1');
- assert.deepEqual(await js('NotchHome.getVisibility().visibleIds'),['pomodoro','cursor','inbox','note']);
+ const initialVisible=await js('NotchHome.getVisibility().visibleIds');
  await js(`document.querySelector('#ui-welcome .primary').click()`);await capture('welcome-2');
+ assert.equal(await js(`document.querySelectorAll('#ui-welcome-modules input:checked').length`),initialVisible.length,'welcome starts with the existing layout');
+ await js(`document.querySelectorAll('#ui-welcome-modules input').forEach(n=>{const wanted=['note','pomodoro','cursor','inbox'].includes(n.value);if(n.checked!==wanted)n.click()})`);
  assert.equal(await js(`document.querySelectorAll('#ui-welcome-modules input:checked').length`),4);
  // Escape temporarily closes the wizard; it never persists completion.
  await js(`document.getElementById('ui-welcome').dispatchEvent(new Event('cancel',{cancelable:true}))`);
@@ -77,7 +93,11 @@ async function run(c){
  await js('setMode(false)');await until('!modeBusy');await js('setMode(true)');await until('!modeBusy');
  await until(`document.getElementById('ui-welcome').open`);
  assert.equal(await js(`document.querySelector('#ui-welcome > small').textContent`),'2 / 3');
+ await js(`(()=>{const write=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k===HOME_HIDDEN_MODULES_KEY)throw new Error('fixture_storage_full');return write.call(this,k,v)};try{document.querySelector('#ui-welcome .primary').click()}finally{Storage.prototype.setItem=write}})()`);
+ assert.equal(await js(`document.querySelector('#ui-welcome > small').textContent`),'2 / 3','unsaved module choices cannot advance welcome');
+ assert.equal(await js(`document.getElementById('ui-welcome-error').hidden`),false);
  await js(`document.querySelector('#ui-welcome .primary').click()`);await capture('welcome-3');
+ assert.deepEqual(await js('NotchHome.getVisibility().visibleIds'),['pomodoro','cursor','inbox','note'],'welcome applies explicit choices through individual switches');
  failWelcome='pending';const savesBefore=welcomeSaves;
  await js(`document.querySelector('#ui-welcome .ui-welcome-body button').click()`);
  await until(`document.querySelectorAll('#ui-welcome button:not(:disabled)').length===0`);
@@ -95,7 +115,7 @@ async function run(c){
  failWelcome='throw';await js(`document.querySelector('#ui-welcome-error button').click()`);
  await until(`document.querySelector('#ui-welcome-error pre').textContent.includes('fixture_save_failed') && !document.querySelector('#ui-welcome-error button').disabled`);
  failWelcome='';await js(`document.querySelector('#ui-welcome-error button').click()`);await until(`!document.getElementById('ui-welcome').open`);
- assert.equal((await js('notchAPI.getAppSettings()')).onboardingPending,false);await capture('home-simple');
+ assert.equal((await js('notchAPI.getAppSettings()')).onboardingPending,false);await capture('home-selected-modules');
  // Capsule help persists a maximum of three openings and closes on collapse.
  for(let i=0;i<4;i++){
   await js('setMode(false)');await until('!modeBusy');await js('setMode(true)');await until('!modeBusy');
@@ -279,7 +299,7 @@ async function run(c){
  assert.doesNotMatch(await js(`document.querySelector('#ui-error-details pre').textContent`),/secret|private-value|user:pass/);await capture('error-bar');
  // Expanded diagnostics occupy their own region; controls can be scrolled into view above it.
  await js(`document.getElementById('ui-error-details').open=true`);
- for(const selector of ['#ui-home-presets button','[data-settings-home-module=pomodoro]']){
+ for(const selector of ['[data-settings-home-module=music]','[data-settings-home-module=pomodoro]']){
   const accessible=await js(`(async()=>{const input=document.querySelector(${JSON.stringify(selector)}),control=input.closest('label')||input;control.scrollIntoView({block:'center'});await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const b=control.getBoundingClientRect(),bar=document.getElementById('ui-error-bar').getBoundingClientRect(),panels=document.getElementById('panels').getBoundingClientRect(),hit=document.elementFromPoint(b.left+b.width/2,b.top+b.height/2);return {separate:panels.bottom<=bar.top+1,reachable:hit===control||control.contains(hit),visible:b.top>=panels.top-1&&b.bottom<=panels.bottom+1};})()`);
   assert.equal(accessible.separate,true);assert.equal(accessible.reachable,true,selector);assert.equal(accessible.visible,true,selector);
  }
@@ -293,30 +313,6 @@ async function run(c){
  assert.equal(await js(`document.getElementById('ui-data-confirm-details').open`),false);await capture('confirmation');
  await js(`document.getElementById('ui-data-confirm-details').open=true`);await capture('confirmation-details');
  await js(`document.querySelector('#ui-data-confirm button').click()`);assert.equal(await js('window.fixtureConfirmed'),false);
- // Inspect actual rendered frames, not intermediate synchronous event states.
- const presetFrames=await js(`(async()=>{
-  const records=[];const frame=()=>new Promise(r=>requestAnimationFrame(r));
-  const selected=()=>[...document.querySelectorAll('#ui-home-presets [aria-pressed=true]')].map(b=>b.dataset.preset);
-  for(let round=0;round<3;round++)for(const name of ['simple','balanced','all']){
-   const record={name,events:[],frames:[]};
-   const modules=()=>record.events.push({event:'modules',selected:selected()});
-   const preset=()=>record.events.push({event:'preset',selected:selected()});
-   document.addEventListener('notch:home-modules-changed',modules);
-   document.addEventListener('notch:home-preset-applied',preset);
-   await frame();document.querySelector('[data-preset='+name+']').click();
-   document.removeEventListener('notch:home-modules-changed',modules);
-   document.removeEventListener('notch:home-preset-applied',preset);
-   for(let i=0;i<8;i++){await frame();record.frames.push(selected());}
-   records.push(record);
-  }
-  return records;
- })()`);
- for(const record of presetFrames){
-  assert.equal(record.events[0].event,'modules');assert.deepEqual(record.events[1],{event:'preset',selected:[record.name]});
-  for(const selection of record.frames)assert.deepEqual(selection,[record.name],'no rendered frame may lose the active preset');
- }
- fs.writeFileSync(path.join(output,'preset-frames.json'),JSON.stringify(presetFrames,null,2));
- console.log('Preset verification: 9 transitions, 72 rendered frames, zero missing or wrong selection');
  // Short failure messages remain transient in either language; persistence is explicit.
  for(const message of ['无法打开摄像头','Couldn’t open the camera','invalid deadline']){
   await js(`showStatusToast(${JSON.stringify(message)},{duration:180})`);
@@ -330,7 +326,7 @@ async function run(c){
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true);
  await js(`document.getElementById('status-toast-action').click()`);assert.equal(await js('fixturePrivacyOpened'),true);
  // Trigger the actual mirror click, with a failed media request and no real camera use.
- cameraFailure=true;await js(`setActiveTab('home');NotchHome.applyPreset('all');window.fixtureGetUserMedia=navigator.mediaDevices.getUserMedia;navigator.mediaDevices.getUserMedia=async()=>{throw new Error('fixture_camera_unavailable')};document.getElementById('mirror-stage').click()`);
+ cameraFailure=true;await js(`setActiveTab('home');fixtureHome();window.fixtureGetUserMedia=navigator.mediaDevices.getUserMedia;navigator.mediaDevices.getUserMedia=async()=>{throw new Error('fixture_camera_unavailable')};document.getElementById('mirror-stage').click()`);
  await until(`!mirrorStarting && !document.getElementById('status-toast').hidden`);
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden && mirrorStream===null`),true);
  await capture('camera-transient-toast');
@@ -341,7 +337,7 @@ async function run(c){
  assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('copy.couldnTReadCodexSignInRetry.5e8c59')`),true);
  await js(`NotchUi.clearError('token:codex')`);
  async function layoutFailure(){
-  await js(`NotchHome.applyPreset('all');setActiveTab('settings')`);
+  await js(`fixtureHome();setActiveTab('settings')`);
   await js(`(()=>{const validate=NotchDomain.validateHomeWidgetLayout;NotchDomain.validateHomeWidgetLayout=()=>false;try{const input=document.querySelector('[data-settings-home-module=sun]');input.checked=false;input.dispatchEvent(new Event('change',{bubbles:true}));}finally{NotchDomain.validateHomeWidgetLayout=validate;}})()`);
   await until(`!document.getElementById('ui-error-bar').hidden`);
   assert.equal(await js(`NotchHome.getVisibility().visibleIds.includes('sun')`),true,'failed changes must keep the original layout');
@@ -349,6 +345,10 @@ async function run(c){
   assert.equal(await js(`document.querySelector('#ui-error-bar small').textContent===PomeI18n.t('ui.error.layoutRepair')`),true);
  }
  await layoutFailure();await capture('layout-failure');
+ await js(`setActiveTab('home')`);
+ await js(`document.querySelector('#ui-error-bar button').click()`);
+ await until(`activeTab==='settings' && !tabBusy`);
+ assert.equal(await js(`document.getElementById('settings-home-module-list').checkVisibility()`),true,'layout repair returns to the surviving widget switches');
  const unchanged=await js(`NotchHome.setModuleVisible('sun',true)`);assert.equal(unchanged.changed,false);
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'no-op changes do not clear a failure');
  await js(`setActiveTab('home');document.getElementById('home-layout-edit').click();document.getElementById('home-layout-cancel').click()`);
@@ -356,7 +356,7 @@ async function run(c){
  await js(`document.getElementById('home-layout-edit').click();document.getElementById('home-layout-save').click()`);
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'saving an unchanged edit does not clear a failure');
  // Failed saves preserve the edit and cancel snapshot, and a later save can retry.
- await js(`NotchUi.clearError();NotchHome.applyPreset('all');setActiveTab('home')`);
+ await js(`NotchUi.clearError();fixtureHome();setActiveTab('home')`);
  const beforeEdit=await js(`localStorage.getItem(HOME_SIZES_KEY)`);
  await js(`document.getElementById('home-layout-edit').click();document.getElementById('home-cursor').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:300,clientY:200}));document.querySelector('[data-home-ctx-size=mini]').click()`);
  const editedSize=await js(`homeSizes.cursor`);
@@ -391,21 +391,21 @@ async function run(c){
  await js(`document.getElementById('home-layout-save').click()`);
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden && homeBento.dataset.layoutEditing==='false'`),true,'an unchanged retry clears its own storage failure');
  await layoutFailure();
- // Visibility was written but saving layout metadata failed: do not claim recovery.
- const unsaved=await js(`(()=>{const write=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key===HOME_ORDER_KEY)throw new Error('fixture_storage_full');return write.call(this,key,value);};try{return NotchHome.applyPreset('simple');}finally{Storage.prototype.setItem=write;}})()`);
+ // Failed visibility persistence must not claim recovery.
+ const unsaved=await js(`(()=>{const write=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key===HOME_HIDDEN_MODULES_KEY)throw new Error('fixture_storage_full');return write.call(this,key,value);};try{return NotchHome.setModuleVisible('sun',false);}finally{Storage.prototype.setItem=write;}})()`);
  assert.equal(unsaved.persisted,false);
- assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'an unsaved preset does not clear a failure');
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'an unsaved visibility change does not clear a failure');
  await layoutFailure();
  await js(`const fixtureToggle=document.querySelector('[data-settings-home-module=sun]');fixtureToggle.checked=false;fixtureToggle.dispatchEvent(new Event('change',{bubbles:true}));`);
  await until(`document.getElementById('ui-error-bar').hidden && !NotchHome.getVisibility().visibleIds.includes('sun')`);
  await capture('layout-visibility-recovered');
- await layoutFailure();assert.equal((await js(`NotchHome.applyPreset('simple')`)).persisted,true);
- assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'a saved preset clears a failure');
+ await layoutFailure();assert.equal((await js(`NotchHome.setModuleVisible('sun',false)`)).persisted,true);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'a saved visibility change clears a failure');
  // Saved resize also recovers, but preserves a failure belonging to another scope.
  await layoutFailure();await js(`setActiveTab('home')`);
  await js(`document.getElementById('home-cursor').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:300,clientY:200}));document.querySelector('[data-home-ctx-size=mini]').click()`);
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'saved resize clears a failure');
- await js(`NotchUi.showError({diagnostic:'Codex: fixture_failure',scope:'token:codex'});NotchHome.applyPreset('all')`);
+ await js(`NotchUi.showError({diagnostic:'Codex: fixture_failure',scope:'token:codex'});NotchHome.setModuleVisible('sun',false)`);
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'layout success cannot clear credential failures');
  await js(`NotchUi.clearError('token:codex')`);
  // Both space constraints are transient and preserve the current layout.
@@ -418,16 +418,22 @@ async function run(c){
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden && document.getElementById('status-toast-message').textContent===PomeI18n.t('copy.notEnoughSpaceToSwap.94e606')`),true);
  await capture('layout-swap-space-toast');await until(`document.getElementById('status-toast').hidden`);
  await js(`document.getElementById('home-layout-cancel').click();setActiveTab('settings')`);
- // All presets use the existing layout validator and protect an active recording.
- for(const name of ['simple','balanced','all']){assert.equal((await js(`NotchHome.applyPreset('${name}')`)).ok,true,name);assert.equal(await js('NotchDomain.validateHomeWidgetLayout(homeWorkingLayout,NotchHome.getVisibility().visibleIds,12,4)'),true);assert.equal(await js(`document.querySelector('[data-preset=${name}]').getAttribute('aria-pressed')`),'true');}
- await js(`NotchHome.setModuleVisible('sun',false)`);
- assert.equal(await js(`document.querySelectorAll('#ui-home-presets [aria-pressed=true]').length`),0,'manual visibility changes clear preset selection');
- await js(`NotchHome.applyPreset('simple');document.getElementById('home-cursor').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:300,clientY:200}));document.querySelector('[data-home-ctx-size=mini]').click()`);
- assert.equal(await js(`document.querySelectorAll('#ui-home-presets [aria-pressed=true]').length`),0,'manual resize clears preset selection');
- await js(`NotchHome.applyPreset('all')`);
- const guarded=await js(`(()=>{const original=NotchWorkspace.isRecordingActive,before=JSON.stringify(NotchHome.getVisibility());NotchWorkspace.isRecordingActive=()=>true;try{return {result:NotchHome.applyPreset('simple'),unchanged:before===JSON.stringify(NotchHome.getVisibility())}}finally{NotchWorkspace.isRecordingActive=original}})()`);
- assert.equal(guarded.result.ok,false);assert.equal(guarded.unchanged,true);
- await js(`document.getElementById('ui-home-presets').scrollIntoView({block:'center'})`);await capture('presets');
+ // Independent switches retain validation, recording protection and the current layout.
+ assert.equal(await js(`typeof NotchHome.applyPreset`),'undefined');
+ assert.equal(await js(`document.querySelector('#ui-home-presets,[data-preset]')`),null);
+ await js(`fixtureHome()`);
+ const guarded=await js(`(()=>{const original=NotchWorkspace.isRecordingActive,before=JSON.stringify(NotchHome.getVisibility());NotchWorkspace.isRecordingActive=()=>true;try{return {result:NotchHome.setModuleVisible('recorder',false),unchanged:before===JSON.stringify(NotchHome.getVisibility())}}finally{NotchWorkspace.isRecordingActive=original}})()`);
+ assert.equal(guarded.result.error,'recording_active');assert.equal(guarded.unchanged,true);
+ for(const locale of ['zh-CN','en-US']) {
+  const savedLayout=await js(`JSON.stringify(homeWorkingLayout)`);
+  await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'))`);
+  assert.equal(await js(`document.querySelector('#ui-home-presets,[data-preset]')`),null,'language changes cannot recreate presets');
+  assert.equal(await js(`JSON.stringify(homeWorkingLayout)`),savedLayout,'settings repaint preserves the saved layout');
+ }
+ await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'));document.getElementById('settings-home-module-list').scrollIntoView({block:'center'})`);
+ await capture('home-modules-no-presets');
+ const moduleBounds=await js(`(()=>{const grid=document.getElementById('settings-home-module-list'),r=grid.getBoundingClientRect(),heading=grid.previousElementSibling.getBoundingClientRect();return {x:r.x,y:heading.y,width:r.width,height:r.bottom-heading.y,dpr:devicePixelRatio}})()`);
+ fs.writeFileSync(path.join(output,'home-modules-no-presets-crop.png'),(await c.capturePage()).crop({x:Math.round(moduleBounds.x*moduleBounds.dpr),y:Math.round(moduleBounds.y*moduleBounds.dpr),width:Math.round(moduleBounds.width*moduleBounds.dpr),height:Math.round(moduleBounds.height*moduleBounds.dpr)}).toPNG());
  await js(`setActiveTab('home')`);
  const reachable=await js(`(()=>{const tile=document.querySelector('.home-note'),box=tile.getBoundingClientRect();return [...tile.querySelectorAll('.note-toolbar button')].filter(e=>e.checkVisibility()).every(e=>{const r=e.getBoundingClientRect();return r.left>=box.left&&r.right<=box.right+1})})()`);
  assert.equal(reachable,true,'quick-note mode and save controls fit compact tiles');
@@ -449,7 +455,8 @@ async function run(c){
  await win.loadFile(path.join(__dirname,'../renderer/index.html'));
  const wjs=code=>win.webContents.executeJavaScript(code);
  await wjs(`window.fixtureNative=false;window.notchAPI={capabilities:{platform:'win32',features:{winNativeSetting:true}},listWindows:async()=>fixtureNative?{items:[{id:'fixture-window',title:'Cursor',appName:'Cursor'}]}:{items:[],error:'native_unavailable'},setWinNative:async()=>{fixtureNative=true;return {ok:true,nativeAvailable:true,winNative:true}}};void 0`);
- await wjs('setMode(true)');await wjs("NotchHome.applyPreset('all');NotchWorkspace.refreshWindows(true)");
+ await wjs(`window.fixtureHome=${seedHomeFixture.toString()};void 0`);
+ await wjs('setMode(true)');await wjs("fixtureHome();NotchWorkspace.refreshWindows(true)");
  await wjs('document.fonts.ready.then(()=>new Promise(r=>setTimeout(r,700)))');
  for(let i=0;i<200&&!await wjs(`!!document.getElementById('ui-enable-win-native')`);i++)await sleep(20);
  assert.equal(await wjs(`!!document.getElementById('ui-enable-win-native')`),true);

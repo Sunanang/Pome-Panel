@@ -210,7 +210,7 @@ Main entry points: `main.js` and `main-services.js`; safe IPC in `preload.js`; d
 
 ## Simplified interactions
 
-Only fresh installs see the three-step welcome (activation, home widgets, optional NAS/AI). New homes start with Quick note, Focus timer, AI quota and AI completion alerts. Existing layouts stay intact. Settings → Display → Home offers Simple, Balanced and Everything presets, with the existing fit rules and an active-recording guard.
+Only fresh installs see the three-step welcome (activation, home widgets, optional NAS/AI). The wizard starts from the platform's default layout and applies the user's individual widget choices. Existing layouts stay intact. Settings → Display → Home provides individual visibility switches with the existing automatic fit rules. At least one widget stays visible, and Quick recording cannot be hidden during an active recording.
 
 NAS shows a brief status and primary action; pairing, endpoints, migration, rollback, HTTP permissions and backups live in Troubleshooting. Missing schemes become HTTPS. A detected HTTPS-to-HTTP mismatch only corrects the draft; HTTP credentials still require explicit consent. Cursor/Codex can Get and save local tokens in one click, with manual entry folded away. Source status follows actual quota responses.
 
