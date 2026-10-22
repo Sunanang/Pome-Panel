@@ -121,6 +121,7 @@ async function checkCursorTokenFlow(contents) {
       for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
       return { value: input.value, disabled: button.disabled,
         hint: document.getElementById('settings-cursor-token-hint').textContent,
+        problem: document.querySelector('#ui-error-bar p').textContent,
         diagnostic: document.querySelector('#ui-error-details pre').textContent,
         response: await window.notchAPI.readLocalCursorToken() };
     })()
@@ -128,7 +129,9 @@ async function checkCursorTokenFlow(contents) {
   assert.equal(failed.value, 'keep-existing-input');
   assert.equal(failed.disabled, false);
   assert.equal(failed.hint, '', 'failure uses only the shared error surface');
-  assert.match(failed.diagnostic, /尚未登录/);
+  assert.match(failed.problem, /尚未登录/);
+  assert.match(failed.diagnostic, /cursor_token_missing/);
+  assert.doesNotMatch(failed.diagnostic, /must-not-reach-renderer/);
   assert.deepEqual(failed.response, { ok: false, error: 'cursor_token_missing' });
   const cleared = await contents.executeJavaScript(`
     (async () => {
@@ -240,11 +243,14 @@ async function checkCodexTokenFlow(contents) {
     for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
     return { value: input.value, disabled: button.disabled,
       hint: document.getElementById('settings-codex-token-hint').textContent,
+      diagnostic: document.querySelector('#ui-error-details pre').textContent,
       response: await window.notchAPI.readLocalCodexToken() };
   })()`);
   assert.equal(failed.value, 'keep-codex-input');
   assert.equal(failed.disabled, false);
-  assert.match(failed.hint, /没有可用 Token/);
+  assert.equal(failed.hint, '', 'Codex acquisition failure uses only the shared error surface');
+  assert.match(failed.diagnostic, /codex_token_missing/);
+  assert.doesNotMatch(failed.diagnostic, /must-not-reach-renderer/);
   assert.deepEqual(failed.response, { ok: false, error: 'codex_token_missing' });
   const cleared = await contents.executeJavaScript(`(async () => {
     const button = document.getElementById('settings-codex-token-clear'); button.click();

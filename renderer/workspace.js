@@ -1105,6 +1105,14 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     renderCodexSettings(null, status);
     document.dispatchEvent(new CustomEvent('notch:codex-token-changed', { detail: status }));
   });
+  function reportCodexTokenFailure(hint, messageKey, code) {
+    if (window.NotchUi?.showError) {
+      window.NotchUi.showError({ diagnostic: `Codex: ${code || 'operation_failed'}`, messageKey, scope: 'token:codex', inlineHint: hint, onRepair: () => window.NotchAiSources?.openSettings('codex') });
+    } else {
+      pomeLocaleRendererWorkspace.bind(hint, 'textContent', () => pomeLocaleRendererWorkspace.t(messageKey));
+      hint?.classList.add('error');
+    }
+  }
   function setCodexTokenBusy(busy) {
     ['settings-codex-token', 'settings-codex-token-fetch', 'settings-codex-token-save', 'settings-codex-token-clear']
       .forEach((id) => { const control = document.getElementById(id); if (control) control.disabled = busy; });
@@ -1118,18 +1126,19 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.readingLocalCodexSignIn.a06abf")));
     pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.reading.146da2")));
     setCodexTokenBusy(true);
+    let readingLocal = true;
     try {
       const result = await window.notchAPI.readLocalCodexToken();
       if (!result?.ok || !result.token) {
         const messages = {
-          codex_auth_missing: pomeLocaleRendererWorkspace.t("copy.noReadableCodexSignInFoundSign.d77b80"),
-          codex_token_missing: pomeLocaleRendererWorkspace.t("copy.noUsableTokenFoundInLocalCodex.fab797"),
-          codex_auth_read_failed: pomeLocaleRendererWorkspace.t("copy.couldnTReadCodexSignInRetry.5e8c59"),
+          codex_auth_missing: "copy.noReadableCodexSignInFoundSign.d77b80",
+          codex_token_missing: "copy.noUsableTokenFoundInLocalCodex.fab797",
+          codex_auth_read_failed: "copy.couldnTReadCodexSignInRetry.5e8c59",
         };
-        pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (messages[result?.error] || pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.129397")));
-        hint.classList.add('error');
+        reportCodexTokenFailure(hint, messages[result?.error] || "copy.couldnTGetATokenRetryOr.129397", result?.error || 'codex_token_missing');
         return;
       }
+      readingLocal = false;
       const saved = await window.notchAPI.setCodexToken(result.token);
       if (!saved?.ok) throw new Error(saved?.error || "save_failed");
       input.value = ""; renderCodexSettings(null, saved);
@@ -1137,9 +1146,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("ui.token.savedPending")));
       hint.classList.add('success');
     } catch (error) {
-      pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t(error.message === "secure_storage_unavailable" ? "copy.systemSecureStorageIsUnavailableCanT.3a9217" : "copy.couldnTGetATokenRetryOr.129397")));
-      hint.classList.add('error');
-      window.NotchUi?.showError({ diagnostic: `Codex: ${error.message}`, scope: 'token:codex', inlineHint: hint, onRepair: () => window.NotchAiSources?.openSettings("codex") });
+      reportCodexTokenFailure(hint, error.message === "secure_storage_unavailable" ? "copy.systemSecureStorageIsUnavailableCanT.3a9217" : readingLocal ? "copy.couldnTReadCodexSignInRetry.5e8c59" : "copy.operationFailedTryAgain.825cfa", error.message);
     } finally {
       setCodexTokenBusy(false);
       pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("ui.token.acquire")));
@@ -1150,7 +1157,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       const input = document.getElementById('settings-codex-token');
       const hint = document.getElementById('settings-codex-token-hint');
       hint.className = 'settings-cursor-token-hint';
-      if (action === 'save' && !input.value.trim()) { pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.enterATokenFirstOrClearThe.1b3ee0"))); return; }
+      if (action === 'save' && !input.value.trim()) { hint.classList.add('error'); pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.enterATokenFirstOrClearThe.1b3ee0"))); return; }
       setCodexTokenBusy(true);
       try {
         const result = action === 'save' ? await window.notchAPI.setCodexToken(input.value) : await window.notchAPI.clearCodexToken();
@@ -1160,8 +1167,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (action === 'save' ? pomeLocaleRendererWorkspace.t("copy.savedSecurelyQueryingLiveQuota.f4cf88") : pomeLocaleRendererWorkspace.t("copy.manualTokenCleared.03619f")));
         hint.classList.add('success');
       } catch (error) {
-        pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (error.message === 'secure_storage_unavailable' ? pomeLocaleRendererWorkspace.t("copy.systemSecureStorageIsUnavailableCanT.3a9217") : pomeLocaleRendererWorkspace.t("copy.operationFailedTryAgain.825cfa")));
-        hint.classList.add('error');
+        reportCodexTokenFailure(hint, error.message === 'secure_storage_unavailable' ? "copy.systemSecureStorageIsUnavailableCanT.3a9217" : "copy.operationFailedTryAgain.825cfa", error.message || `${action}_failed`);
       } finally { setCodexTokenBusy(false); }
     });
   }
@@ -1837,13 +1843,13 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   if (recordingNew) recordingNew.addEventListener('click', startRecording);
   if (recordingConfigure) recordingConfigure.addEventListener('click', openTranscriptionSettings);
 
-  function setCursorTokenHint(message, kind = '') {
+  function setCursorTokenHint(messageKey, kind = '', { code = 'operation_failed', inline = false } = {}) {
     if (!settingsCursorTokenHint) return;
-    settingsCursorTokenHint.textContent = message || '';
+    pomeLocaleRendererWorkspace.bind(settingsCursorTokenHint, 'textContent', () => messageKey ? pomeLocaleRendererWorkspace.t(messageKey) : '');
     settingsCursorTokenHint.classList.toggle('error', kind === 'error');
     settingsCursorTokenHint.classList.toggle('success', kind === 'success');
     settingsCursorTokenHint.classList.toggle('warning', kind === 'warning');
-    if (kind === 'error') window.NotchUi?.showError({ diagnostic: `Cursor: ${message}`, scope: 'token:cursor', inlineHint: settingsCursorTokenHint, onRepair: () => window.NotchAiSources?.openSettings('cursor') });
+    if (kind === 'error' && !inline) window.NotchUi?.showError({ messageKey, diagnostic: `Cursor: ${code}`, scope: 'token:cursor', inlineHint: settingsCursorTokenHint, onRepair: () => window.NotchAiSources?.openSettings('cursor') });
     else if (kind === 'success') window.NotchUi?.clearError('token:cursor');
   }
 
@@ -1855,9 +1861,9 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
 
   // Failures use the shared error surface; inline hints remain for progress,
   // success and as a fallback when that surface is unavailable.
-  function setNasSyncHint(message, kind = '') {
+  function setNasSyncHint(message, kind = '', { messageKey = 'ui.error.nas', code = 'operation_failed' } = {}) {
     paintNasHint(settingsNasSyncHint, message, kind);
-    if (kind === 'error') window.NotchUi?.showError({ diagnostic: `NAS: ${message}`, scope: 'nas', inlineHint: settingsNasSyncHint, onRepair: () => { document.getElementById('ui-nas-troubleshoot').open = true; settingsNasSyncBaseUrl?.focus(); } });
+    if (kind === 'error') window.NotchUi?.showError({ messageKey, repairKey: 'ui.error.nasRepair', diagnostic: `NAS: ${code}\n${message}`, scope: 'nas', inlineHint: settingsNasSyncHint, onRepair: () => { document.getElementById('ui-nas-troubleshoot').open = true; settingsNasSyncBaseUrl?.focus(); } });
     else if (kind === 'success') window.NotchUi?.clearError('nas');
   }
 
@@ -2137,7 +2143,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       tabTodo.classList.toggle('is-migration-readonly', Boolean(nasMigrationUi.readonly));
     }
     renderNasSyncPanel();
-    if (nasMigrationUi.phase === 'failed') setNasSyncHint(nasMigrationUi.error || pomeLocaleRendererWorkspace.t("copy.migrationFailed.35cda8"), 'error');
+    if (nasMigrationUi.phase === 'failed') setNasSyncHint(nasMigrationUi.error || pomeLocaleRendererWorkspace.t("copy.migrationFailed.35cda8"), 'error', { messageKey: 'copy.migrationFailed.35cda8', code: nasMigrationUi.error || 'migration_failed' });
     if (nasMigrationUi.toast && typeof showStatusToast === 'function') {
       showStatusToast(nasMigrationUi.toast);
     }
@@ -2177,7 +2183,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         type: 'failed',
         message: (classified && classified.error) || pomeLocaleRendererWorkspace.t("copy.couldnTDetermineMigrationState.4d2f3f"),
       });
-      setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.couldnTDetermineMigrationState.0c1a8f"), 'error');
+      setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.couldnTDetermineMigrationState.0c1a8f"), 'error', { messageKey: 'copy.couldnTDetermineMigrationState.0c1a8f', code: classified?.error || 'migration_classify_failed' });
       return;
     }
 
@@ -2230,6 +2236,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       setNasSyncHint(
         result && result.error === 'cas_conflict' ? pomeLocaleRendererWorkspace.t("copy.theRemoteSideChangedCheckAgain.0f1ab5") : pomeLocaleRendererWorkspace.t("copy.migrationFailed.35cda8"),
         'error',
+        { messageKey: result?.error === 'cas_conflict' ? 'copy.theRemoteSideChangedCheckAgain.0f1ab5' : 'copy.migrationFailed.35cda8', code: result?.error || 'migration_failed' },
       );
       return;
     }
@@ -2372,7 +2379,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         settingsNasSyncBaseUrl.value = baseUrl.replace(/^https:/, 'http:');
         nasPairUi = { ...nasPairUi, baseUrl: settingsNasSyncBaseUrl.value };
       }
-      setNasSyncHint(result.message || pomeLocaleRendererWorkspace.t("copy.pairingFailed.aea73b"), 'error');
+      setNasSyncHint(result.message || pomeLocaleRendererWorkspace.t("copy.pairingFailed.aea73b"), 'error', { messageKey: 'copy.pairingFailed.aea73b', code: result.error || 'pair_failed' });
       return;
     }
     applyNasPairUi({ type: 'success', status: result.status });
@@ -2397,28 +2404,34 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   if (settingsCursorTokenFetch) settingsCursorTokenFetch.addEventListener('click', async () => {
     if (!window.notchAPI?.readLocalCursorToken || !settingsCursorToken) return;
     setCursorTokenBusy(true);
-    pomeLocaleRendererWorkspace.bind(settingsCursorTokenFetch, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.reading.146da2")));
-    setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.readingLocalCursorSignIn.153fb0"));
+    pomeLocaleRendererWorkspace.bind(settingsCursorTokenFetch, 'textContent', () => pomeLocaleRendererWorkspace.t('copy.reading.146da2'));
+    setCursorTokenHint('copy.readingLocalCursorSignIn.153fb0');
+    let stage = 'read';
     try {
       const result = await window.notchAPI.readLocalCursorToken();
       if (!result?.ok || !result.token) {
         const messages = {
-          cursor_db_missing: pomeLocaleRendererWorkspace.t("copy.noLocalCursorDataFoundInstallCursor.f5b341"),
-          cursor_token_missing: pomeLocaleRendererWorkspace.t("copy.cursorIsnTSignedInLocallySign.45a8a8"),
-          cursor_db_read_failed: pomeLocaleRendererWorkspace.t("copy.couldnTReadCursorSignInRetry.6bf381"),
+          cursor_db_missing: 'copy.noLocalCursorDataFoundInstallCursor.f5b341',
+          cursor_token_missing: 'copy.cursorIsnTSignedInLocallySign.45a8a8',
+          cursor_db_read_failed: 'copy.couldnTReadCursorSignInRetry.6bf381',
         };
-        setCursorTokenHint(messages[result?.error] || pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.8c7624"), 'error');
+        const code = result?.error || 'cursor_token_missing';
+        setCursorTokenHint(messages[code] || 'copy.couldnTGetATokenRetryOr.8c7624', 'error', { code });
         return;
       }
+      stage = 'save';
       const saved = await window.notchAPI.setCursorToken(result.token);
-      if (!saved?.ok) throw new Error(saved?.error || "save_failed");
-      settingsCursorToken.value = ""; settingsCursorTokenMeta = saved; renderSettingsPanel();
-      setCursorTokenHint(pomeLocaleRendererWorkspace.t("ui.token.savedPending"), 'success');
+      if (!saved?.ok) throw new Error(saved?.error || 'save_failed');
+      settingsCursorToken.value = ''; settingsCursorTokenMeta = saved; renderSettingsPanel();
+      setCursorTokenHint('ui.token.savedPending', 'success');
     } catch (error) {
-      setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.couldnTGetATokenRetryOr.8c7624"), 'error');
+      const secure = error?.message === 'secure_storage_unavailable';
+      const messageKey = stage === 'read' ? 'copy.couldnTReadCursorSignInRetry.6bf381'
+        : secure ? 'copy.systemSecureStorageIsUnavailableCanT.3a9217' : 'copy.couldnTSaveTheTokenRetry.69484f';
+      setCursorTokenHint(messageKey, 'error', { code: stage === 'read' ? 'cursor_db_read_failed' : secure ? 'secure_storage_unavailable' : 'save_failed' });
     } finally {
       setCursorTokenBusy(false);
-      pomeLocaleRendererWorkspace.bind(settingsCursorTokenFetch, "textContent", () => (pomeLocaleRendererWorkspace.t("ui.token.acquire")));
+      pomeLocaleRendererWorkspace.bind(settingsCursorTokenFetch, 'textContent', () => pomeLocaleRendererWorkspace.t('ui.token.acquire'));
     }
   });
 
@@ -2426,51 +2439,43 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     if (!window.notchAPI || typeof window.notchAPI.setCursorToken !== 'function') return;
     const token = settingsCursorToken?.value || '';
     if (!String(token).trim()) {
-      setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.getOrPasteATokenFirstOr.f2f57e"), 'error');
+      setCursorTokenHint('copy.getOrPasteATokenFirstOr.f2f57e', 'error', { inline: true, code: 'token_required' });
       return;
     }
     setCursorTokenBusy(true);
-    setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.savingSecurely.1af0c5"));
+    setCursorTokenHint('copy.savingSecurely.1af0c5');
     let result;
-    try {
-      result = await window.notchAPI.setCursorToken(token);
-    } catch (error) {
-      result = { ok: false, error: 'save_failed' };
-    }
+    try { result = await window.notchAPI.setCursorToken(token); }
+    catch { result = { ok: false, error: 'save_failed' }; }
     setCursorTokenBusy(false);
-    if (!result || !result.ok) {
-      setCursorTokenHint(
-        result && result.error === 'secure_storage_unavailable'
-          ? pomeLocaleRendererWorkspace.t("copy.systemSecureStorageIsUnavailableCanT.3a9217")
-          : pomeLocaleRendererWorkspace.t("copy.couldnTSaveTheTokenRetry.69484f"),
-        'error'
-      );
+    if (!result?.ok) {
+      const validation = result?.error === 'token_required';
+      const messageKey = validation ? 'copy.getOrPasteATokenFirstOr.f2f57e' : result?.error === 'secure_storage_unavailable'
+        ? 'copy.systemSecureStorageIsUnavailableCanT.3a9217' : 'copy.couldnTSaveTheTokenRetry.69484f';
+      setCursorTokenHint(messageKey, 'error', { code: result?.error || 'save_failed', inline: validation });
       return;
     }
     settingsCursorTokenMeta = result;
     if (settingsCursorToken) settingsCursorToken.value = '';
     renderSettingsPanel();
-    setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.savedSecurelyAndSyncedEncryptedWhenPaired.ec564d"), 'success');
+    setCursorTokenHint('copy.savedSecurelyAndSyncedEncryptedWhenPaired.ec564d', 'success');
   });
 
   if (settingsCursorTokenClear) settingsCursorTokenClear.addEventListener('click', async () => {
     if (!window.notchAPI || typeof window.notchAPI.clearCursorToken !== 'function') return;
     setCursorTokenBusy(true);
     let result;
-    try {
-      result = await window.notchAPI.clearCursorToken();
-    } catch (error) {
-      result = { ok: false };
-    }
+    try { result = await window.notchAPI.clearCursorToken(); }
+    catch { result = { ok: false, error: 'clear_failed' }; }
     setCursorTokenBusy(false);
-    if (!result || !result.ok) {
-      setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.couldnTClearTheTokenRetry.3cb9ef"), 'error');
+    if (!result?.ok) {
+      setCursorTokenHint('copy.couldnTClearTheTokenRetry.3cb9ef', 'error', { code: result?.error || 'clear_failed' });
       return;
     }
     settingsCursorTokenMeta = result;
     if (settingsCursorToken) settingsCursorToken.value = '';
     renderSettingsPanel();
-    setCursorTokenHint(pomeLocaleRendererWorkspace.t("copy.savedTokenClearedLocalSignInWill.da9bd9"), 'success');
+    setCursorTokenHint('copy.savedTokenClearedLocalSignInWill.da9bd9', 'success');
   });
 
   if (settingsNasPairCode) {
@@ -2504,7 +2509,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.bindingClearedYouCanPairAgain.9814e6"), 'success');
         await refreshNasSyncStatus();
       } else {
-        setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.couldnTClearBinding.2952f4"), 'error');
+        setNasSyncHint(pomeLocaleRendererWorkspace.t("copy.couldnTClearBinding.2952f4"), 'error', { messageKey: 'copy.couldnTClearBinding.2952f4', code: cleared?.error || 'clear_binding_failed' });
       }
     });
   }
@@ -2738,7 +2743,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       if (!window.notchAPI || typeof window.notchAPI.syncRestoreMigrationBackup !== 'function') return;
       const restored = await window.notchAPI.syncRestoreMigrationBackup({ confirmed: true });
       if (!restored || !restored.ok) {
-        setNasSyncHint(describeNasSyncError(restored, pomeLocaleRendererWorkspace.t("copy.restoreFailed.89281a")), 'error');
+        setNasSyncHint(describeNasSyncError(restored, pomeLocaleRendererWorkspace.t("copy.restoreFailed.89281a")), 'error', { messageKey: 'copy.restoreFailed.89281a', code: restored?.error || 'restore_failed' });
         return;
       }
       if (restored.projectionJson) applyMigrationProjection(restored.projectionJson);
@@ -2837,7 +2842,17 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
               : result?.error === 'dom_apply_failed'
                 ? pomeLocaleRendererWorkspace.t("copy.couldnTApplyLayoutOriginalLayoutRestored.ec29ab")
                 : pomeLocaleRendererWorkspace.t("copy.homeWidgetSettingsWereNotUpdated.080c41");
-      if (typeof showStatusToast === 'function') showStatusToast(message);
+      const messageKey = {
+        layout_read_only: 'copy.homeLayoutIsInSafeModeWidgets.8dcefc',
+        layout_invalid: 'copy.newLayoutVerificationFailedOriginalLayoutPreserved.dedc5e',
+        dom_apply_failed: 'copy.couldnTApplyLayoutOriginalLayoutRestored.ec29ab',
+      }[result?.error];
+      if (typeof showStatusToast === 'function') showStatusToast(message, {
+        messageKey,
+        kind: ['layout_read_only', 'layout_invalid', 'dom_apply_failed'].includes(result?.error) ? 'error' : 'warning',
+        scope: 'home:layout',
+        onRepair: () => document.getElementById('ui-home-presets')?.scrollIntoView({ block: 'center' }),
+      });
       return;
     }
     if (result.changed === false) return;

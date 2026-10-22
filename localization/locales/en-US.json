@@ -302,7 +302,6 @@
   "copy.localSessionRecords.45f182": "Local session records",
   "copy.quotaRunningLow.f8e557": " · Quota critical",
   "copy.lowRemainingQuota.f5107a": " · Quota low",
-  "copy.lowestRemainingQuota.775faf": "{arg1} lowest remaining quota: {arg2}{arg3}",
   "copy.courses.60db1a": "Courses",
   "copy.mediaWriting.4672dc": "Media & writing",
   "copy.dailyLife.f648d6": "Daily life",
@@ -1356,7 +1355,6 @@
   "quota.week": "Week",
   "quota.day": "Day",
   "quota.error": "Unavailable",
-  "quota.lowest": "Lowest remaining",
   "quota.moreSources": {
     "one": "+{count} source",
     "other": "+{count} sources"
@@ -1365,7 +1363,6 @@
     "one": "{count} source needs attention",
     "other": "{count} sources need attention"
   },
-  "quota.minimumReset": "Lowest {source} · {reset}",
   "quota.refreshOrder": "Refreshes every 5 min · Settings order",
   "quota.compactOrder": "Urgency first",
   "settings.ai.subtitle": "Get notified when AI work finishes, and check your quotas.",
@@ -1469,6 +1466,8 @@
   "quota.overview": "Quota overview",
   "quota.sourceCount": "{count} sources",
   "quota.shortestWindow": "Shortest window first",
+  "ui.error.nas": "NAS sync did not complete. Check the settings and retry.",
+  "ui.error.nasRepair": "Check the NAS address, network and pairing status, then retry. You can also copy diagnostics.",
   "quota.allDepleted": "All quotas 0%",
   "quota.manyDepleted": "{count} sources at 0%",
   "quota.earliest": " · Earliest {time}",

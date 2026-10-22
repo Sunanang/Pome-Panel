@@ -114,9 +114,24 @@
   const errorDetails = details('ui.details', 'ui-error-details'); const raw = document.createElement('pre'); errorDetails.append(raw);
   let repair = () => window.NotchAiSources?.openSettings();
   let activeError = null;
+  const panel = el('panel'), panels = el('panels');
+  function setErrorVisible(visible) {
+    if (visible && !panel.classList.contains('ui-error-visible')) {
+      panel.style.setProperty('--ui-content-height', `${panels.getBoundingClientRect().height}px`);
+    }
+    errorBar.hidden = !visible;
+    panel.classList.toggle('ui-error-visible', visible);
+    if (!visible) panel.style.removeProperty('--ui-content-height');
+  }
+  window.addEventListener('resize', () => {
+    if (!errorBar.hidden) {
+      const margin = parseFloat(getComputedStyle(errorBar).marginTop) || 0;
+      panel.style.setProperty('--ui-content-height', `${panels.getBoundingClientRect().height + errorBar.getBoundingClientRect().height + margin}px`);
+    }
+  });
   function clearError(scope) {
     if (scope && activeError?.scope !== scope) return;
-    activeError = null; errorBar.hidden = true;
+    activeError = null; setErrorVisible(false);
   }
   const fix = button('ui.repair', () => repair(), true);
   const copy = button('ui.copyDiagnostic', async () => { text(copy, await copyDiagnostic(raw.textContent) ? 'ui.copied' : 'ui.copyFailed'); });
@@ -131,15 +146,15 @@
     }
     activeError = { scope: options.scope };
     const value = options.diagnostic || options.message || '';
-    const problem = D.errorKey(value);
-    text(errorMessage, problem); text(repairCopy, options.repairKey || (problem === 'ui.error.layout' ? 'ui.error.layoutRepair' : 'ui.error.repair'));
+    const problem = options.messageKey || D.errorKey(value);
+    const layoutProblem = options.scope === 'home:layout' || problem === 'ui.error.layout';
+    text(errorMessage, problem); text(repairCopy, options.repairKey || (layoutProblem ? 'ui.error.layoutRepair' : 'ui.error.repair'));
     raw.textContent = D.diagnostic(value);
     const source = ['claude','codex','cursor','manus','grok','copilot'].find(id => value.toLowerCase().includes(id));
-    repair = options.onRepair || (problem === 'ui.error.layout' ? () => { void setActiveTab('settings').then(() => presets.scrollIntoView({ block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
+    repair = options.onRepair || (layoutProblem ? () => { void setActiveTab('settings').then(() => presets.scrollIntoView({ block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
     text(copy, 'ui.copyDiagnostic'); errorDetails.open = false;
-    errorBar.hidden = !el('app').classList.contains('expanded');
+    setErrorVisible(el('app').classList.contains('expanded'));
   }
-  const isError = value => /失败|无法|错误|失效|连不上|failed|failure|error|invalid|couldn['’]t|unavailable|ECONN|ENOTFOUND|ETIMEDOUT/i.test(String(value || ''));
 
   const noteOpen = button('ui.openNotes', async () => {
     el('note-save-btn')?.click(); await setActiveTab('notes');
@@ -241,12 +256,13 @@
         body.append(button(key, async () => { if (!await finishWelcome()) return; await setActiveTab('settings'); el(target)?.scrollIntoView({ block: 'start' }); if (target.includes('nas')) nasDetails.open = true; }));
       }
     }
+    if (finishing) welcome.querySelectorAll('button').forEach(b => { b.disabled = true; });
   }
   let finishing = false;
   async function finishWelcome() {
     if (finishing) return false;
     finishing = true;
-    [skip, back, next, welcomeRetry].forEach(b => { b.disabled = true; });
+    welcome.querySelectorAll('button').forEach(b => { b.disabled = true; });
     try {
       const result = await api?.completeWelcome?.();
       if (!result?.ok) throw new Error(result?.error || 'welcome_save_failed');
@@ -254,7 +270,7 @@
     } catch (error) {
       showWelcomeError('ui.welcome.saveFailed', error?.message || 'welcome_save_failed'); return false;
     } finally {
-      finishing = false; [skip, back, next, welcomeRetry].forEach(b => { b.disabled = false; });
+      finishing = false; welcome.querySelectorAll('button').forEach(b => { b.disabled = false; });
     }
   }
   welcome.addEventListener('cancel', e => { e.preventDefault(); if (!finishing) welcome.close(); });
@@ -278,8 +294,8 @@
   document.addEventListener('notch:tabchange', e => { if (e.detail.tab !== 'home') { hint.hidden = true; clearTimeout(hintTimer); } });
   document.addEventListener('notch:modechange', e => {
     clearTimeout(hintTimer);
-    if (!e.detail.expanded) { hint.hidden = true; if (welcome.open) welcome.close(); errorBar.hidden = true; return; }
-    errorBar.hidden = !activeError;
+    if (!e.detail.expanded) { hint.hidden = true; if (welcome.open) welcome.close(); setErrorVisible(false); return; }
+    setErrorVisible(!!activeError);
     if (firstWelcome) { if (!welcome.open) welcome.showModal(); return; }
     const count = hintsSeen;
     if (count >= 3 || document.getElementById('tab-home').getAttribute('aria-hidden') === 'true') return;
@@ -305,5 +321,5 @@
     return new Promise(resolve => { confirmResolve = resolve; });
   }
   document.addEventListener('notch:modechange', e => { if (!e.detail.expanded && confirm.open) resolveConfirm(false); });
-  window.NotchUi = { openManual, renderTokenSources, renderNas, prepareConfirmation, showError, clearError, isError, copyDiagnostic, confirm: confirmData };
+  window.NotchUi = { openManual, renderTokenSources, renderNas, prepareConfirmation, showError, clearError, copyDiagnostic, confirm: confirmData };
 })();

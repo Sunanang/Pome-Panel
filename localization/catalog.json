@@ -3932,18 +3932,6 @@
     ]
   },
   {
-    "key": "copy.lowestRemainingQuota.775faf",
-    "zh": "{arg1} 最少剩余额度：{arg2}{arg3}",
-    "en": "{arg1} lowest remaining quota: {arg2}{arg3}",
-    "locations": [
-      {
-        "file": "renderer/ai-usage.js",
-        "line": 165,
-        "type": "TemplateLiteral"
-      }
-    ]
-  },
-  {
     "key": "copy.courses.60db1a",
     "zh": "课程",
     "en": "Courses",

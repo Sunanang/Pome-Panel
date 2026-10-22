@@ -133,3 +133,13 @@ test('Cursor invalid state survives transient retries until login/token changes'
   assert.equal((await service.getUsage({manualToken:'fixture',force:true})).manualTokenInvalid,true);
   assert.equal((await service.getUsage({manualToken:'new-fixture',force:true})).manualTokenInvalid,false);
 });
+
+
+test('Cursor period snapshots preserve the API billing timestamp down to seconds', () => {
+  const time = new Date(2026, 9, 28, 13, 4, 9).getTime();
+  for (const value of [time, String(time), time / 1000]) {
+    const data = buildSnapshot({ billingCycleEnd: value }, {});
+    assert.equal(data.billing.cycleEnd, new Date(time).toISOString());
+  }
+  assert.equal(buildSnapshot({ billingCycleEnd: 'invalid' }, {}).billing.cycleEnd, null);
+});

@@ -206,9 +206,10 @@ function dismissStatusToast(commitPending = true) {
 }
 
 function showStatusToast(message, options = {}) {
-  if (!options.onAction && window.NotchUi?.isError(message)) {
+  // Callers choose persistent failures explicitly; wording and locale do not decide.
+  if (options.kind === 'error' && !options.onAction && window.NotchUi?.showError) {
     dismissStatusToast(true);
-    window.NotchUi.showError({ diagnostic: message });
+    window.NotchUi.showError({ diagnostic: message, messageKey: options.messageKey, scope: options.scope, onRepair: options.onRepair });
     return;
   }
   dismissStatusToast(true);
@@ -3178,8 +3179,10 @@ function saveHomeLayout() {
       localStorage.setItem(HOME_PLACEMENTS_KEY, JSON.stringify(homeWorkingLayout.placements));
       if (homeInboxSavedPlacement) localStorage.setItem(HOME_INBOX_SLOT_KEY, JSON.stringify(homeInboxSavedPlacement));
     }
+    return true;
   } catch (error) {
     // LocalStorage 不可用时仍保留当前会话内的布局。
+    return false;
   }
 }
 
@@ -3537,6 +3540,7 @@ function setHomeModuleVisible(moduleId, visible) {
   const result = setHomeModuleVisibleCore(moduleId, visible, requestInline);
   if (!result.ok) windowsInlineRequested = before;
   else if (requestInline) { try { localStorage.setItem('pome-windows-inline-v1', '1'); } catch {} }
+  if (result.ok && result.changed && result.persisted) window.NotchUi?.clearError('home:layout');
   return result;
 }
 function setHomeModuleVisibleCore(moduleId, visible, force = false) {
@@ -3596,8 +3600,9 @@ function setHomeModuleVisibleCore(moduleId, visible, force = false) {
       try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch {}
       return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
     }
-    const persisted = saveHiddenHomeModules();
-    saveHomeLayout();
+    const visibilityPersisted = saveHiddenHomeModules();
+    const layoutPersisted = saveHomeLayout();
+    const persisted = visibilityPersisted && layoutPersisted;
     document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
     return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
   }
@@ -3659,8 +3664,9 @@ function setHomeModuleVisibleCore(moduleId, visible, force = false) {
     try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch (rollbackError) {}
     return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
   }
-  const persisted = saveHiddenHomeModules();
-  if (fittedSizes || JSON.stringify(homeSizes) !== JSON.stringify(previousSizes)) saveHomeLayout();
+  const visibilityPersisted = saveHiddenHomeModules();
+  const layoutPersisted = fittedSizes || JSON.stringify(homeSizes) !== JSON.stringify(previousSizes) ? saveHomeLayout() : true;
+  const persisted = visibilityPersisted && layoutPersisted;
   const detail = visibilitySnapshot();
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail }));
   return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
@@ -3686,10 +3692,13 @@ function applyHomePreset(name, selected) {
   hiddenHomeModules = nextHidden;
   stopMirror();
   applyHomeLayout(layout, { reason: 'visibility' });
-  const persisted = saveHiddenHomeModules(); saveHomeLayout();
+  const visibilityPersisted = saveHiddenHomeModules();
+  const layoutPersisted = saveHomeLayout();
+  const persisted = visibilityPersisted && layoutPersisted;
   if (windowsInlineRequested) { try { localStorage.setItem('pome-windows-inline-v1', '1'); } catch {} }
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
   document.dispatchEvent(new CustomEvent('notch:home-preset-applied', { detail: { name, custom: !!selected } }));
+  if (persisted) window.NotchUi?.clearError('home:layout');
   return { ok: true, persisted };
 }
 window.NotchHome = Object.freeze({
@@ -3812,7 +3821,10 @@ if (homeBento) {
         if (layout) applyHomeLayout(layout, { reason: 'rollback' });
         saveHomeLayout();
       } else if (action === 'save') {
-        saveHomeLayout();
+        const changed = JSON.stringify(homeLayoutEditSnapshot) !== JSON.stringify({
+          order: [...homeOrder], sizes: { ...homeSizes }, layout: cloneHomeLayout(homeWorkingLayout),
+        });
+        if (saveHomeLayout() && changed) window.NotchUi?.clearError('home:layout');
       }
       homeLayoutEditSnapshot = null;
     }
@@ -3885,7 +3897,7 @@ if (homeBento) {
     homeWorkingLayout = next;
     // 拖动预览已完成让位：松手只落格，不再播一次互换动画
     applyHomeLayout(next, { reason: fromDrag ? 'drag-commit' : 'reorder' });
-    if (!homeLayoutEditing) saveHomeLayout();
+    if (!homeLayoutEditing && saveHomeLayout()) window.NotchUi?.clearError('home:layout');
     return true;
   };
 
@@ -4010,7 +4022,8 @@ if (homeBento) {
       return;
     }
     applyHomeLayout(layout, { reason: 'size' });
-    if (!homeLayoutEditing) saveHomeLayout();
+    const persisted = homeLayoutEditing ? false : saveHomeLayout();
+    if (persisted && JSON.stringify(homeSizes) !== JSON.stringify(previousSizes)) window.NotchUi?.clearError('home:layout');
     showStatusToast(pomeLocaleRendererApp.t("copy.widgetSizeSetTo.f1ae86", { arg1: (HOME_SIZE_LABELS[homeSizes[moduleId]]) }));
   };
 

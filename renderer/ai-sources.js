@@ -22,9 +22,9 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   let dismissed = [];
   try { const value = JSON.parse(localStorage.getItem(dismissKey) || '[]'); if (Array.isArray(value)) dismissed = value; } catch {}
   const el = id => document.getElementById(id);
-  function reportFailure(source, message, hint = status, scope = `source:${source}`) {
-    if (window.NotchUi) window.NotchUi.showError({ diagnostic: `${source}: ${message}`, scope, inlineHint: hint, onRepair: () => openSettings(source) });
-    else if (hint) hint.textContent = message;
+  function reportFailure(source, code, hint = status, scope = `source:${source}`, messageKey = 'ui.error.generic', detail = '') {
+    if (window.NotchUi) window.NotchUi.showError({ diagnostic: `${source}: ${code}${detail ? ` (${detail})` : ''}`, messageKey, scope, inlineHint: hint, onRepair: () => openSettings(source) });
+    else if (hint) pomeLocaleRendererAiSources.bind(hint, 'textContent', () => pomeLocaleRendererAiSources.t(messageKey));
   }
   function makeButton(text, callback) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = text;
@@ -192,14 +192,18 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         button.disabled = true;
         try {
           const result = await api?.setAiProviderToken?.(id, token, id === 'grok' ? { teamId: el('settings-grok-team').value } : undefined);
-          const message = result?.ok === true ? 'copy.sourceConfigurationUpdated.3181cd' : result?.error === 'grok_team_required' ? 'providers.grokTeamRequired' : result?.error === 'token_required' ? 'providers.tokenRequired' : 'providers.tokenSaveFailed';
-          pomeLocaleRendererAiSources.bind(hint, 'textContent', () => pomeLocaleRendererAiSources.t(message));
-          if (result?.ok !== true) return;
+          if (result?.ok !== true) {
+            const validationKey = result?.error === 'grok_team_required' ? 'providers.grokTeamRequired' : result?.error === 'token_required' ? 'providers.tokenRequired' : null;
+            if (validationKey) pomeLocaleRendererAiSources.bind(hint, 'textContent', () => pomeLocaleRendererAiSources.t(validationKey));
+            else reportFailure(id, 'provider_token_save_failed', hint, `token:${id}`, 'providers.tokenSaveFailed', result?.error);
+            return;
+          }
+          pomeLocaleRendererAiSources.bind(hint, 'textContent', () => pomeLocaleRendererAiSources.t('copy.sourceConfigurationUpdated.3181cd'));
           window.NotchUi?.clearError(`token:${id}`);
           document.dispatchEvent(new CustomEvent('notch:ai-provider-token-changed', { detail: result }));
           if (input?.value === token) input.value = '';
           await refreshTokenStatuses();
-        } catch { pomeLocaleRendererAiSources.bind(hint, 'textContent', () => pomeLocaleRendererAiSources.t('providers.tokenSaveFailed')); }
+        } catch { reportFailure(id, 'provider_token_save_failed', hint, `token:${id}`, 'providers.tokenSaveFailed'); }
         finally { button.disabled = false; }
       });
     });
@@ -216,7 +220,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
           document.dispatchEvent(new CustomEvent('notch:ai-provider-token-changed', { detail: result }));
           await refreshTokenStatuses();
         } catch {
-          reportFailure(id, pomeLocaleRendererAiSources.t('providers.tokenSaveFailed'), el(`settings-${id}-token-hint`) || el(`settings-${id}-token-status`), `token:${id}`);
+          reportFailure(id, 'provider_token_clear_failed', el(`settings-${id}-token-hint`) || el(`settings-${id}-token-status`), `token:${id}`, 'providers.tokenSaveFailed');
         }
         finally { button.disabled = false; }
       });
@@ -415,7 +419,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       pomeLocaleRendererAiSources.bind(el('ai-source-confirm-note'), "textContent", () => (pomeLocaleRendererAiSources.t("copy.onlyPomeEntriesWillChangeOtherConfiguration.336c05", { arg1: (plan.message) })));
       pomeLocaleRendererAiSources.bind(el('ai-source-confirm-apply'), "textContent", () => (action === 'disconnect' ? pomeLocaleRendererAiSources.t("copy.backUpAndDisconnect.6abb4a") : action === 'repair' ? pomeLocaleRendererAiSources.t("copy.backUpAndRepair.9b2ea1") : pomeLocaleRendererAiSources.t("copy.backUpAndConnect.bda493")));
       dialog.showModal(); positionConfirmation();
-    } catch (error) { reportFailure(source, error.message); }
+    } catch (error) { reportFailure(source, 'source_preview_failed', status, `source:${source}`, 'ui.error.generic', error.message); }
     finally { busy = false; render(); }
   }
   el('ai-source-confirm-cancel')?.addEventListener('click', () => { dialog.close(); plan = null; anchor?.focus({ preventScroll: true }); });
@@ -436,7 +440,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       const message = needsRestart ? restartMessage(applyingPlan.source) : applyingPlan.unchanged ? pomeLocaleRendererAiSources.t("copy.noConfigurationChangesNeeded.300b3f") : pomeLocaleRendererAiSources.t("copy.sourceConfigurationUpdated.3181cd");
       dismiss(applyingPlan.source); pomeLocaleRendererAiSources.bind(status, "textContent", () => (`${message}${result.backupPath ? pomeLocaleRendererAiSources.t("copy.backup.9297fd", { arg1: (result.backupPath) }) : ''}`));
       dialog.close(); plan = null; window.showStatusToast?.(message);
-    } catch (error) { dialog.close(); plan = null; reportFailure(applyingPlan.source, error.message); }
+    } catch (error) { dialog.close(); plan = null; reportFailure(applyingPlan.source, 'source_apply_failed', status, `source:${applyingPlan.source}`, 'ui.error.generic', error.message); }
     finally { busy = false; el('ai-source-confirm-apply').disabled = false; await refresh(); }
   });
   document.addEventListener('notch:tabchange', event => {

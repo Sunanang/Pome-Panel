@@ -84,7 +84,7 @@ async function main() {
       const fits=r=>r.left>=box.left&&r.right<=box.right+1&&r.top>=box.top&&r.bottom<=box.bottom+1;
       return {ids:items.map(el=>el.dataset.provider),states:items.map(el=>el.dataset.state),
         noTabs:!tile.querySelector('[role=tab], [role=tablist], .ai-usage-tabs'),
-        contentOverflow:items.flatMap(el=>{const cell=el.getBoundingClientRect();return [...el.querySelectorAll('.ai-usage-source,.q-chip,.q-compact-caption,.q-ring,.q-ring-center,.q-ring .q-pct,.cursor-usage-footnote')].filter(n=>n.checkVisibility()).flatMap(n=>{const r=n.getBoundingClientRect();return r.left<cell.left-1||r.right>cell.right+1||r.top<cell.top-1||r.bottom>cell.bottom+1?[el.dataset.provider+':'+n.className]:[];});}),
+        contentOverflow:items.flatMap(el=>{const cell=el.getBoundingClientRect();return [...el.querySelectorAll('.ai-usage-source,.q-compact-caption,.q-ring,.q-ring-center,.q-ring .q-pct,.cursor-usage-footnote')].filter(n=>n.checkVisibility()).flatMap(n=>{const r=n.getBoundingClientRect();return r.left<cell.left-1||r.right>cell.right+1||r.top<cell.top-1||r.bottom>cell.bottom+1?[el.dataset.provider+':'+n.className]:[];});}),
         overflow:tile.scrollWidth>tile.clientWidth||tile.scrollHeight>tile.clientHeight,
         ringsFit:items.every(el=>fits(el.querySelector('.q-ring').getBoundingClientRect())),
         cellsFit:items.every(el=>fits(el.getBoundingClientRect())),

@@ -12,24 +12,47 @@ require('../codex-usage').readCodexUsage=async()=>({ok:true,detected:true,authSo
 require('../codex-auth').readLocalCodexToken=async()=>({ok:true,token:'fixture-local-codex'});
 require('../codex-usage-remote').createCodexUsageService=()=>({tokenState:()=>({manualTokenInvalid:false}),getUsage:async({manualToken}={})=>({ok:true,detected:true,configured:!!manualToken,authSource:manualToken?'manual':'local',updatedAt:stamp,primary:{percent:50}}),reset(){}});
 let failSave=false, failCodexSave=false, failWelcome='', welcomeSaves=0, failClear=false, failPair=false;
+let localCursorError='', cursorActionError='', nasPairError='', localCodexError='', codexActionError='', providerSaveError='', releaseWelcome=null, cameraFailure=false;
 const originalHandle=ipcMain.handle.bind(ipcMain);
 ipcMain.handle=(channel,listener)=>originalHandle(channel,(event,...args)=>{
  if(channel==='settings:complete-welcome'){
   welcomeSaves++;
+  if(failWelcome==='pending')return new Promise(resolve=>{releaseWelcome=()=>resolve({ok:false,error:'save_failed'});});
   if(failWelcome==='throw')throw new Error('fixture_save_failed');
   if(failWelcome)return {ok:false,error:'save_failed'};
  }
+ if(channel==='cursor:read-local-token'&&localCursorError){
+  if(localCursorError==='throw')throw new Error('fixture_cursor_read_failed');
+  return {ok:false,error:localCursorError};
+ }
+ if(['cursor:set-token','cursor:clear-token'].includes(channel)&&cursorActionError){
+  if(cursorActionError==='throw')throw new Error('fixture_cursor_write_failed');
+  return {ok:false,error:cursorActionError};
+ }
+ if(channel==='codex:read-local-token'&&localCodexError){
+  if(localCodexError==='throw')throw new Error('fixture_codex_read_failed');
+  return {ok:false,error:localCodexError};
+ }
+ if(['codex:set-token','codex:clear-token'].includes(channel)&&codexActionError){
+  if(codexActionError==='throw')throw new Error('fixture_codex_write_failed');
+  return {ok:false,error:codexActionError};
+ }
+ if(channel==='ai-provider:set-token'&&providerSaveError){
+  if(providerSaveError==='throw')throw new Error('fixture_provider_save_failed');
+  return {ok:false,error:providerSaveError};
+ }
+ if(channel==='media:camera'&&cameraFailure)return true;
  if(channel==='cursor:set-token'&&failSave)return {ok:false,error:'secure_storage_unavailable'};
  if(channel==='codex:set-token'&&failCodexSave)return {ok:false,error:'secure_storage_unavailable'};
  if(channel==='ai-provider:clear-token'&&failClear)return {ok:false,error:'secure_storage_unavailable'};
- if(channel==='sync:pair-claim'&&failPair)return {ok:false,error:'timeout',message:'连接超时，请重试'};
+ if(channel==='sync:pair-claim'&&(failPair||nasPairError))return {ok:false,error:nasPairError||'timeout',message:nasPairError?'NAS token 保存失败 / NAS token storage failed':'连接超时，请重试'};
  return listener(event,...args);
 });
 require('../grokbot-usage').createGrokbotUsageService=()=>({getUsage:async()=>({ok:true,detected:false}),reset(){}});
 let nativeError=true;
 const adapters=require('../platform-adapters'),load=adapters.loadAdapter;adapters.loadAdapter=(...args)=>{const adapter=load(...args);adapter.windows.list=async()=>({items:[],error:nativeError?'native_unavailable':null});return adapter;};
 const output=path.join(__dirname,'../dist.noindex/ui-simplify/flows');fs.mkdirSync(output,{recursive:true});
-let started=false;const errors=[];const timer=setTimeout(()=>{console.error('Simplification timed out',errors);app.exit(1);},90000);
+let started=false;const errors=[];const timer=setTimeout(()=>{console.error('Simplification timed out',errors);app.exit(1);},150000);
 app.on('web-contents-created',(_event,c)=>{c.on('console-message',d=>{if(d.level==='error'&&!d.message.includes('ERR_'))errors.push(d.message);});c.once('did-finish-load',()=>{if(started||!c.getURL().endsWith('/renderer/index.html'))return;started=true;run(c).then(()=>{clearTimeout(timer);console.log('UI simplification: welcome/upgrade, presets, acquisition/save failures, diagnostics, dual entries, hidden tabs, confirmations, capsule hints and Windows fallback passed');app.exit(0);}).catch(e=>{console.error(e,errors);app.exit(1);});});});
 async function run(c){
  const js=code=>c.executeJavaScript(code),sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -55,6 +78,15 @@ async function run(c){
  await until(`document.getElementById('ui-welcome').open`);
  assert.equal(await js(`document.querySelector('#ui-welcome > small').textContent`),'2 / 3');
  await js(`document.querySelector('#ui-welcome .primary').click()`);await capture('welcome-3');
+ failWelcome='pending';const savesBefore=welcomeSaves;
+ await js(`document.querySelector('#ui-welcome .ui-welcome-body button').click()`);
+ await until(`document.querySelectorAll('#ui-welcome button:not(:disabled)').length===0`);
+ await js(`document.querySelectorAll('#ui-welcome button').forEach(b=>b.click());window.dispatchEvent(new Event('pome:language-changed'))`);
+ assert.equal(welcomeSaves,savesBefore+1,'all welcome buttons stay disabled while saving, including after rerender');
+ assert.equal(await js(`document.querySelectorAll('#ui-welcome button:not(:disabled)').length`),0);
+ await capture('welcome-busy');
+ assert(releaseWelcome);releaseWelcome();
+ await until(`!document.querySelector('#ui-welcome .ui-welcome-body button').disabled`);
  failWelcome='result';await js(`document.querySelector('#ui-welcome .primary').click()`);
  await until(`!document.getElementById('ui-welcome-error').hidden && !document.querySelector('#ui-welcome-error button').disabled`);
  assert.equal(await js(`document.getElementById('ui-welcome').open && document.getElementById('ui-error-bar').hidden`),true);
@@ -90,14 +122,134 @@ async function run(c){
  await js('setMode(false)');await until('!modeBusy');assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true);
  await js('setMode(true)');await until('!modeBusy');assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'unresolved errors return on expansion');
  await js(`document.getElementById('settings-cursor-token-fetch').click()`);await until(`!document.getElementById('settings-cursor-token-fetch').disabled && document.getElementById('ui-error-bar').hidden`);
+ // Cursor read, save and clear failures preserve their exact localized problem.
+ for(const locale of ['zh-CN','en-US']){
+  await js(`notchAPI.setLanguage('${locale}')`);await until(`document.documentElement.lang==='${locale}'`);
+  await js(`NotchAiSources.openSettings('cursor')`);await until(`document.activeElement.id==='settings-cursor-token'`);
+  await js(`document.getElementById('settings-cursor-token').value='  ';document.getElementById('settings-cursor-token-save').click();NotchAiUsage.refresh({force:true})`);
+  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'empty Cursor token is only a field validation');
+  assert.equal(await js(`document.getElementById('settings-cursor-token-hint').textContent===PomeI18n.t('copy.getOrPasteATokenFirstOr.f2f57e')`),true,'quota refresh preserves the field validation');
+  if(locale==='zh-CN')await capture('cursor-token-required');
+  for(const code of ['cursor_db_missing','cursor_token_missing','cursor_db_read_failed','throw']){
+   localCursorError=code;
+   await js(`document.getElementById('settings-cursor-token-fetch').click()`);
+   await until(`!document.getElementById('settings-cursor-token-fetch').disabled && !document.getElementById('ui-error-bar').hidden`);
+   const key={cursor_db_missing:'copy.noLocalCursorDataFoundInstallCursor.f5b341',cursor_token_missing:'copy.cursorIsnTSignedInLocallySign.45a8a8',cursor_db_read_failed:'copy.couldnTReadCursorSignInRetry.6bf381',throw:'copy.couldnTReadCursorSignInRetry.6bf381'}[code];
+   assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('${key}')`),true,locale+'/'+code+' keeps the actual local-read problem');
+   assert.equal(await js(`document.getElementById('settings-cursor-token-hint').textContent`),'');
+   assert.match(await js(`document.querySelector('#ui-error-details pre').textContent`),new RegExp(code==='throw'?'cursor_db_read_failed':code));
+   if(code==='cursor_db_read_failed')await capture('cursor-local-read-'+locale);
+   await js(`NotchUi.clearError('token:cursor')`);
+  }
+  localCursorError='';
+  for(const action of ['save','clear'])for(const code of ['secure_storage_unavailable','throw']){
+   cursorActionError=code;
+   await js(`document.getElementById('settings-cursor-token').value='fixture-cursor';document.getElementById('settings-cursor-token-${action}').click()`);
+   await until(`!document.getElementById('settings-cursor-token-${action}').disabled && !document.getElementById('ui-error-bar').hidden`);
+   const key=action==='clear'?'copy.couldnTClearTheTokenRetry.3cb9ef':code==='secure_storage_unavailable'?'copy.systemSecureStorageIsUnavailableCanT.3a9217':'copy.couldnTSaveTheTokenRetry.69484f';
+   assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('${key}')`),true,locale+'/'+action+' never claims an expired login');
+   cursorActionError='';
+   await js(`document.getElementById('settings-cursor-token-${action}').click()`);
+   await until(`!document.getElementById('settings-cursor-token-${action}').disabled && document.getElementById('ui-error-bar').hidden`);
+  }
+  cursorActionError='token_required';
+  await js(`document.getElementById('settings-cursor-token').value='fixture-cursor';document.getElementById('settings-cursor-token-save').click()`);
+  await until(`!document.getElementById('settings-cursor-token-save').disabled`);
+  await js(`NotchAiUsage.refresh({force:true})`);
+  assert.equal(await js(`document.getElementById('ui-error-bar').hidden && document.getElementById('settings-cursor-token-hint').textContent===PomeI18n.t('copy.getOrPasteATokenFirstOr.f2f57e')`),true,'server token validation also stays inline after quota refresh');
+  cursorActionError='';
+  await js(`document.getElementById('settings-cursor-token-clear').click()`);
+  await until(`!document.getElementById('settings-cursor-token-clear').disabled`);
+ }
+ await js(`notchAPI.setLanguage('zh-CN')`);await until(`document.documentElement.lang==='zh-CN'`);
  failCodexSave=true;await js(`document.getElementById('settings-codex-token-fetch').click()`);
  await until(`!document.getElementById('ui-error-bar').hidden && !document.getElementById('settings-codex-token-fetch').disabled`);
  assert.equal(await js(`document.getElementById('settings-codex-token-hint').textContent`),'','Codex acquisition failure has one error surface');
  failCodexSave=false;await js(`document.getElementById('settings-codex-token-fetch').click()`);
  await until(`!document.getElementById('settings-codex-token-fetch').disabled && document.getElementById('ui-error-bar').hidden`);
+ // Returned failures and rejected IPC calls must share one error surface.
+ for(const code of ['codex_auth_missing','codex_token_missing','codex_auth_read_failed','throw']){
+  localCodexError=code;
+  await js(`NotchAiSources.openSettings('codex')`);
+  await until(`document.activeElement.id==='settings-codex-token'`);
+  await js(`document.getElementById('settings-codex-token-fetch').click()`);
+  await until(`!document.getElementById('settings-codex-token-fetch').disabled && !document.getElementById('ui-error-bar').hidden`);
+  assert.equal(await js(`document.getElementById('settings-codex-token-hint').textContent`),'');
+  assert.match(await js(`document.querySelector('#ui-error-details pre').textContent`),code==='throw'?/fixture_codex_read_failed/:new RegExp(code));
+  const messageKey={codex_auth_missing:'copy.noReadableCodexSignInFoundSign.d77b80',codex_token_missing:'copy.noUsableTokenFoundInLocalCodex.fab797',codex_auth_read_failed:'copy.couldnTReadCodexSignInRetry.5e8c59',throw:'copy.couldnTReadCodexSignInRetry.5e8c59'}[code];
+  assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('${messageKey}')`),true,'local read failures must not claim an expired login');
+  if(code==='codex_auth_read_failed'){
+   await js(`notchAPI.setLanguage('en-US')`);
+   await until(`document.documentElement.lang==='en-US'`);
+   assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('${messageKey}')`),true);
+   await js(`notchAPI.setLanguage('zh-CN')`);await until(`document.documentElement.lang==='zh-CN'`);
+  }
+  if(code==='codex_auth_missing')await capture('codex-local-missing');
+  if(code==='codex_auth_read_failed'){
+   await js(`document.querySelector('#ui-error-bar button').click()`);
+   await until(`document.activeElement.id==='settings-codex-token'`);
+   await capture('codex-read-failed');
+  }
+  await js(`NotchUi.clearError('token:codex')`);
+ }
+ localCodexError='';
+ for(const action of ['save','clear'])for(const failure of ['secure_storage_unavailable','throw']){
+  codexActionError=failure;
+  await js(`NotchAiSources.openSettings('codex');document.getElementById('settings-codex-token').value='fixture-manual-codex';document.getElementById('settings-codex-token-${action}').click()`);
+  await until(`!document.getElementById('settings-codex-token-${action}').disabled && !document.getElementById('ui-error-bar').hidden`);
+  assert.equal(await js(`document.getElementById('settings-codex-token-hint').textContent`),'');
+  if(failure!=='throw')await capture(`codex-${action}-failed`);
+  codexActionError='';
+  await js(`document.getElementById('settings-codex-token-${action}').click()`);
+  await until(`!document.getElementById('settings-codex-token-${action}').disabled && document.getElementById('ui-error-bar').hidden`);
+ }
+ await js(`document.getElementById('settings-codex-token-save').click()`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'empty Codex token stays a field validation');
+ await js(`NotchAiUsage.refresh({force:true})`);
+ assert.notEqual(await js(`document.getElementById('settings-codex-token-hint').textContent`),'');
+ await capture('codex-required-after-refresh');
+ for(const id of ['copilot','grok','antigravity','manus']){
+  for(const failure of ['secure_storage_unavailable','throw']){
+   providerSaveError=failure;
+   await js(`NotchAiSources.openSettings('${id}');document.getElementById('settings-${id}-token').value='fixture-${id}';document.querySelector('[data-provider-save=${id}]').click()`);
+   await until(`!document.querySelector('[data-provider-save=${id}]').disabled && !document.getElementById('ui-error-bar').hidden`);
+   assert.equal(await js(`document.getElementById('settings-${id}-token-hint').textContent`),'');
+   for(const locale of ['en-US','zh-CN']){
+    await js(`notchAPI.setLanguage('${locale}')`);await until(`document.documentElement.lang==='${locale}'`);
+    assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('providers.tokenSaveFailed')`),true,'credential storage failures keep their explicit message across locale changes');
+    assert.equal(await js(`document.querySelector('#ui-error-details pre').textContent.includes('provider_token_save_failed')`),true,'diagnostics use an operation code instead of translated copy');
+    if(id==='copilot'&&failure!=='throw')await capture(`provider-save-failed-${locale}`);
+   }
+   await js(`document.querySelector('#ui-error-bar button').click()`);
+   await until(`document.activeElement.id==='settings-${id}-token'`);
+   if(id==='copilot'&&failure!=='throw')await capture('provider-save-failed');
+   await js(`NotchUi.clearError('token:${id}')`);
+  }
+  for(const failure of ['token_required',...(id==='grok'?['grok_team_required']:[])]){
+   providerSaveError=failure;
+   await js(`document.querySelector('[data-provider-save=${id}]').click()`);
+   await until(`!document.querySelector('[data-provider-save=${id}]').disabled`);
+   assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'field validation must not become persistent');
+   assert.notEqual(await js(`document.getElementById('settings-${id}-token-hint').textContent`),'');
+  }
+ }
+ providerSaveError='';
+ // A successful save clears its own failure; unrelated success cannot clear it.
+ providerSaveError='secure_storage_unavailable';
+ await js(`document.querySelector('[data-provider-save=copilot]').click()`);
+ await until(`!document.querySelector('[data-provider-save=copilot]').disabled`);
+ await js(`NotchUi.clearError('token:codex')`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false);
+ providerSaveError='';await js(`document.querySelector('[data-provider-save=copilot]').click()`);
+ await until(`!document.querySelector('[data-provider-save=copilot]').disabled && document.getElementById('ui-error-bar').hidden`);
  failClear=true;await js(`document.querySelector('[data-provider-clear=grok]').click()`);
  await until(`!document.getElementById('ui-error-bar').hidden && !document.querySelector('[data-provider-clear=grok]').disabled`);
  assert.equal(await js(`document.getElementById('settings-grok-token-hint').textContent`),'','provider clear failure has one error surface');
+ for(const locale of ['en-US','zh-CN']){
+  await js(`notchAPI.setLanguage('${locale}')`);await until(`document.documentElement.lang==='${locale}'`);
+  assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('providers.tokenSaveFailed')`),true,'clear failures must not claim that login expired');
+  assert.equal(await js(`document.querySelector('#ui-error-details pre').textContent.includes('provider_token_clear_failed')`),true);
+ }
  failClear=false;await js(`document.querySelector('[data-provider-clear=grok]').click()`);
  await until(`!document.querySelector('[data-provider-clear=grok]').disabled && document.getElementById('ui-error-bar').hidden`);
  failPair=true;await js(`document.getElementById('settings-nas-sync-base-url').value='https://nas.example.invalid';document.getElementById('settings-nas-pair-code').value='123456';document.getElementById('settings-nas-pair-submit').click()`);
@@ -106,6 +258,17 @@ async function run(c){
  await js(`NotchUi.clearError('token:cursor')`);
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'an unrelated success cannot clear a NAS failure');
  failPair=false;
+ for(const locale of ['en-US','zh-CN']){
+  nasPairError='token_store_failed';
+  await js(`notchAPI.setLanguage('${locale}')`);await until(`document.documentElement.lang==='${locale}'`);
+  await js(`document.getElementById('settings-nas-pair-submit').click()`);
+  await until(`!document.getElementById('settings-nas-pair-submit').disabled && !document.getElementById('ui-error-bar').hidden`);
+  assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('copy.pairingFailed.aea73b')`),true,'NAS token errors must not claim an AI login has expired');
+  assert.equal(await js(`document.querySelector('#ui-error-bar small').textContent===PomeI18n.t('ui.error.nasRepair')`),true);
+  assert.match(await js(`document.querySelector('#ui-error-details pre').textContent`),/token_store_failed/);
+  await capture('nas-pair-domain-'+locale);
+ }
+ nasPairError='';
  await js(`document.querySelectorAll('#ui-error-bar button')[2].click();setActiveTab('home')`);
  await js(`setActiveTab('settings')`);await sleep(150);
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'repainting NAS status cannot reopen a dismissed pair failure');
@@ -114,6 +277,14 @@ async function run(c){
  await js(`document.querySelector('#ui-error-bar button').click()`);assert.equal(await js('window.fixtureRepaired'),true);
  await js(`document.querySelectorAll('#ui-error-bar button')[1].click()`);await until(`document.querySelectorAll('#ui-error-bar button')[1].textContent==='已复制'`);
  assert.doesNotMatch(await js(`document.querySelector('#ui-error-details pre').textContent`),/secret|private-value|user:pass/);await capture('error-bar');
+ // Expanded diagnostics occupy their own region; controls can be scrolled into view above it.
+ await js(`document.getElementById('ui-error-details').open=true`);
+ for(const selector of ['#ui-home-presets button','[data-settings-home-module=pomodoro]']){
+  const accessible=await js(`(async()=>{const input=document.querySelector(${JSON.stringify(selector)}),control=input.closest('label')||input;control.scrollIntoView({block:'center'});await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const b=control.getBoundingClientRect(),bar=document.getElementById('ui-error-bar').getBoundingClientRect(),panels=document.getElementById('panels').getBoundingClientRect(),hit=document.elementFromPoint(b.left+b.width/2,b.top+b.height/2);return {separate:panels.bottom<=bar.top+1,reachable:hit===control||control.contains(hit),visible:b.top>=panels.top-1&&b.bottom<=panels.bottom+1};})()`);
+  assert.equal(accessible.separate,true);assert.equal(accessible.reachable,true,selector);assert.equal(accessible.visible,true,selector);
+ }
+ await capture('error-controls-accessible');
+ await js(`document.getElementById('ui-error-details').open=false`);
  await js(`document.querySelectorAll('#ui-error-bar button')[2].click()`);
  await js('setMode(false)');await until('!modeBusy');await js('setMode(true)');await until('!modeBusy');
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'dismissed errors stay dismissed');
@@ -122,6 +293,95 @@ async function run(c){
  assert.equal(await js(`document.getElementById('ui-data-confirm-details').open`),false);await capture('confirmation');
  await js(`document.getElementById('ui-data-confirm-details').open=true`);await capture('confirmation-details');
  await js(`document.querySelector('#ui-data-confirm button').click()`);assert.equal(await js('window.fixtureConfirmed'),false);
+ // Inspect actual rendered frames, not intermediate synchronous event states.
+ const presetFrames=await js(`(async()=>{
+  const records=[];const frame=()=>new Promise(r=>requestAnimationFrame(r));
+  const selected=()=>[...document.querySelectorAll('#ui-home-presets [aria-pressed=true]')].map(b=>b.dataset.preset);
+  for(let round=0;round<3;round++)for(const name of ['simple','balanced','all']){
+   const record={name,events:[],frames:[]};
+   const modules=()=>record.events.push({event:'modules',selected:selected()});
+   const preset=()=>record.events.push({event:'preset',selected:selected()});
+   document.addEventListener('notch:home-modules-changed',modules);
+   document.addEventListener('notch:home-preset-applied',preset);
+   await frame();document.querySelector('[data-preset='+name+']').click();
+   document.removeEventListener('notch:home-modules-changed',modules);
+   document.removeEventListener('notch:home-preset-applied',preset);
+   for(let i=0;i<8;i++){await frame();record.frames.push(selected());}
+   records.push(record);
+  }
+  return records;
+ })()`);
+ for(const record of presetFrames){
+  assert.equal(record.events[0].event,'modules');assert.deepEqual(record.events[1],{event:'preset',selected:[record.name]});
+  for(const selection of record.frames)assert.deepEqual(selection,[record.name],'no rendered frame may lose the active preset');
+ }
+ fs.writeFileSync(path.join(output,'preset-frames.json'),JSON.stringify(presetFrames,null,2));
+ console.log('Preset verification: 9 transitions, 72 rendered frames, zero missing or wrong selection');
+ // Short failure messages remain transient in either language; persistence is explicit.
+ for(const message of ['无法打开摄像头','Couldn’t open the camera','invalid deadline']){
+  await js(`showStatusToast(${JSON.stringify(message)},{duration:180})`);
+  assert.equal(await js(`document.getElementById('ui-error-bar').hidden && !document.getElementById('status-toast').hidden`),true);
+  await until(`document.getElementById('status-toast').hidden`);
+ }
+ await js(`showStatusToast('fixture failure',{kind:'error',scope:'fixture:operation',onRepair:()=>{window.fixtureToastRepaired=true}})`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false);
+ await js(`document.querySelector('#ui-error-bar button').click()`);assert.equal(await js('fixtureToastRepaired'),true);
+ await js(`NotchUi.clearError('fixture:operation');showStatusToast('无法打开摄像头',{kind:'error',duration:200,onAction:()=>{window.fixturePrivacyOpened=true},actionLabel:'打开隐私设置'})`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true);
+ await js(`document.getElementById('status-toast-action').click()`);assert.equal(await js('fixturePrivacyOpened'),true);
+ // Trigger the actual mirror click, with a failed media request and no real camera use.
+ cameraFailure=true;await js(`setActiveTab('home');NotchHome.applyPreset('all');window.fixtureGetUserMedia=navigator.mediaDevices.getUserMedia;navigator.mediaDevices.getUserMedia=async()=>{throw new Error('fixture_camera_unavailable')};document.getElementById('mirror-stage').click()`);
+ await until(`!mirrorStarting && !document.getElementById('status-toast').hidden`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden && mirrorStream===null`),true);
+ await capture('camera-transient-toast');
+ await until(`document.getElementById('status-toast').hidden`);
+ await js(`navigator.mediaDevices.getUserMedia=fixtureGetUserMedia;setActiveTab('settings')`);cameraFailure=false;
+ // An explicit title wins over diagnostic words such as auth/401.
+ await js(`NotchUi.showError({diagnostic:'401 Codex auth',messageKey:'copy.couldnTReadCodexSignInRetry.5e8c59',scope:'token:codex'})`);
+ assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('copy.couldnTReadCodexSignInRetry.5e8c59')`),true);
+ await js(`NotchUi.clearError('token:codex')`);
+ async function layoutFailure(){
+  await js(`NotchHome.applyPreset('all');setActiveTab('settings')`);
+  await js(`(()=>{const validate=NotchDomain.validateHomeWidgetLayout;NotchDomain.validateHomeWidgetLayout=()=>false;try{const input=document.querySelector('[data-settings-home-module=sun]');input.checked=false;input.dispatchEvent(new Event('change',{bubbles:true}));}finally{NotchDomain.validateHomeWidgetLayout=validate;}})()`);
+  await until(`!document.getElementById('ui-error-bar').hidden`);
+  assert.equal(await js(`NotchHome.getVisibility().visibleIds.includes('sun')`),true,'failed changes must keep the original layout');
+  assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('copy.newLayoutVerificationFailedOriginalLayoutPreserved.dedc5e')`),true);
+  assert.equal(await js(`document.querySelector('#ui-error-bar small').textContent===PomeI18n.t('ui.error.layoutRepair')`),true);
+ }
+ await layoutFailure();await capture('layout-failure');
+ const unchanged=await js(`NotchHome.setModuleVisible('sun',true)`);assert.equal(unchanged.changed,false);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'no-op changes do not clear a failure');
+ await js(`setActiveTab('home');document.getElementById('home-layout-edit').click();document.getElementById('home-layout-cancel').click()`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'cancel does not clear a failure');
+ await js(`document.getElementById('home-layout-edit').click();document.getElementById('home-layout-save').click()`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'saving an unchanged edit does not clear a failure');
+ // Visibility was written but saving layout metadata failed: do not claim recovery.
+ const unsaved=await js(`(()=>{const write=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key===HOME_ORDER_KEY)throw new Error('fixture_storage_full');return write.call(this,key,value);};try{return NotchHome.applyPreset('simple');}finally{Storage.prototype.setItem=write;}})()`);
+ assert.equal(unsaved.persisted,false);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'an unsaved preset does not clear a failure');
+ await layoutFailure();
+ await js(`const fixtureToggle=document.querySelector('[data-settings-home-module=sun]');fixtureToggle.checked=false;fixtureToggle.dispatchEvent(new Event('change',{bubbles:true}));`);
+ await until(`document.getElementById('ui-error-bar').hidden && !NotchHome.getVisibility().visibleIds.includes('sun')`);
+ await capture('layout-visibility-recovered');
+ await layoutFailure();assert.equal((await js(`NotchHome.applyPreset('simple')`)).persisted,true);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'a saved preset clears a failure');
+ // Saved resize also recovers, but preserves a failure belonging to another scope.
+ await layoutFailure();await js(`setActiveTab('home')`);
+ await js(`document.getElementById('home-cursor').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:300,clientY:200}));document.querySelector('[data-home-ctx-size=mini]').click()`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'saved resize clears a failure');
+ await js(`NotchUi.showError({diagnostic:'Codex: fixture_failure',scope:'token:codex'});NotchHome.applyPreset('all')`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'layout success cannot clear credential failures');
+ await js(`NotchUi.clearError('token:codex')`);
+ // Both space constraints are transient and preserve the current layout.
+ const sizeFailure=await js(`(()=>{const before=JSON.stringify({layout:homeWorkingLayout,sizes:homeSizes}),resolve=resolveValidatedHomeLayout;resolveValidatedHomeLayout=()=>null;try{document.getElementById('home-cursor').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:300,clientY:200}));document.querySelector('[data-home-ctx-size=mini]').click();return before===JSON.stringify({layout:homeWorkingLayout,sizes:homeSizes});}finally{resolveValidatedHomeLayout=resolve;}})()`);
+ assert.equal(sizeFailure,true);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden && !document.getElementById('status-toast').hidden`),true);
+ await capture('layout-size-space-toast');await until(`document.getElementById('status-toast').hidden`);
+ const swapFailure=await js(`(()=>{document.getElementById('home-layout-edit').click();const before=JSON.stringify({layout:homeWorkingLayout,sizes:homeSizes,order:homeOrder}),swap=NotchDomain.swapHomeWidgetPlacements;NotchDomain.swapHomeWidgetPlacements=()=>null;try{const a=document.getElementById('home-cursor').getBoundingClientRect(),b=document.getElementById('home-recorder').getBoundingClientRect(),pointer={bubbles:true,cancelable:true,isPrimary:true,pointerId:1,button:0,buttons:1};document.getElementById('home-cursor').dispatchEvent(new PointerEvent('pointerdown',{...pointer,clientX:a.left+8,clientY:a.top+8}));homeBento.dispatchEvent(new PointerEvent('pointermove',{...pointer,clientX:b.left+b.width/2,clientY:b.top+b.height/2}));homeBento.dispatchEvent(new PointerEvent('pointerup',{...pointer,clientX:b.left+b.width/2,clientY:b.top+b.height/2,buttons:0}));return before===JSON.stringify({layout:homeWorkingLayout,sizes:homeSizes,order:homeOrder});}finally{NotchDomain.swapHomeWidgetPlacements=swap;}})()`);
+ assert.equal(swapFailure,true);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden && document.getElementById('status-toast-message').textContent===PomeI18n.t('copy.notEnoughSpaceToSwap.94e606')`),true);
+ await capture('layout-swap-space-toast');await until(`document.getElementById('status-toast').hidden`);
+ await js(`document.getElementById('home-layout-cancel').click();setActiveTab('settings')`);
  // All presets use the existing layout validator and protect an active recording.
  for(const name of ['simple','balanced','all']){assert.equal((await js(`NotchHome.applyPreset('${name}')`)).ok,true,name);assert.equal(await js('NotchDomain.validateHomeWidgetLayout(homeWorkingLayout,NotchHome.getVisibility().visibleIds,12,4)'),true);assert.equal(await js(`document.querySelector('[data-preset=${name}]').getAttribute('aria-pressed')`),'true');}
  await js(`NotchHome.setModuleVisible('sun',false)`);

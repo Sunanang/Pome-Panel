@@ -56,8 +56,9 @@ async function main() {
         const after={layout:structuredClone(homeWorkingLayout),sizes:{...homeSizes},beforeSizes,
           sourceSize:tile.dataset.widgetSize,targetSize:target.dataset.widgetSize,
           previewCleared:!homeBento.querySelector('.home-swap-placeholder')};
+        NotchUi.showError({diagnostic:'layout_invalid',scope:'home:layout'});
         document.getElementById('home-layout-save').click();
-        return {...after,preview,stored:JSON.parse(localStorage.getItem(HOME_PLACEMENTS_KEY))};
+        return {...after,preview,errorCleared:document.getElementById('ui-error-bar').hidden,stored:JSON.parse(localStorage.getItem(HOME_PLACEMENTS_KEY))};
       })()`);
       assert.equal(result.preview.width,result.preview.expectedWidth,'drop placeholder keeps dragged width');
       assert.equal(result.preview.height,result.preview.expectedHeight,'drop placeholder keeps dragged height');
@@ -67,6 +68,7 @@ async function main() {
       assert.equal(domain.validateHomeWidgetLayout(result.layout,Object.keys(placements)),true);
       assert.deepEqual(result.stored,result.layout.placements);
       assert.equal(result.previewCleared,true);
+      assert.equal(result.errorCleared,true,'a saved swap clears the matching layout failure');
       for(const [id,before] of Object.entries(placements)) {
         assert.equal(result.layout.placements[id].width,before.width,id);
         assert.equal(result.layout.placements[id].height,before.height,id);
@@ -88,12 +90,13 @@ async function main() {
         homeBento.dispatchEvent(new PointerEvent('pointermove',{...pointer,clientX:b.left+b.width/2,clientY:b.top+b.height/2}));
         homeBento.dispatchEvent(new PointerEvent('pointerup',{...pointer,clientX:b.left+b.width/2,clientY:b.top+b.height/2,buttons:0}));
         return {unchanged:before===JSON.stringify({layout:homeWorkingLayout,sizes:homeSizes,order:homeOrder}),
-          persisted:stored===localStorage.getItem(HOME_PLACEMENTS_KEY),toast:document.querySelector('#ui-error-bar p')?.textContent,
+          persisted:stored===localStorage.getItem(HOME_PLACEMENTS_KEY),toast:document.getElementById('status-toast-message').textContent,errorHidden:document.getElementById('ui-error-bar').hidden,
           dragging:homeBento.classList.contains('layout-dragging'),placeholder:!!homeBento.querySelector('.home-swap-placeholder')};
       } finally { NotchDomain.swapHomeWidgetPlacements=real; }
     })()`);
     assert.equal(failure.unchanged,true,JSON.stringify(failure)); assert.equal(failure.persisted,true);
     assert.equal(failure.toast,'空间不够，无法交换');
+    assert.equal(failure.errorHidden,true,'space constraints use a short toast');
     assert.equal(failure.dragging,false); assert.equal(failure.placeholder,false);
     assert.deepEqual(errors,[]);
     console.log('Homepage swap keeps sizes, previews original footprints, packs without gaps, persists positions and rejects failed drops');

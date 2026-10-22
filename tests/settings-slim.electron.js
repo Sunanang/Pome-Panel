@@ -65,6 +65,8 @@ async function run(c) {
   assert.equal(await js(`!!document.querySelector('.settings-mirror-card .tile-label')`),true);
   assert.equal(await js(`!!document.querySelector('.settings-device-card .settings-language-row #settings-language')`),true,'language is a device setting');
   assert.equal(await js(`document.querySelector('.settings-language-card')`),null);
+  assert.equal(await js(`(()=>{const props=['height','minWidth','paddingLeft','paddingRight','backgroundColor','borderColor','borderRadius','fontSize','fontFamily','color','appearance','colorScheme'];const [a,b]=['settings-language','settings-default-tab'].map(id=>getComputedStyle(document.getElementById(id)));return props.every(p=>a[p]===b[p])})()`),true,'language and default-page selects share the same appearance');
+
   assert.equal(structure.secondary.length,3);
   assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI');
   assert.equal(structure.oldQuota,false); assert.equal(structure.obsolete,0); assert.equal(structure.testButtons,0);
@@ -95,6 +97,17 @@ async function run(c) {
   assert.equal(await js(`document.querySelector('[data-provider-save=grok]')?.textContent`),'Save');
   await js(`document.getElementById('settings-grok-token').value='';notchAPI.setLanguage('zh-CN')`); await until(`document.documentElement.lang==='zh-CN'`);
   await until(`document.querySelector('[data-provider-save=grok]')?.textContent==='保存'`);
+  for(const locale of ['en-US','zh-CN']) {
+    await js(`(()=>{const s=document.getElementById('settings-language');s.value='${locale}';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+    await until(`document.documentElement.lang==='${locale}'&&!document.getElementById('settings-language').disabled`);
+    assert.equal((await js('notchAPI.getAppSettings()')).language,locale,'language select persists its value');
+    if(output){
+      fs.mkdirSync(output,{recursive:true});
+      await js(`document.getElementById('settings-language').closest('label').scrollIntoView({block:'start',behavior:'instant'});document.activeElement.blur();document.getElementById('ui-capsule-hint').hidden=true;document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))`);
+      c.invalidate();await delay(200);
+      fs.writeFileSync(path.join(output,'language-controls-'+locale+'.png'),(await c.capturePage()).toPNG());
+    }
+  }
   if (output) {
     fs.mkdirSync(output,{recursive:true});
     // Only synthetic hook configurations in the temporary HOME are written.
