@@ -235,7 +235,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       if (size !== 'mini') {
         const group = card.querySelector('.q-gauge-group'), area = group.getBoundingClientRect();
         const padding = parseFloat(getComputedStyle(group).paddingBottom) || 0;
-        diameter = Math.min(diameter, area.width, area.height-padding-rowHeight-(rows ? number('--q-ring-row-gap') : 0));
+        diameter = Math.min(diameter, area.width, area.height-padding-rowHeight);
       }
       const labels = [...card.querySelectorAll('.q-inline-rows .q-window-short')];
       if (!labels.length) return;
@@ -251,18 +251,6 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     diameter = Math.max(10, Math.floor(diameter*10)/10);
     tile.style.setProperty('--q-render-size', `${diameter}px`);
     tile.style.setProperty('--q-ring-font', `${diameter*(diameter <= 40 ? .28 : .25)}px`);
-    if (size === 'small') cells.forEach(card => {
-      const rows = card.querySelector('.q-inline-rows');
-      const area = card.querySelector('.q-gauge-group').getBoundingClientRect().height;
-      const space = (area - diameter) / 2 - (rows?.getBoundingClientRect().height || 0);
-      const minimum = number('--q-min-ring-row-gap');
-      // Center the ring itself. Only a multi-row pool that cannot fit below
-      // the midpoint may move upward to preserve its rows and reset footer.
-      const offset = rows ? Math.min(0, space - minimum) : 0;
-      const gap = Math.max(minimum, Math.min(number('--q-ring-row-gap'), space));
-      card.style.setProperty('--q-small-ring-offset', `${offset}px`);
-      card.style.setProperty('--q-small-ring-gap', `${gap}px`);
-    });
   }
   function animatePositions(previous, models) {
     for (const m of models) {

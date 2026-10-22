@@ -1,3 +1,18 @@
+# 额度卡片按剩余空间居中 · 2026-10-22
+
+final result: passed
+
+按用户已确认的定义覆盖此前 small 绝对居中补充：有条时，圆环在「名称下沿 → 进度条上沿」的剩余区域居中；无条时，区域延伸到脚注上沿。small/medium/large 共用伸缩网格行，先给名称、条与脚注留位，移除 small 的绝对偏移及 small/medium 的固定环条间距补偿。
+
+- 同状态合成对照 `dist.noindex/quota-remaining-space/before-after.png`（small/medium，左改前右改后）。检查字体、颜色、边距、圆环/多池条/底部说明的空间关系；各状态原截图在同目录。时间为本次夹具字段，与改前不同，不作为布局差异。
+- 自动检查每格圆环到剩余区域上下边界的距离，偏差 <0.6px；覆盖设计/实机尺寸、四尺寸状态矩阵、四家增删进度条、多池、长英文、失效与过期。条长度及数字动画稳定，未与环或脚注重叠。
+- large 原已符合该结构，合并共用规则后圆环区域像素保持一致；mini 内容区像素一致，定稿样式保留。比较记录在 `unchanged-regions.json`。动画模块 SHA-256 未变，唤出/手动刷新录像及抽帧在 `animation/`。
+- 40 项领域/动画单测通过；完整 npm test：855 pass / 0 fail / 1 Windows-only skip，31 次 Electron 运行、语言与语法检查通过，日志 `dist.noindex/quota-remaining-space/full-test.log`。
+
+只提交额度对应样式、布局适配、几何回归和文档。原有未提交栈保留，main 不动。未做 Windows 真机、真实账号联网及安装包验证。文件与边界见 [验收记录最新段](docs/quota-v9-acceptance.md)。
+
+---
+
 # small 四家圆环独立居中 · 2026-10-22
 
 final result: passed

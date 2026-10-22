@@ -75,3 +75,17 @@ mini 改前/改后对照：`dist.noindex/quota-v9/mini-before-after.png`。同�
 - 40 项领域/动画单测通过；四尺寸×状态矩阵、原额度交互回归通过。新增四家增删周窗口前后环中心差 <0.6px、两条 Copilot 池不遮挡底部、轨道等长且不随动画数字变化的断言。
 - 改前/改后实机对照：`dist.noindex/quota-small-center/before-after.png`；无条与多池边界截图也在同目录。实际时间字段不同，不影响布局比较。mini、medium、large 布局规则不变。
 - 刷新动画模块未修改。首次无录屏回归在 large 的每帧数字差断言有一次失败；录屏与原无录屏配置复测均通过，截图和动画证据在 `dist.noindex/quota-small-center/animation/`。首次失败的原因尚未确认，不将其直接归因于本次 small 布局。
+
+## 三档卡片按剩余空间居中 · 2026-10-22（最终确认）
+
+本节覆盖上文 small「独立对齐绝对中线／1–8px 自适应间距」补充。用户明确确认：有进度条时，圆环在名称下方、进度条上方的剩余空间居中；没有进度条时，区域延伸到底部说明上方。
+
+small、medium、large 共用同一套网格：先给名称、实际进度条与脚注留位，圆环占可伸缩的剩余行并居中。移除 small 的绝对偏移、环条距离补偿，以及 medium 原先固定环条间距；large 原有排布符合该定义，合并到共用规则并保留脚注前留白。mini 无进度条，现有排布与动画保留。
+
+- 几何验收直接比较圆环到「名称下沿」和「进度条上沿」的留白；无条则比较至脚注上沿，误差 <0.6px，覆盖三档的全部状态与设计/实机尺寸。
+- 四家增删窗口时，释放的条高重新分配给圆环区域，圆环中线随剩余空间变化；同格轨道仍等宽，多池不覆盖底部。38px 等目标环径与全卡统一缩放规则保留。
+- 修改 `renderer/ai-usage-final.css`、`renderer/ai-usage.js`、`tests/ai-usage-final.electron.js` 以及中英文 README、design-qa 与本记录。动画模块文件未改。
+- 原截图与当前 Electron 截图合成：`dist.noindex/quota-remaining-space/before-after.png`（small/medium，左改前右改后）；large 与各状态原图同目录。截图中的时间来自当次夹具，时间不同不作为布局差异。
+- 40 项领域/动画单测和四尺寸状态矩阵通过；完整 `npm test` 为 855 pass / 0 fail / 1 Windows-only skip，31 次 Electron 运行、语言及语法检查通过。日志在 `dist.noindex/quota-remaining-space/full-test.log`。
+
+使用隔离 userData 与额度夹具；未做 Windows 真机、真实账号联网或安装包验证。main 不动，原有未提交栈保留。
