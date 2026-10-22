@@ -19,7 +19,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   let pinnedDetails = null;
   let hoverDetailsTimer = null;
   let hoverDetailsId = null;
-  const HOVER_DETAILS_DELAY_MS = 2000;
+  const HOVER_DETAILS_DELAY_MS = 1000;
   function clearHoverDetailsTimer() {
     if (hoverDetailsTimer) clearTimeout(hoverDetailsTimer);
     hoverDetailsTimer = null;
