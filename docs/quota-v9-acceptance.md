@@ -89,3 +89,18 @@ small、medium、large 共用同一套网格：先给名称、实际进度条与
 - 40 项领域/动画单测和四尺寸状态矩阵通过；完整 `npm test` 为 855 pass / 0 fail / 1 Windows-only skip，31 次 Electron 运行、语言及语法检查通过。日志在 `dist.noindex/quota-remaining-space/full-test.log`。
 
 使用隔离 userData 与额度夹具；未做 Windows 真机、真实账号联网或安装包验证。main 不动，原有未提交栈保留。
+
+
+## 中号长条居中与进度行留白 · 2026-10-22（最新反馈）
+
+本节覆盖上文对 medium 3–4 家单排长条格的剩余空间居中描述：这类格子改为圆环对齐整格垂直中线，窗口条固定跟随在环下方 10px，时间说明仍在底部。small 以及 medium 多排、large 沿用剩余空间居中；mini 样式保留。
+
+所有非 mini 窗口行按「标题＋轨道＋实际数值」整组居中，数值列仍按真实字体下的 100% 固定预留，但未用到的宽度不再影响可见内容的居中。标题/轨道间距为 3px，轨道/实际数字为 2px。每家独立量取标题和数值列，同家轨道等长，数字变化时仅用 transform 平滑调整整组位置，不改变轨道宽度。新增内层包裹适配，复用原 createValueStore；动画模块本身未改，原圈、主数字、窗口数值与填充动画保留。
+
+- 实机比例截图：`dist.noindex/quota-tall-center/four-source-review.png`（左 small、右 medium）。中号三家、四家、失效、多池和完整状态矩阵均在同目录；`medium-before-after.png` 为中号改前/改后对照。
+- 四尺寸×8 状态、设计/实机尺寸及中英文检查通过；可见行左右留白差 <0.7px，数字与轨道相距 2px，100% 数值列冗余 <0.6px。同格多条轨道左右对齐，0%、8%、100% 和动画帧中宽度差 <0.001px（仅 transform 坐标浮点误差）。详情层的独立布局保留。
+- 中号长条所有正常/失效环对齐整格中心，环条间距 10px，失效修复按钮通过实际点击命中检查。small 圆环区域与改前像素一致：`small-ring-check.json`。
+- 调试期间修正了 grid 区域约束导致的中号绝对定位参照错误；回归断言同步适配数值列左起排版及 small 紧急度重排，轨道浮点坐标采用 0.001px 容差。
+- 最终完整 `npm test` 通过：855 pass / 0 fail / 1 Windows-only skip，31 次 Electron 运行及语言、语法检查全部通过，日志 `full-test.log`。唤出与手动刷新录像在 `animation/panel-refresh.webm`；已解码抽查 4 帧，rAF 采样 222 帧，中位间隔 16.7ms、P95 17.6ms（本机隔离 Electron 观测，不代表其他设备）。动画模块 SHA-256 与改前一致。
+
+本轮修改文件：`renderer/ai-usage.js`、`renderer/ai-usage-final.css`、`tests/ai-usage-final.electron.js`、`tests/ai-usage.electron.js`，以及 `README.md`、`README.en.md`、`design-qa.md` 与本记录。保留工作区原有未提交栈；仅在 dev 提交，不推送、不改 main。使用隔离 userData 与额度夹具，未做 Windows 真机、真实账号联网和安装包验证。

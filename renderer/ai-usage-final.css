@@ -10,7 +10,7 @@
   --q-window-font:8px; --q-window-line:11px; --q-window-gap:4px;
   --q-caption-font:8.5px; --q-caption-line:11px; --q-caption-lines:1;
   --q-cell-pad-y:6px; --q-cell-pad-x:3px;
-  --q-window-height:0px; --q-window-label-width:24px; --q-window-value-width:29px;
+  --q-window-height:0px; --q-window-label-width:24px; --q-window-value-width:29px; --q-window-end-inset:3px;
   padding:11px 10px 10px; gap:6px;
 }
 #home-cursor .ai-usage-providers {
@@ -62,10 +62,15 @@
 #home-cursor .q-pct small { font-size:.62em; line-height:1; margin-left:1px; }
 #home-cursor .q-alert { flex:none; width:clamp(9px,calc(var(--q-render-size) * .23),22px); height:clamp(9px,calc(var(--q-render-size) * .23),22px); }
 #home-cursor .q-inline-rows {
-  display:grid; grid-column:1; grid-row:2; flex:none; grid-template-columns:var(--q-window-label-width) 3px minmax(0,1fr) 4px var(--q-window-value-width);
-  grid-auto-rows:var(--q-window-line); column-gap:0; row-gap:var(--q-window-gap);
-  align-content:start; width:100%; min-width:0; height:var(--q-window-height); max-height:none;
-  overflow:auto; scrollbar-width:thin;
+  display:block; grid-column:1; grid-row:2; flex:none; justify-self:center;
+  width:calc(100% + 2 * var(--q-cell-pad-x)); min-width:0; height:var(--q-window-height); max-height:none;
+  overflow-x:hidden; overflow-y:auto; scrollbar-width:thin;
+}
+#home-cursor .q-inline-content {
+  display:grid; grid-template-columns:var(--q-window-label-width) 3px minmax(0,1fr) 2px var(--q-window-value-width);
+  grid-auto-rows:var(--q-window-line); column-gap:0; row-gap:var(--q-window-gap); align-content:start;
+  width:calc(100% - var(--q-cell-pad-x) - min(var(--q-cell-pad-x),var(--q-window-end-inset)));
+  margin-left:var(--q-cell-pad-x); will-change:transform;
 }
 #home-cursor .q-inline-rows .ai-quota-row {
   display:grid; grid-column:1/-1; grid-template-columns:subgrid; grid-template-rows:var(--q-window-line);
@@ -76,7 +81,7 @@
   display:block; grid-column:1; grid-row:1; min-width:0; font-size:var(--q-window-font); line-height:var(--q-window-line);
   font-family:var(--q-font); text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-#home-cursor .q-inline-rows .q-pct { grid-column:5; grid-row:1; min-width:0; font-size:var(--q-window-font); line-height:var(--q-window-line); width:100%; }
+#home-cursor .q-inline-rows .q-pct { grid-column:5; grid-row:1; min-width:0; font-size:var(--q-window-font); line-height:var(--q-window-line); width:100%; text-align:left; }
 #home-cursor .q-inline-rows :is(.q-window-full,.ai-quota-help) { display:none; }
 #home-cursor .q-inline-rows .cursor-usage-track {
   grid-column:3; grid-row:1; width:100%; min-width:0; height:5px; align-self:center; margin:0;
@@ -141,6 +146,11 @@
 #home-cursor[data-widget-size='medium'][data-ai-count='4'] { --q-name-font:9.5px; --q-icon-size:12px; --q-cell-pad-y:8px; --q-cell-pad-x:3px; --q-window-font:9px; }
 #home-cursor[data-widget-size='medium'][data-ai-density='dense']:not([data-ai-count='4']) { --q-name-font:11px; --q-name-line:14px; --q-cell-pad-y:5px; --q-cell-pad-x:7px; --q-window-font:8.5px; --q-window-line:11px; }
 #home-cursor[data-widget-size='medium'][data-ai-many='true'] .ai-usage-providers { grid-template-rows:repeat(var(--q-rows),minmax(110px,1fr)); overflow-y:auto; }
+#home-cursor[data-widget-size='medium'][data-quota-tall='true'] { --q-tall-row-gap:10px; }
+#home-cursor[data-widget-size='medium'][data-quota-tall='true'] .ai-usage-provider { position:relative; }
+#home-cursor[data-widget-size='medium'][data-quota-tall='true'] .q-gauge-group { grid-area:auto; position:absolute; inset:0; display:block; }
+#home-cursor[data-widget-size='medium'][data-quota-tall='true'] .q-ring { position:absolute; top:50%; left:50%; translate:-50% -50%; }
+#home-cursor[data-widget-size='medium'][data-quota-tall='true'] .q-inline-rows { position:absolute; top:calc(50% + var(--q-render-size) / 2 + var(--q-tall-row-gap)); left:0; width:100%; }
 #home-cursor[data-widget-size='large'] { padding:18px 20px 20px; gap:12px; --q-grid-gap:12px; --q-name-font:15px; --q-name-line:20px; --q-icon-size:18px; --q-window-font:12.5px; --q-window-line:16px; --q-window-gap:4px; --q-caption-font:11px; --q-caption-line:14px; --q-cell-pad-y:16px; --q-cell-pad-x:16px; }
 #home-cursor[data-widget-size='large'] .cursor-usage-head { min-height:32px; }
 #home-cursor[data-widget-size='large'] .tile-label { font-size:14px; }

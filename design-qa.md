@@ -1,3 +1,19 @@
+# 中号长条居中与进度行可见内容居中 · 2026-10-22
+
+final result: passed
+
+按用户最新反馈覆盖下文 medium 3–4 家单排长条格的居中规则：圆环在整格垂直居中，条跟随圆环下方 10px，时间说明继续底部对齐。small 原有圆环区域像素保持一致，其他常规布局仍按剩余空间居中；mini 保留定稿。
+
+- 全部非 mini 窗口行以「标题＋条＋实际数字」居中，排除未用数字预留带来的视觉偏左。标题/条/数字间距为 3px/2px；数值列按实际字体（含 tabular-nums、letter-spacing）的 100% 固定宽度预留，轨道不随位数变化。内层整组位置复用原动画 store 的 transform 过渡。
+- 核对 `dist.noindex/quota-tall-center/four-source-review.png`（左 small、右 medium），对照字体、环位置、条长度、两端留白与时间说明，四家行左右可见留白差 <0.7px。三家、四家失效、全部状态及中英文原图在同目录。small 圆环像素比较记录为 `small-ring-check.json`。
+- 初轮发现中号绝对定位仍被旧 grid-area 限制在伸缩行，已解除该约束并重新截图；旧数字右对齐断言随当前紧凑排版更新，轨道断言按 provider key 比较以兼容紧急度重排，并采用 0.001px 容差排除 transform 浮点坐标差。最终矩阵全部通过。
+- 完整 npm test：855 pass / 0 fail / 1 Windows-only skip；31 次 Electron 运行、语言与语法检查通过。环条不重叠，失效修复按钮命中正常；0%/8%/100% 及动画帧轨道宽度稳定，同格多条左右对齐。
+- 原动画模块未改；唤出/手动刷新录像与解码帧在 `animation/`。本机 rAF 222 帧，中位间隔 16.7ms、P95 17.6ms。全量日志 `dist.noindex/quota-tall-center/full-test.log`。
+
+修改文件与验证范围见 [验收记录最新段](docs/quota-v9-acceptance.md)。只提交本次额度布局、相关回归与文档，保留原有未提交栈。未做 Windows 真机、真实账号联网及安装包验证；不推送、不改 main。
+
+---
+
 # 额度卡片按剩余空间居中 · 2026-10-22
 
 final result: passed

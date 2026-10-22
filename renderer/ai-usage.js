@@ -163,7 +163,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   }
 
   function quotaRows(m, inline = false) {
-    return `<div class="cursor-usage-rows${inline ? ' q-inline-rows' : ''}" ${inline ? 'aria-hidden="true"' : `popover="manual" id="${m.id}-usage-rows"`}>${(inline ? m.inlineRows : m.rows).map(row => {
+    return `<div class="cursor-usage-rows${inline ? ' q-inline-rows' : ''}" ${inline ? 'aria-hidden="true"' : `popover="manual" id="${m.id}-usage-rows"`}>${inline ? '<div class="q-inline-content">' : ''}${(inline ? m.inlineRows : m.rows).map(row => {
       const name = row.kind === 'currency' ? t('providers.prepaidBalance') : row.kind === 'credits' ? t('providers.availableCredits') : row.name;
       const special = row.kind !== 'percent', value = special ? escape(row.display) : pct(row.value);
       const short = inline && m.size !== 'mini' ? ({ Auto:'Au', Other:'Oth' }[row.short] || row.short) : row.short;
@@ -171,7 +171,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         <div class="cursor-usage-meta"><span class="q-window-short">${escape(special ? name : short)}</span><span class="q-window-full">${escape(name)} <small class="q-window-reset">${escape(row.help)}</small></span><strong class="q-pct"${!inline && m.id === 'cursor' ? ` id="cursor-usage-${escape(row.key)}-pct"` : ''}>${value}</strong></div>
         <div class="cursor-usage-track"${special ? ' hidden' : ` role="progressbar" aria-label="${escape(t('copy.remainingQuota.68dc7b', { arg1: `${registry.get(m.id).label} ${name}` }))}" aria-valuemin="0" aria-valuemax="100" aria-valuetext="${escape(row.display)}"${row.value == null ? '' : ` aria-valuenow="${row.value}"`}`}><i${!inline && m.id === 'cursor' ? ` id="cursor-usage-${escape(row.key)}-fill"` : ''} style="transform:scaleX(${(row.value ?? 0) / 100})"></i></div>
         <small class="ai-quota-help">${escape(row.help)}</small></div>`;
-    }).join('')}</div>`;
+    }).join('')}${inline ? '</div>' : ''}</div>`;
   }
   function captionLines(m) {
     if (m.size === 'mini') return [];
@@ -211,12 +211,29 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   }
   let currentLayout = null, currentModels = [];
   const measure = document.createElement('canvas').getContext('2d');
+  function percentTextWidth(style, text, cache) {
+    const properties = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariantNumeric', 'fontFeatureSettings', 'fontVariationSettings', 'letterSpacing'];
+    const key = text + '|' + properties.map(name => style[name]).join('|');
+    if (cache.has(key)) return cache.get(key);
+    const probe = document.createElement('span');
+    Object.assign(probe.style, { position:'fixed', left:'-10000px', visibility:'hidden', display:'inline-block', whiteSpace:'nowrap', padding:'0', border:'0', margin:'0' });
+    properties.forEach(name => { probe.style[name] = style[name]; });
+    probe.textContent = text;
+    document.body.appendChild(probe);
+    const width = probe.getBoundingClientRect().width;
+    probe.remove();
+    cache.set(key, width);
+    return width;
+  }
   function syncGeometry(layout = currentLayout, models = currentModels) {
     currentLayout = layout; currentModels = models;
     if (!layout || !models.length) return;
     const size = tile.dataset.widgetSize || 'small';
     tile.dataset.quotaNarrow = String(tile.clientWidth < 600);
+    const tall = size === 'medium' && layout.rows === 1 && models.length >= 3 && models.length <= 4;
+    tile.dataset.quotaTall = String(tall);
     const css = getComputedStyle(tile);
+    const numericWidths = new Map();
     const number = key => parseFloat(css.getPropertyValue(key)) || 0;
     const cells = models.map(m => byId(`ai-provider-${m.id}`)).filter(Boolean);
     const rowCounts = models.map((m,index) => Math.min(3, Math.max(0, ...models.slice(Math.floor(index/layout.columns)*layout.columns,(Math.floor(index/layout.columns)+1)*layout.columns).map(item=>item.inlineRows.length))));
@@ -235,18 +252,33 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       if (size !== 'mini') {
         const group = card.querySelector('.q-gauge-group'), area = group.getBoundingClientRect();
         const padding = parseFloat(getComputedStyle(group).paddingBottom) || 0;
-        diameter = Math.min(diameter, area.width, area.height-padding-rowHeight);
+        if (tall) {
+          const center = area.top + area.height / 2;
+          const nameBottom = card.querySelector('.ai-usage-source').getBoundingClientRect().bottom;
+          const footerTop = card.querySelector('.q-compact-caption').getBoundingClientRect().top;
+          const below = footerTop - center - rowHeight - (rows ? number('--q-tall-row-gap') : 0);
+          diameter = Math.min(diameter, area.width - 2 * number('--q-cell-pad-x'), 2 * Math.min(center - nameBottom, below));
+        } else diameter = Math.min(diameter, area.width, area.height-padding-rowHeight);
       }
       const labels = [...card.querySelectorAll('.q-inline-rows .q-window-short')];
-      if (!labels.length) return;
+      if (!labels.length) { animation.remove(`${m.id}/rows-offset`); return; }
       const font = getComputedStyle(labels[0]);
       measure.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
       const labelWidth = Math.ceil(Math.max(...labels.map(label=>measure.measureText(label.textContent).width)));
       const valueStyle = getComputedStyle(card.querySelector('.q-inline-rows .q-pct'));
-      measure.font = `${valueStyle.fontWeight} ${valueStyle.fontSize} ${valueStyle.fontFamily}`;
-      const valueWidth = Math.ceil(measure.measureText('100%').width)+1;
+      const valueWidth = Math.ceil(percentTextWidth(valueStyle, '100%', numericWidths) * 10) / 10 + .25;
       card.style.setProperty('--q-window-label-width', `${Math.min(labelWidth, card.clientWidth*.36)}px`);
       card.style.setProperty('--q-window-value-width', `${valueWidth}px`);
+      // Keep the 100% column and track widths fixed; center the visible row,
+      // excluding its unused numeric reserve. Reuse the value store so a refresh
+      // during this adjustment continues from the currently painted transform.
+      const visibleWidth = Math.max(...m.inlineRows.map(row => row.kind === 'percent'
+        ? percentTextWidth(valueStyle, `${Math.round(row.value ?? 0)}%`, numericWidths) : valueWidth));
+      const pad = number('--q-cell-pad-x'), inset = Math.min(pad, number('--q-window-end-inset'));
+      const offset = (inset + Math.max(0, valueWidth - visibleWidth) - pad) / 2;
+      const content = card.querySelector('.q-inline-content');
+      animation.set(`${m.id}/rows-offset`, offset, value => { content.style.transform = `translateX(${value}px)`; },
+        { reduced:motion.matches, from:offset, delay:Math.min(180, Math.max(0, m.rows.length - 1) * 60) });
     });
     diameter = Math.max(10, Math.floor(diameter*10)/10);
     tile.style.setProperty('--q-render-size', `${diameter}px`);
