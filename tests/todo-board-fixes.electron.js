@@ -139,10 +139,38 @@ async function main() {
   await js(`document.querySelector('.ui-capsule-hint button')?.click()`);
   await js(`setActiveTab('todo')`);
   await until(`document.getElementById('tab-todo').classList.contains('active')`);
+  await until(`document.getElementById('tab-button-todo')?.getAttribute('aria-selected') === 'true'`);
   await until(`document.querySelectorAll('#todo-sections .quadrant').length >= 4`);
   assert.equal(await js(`document.querySelectorAll('#todo-sections .quadrant').length`), 4);
+  // Let tab paint settle before screenshot (rAF alone can still grab home).
+  await new Promise((r) => setTimeout(r, 80));
   await capture('02-todo-default-4');
+  assert.equal(
+    await js(`document.getElementById('tab-button-todo')?.getAttribute('aria-selected')`),
+    'true',
+    '02 shot must be on todo tab'
+  );
 
+  assert.equal(await js(`!!document.querySelector('.todo-board-toolbar')`), false, 'top toolbar row must be gone');
+  const fab = await js(`(() => {
+    const b = document.getElementById('todo-add-category');
+    if (!b) return null;
+    const r = b.getBoundingClientRect();
+    const tab = document.getElementById('tab-todo').getBoundingClientRect();
+    return {
+      hidden: b.hidden,
+      aria: b.getAttribute('aria-label'),
+      rightGap: tab.right - r.right,
+      bottomGap: tab.bottom - r.bottom,
+      w: r.width,
+      h: r.height,
+    };
+  })()`);
+  assert.equal(fab.hidden, false);
+  assert.equal(fab.aria, '添加分类');
+  assert.ok(fab.w >= 36 && fab.w <= 44, `fab size ${fab.w}`);
+  assert.ok(fab.rightGap >= 18 && fab.rightGap <= 30, `fab right ${fab.rightGap}`);
+  assert.ok(fab.bottomGap >= 60 && fab.bottomGap <= 90, `fab bottom ${fab.bottomGap}`);
   await js(`document.getElementById('todo-add-category').click()`);
   await until(`document.querySelectorAll('#todo-sections .quadrant').length === 5`);
   assert.equal(await js(`document.querySelectorAll('#todo-sections .quadrant').length`), 5);
@@ -163,6 +191,49 @@ async function main() {
 
   await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P0"]').click()`);
   await until(`!document.getElementById('todo-date-popover').hidden`);
+  const popHost = await js(`(() => {
+    const pop = document.getElementById('todo-date-popover');
+    const pr = pop.getBoundingClientRect();
+    const card = pop.querySelector('.todo-editor-card')?.getBoundingClientRect();
+    return {
+      parentIsBody: pop.parentElement === document.body,
+      fixed: getComputedStyle(pop).position === 'fixed',
+      clippedByQuadrant: !!pop.closest('.quadrant'),
+      clippedByPanel: !!pop.closest('.panel'),
+      fullyOnScreen:
+        pr.left >= 0 && pr.top >= 0 &&
+        pr.right <= innerWidth + 1 && pr.bottom <= innerHeight + 1,
+      cardFullyVisible: !!card && card.height > 180 && card.bottom <= innerHeight + 1,
+      height: pr.height,
+    };
+  })()`);
+  assert.equal(popHost.parentIsBody, true, 'popover must portal to document.body');
+  assert.equal(popHost.fixed, true, 'popover must be position:fixed');
+  assert.equal(popHost.clippedByQuadrant, false);
+  assert.equal(popHost.clippedByPanel, false);
+  assert.equal(popHost.fullyOnScreen, true, JSON.stringify(popHost));
+  assert.equal(popHost.cardFullyVisible, true, JSON.stringify(popHost));
+  const hitTest = await js(`(() => {
+    const pop = document.getElementById('todo-date-popover');
+    const card = pop.querySelector('.todo-editor-card');
+    const cr = card.getBoundingClientRect();
+    const samples = [
+      [cr.left + cr.width / 2, cr.bottom - 3],
+      [cr.left + 28, cr.bottom - 12],
+      [cr.right - 28, cr.bottom - 12],
+      [cr.left + cr.width / 2, cr.top + 8],
+    ];
+    return samples.map(([x, y]) => {
+      const el = document.elementFromPoint(x, y);
+      return {
+        x, y,
+        inPopover: !!(el && (el === pop || pop.contains(el))),
+        id: el?.id || '',
+        cls: String(el?.className || '').slice(0, 48),
+      };
+    });
+  })()`);
+  assert.ok(hitTest.every((s) => s.inPopover), `popover bottom hit-test failed: ${JSON.stringify(hitTest)}`);
   const hours = await js(`document.querySelectorAll('#todo-editor-hour button[data-value]').length`);
   const minutes = await js(`document.querySelectorAll('#todo-editor-minute button[data-value]').length`);
   assert.equal(hours, 24);
@@ -181,6 +252,25 @@ async function main() {
   assert.equal(picked.error, '', `time apply failed: ${picked.error}`);
   assert.match(String(picked.trigger || ''), /23:45/);
   await capture('04-todo-time-picker');
+
+  // Bottom-right category must also escape clip (edge card).
+  await js(`document.getElementById('todo-date-popover').hidden = true`);
+  await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P3"]').click()`);
+  await until(`!document.getElementById('todo-date-popover').hidden`);
+  const edgePop = await js(`(() => {
+    const pop = document.getElementById('todo-date-popover');
+    const pr = pop.getBoundingClientRect();
+    return {
+      parentIsBody: pop.parentElement === document.body,
+      fullyOnScreen:
+        pr.left >= 0 && pr.top >= 0 &&
+        pr.right <= innerWidth + 1 && pr.bottom <= innerHeight + 1,
+      height: pr.height,
+    };
+  })()`);
+  assert.equal(edgePop.parentIsBody, true);
+  assert.equal(edgePop.fullyOnScreen, true, JSON.stringify(edgePop));
+  await capture('04b-todo-time-picker-edge');
 
   // Rebuild board while popover is open — popover node must survive.
   await js(`renderTodoBoard()`);
@@ -207,6 +297,17 @@ async function main() {
   await until(`!!document.querySelector('.quadrant[data-priority="P5"]')`);
   assert.equal(await js(`document.querySelector('.quadrant[data-priority="P5"] .todo-text')?.textContent`), '远端分类条目');
   await capture('06-todo-order-reconcile');
+
+  // Fill to 8 categories — FAB must disappear.
+  await js(`(() => {
+    todoCategoryOrder = ['P0','P1','P2','P3','P4','P5','P6','P7'];
+    PRIORITIES.forEach((p) => { if (!Array.isArray(data[p])) data[p] = []; });
+    persistTodoCategoryOrder();
+    renderTodoBoard();
+  })()`);
+  await until(`document.querySelectorAll('#todo-sections .quadrant').length === 8`);
+  assert.equal(await js(`document.getElementById('todo-add-category').hidden`), true);
+  await capture('07-todo-fab-hidden-at-8');
 
   assert.deepEqual(errors, [], errors.join('\\n'));
   console.log('todo-board-fixes: sun seed, recorder head entry, time pickers, categories OK');

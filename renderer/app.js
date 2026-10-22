@@ -457,18 +457,51 @@ function quadrantHtml(priority) {
 function syncTodoAddCategoryButton() {
   const button = document.getElementById('todo-add-category');
   if (!button) return;
-  button.disabled = todoCategoryOrder.length >= PRIORITIES.length || window.__nasTodoReadonly === true;
+  const full = todoCategoryOrder.length >= PRIORITIES.length;
+  const readonly = window.__nasTodoReadonly === true;
+  // Hide at 8 categories; also hide while migration readonly so it never steals taps.
+  button.hidden = full || readonly;
+  button.disabled = readonly;
+}
+
+function parkTodoDatePopover() {
+  const popover = document.getElementById('todo-date-popover');
+  // Mount on body with position:fixed so .panel { overflow:hidden } and
+  // .quadrant { overflow:hidden } cannot clip the calendar.
+  if (popover && popover.parentElement !== document.body) document.body.appendChild(popover);
+  return popover;
+}
+
+function positionTodoDatePopover(anchorEl) {
+  const popover = parkTodoDatePopover();
+  if (!popover || !anchorEl) return;
+  popover.hidden = false;
+  popover.classList.add('todo-date-popover--portal');
+  popover.style.visibility = 'hidden';
+  const anchorRect = anchorEl.getBoundingClientRect();
+  const popW = Math.max(popover.offsetWidth || 224, 200);
+  const popH = Math.max(popover.offsetHeight || 280, 220);
+  const gap = 8;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  let left = anchorRect.right - popW;
+  let top = anchorRect.top - popH - gap;
+  if (top < gap) top = anchorRect.bottom + gap;
+  left = Math.max(gap, Math.min(left, vw - popW - gap));
+  top = Math.max(gap, Math.min(top, vh - popH - gap));
+  popover.style.position = 'fixed';
+  popover.style.left = `${Math.round(left)}px`;
+  popover.style.top = `${Math.round(top)}px`;
+  popover.style.right = 'auto';
+  popover.style.bottom = 'auto';
+  popover.style.zIndex = '240';
+  popover.style.visibility = '';
 }
 
 function renderTodoBoard() {
   const root = document.getElementById('todo-sections');
   if (!root) return;
-  // Keep the date popover alive across board rebuilds (it may be parked inside a quadrant).
-  const popover = document.getElementById('todo-date-popover');
-  const host = document.getElementById('tab-todo') || document.body;
-  if (popover && host && popover.parentElement && popover.parentElement !== host) {
-    host.appendChild(popover);
-  }
+  parkTodoDatePopover();
   root.dataset.count = String(todoCategoryOrder.length);
   root.innerHTML = todoCategoryOrder.map((priority) => quadrantHtml(priority)).join('');
   syncTodoAddCategoryButton();
@@ -1676,13 +1709,7 @@ function openTodoEditor(priority, item = null, anchor = null) {
     const target = anchor || (item
       ? document.querySelector(`.todo-item[data-id="${CSS.escape(item.id)}"] .todo-inline-deadline`)
       : trigger);
-    const quadrant = target?.closest('.quadrant') || document.querySelector(`.quadrant[data-priority="${priority}"]`);
-    quadrant?.appendChild(todoEditorBackdrop);
-    todoEditorBackdrop.hidden = false;
-    todoEditorBackdrop.style.removeProperty('left');
-    todoEditorBackdrop.style.removeProperty('top');
-    todoEditorBackdrop.style.right = '12px';
-    todoEditorBackdrop.style.bottom = '58px';
+    positionTodoDatePopover(target || trigger);
   }
   applyTodoEditorSelection(false);
 }

@@ -1501,13 +1501,7 @@ body.panel-dragging #app.collapsed .notch {
   color: var(--text-1);
 }
 
-/* ============ 待办 · P0–P3 四象限 ============ */
-.todo-board-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  flex: none;
-  margin-bottom: 8px;
-}
+/* ============ 待办 · P0–P7 分类网格 ============ */
 .sections {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4758,6 +4752,11 @@ body.panel-dragging #app.collapsed .notch {
   border-radius: var(--r-popover);
   overflow: hidden;
 }
+/* Popover card keeps radius clip for children, but must not shave the caret (::after bottom:-6px). */
+body > .todo-date-popover .todo-editor-card,
+.todo-date-popover.todo-date-popover--portal .todo-editor-card {
+  overflow: visible;
+}
 .note-body {
   border-radius: calc(var(--r-tile) - 5px);
   overflow: hidden;
@@ -5346,32 +5345,7 @@ body.panel-dragging #app.collapsed .notch {
 .home-music[data-widget-size='large'] .music-controls .music-play { width: 46px; height: 46px; }
 .home-music[data-widget-size='large'] .music-controls svg { width: 19px; height: 19px; }
 
-/* 日期浮层永远属于当前象限，而不是按整块面板定位。 */
 .quadrant { position: relative; }
-.quadrant:has(> .todo-date-popover:not([hidden])) { z-index: 60; }
-.quadrant > .todo-date-popover {
-  top: auto !important;
-  right: 12px !important;
-  bottom: 58px !important;
-  left: auto !important;
-  width: 208px;
-  filter: drop-shadow(0 14px 28px rgba(0,0,0,.46));
-}
-.quadrant > .todo-date-popover .todo-editor-card {
-  width: 208px;
-  padding: 9px;
-  border-radius: var(--r-popover);
-}
-.quadrant > .todo-date-popover .todo-editor-card::after { display: none; }
-.quadrant > .todo-date-popover .todo-editor-card header { min-height: 15px; margin-bottom: 3px; }
-.quadrant > .todo-date-popover .todo-calendar-head { grid-template-columns: 20px 1fr 20px; gap: 2px; }
-.quadrant > .todo-date-popover .todo-calendar-head button { width: 20px; height: 20px; border-radius: 6px; font-size: 13px; }
-.quadrant > .todo-date-popover .todo-calendar-week { margin-bottom: 1px; font-size: 7px; }
-.quadrant > .todo-date-popover .todo-calendar-grid { min-height: 104px; gap: 1px; }
-.quadrant > .todo-date-popover .todo-calendar-grid button { height: 17px; border-radius: 6px; font-size: 8px; }
-.quadrant > .todo-date-popover .todo-time-row { margin-top: 4px; }
-.quadrant > .todo-date-popover .todo-time-picker { width: 50px; max-height: 96px; }
-.quadrant > .todo-date-popover .todo-time-picker button { height: 22px; font-size: 10px; }
 
 /* 待办 Line Sidebar：象限色、内缩竖线和安全位移，避免穿过复选框或右侧裁切。 */
 .quadrant[data-priority='P0'] .todo-list { --line-accent: var(--p0); }
@@ -6732,6 +6706,7 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
 }
 .settings-nas-migration-actions[hidden] { display: none !important; }
 #tab-todo {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -6740,14 +6715,59 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   flex: 1;
   min-height: 0;
 }
+/* 添加分类 FAB：相对待办视口固定，不占行高、不挡输入行。 */
+.todo-add-fab {
+  position: absolute;
+  right: 22px;
+  bottom: 70px;
+  z-index: 45;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: linear-gradient(165deg, rgba(48, 49, 56, 0.88), rgba(22, 23, 28, 0.92));
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px) saturate(1.15);
+  cursor: pointer;
+  transition: background var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease), transform var(--d-fast) var(--ease-out);
+}
+.todo-add-fab[hidden] { display: none !important; }
+.todo-add-fab svg { width: 18px; height: 18px; }
+.todo-add-fab:hover {
+  background: linear-gradient(165deg, rgba(62, 64, 72, 0.94), rgba(30, 31, 38, 0.96));
+  border-color: rgba(255, 255, 255, 0.26);
+  transform: translateY(-1px);
+}
+.todo-add-fab:focus-visible {
+  outline: 2px solid var(--focus-ring, rgba(132, 172, 255, 0.7));
+  outline-offset: 2px;
+}
+.todo-add-fab:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+  pointer-events: none;
+}
 #tab-todo.is-migration-readonly .add-row input,
 #tab-todo.is-migration-readonly .todo-category-name,
 #tab-todo.is-migration-readonly .todo-deadline-trigger,
 #tab-todo.is-migration-readonly .todo-bulk-delete,
 #tab-todo.is-migration-readonly .todo-remove-category,
-#tab-todo.is-migration-readonly #todo-add-category {
+#tab-todo.is-migration-readonly .todo-add-fab {
   pointer-events: none;
   opacity: 0.55;
+}
+/* 日期浮层 portal 到 body + fixed，避开 .panel / .quadrant 的 overflow 裁切。 */
+body > .todo-date-popover,
+.todo-date-popover.todo-date-popover--portal {
+  position: fixed;
+  z-index: 240;
+  padding-bottom: 8px; /* room for card ::after caret */
+  filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.48));
 }
 
 /* T6 NAS sync settings — status / endpoints / HTTP toggle; reuse settings tokens only */
