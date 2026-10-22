@@ -386,7 +386,7 @@ async function main() {
     await resize('medium');
     await capture('state-token-local');
     await supply({codex:{ok:true,detected:true,configured:true,manualTokenInvalid:true}});
-    assert.equal(await js(`document.getElementById('ai-codex-source').textContent`),'Token 失效');
+    assert.match(await js(`document.getElementById('ai-provider-codex').title`),/Token 失效/);
     await supply({codex:{...codex,authSource:'manual',configured:true,detected:false}});
     assert.match(await js(`document.getElementById('ai-provider-codex').title`),/手动 Token/);
     assert.match(await js(`document.getElementById('ai-provider-codex').title`),/Plus/);

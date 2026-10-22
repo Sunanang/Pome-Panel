@@ -8,7 +8,10 @@ const pomeNotificationProviders = typeof module === 'object' && module.exports ?
   'use strict';
   const providers = Object.fromEntries(pomeNotificationProviders.completionIds().map(id => [id, pomeNotificationProviders.get(id)]));
   const sources = { ...Object.fromEntries(Object.entries(providers).map(([id, row]) => [id, row.label])), claude: 'Claude', gpt: 'GPT', get task() { return pomeLocaleRendererNotificationDomain.t("copy.task.525304"); }, get todo() { return pomeLocaleRendererNotificationDomain.t("copy.tasks.52fdbb"); } };
-  const iconPath = source => providers[source]?.icon || `assets/notification/${sourceKey(source)}.svg`;
+  function iconPath(source) {
+    const key = sourceKey(source);
+    return providers[key]?.icon || (key === 'gpt' ? 'assets/inbox/openai.svg' : `assets/notification/${key}.svg`);
+  }
   function sourceKey(value) {
     const key = String(value || '').trim().toLowerCase();
     if (key === 'claude-code' || key === 'claude code') return 'claude';
@@ -37,7 +40,6 @@ const pomeNotificationProviders = typeof module === 'object' && module.exports ?
     return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : fallback;
   }
   function relativeTime(timestamp, now = Date.now()) {
-    const minutes = Math.floor(Math.max(0, now - eventTime(timestamp, now)) / 60000);
     return pomeLocaleRendererNotificationDomain.relativeTime(eventTime(timestamp, now), now);
   }
   function queueCount(value) {

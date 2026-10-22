@@ -201,7 +201,7 @@ async function checkCodexTokenFlow(contents) {
   const invalid = await contents.executeJavaScript(`(async () => {
     await window.NotchAiUsage.refresh({force:true});
     return { status: await window.notchAPI.getCodexTokenStatus(),
-      label: document.getElementById('ai-codex-source').textContent,
+      label: document.getElementById('ai-provider-codex').title.split(String.fromCharCode(10))[1],
       percent: document.querySelector('#codex-usage-rows strong').textContent,
       guideVisible: !document.getElementById('settings-codex-token-guide').hidden,
       footer: document.getElementById('codex-usage-footnote').textContent,
@@ -219,7 +219,7 @@ async function checkCodexTokenFlow(contents) {
   const fallback = await contents.executeJavaScript(`(async () => {
     await window.NotchAiUsage.refresh({force:true});
     await new Promise(r=>setTimeout(r,850));
-    return { label:document.getElementById('ai-codex-source').textContent,
+    return { label:document.getElementById('ai-provider-codex').title.split(String.fromCharCode(10))[1],
       percent:document.querySelector('#codex-usage-rows strong').textContent };
   })()`);
   assert.equal(fallback.label, 'Token 失效 · 已改用本机'); assert.equal(fallback.percent, '55%');

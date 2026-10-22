@@ -3,6 +3,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const domain = require('../renderer/notification-domain');
 
+test('notification branding resolves real assets for providers, aliases, legacy events and internal reminders', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  for (const source of [...require('../aiProviderCatalog').completionIds(), 'gpt', 'task', 'todo', 'unknown', 'Claude Code', ' CODEX ']) {
+    assert(fs.existsSync(path.join(__dirname, '../renderer', domain.iconPath(source))), source + ' must have a loadable icon');
+  }
+  assert.equal(domain.iconPath('Claude Code'), domain.iconPath('claude'));
+  assert.equal(domain.iconPath('unknown'), domain.iconPath('task'));
+});
+
 test('notification source names remain normalized without enabling new hook endpoints', () => {
   for (const [input, key, label] of [
     ['CODEX','codex','Codex'], ['Claude Code','claude','Claude'], ['claude-code','claude','Claude'],

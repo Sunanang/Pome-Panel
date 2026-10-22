@@ -1363,8 +1363,6 @@
     "one": "{count} source needs attention",
     "other": "{count} sources need attention"
   },
-  "quota.refreshOrder": "Refreshes every 5 min · Settings order",
-  "quota.compactOrder": "Urgency first",
   "settings.ai.subtitle": "Get notified when AI work finishes, and check your quotas.",
   "settings.ai.footer": "Only local tool configuration changes; disconnecting removes Pome entries only.",
   "settings.ai.noConnection": "No setup needed",
@@ -1414,6 +1412,8 @@
   "ui.error.signIn": "Your sign-in expired. Quota is temporarily unavailable.",
   "ui.error.hook": "Your AI tool alerts need to be reconnected.",
   "ui.error.storage": "Could not save the changes. Your existing data is kept.",
+  "ui.error.layoutSave": "Could not save the layout. Your edits are still here. Try again.",
+  "ui.error.layoutSaveRepair": "Check local storage space and permissions, then click Save again.",
   "ui.error.generic": "This step did not finish. Check your settings and retry.",
   "ui.error.repair": "Check the connection or sign-in in settings and retry, or copy diagnostics.",
   "ui.openNotes": "Open in Notes",

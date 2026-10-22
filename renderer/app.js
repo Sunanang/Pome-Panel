@@ -209,7 +209,7 @@ function showStatusToast(message, options = {}) {
   // Callers choose persistent failures explicitly; wording and locale do not decide.
   if (options.kind === 'error' && !options.onAction && window.NotchUi?.showError) {
     dismissStatusToast(true);
-    window.NotchUi.showError({ diagnostic: message, messageKey: options.messageKey, scope: options.scope, onRepair: options.onRepair });
+    window.NotchUi.showError({ diagnostic: message, messageKey: options.messageKey, repairKey: options.repairKey, scope: options.scope, onRepair: options.onRepair });
     return;
   }
   dismissStatusToast(true);
@@ -3734,6 +3734,7 @@ if (homeBento) {
   const homeLayoutSaveBtn = document.getElementById('home-layout-save');
   const homeLayoutCancelBtn = document.getElementById('home-layout-cancel');
   let homeLayoutEditSnapshot = null;
+  let homeLayoutSaveFailed = false;
 
   const syncHomeContextMenu = () => {
     if (!homeContextMenu) return;
@@ -3806,6 +3807,7 @@ if (homeBento) {
     const next = Boolean(editing) && !homeLayoutReadOnly;
     const wasEditing = homeLayoutEditing;
     if (next && !wasEditing) {
+      homeLayoutSaveFailed = false;
       homeLayoutEditSnapshot = {
         order: [...homeOrder],
         sizes: { ...homeSizes },
@@ -3819,13 +3821,22 @@ if (homeBento) {
         homeWorkingLayout = cloneHomeLayout(homeLayoutEditSnapshot.layout);
         const layout = homeWorkingLayout || resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, { forcePack: true });
         if (layout) applyHomeLayout(layout, { reason: 'rollback' });
-        saveHomeLayout();
+        if (saveHomeLayout() && homeLayoutSaveFailed) window.NotchUi?.clearError('home:layout');
       } else if (action === 'save') {
         const changed = JSON.stringify(homeLayoutEditSnapshot) !== JSON.stringify({
           order: [...homeOrder], sizes: { ...homeSizes }, layout: cloneHomeLayout(homeWorkingLayout),
         });
-        if (saveHomeLayout() && changed) window.NotchUi?.clearError('home:layout');
+        if (!saveHomeLayout()) {
+          homeLayoutSaveFailed = true;
+          showStatusToast(pomeLocaleRendererApp.t('ui.error.layoutSave'), {
+            kind:'error', messageKey:'ui.error.layoutSave', repairKey:'ui.error.layoutSaveRepair',
+            scope:'home:layout', onRepair:() => { void setActiveTab('home').then(() => homeLayoutSaveBtn?.focus({ preventScroll:true })); },
+          });
+          return; // Keep the edit snapshot and save/cancel controls available for retry.
+        }
+        if (changed || homeLayoutSaveFailed) window.NotchUi?.clearError('home:layout');
       }
+      homeLayoutSaveFailed = false;
       homeLayoutEditSnapshot = null;
     }
     homeLayoutEditing = next;

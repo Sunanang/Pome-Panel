@@ -191,6 +191,33 @@ async function main(){
   await size('small',{small:[330,248]});await capture('small-wide-brand-names');
   assert.equal(await js(`document.querySelector('#ai-provider-claude .ai-usage-source b').textContent`),'Claude Code','resizing back restores the complete name');
 
+  // Periodic updates retain compact Chinese copy and readable full tooltips.
+  await supply(fixture(4,'warn'));
+  for(const locale of ['zh-CN','en-US'])for(const name of ['small','medium']) {
+    await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'))`);
+    await size(name,actual);
+    const read=()=>js(`[...document.querySelectorAll('#home-cursor .q-compact-caption')].map(n=>({text:n.textContent,title:n.title}))`);
+    const before=await read();
+    if(locale==='zh-CN'&&name==='small') {
+      await sleep(31000);
+      assert.deepEqual(await read(),before,'the real 30s tick preserves compact captions and full tooltips');
+    }
+    assert(before.some(n=>n.text.length>0));
+    if(locale==='zh-CN'&&name==='small')assert(before.every(n=>!(/\s/.test(n.text))));
+    else assert(before.some(n=>/\s/.test(n.text)),'English and larger cells retain word spacing');
+    await capture(name+'-'+locale+'-after-tick');
+    assert.equal(await js(`document.querySelector('[id^=ai-][id$=-source]')===null`),true,'source diagnostics use the card tooltip instead of hidden test-only nodes');
+  }
+  // Resizes reuse actual font/text measurements; a newly loaded font invalidates them.
+  await size('small',actual);await size('small',{small:[197,248]});await size('small',actual);
+  await js(`window.quotaProbeCount=0;window.quotaProbeObserver=new MutationObserver(records=>{for(const r of records)for(const n of r.addedNodes)if(n.nodeType===1&&n.tagName==='SPAN'&&n.style.left==='-10000px')quotaProbeCount++});quotaProbeObserver.observe(document.body,{childList:true})`);
+  for(let i=0;i<3;i++){await size('small',{small:[197,248]});await size('small',actual);}
+  assert.equal(await js('quotaProbeCount'),0,'unchanged fonts and labels reuse widths across resize passes');
+  await js(`document.fonts.dispatchEvent(new Event('loadingdone'))`);await settle();
+  assert(await js('quotaProbeCount')>0,'font loading measures text again');
+  await js('quotaProbeObserver.disconnect()');
+  console.log('Quota follow-up: real 30s tick keeps compact captions; six repeated resizes add zero measurement probes; font changes invalidate measurements');
+  await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);
   // Both the title icon and the invalid indicator share the geometric center.
   await supply(fixture(6,'error'));await size('mini',actual);await sleep(900);
   assert.deepEqual(await js(`[...document.querySelectorAll('#home-cursor .q-ring-center')].flatMap(center=>{const icon=center.querySelector('.q-icon,.q-alert'),r=center.getBoundingClientRect(),b=icon.getBoundingClientRect();return Math.abs((b.left+b.right-r.left-r.right)/2)>.5||Math.abs((b.top+b.bottom-r.top-r.bottom)/2)>.5?[center.closest('[data-provider]').dataset.provider]:[]})`),[],'mini icon/error centers');

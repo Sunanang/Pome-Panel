@@ -124,7 +124,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const updated = stamp == null ? '' : t('copy.updated.7114c0', { arg1: D.clock(new Date(stamp).toISOString()) });
     const message = status === 'error' ? errorCopy(data) : status === 'stale' ? t('quota.stale')
       : exhausted ? t(selected.kind === 'credits' ? 'quota.creditsDepleted' : 'quota.balanceDepleted') : '';
-    return { id, size, data, status, stale: D.isStale(data, id), rows: values, inlineRows, remaining, exhausted, depleted, bottleneck, level: depleted ? 'critical' : D.level(bottleneck?.remaining), selected, source, updated, message,
+    return { id, size, data, status, stale: D.isStale(data, id), rows: values, inlineRows, remaining, exhausted, depleted, bottleneck, level: depleted ? 'critical' : D.level(bottleneck?.remaining), selected, updated, message,
       title: [registry.get(id).label, source, message, ...values.map(row => `${row.name}: ${row.display} · ${row.help}`),
         id === 'codex' && data?.plan ? D.planLabel(data.plan) : '',
         id === 'codex' && data?.credits ? `Credits: ${data.credits.unlimited ? t('copy.unlimited.8651f5') : data.credits.balance ?? '--'}` : '', updated].filter(Boolean).join('\n') };
@@ -177,20 +177,25 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     return [t('quota.resetAt', { time:D.recoveryTime(raw) })];
   }
   function provider(m, layout) {
-    const error = m.status === 'error', caption = captionLines(m);
-    const compactCaption = m.size === 'small' && I.getState().effectiveLocale === 'zh-CN';
+    const error = m.status === 'error', caption = captionContent(m);
     const invalid = D.invalidToken(m.data), errorLabel = t(invalid ? 'quota.status.invalid' : 'quota.status.error');
     const settings = invalid || m.data?.error === 'grok_team_required';
     const repair = error ? `<button class="ai-inline-settings" type="button" data-quota-${settings ? 'settings' : 'retry'}="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t(settings ? 'copy.openSettings.93112c' : 'ui.retry')}`)}">${escape(t(settings ? 'quota.repair' : 'ui.retry'))}</button>` : '';
     return `<section class="ai-usage-provider" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-stale="${m.stale}" data-level="${m.level}" data-unit="${m.selected.kind}" data-quota-window="${escape(m.selected.key)}" data-balance-empty="${m.exhausted}" data-has-bars="${m.inlineRows.length > 0 && !error}" data-depleted="${!error && visualStates.get(`${m.id}/depleted`) === true}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}" title="${escape(m.title)}">
       <button class="q-detail-toggle" data-quota-toggle="${m.id}" type="button" aria-controls="${m.id}-usage-rows" aria-expanded="false" aria-label="${escape(t('ui.quota.details', { source: registry.get(m.id).label }))}"></button>
       <div class="q-provider-body">
-        <div class="ai-usage-source">${icon(m.id)}<b style="--q-name-length:${registry.get(m.id).label.length}">${escape(registry.get(m.id).label)}</b><span id="ai-${m.id}-source" hidden>${escape(m.source)}</span></div>
+        <div class="ai-usage-source">${icon(m.id)}<b style="--q-name-length:${registry.get(m.id).label.length}">${escape(registry.get(m.id).label)}</b></div>
         <div class="q-gauge-group">${ring(m, layout.ringSize)}${m.inlineRows.length && !error ? quotaRows(m, true) : ''}</div>
-        <div class="q-compact-caption" data-state-fade="${m.status}" title="${escape(caption.filter(Boolean).join(' · '))}">${caption.filter(Boolean).map(line => `<span>${escape(compactCaption ? line.replace(/\s+/g, '') : line)}</span>`).join('')}</div>
+        <div class="q-compact-caption" data-state-fade="${m.status}" title="${escape(caption.title)}">${caption.html}</div>
         <p class="cursor-usage-footnote" id="${m.id}-usage-footnote">${error ? `<span>${escape(errorLabel)}</span>${repair}` : escape(m.updated)}</p>
       </div>${quotaRows(m)}
       <div class="q-mini-value">${error ? escape(errorLabel) : m.remaining == null ? `<span data-main-amount>${escape(m.selected.display)}</span>` : `<span class="q-pct" data-main-number>${pct(m.remaining)}</span>`}</div></section>`;
+  }
+
+  function captionContent(m) {
+    const lines = captionLines(m).filter(Boolean);
+    const compact = m.size === 'small' && I.getState().effectiveLocale === 'zh-CN';
+    return { title:lines.join(' · '), html:lines.map(line => `<span>${escape(compact ? line.replace(/\s+/g, '') : line)}</span>`).join('') };
   }
 
   function fadeState(node, key, next) {
@@ -207,10 +212,11 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   let currentLayout = null, currentModels = [];
   const compactNames = { claude:'Claude', antigravity:'Antigrav' };
   const measure = document.createElement('canvas').getContext('2d');
-  function textWidth(style, text, cache) {
+  const textWidths = new Map();
+  function textWidth(style, text) {
     const properties = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariantNumeric', 'fontFeatureSettings', 'fontVariationSettings', 'letterSpacing'];
     const key = text + '|' + properties.map(name => style[name]).join('|');
-    if (cache.has(key)) return cache.get(key);
+    if (textWidths.has(key)) return textWidths.get(key);
     const probe = document.createElement('span');
     Object.assign(probe.style, { position:'fixed', left:'-10000px', visibility:'hidden', display:'inline-block', whiteSpace:'nowrap', padding:'0', border:'0', margin:'0' });
     properties.forEach(name => { probe.style[name] = style[name]; });
@@ -218,7 +224,9 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     document.body.appendChild(probe);
     const width = probe.getBoundingClientRect().width;
     probe.remove();
-    cache.set(key, width);
+    // Reuse measurements across refreshes/resizes without retaining arbitrary labels forever.
+    if (textWidths.size >= 256) textWidths.delete(textWidths.keys().next().value);
+    textWidths.set(key, width);
     return width;
   }
   function syncGeometry(layout = currentLayout, models = currentModels) {
@@ -229,7 +237,6 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const tall = size === 'medium' && layout.rows === 1 && models.length >= 3 && models.length <= 4;
     tile.dataset.quotaTall = String(tall);
     const css = getComputedStyle(tile);
-    const textWidths = new Map();
     const number = key => parseFloat(css.getPropertyValue(key)) || 0;
     const cells = models.map(m => byId(`ai-provider-${m.id}`)).filter(Boolean);
     const rowCounts = models.map((m,index) => Math.min(3, Math.max(0, ...models.slice(Math.floor(index/layout.columns)*layout.columns,(Math.floor(index/layout.columns)+1)*layout.columns).map(item=>item.inlineRows.length))));
@@ -244,12 +251,12 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         const available = header.getBoundingClientRect().width - number('--q-icon-size') - 3 - .5;
         const fullName = registry.get(m.id).label;
         const readable = Math.min(target, 9.5);
-        const fullSize = target * available / (textWidth(font, fullName, textWidths) + .5);
+        const fullSize = target * available / (textWidth(font, fullName) + .5);
         const label = fullSize < readable && compactNames[m.id] ? compactNames[m.id] : fullName;
         name.textContent = label;
         name.title = fullName;
         name.setAttribute('aria-label', fullName);
-        name.style.fontSize = `${Math.max(8, Math.min(target, target*available/(textWidth(font, label, textWidths)+.5)))}px`;
+        name.style.fontSize = `${Math.max(8, Math.min(target, target*available/(textWidth(font, label)+.5)))}px`;
         // Variable fonts can change optical metrics as their size shrinks.
         // Check the actual text box as well, so a subpixel overflow cannot
         // silently replace the last letters with an ellipsis.
@@ -283,14 +290,14 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       measure.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
       const labelWidth = Math.ceil(Math.max(...labels.map(label=>measure.measureText(label.textContent).width)));
       const valueStyle = getComputedStyle(card.querySelector('.q-inline-rows .q-pct'));
-      const valueWidth = Math.ceil(textWidth(valueStyle, '100%', textWidths) * 10) / 10 + .25;
+      const valueWidth = Math.ceil(textWidth(valueStyle, '100%') * 10) / 10 + .25;
       card.style.setProperty('--q-window-label-width', `${Math.min(labelWidth, card.clientWidth*.36)}px`);
       card.style.setProperty('--q-window-value-width', `${valueWidth}px`);
       // Keep the 100% column and track widths fixed; center the visible row,
       // excluding its unused numeric reserve. Reuse the value store so a refresh
       // during this adjustment continues from the currently painted transform.
       const visibleWidth = Math.max(...m.inlineRows.map(row => row.kind === 'percent'
-        ? textWidth(valueStyle, `${Math.round(row.value ?? 0)}%`, textWidths) : valueWidth));
+        ? textWidth(valueStyle, `${Math.round(row.value ?? 0)}%`) : valueWidth));
       const pad = number('--q-cell-pad-x'), inset = Math.min(pad, number('--q-window-end-inset'));
       const offset = (inset + Math.max(0, valueWidth - visibleWidth) - pad) / 2;
       const content = card.querySelector('.q-inline-content');
@@ -421,11 +428,10 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const footer = byId('ai-usage-footer');
     footer.hidden = !ids.length || size !== 'mini';
     const first = visible[0];
-    const miniSummary = D.miniSummary(state);
-    footer.dataset.severity = size === 'mini' ? miniSummary.severity : 'ok';
-    footer.innerHTML = size === 'mini' ? escape(miniSummary.text || (first ? t('quota.windowSummary', { source: registry.get(first.id).label, window: D.percent(first.selected.windowUsage?.windowMinutes) > 0 ? `${first.selected.scopeShort || first.selected.short} · ` : '', remaining: first.status === 'error' ? t(D.invalidToken(first.data) ? 'quota.status.invalid' : 'quota.status.error') : first.selected.display }) : ''))
-      : size === 'large' ? escape(t('quota.refreshOrder')) : [layout.hidden.length ? `<button class="ai-inline-settings" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}">${escape(t('quota.moreSources', { count: layout.hidden.length }))}</button>` : escape(t('quota.compactOrder')), escape(updated)].filter(Boolean).join(' · ');
-    footer.title = size === 'mini' && first ? `${first.selected.name}: ${first.selected.display}\n${first.title}` : [footer.textContent, updated].filter(Boolean).join(' · ');
+    const miniSummary = size === 'mini' ? D.miniSummary(state) : { severity:'ok' };
+    footer.dataset.severity = miniSummary.severity;
+    footer.textContent = size === 'mini' ? miniSummary.text || (first ? t('quota.windowSummary', { source: registry.get(first.id).label, window: D.percent(first.selected.windowUsage?.windowMinutes) > 0 ? `${first.selected.scopeShort || first.selected.short} · ` : '', remaining: first.status === 'error' ? t(D.invalidToken(first.data) ? 'quota.status.invalid' : 'quota.status.error') : first.selected.display }) : '') : '';
+    footer.title = size === 'mini' && first ? `${first.selected.name}: ${first.selected.display}\n${first.title}` : '';
     delete footer.dataset.quotaSettings;
     delete footer.dataset.quotaRetry;
     if (size === 'mini' && miniSummary.repair) {
@@ -552,7 +558,11 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         const m = model(id, tile.dataset.widgetSize || 'small');
         const caption = el.querySelector('.q-compact-caption');
         const foot = el.querySelector('.cursor-usage-footnote > span');
-        if (caption) caption.innerHTML = captionLines(m).filter(Boolean).map(text => `<span>${escape(text)}</span>`).join('');
+        if (caption) {
+          const content = captionContent(m);
+          if (caption.innerHTML !== content.html) caption.innerHTML = content.html;
+          caption.title = content.title;
+        }
         if (foot && m.status !== 'error') foot.textContent = [m.message, m.updated].filter(Boolean).join(' · ');
       }
     }
@@ -566,6 +576,9 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     refreshTimer = setTimeout(() => refresh({ force: usageVisible() }), D.refreshDelay(state, usageVisible()));
   }
   motion.addEventListener('change', render);
+  function resetTextMeasurements() { textWidths.clear(); syncGeometry(); }
+  document.fonts.ready.then(resetTextMeasurements);
+  document.fonts.addEventListener('loadingdone', resetTextMeasurements);
   window.addEventListener('pome:language-changed', render);
   window.NotchAiUsage = { refresh, openSettings };
   syncTick();

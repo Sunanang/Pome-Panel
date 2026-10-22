@@ -355,6 +355,42 @@ async function run(c){
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'cancel does not clear a failure');
  await js(`document.getElementById('home-layout-edit').click();document.getElementById('home-layout-save').click()`);
  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),false,'saving an unchanged edit does not clear a failure');
+ // Failed saves preserve the edit and cancel snapshot, and a later save can retry.
+ await js(`NotchUi.clearError();NotchHome.applyPreset('all');setActiveTab('home')`);
+ const beforeEdit=await js(`localStorage.getItem(HOME_SIZES_KEY)`);
+ await js(`document.getElementById('home-layout-edit').click();document.getElementById('home-cursor').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:300,clientY:200}));document.querySelector('[data-home-ctx-size=mini]').click()`);
+ const editedSize=await js(`homeSizes.cursor`);
+ assert.equal(editedSize,'mini');
+ for(const key of ['HOME_ORDER_KEY','HOME_SIZES_KEY','HOME_PLACEMENTS_KEY']) {
+  await js(`(()=>{const write=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k===${key})throw new Error('fixture_storage_full');return write.call(this,k,v)};try{document.getElementById('home-layout-save').click()}finally{Storage.prototype.setItem=write}})()`);
+  assert.equal(await js(`homeBento.dataset.layoutEditing`),'true','failed '+key+' save stays editable');
+  assert.equal(await js(`document.querySelector('#ui-error-bar p').textContent===PomeI18n.t('ui.error.layoutSave')`),true);
+  assert.equal(await js(`document.querySelector('#ui-error-bar small').textContent===PomeI18n.t('ui.error.layoutSaveRepair')`),true);
+  assert.equal(await js(`document.getElementById('status-toast').getAttribute('aria-hidden')`),'true','a failed save dismisses the previous transient toast');
+  await until(`document.getElementById('status-toast').hidden`);
+ }
+ await capture('layout-save-failed-retained');
+ await js(`setActiveTab('settings')`);
+ await js(`document.querySelector('#ui-error-bar button').click()`);
+ await until(`document.activeElement.id==='home-layout-save' && document.getElementById('tab-home').classList.contains('active')`);
+ assert.equal(await js(`homeBento.dataset.layoutEditing`),'true','repair returns to the saved edit from another page');
+ await js(`document.getElementById('home-layout-cancel').click()`);
+ assert.equal(await js(`homeBento.dataset.layoutEditing`),'false');
+ assert.equal(await js(`localStorage.getItem(HOME_SIZES_KEY)`),beforeEdit,'cancel after failed writes restores the original snapshot');
+ await js(`document.getElementById('home-layout-edit').click();document.getElementById('home-cursor').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:300,clientY:200}));document.querySelector('[data-home-ctx-size=mini]').click()`);
+ await js(`(()=>{const write=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw new Error('fixture_storage_full')};try{document.getElementById('home-layout-save').click()}finally{Storage.prototype.setItem=write}})()`);
+ assert.equal(await js(`homeBento.dataset.layoutEditing`),'true');
+ await js(`document.getElementById('home-layout-save').click()`);
+ assert.equal(await js(`homeBento.dataset.layoutEditing`),'false','retry exits only after a successful save');
+ assert.equal(await js(`JSON.parse(localStorage.getItem(HOME_SIZES_KEY)).cursor`),editedSize);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'successful retry clears its own error');
+ await capture('layout-save-retry-succeeded');
+ // A storage failure also resolves on retry when the user made no layout change.
+ await js(`document.getElementById('home-layout-edit').click();(()=>{const write=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw new Error('fixture_storage_full')};try{document.getElementById('home-layout-save').click()}finally{Storage.prototype.setItem=write}})()`);
+ assert.equal(await js(`homeBento.dataset.layoutEditing`),'true');
+ await js(`document.getElementById('home-layout-save').click()`);
+ assert.equal(await js(`document.getElementById('ui-error-bar').hidden && homeBento.dataset.layoutEditing==='false'`),true,'an unchanged retry clears its own storage failure');
+ await layoutFailure();
  // Visibility was written but saving layout metadata failed: do not claim recovery.
  const unsaved=await js(`(()=>{const write=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key===HOME_ORDER_KEY)throw new Error('fixture_storage_full');return write.call(this,key,value);};try{return NotchHome.applyPreset('simple');}finally{Storage.prototype.setItem=write;}})()`);
  assert.equal(unsaved.persisted,false);

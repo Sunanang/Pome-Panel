@@ -232,6 +232,7 @@ async function run(mainContents) {
   win = await shown('提交 Pome Panel 1.4 发布说明');
   assert.equal(await evaluate(win, 'currentNotification.status'), 'due');
   assert.equal(await evaluate(win, 'detailElement.textContent'), '将在 1 小时内截止');
+  assert.equal(await evaluate(win, `document.getElementById('attention-brand').decode().then(()=>document.getElementById('attention-brand').naturalWidth>0).catch(()=>false)`),true,'real todo reminder loads its source icon');
   await capture(win, 'todo-due-soon'); await dismiss(win);
   assert.equal(JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length, before);
   assert(timings.length > 5);
@@ -272,6 +273,7 @@ async function previewVariants() {
       if (name === 'windows-codex-completed' || name === 'task-completed') {
         for (const frame of [40, 100, 180]) { await delay(frame); await capture(preview, `${name}-enter-${frame}`); }
       } else await delay(500);
+      assert.equal(await evaluate(preview, `document.getElementById('attention-brand').decode().then(()=>document.getElementById('attention-brand').naturalWidth>0).catch(()=>false)`),true,name+' source icon loads even when only the CSS mask is visible');
       if (hover) await evaluate(preview, 'reportHover(true)');
       await delay(160);
       await capture(preview,name);
