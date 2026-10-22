@@ -58,11 +58,11 @@ async function main(){
       if(name!=='mini'){
         assert(v.cards.every(c=>!c.headerWrap),prefix+' names stay on one line');
         if(format==='reference')assert(Math.abs(v.cards[0].ring.width-(name==='small'?38:name==='medium'?count===3?72:count===4?60:32:count===3?140:count===4?120:80))<.5,prefix+' specified ring diameter');
-        assert.equal(await js(`(()=>{const size='${name}';return [...document.querySelectorAll('#home-cursor .q-inline-rows')].every(rows=>{const first=rows.querySelector('.cursor-usage-track'),ring=rows.closest('[data-provider]').querySelector('.q-ring').getBoundingClientRect();if(size!=='large'&&Math.abs(rows.getBoundingClientRect().top-ring.bottom-(size==='small'?8:10))>.6)return false;return [...rows.querySelectorAll('.ai-quota-row')].every(row=>{const label=row.querySelector('.q-window-short').getBoundingClientRect(),bar=row.querySelector('.cursor-usage-track').getBoundingClientRect(),value=row.querySelector('.q-pct'),v=value.getBoundingClientRect();return Math.abs(bar.left-label.right-3)<.6&&Math.abs(v.left-bar.right-4)<.6&&getComputedStyle(value).fontSize===getComputedStyle(value.querySelector('small')).fontSize})})})()`),true,prefix+' ring/bar gaps and fixed grid columns');
+        assert.equal(await js(`(()=>{const size='${name}';return [...document.querySelectorAll('#home-cursor .q-inline-rows')].every(rows=>{const first=rows.querySelector('.cursor-usage-track'),ring=rows.closest('[data-provider]').querySelector('.q-ring').getBoundingClientRect();const gap=rows.getBoundingClientRect().top-ring.bottom;if(size==='medium'&&Math.abs(gap-10)>.6||size==='small'&&(gap<.9||gap>8.6))return false;return [...rows.querySelectorAll('.ai-quota-row')].every(row=>{const label=row.querySelector('.q-window-short').getBoundingClientRect(),bar=row.querySelector('.cursor-usage-track').getBoundingClientRect(),value=row.querySelector('.q-pct'),v=value.getBoundingClientRect();return Math.abs(bar.left-label.right-3)<.6&&Math.abs(v.left-bar.right-4)<.6&&getComputedStyle(value).fontSize===getComputedStyle(value.querySelector('small')).fontSize})})})()`),true,prefix+' ring/bar gaps and fixed grid columns');
 
         assert(v.cards.every(c=>Math.abs(c.width-v.cards[0].width)<.5&&Math.abs(c.height-v.cards[0].height)<.5),prefix+' equal cells');
         assert(v.cards.every(c=>!c.badge),prefix+' no corner badges or reserved lanes');
-        for(const c of v.cards.filter(c=>!c.hasBars))assert(Math.abs(c.ring.y+c.ring.height/2-(c.headerBottom+c.captionTop)/2)<.6,prefix+' no-bar ring centers in remaining space '+c.id);
+        for(const c of v.cards.filter(c=>!c.hasBars||name==='small'))assert(Math.abs(c.ring.y+c.ring.height/2-(c.headerBottom+c.captionTop)/2)<.6,prefix+' ring centers in remaining space '+c.id);
         for(let i=0;i<v.cards.length;i+=v.columns){const row=v.cards.slice(i,i+v.columns),bars=row.filter(c=>c.hasBars);assert(bars.every(c=>Math.abs(c.ring.y-bars[0].ring.y)<.6),prefix+' row rings with bars align');assert(row.every(c=>Math.abs(c.footY-row[0].footY)<.6),prefix+' footnotes align');}
         for(const c of v.cards){if(c.tracks.length)assert(c.tracks.every(t=>Math.abs(t.width-c.tracks[0].width)<.5&&Math.abs(t.x-c.tracks[0].x)<.5),prefix+' equal tracks '+c.id);if(c.state==='error')assert.doesNotMatch(c.errorText,/%|--/,prefix+' invalid card has no placeholder quota');}
         assert.equal(await js(`!!document.querySelector('#home-cursor .q-summary')`),false,'no onboarding filler in the empty fifth-source slot');
@@ -133,6 +133,22 @@ async function main(){
   assert.match(await js(`document.getElementById('ai-provider-grokbot').title`),/Cursor Sand.*手动 Token/,'Grok Bot identifies the Sand pool and actual credential source');
   await supply({codex:{...snapshot(100,0),primary:{percent:0,windowMinutes:300},secondary:{percent:100,windowMinutes:10080}}});
   for(const name of ['small','medium','large']){await size(name,actual);assert.equal(await js(`document.querySelector('#ai-provider-codex .q-compact-caption').textContent`),'','missing provider reset data never invents a time');}
+  // Adding a secondary window must not pull a four-source small ring upward.
+  const four=fixture(4,'warn');
+  await supply(four);await size('small',actual);
+  const centers=()=>js(`Object.fromEntries([...document.querySelectorAll('#home-cursor .ai-usage-provider')].map(card=>{const ring=card.querySelector('.q-ring').getBoundingClientRect(),box=card.getBoundingClientRect();return [card.dataset.provider,ring.top+ring.height/2-box.top]}))`);
+  const withBars=await centers();
+  const single=structuredClone(four);delete single.codex.secondary;
+  await supply(single);
+  const withoutBars=await centers();
+  for(const id of Object.keys(withBars))assert(Math.abs(withBars[id]-withoutBars[id])<.6,'small four-source ring center is independent of a progress row: '+id);
+  await capture('small-4ai-single-window');
+  const multiple=fixture(4,'warn');delete multiple.grokbot;
+  multiple.copilot={ok:true,configured:true,windows:[{id:'premium',percent:20},{id:'chat',percent:20},{id:'completions',percent:20}]};
+  await supply(multiple);await size('small',actual);
+  assert.deepEqual((await inspect()).cards.flatMap(c=>c.overflow),[],'small retains multiple pool rows inside their source cells');
+  assert.equal(await js(`(()=>{const card=document.getElementById('ai-provider-copilot'),rows=card.querySelector('.q-inline-rows');return rows.querySelectorAll('.ai-quota-row').length===2&&rows.getBoundingClientRect().bottom<=card.querySelector('.q-compact-caption').getBoundingClientRect().top+.6})()`),true,'multiple pool rows do not cover the reset footer');
+  await capture('small-4ai-multiple-pools');
   // Equal grids cannot change track lengths while values acquire more digits.
   await supply(fixture(4,'warn'));await size('medium',actual);
   const providerTracks=await js(`Object.fromEntries([...document.querySelectorAll('#home-cursor .ai-usage-provider')].map(card=>[card.dataset.provider,card.querySelector('.q-inline-rows .cursor-usage-track')?.getBoundingClientRect().width||0]))`);
@@ -155,6 +171,6 @@ async function main(){
   await js(`document.getElementById('ai-usage-footer').click()`);await sleep(200);
   assert.equal(await js(`document.getElementById('tab-settings').classList.contains('active')`),true,'invalid summary repairs the selected provider');
   assert.deepEqual(errors,[],'renderer console');
-  console.log('Final quota: four sizes x 3–6 sources, all states, equal cells/rings, centered no-bar cells, fixed animated tracks, gray expiry and mini repair passed');
+  console.log('Final quota: four sizes x 3–6 sources, all states, equal cells/rings, independently centered small rings, fixed animated tracks, gray expiry and mini repair passed');
 }
 main().then(()=>{clearTimeout(timer);win?.destroy();app.quit();},error=>{console.error(error);app.exit(1);});

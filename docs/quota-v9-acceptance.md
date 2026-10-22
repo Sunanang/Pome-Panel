@@ -66,3 +66,12 @@ mini 改前/改后对照：`dist.noindex/quota-v9/mini-before-after.png`。同�
 - `README.md`、`README.en.md`、`design-qa.md`、本文件：行为准绳与验收记录。
 
 动画模块、顶栏代码、其他模块、用户已有图标改动均不在本次提交中。
+
+## small 四家圆环独立居中补充 · 2026-10-22
+
+按最新反馈覆盖上文 small 固定 8px 环条间距：原来居中的是「环＋条」整组，有条时圆环被向上推。现在环独立对齐名称与底部时间之间的中线，进度条单独放在环下方，按可用空间将间距收紧到 1–8px。保留 38px 目标环径、原动画与固定轨道；多窗口高度确实不足时才按最小必要量避让，避免覆盖底部，不隐藏任何已有池。
+
+- 修改 `renderer/ai-usage-final.css`、`renderer/ai-usage.js`、`tests/ai-usage-final.electron.js`，同步 README 中英文与本验收说明、design-qa。
+- 40 项领域/动画单测通过；四尺寸×状态矩阵、原额度交互回归通过。新增四家增删周窗口前后环中心差 <0.6px、两条 Copilot 池不遮挡底部、轨道等长且不随动画数字变化的断言。
+- 改前/改后实机对照：`dist.noindex/quota-small-center/before-after.png`；无条与多池边界截图也在同目录。实际时间字段不同，不影响布局比较。mini、medium、large 布局规则不变。
+- 刷新动画模块未修改。首次无录屏回归在 large 的每帧数字差断言有一次失败；录屏与原无录屏配置复测均通过，截图和动画证据在 `dist.noindex/quota-small-center/animation/`。首次失败的原因尚未确认，不将其直接归因于本次 small 布局。
