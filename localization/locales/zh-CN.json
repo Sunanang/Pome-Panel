@@ -1386,7 +1386,6 @@
   "ui.error.layoutSaveRepair": "检查本机存储空间和权限，然后再次点击保存。",
   "ui.error.generic": "这一步没有完成，请检查后重试。",
   "ui.error.repair": "打开相关设置检查连接或登录，再重试；也可复制诊断信息。",
-  "ui.openNotes": "在笔记中打开",
   "ui.openRecordings": "在录音中打开",
   "ui.back": "上一步",
   "ui.next": "下一步",

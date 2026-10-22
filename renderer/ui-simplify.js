@@ -156,17 +156,12 @@
     setErrorVisible(el('app').classList.contains('expanded'));
   }
 
-  const noteOpen = button('ui.openNotes', async () => {
-    el('note-save-btn')?.click(); await setActiveTab('notes');
-  }); noteOpen.id = 'ui-open-notes'; noteOpen.classList.add('ui-quick-entry');
-  document.querySelector('.note-persist-actions')?.prepend(noteOpen);
   const recordingOpen = button('ui.openRecordings', () => setActiveTab('recordings'));
   recordingOpen.id = 'ui-open-recordings'; recordingOpen.classList.add('ui-quick-entry');
   document.querySelector('#home-recorder .recording-toolbar')?.append(recordingOpen);
   if (!recordingOpen.isConnected) document.querySelector('#home-recorder .tile-header')?.append(recordingOpen);
   if (!recordingOpen.isConnected) el('home-recorder')?.append(recordingOpen);
   function quickEntries(settings) {
-    noteOpen.hidden = settings?.features?.notes === false;
     recordingOpen.hidden = settings?.features?.recordings === false;
   }
   api?.onAppSettingsChanged?.(quickEntries);

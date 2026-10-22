@@ -1416,7 +1416,6 @@
   "ui.error.layoutSaveRepair": "Check local storage space and permissions, then click Save again.",
   "ui.error.generic": "This step did not finish. Check your settings and retry.",
   "ui.error.repair": "Check the connection or sign-in in settings and retry, or copy diagnostics.",
-  "ui.openNotes": "Open in Notes",
   "ui.openRecordings": "Open in Recordings",
   "ui.back": "Back",
   "ui.next": "Next",

@@ -430,12 +430,18 @@ async function run(c){
  await js(`document.getElementById('ui-home-presets').scrollIntoView({block:'center'})`);await capture('presets');
  await js(`setActiveTab('home')`);
  const reachable=await js(`(()=>{const tile=document.querySelector('.home-note'),box=tile.getBoundingClientRect();return [...tile.querySelectorAll('.note-toolbar button')].filter(e=>e.checkVisibility()).every(e=>{const r=e.getBoundingClientRect();return r.left>=box.left&&r.right<=box.right+1})})()`);
- assert.equal(reachable,true,'quick-note modes, open and save must fit compact tiles');
- await capture('home-dual-entry');
- await js(`document.getElementById('home-note').value='# 双入口验证';document.getElementById('ui-open-notes').click()`);await until(`activeTab==='notes'`);
- assert.match(await js(`document.getElementById('notes-editor').value`),/双入口验证/);
- await js(`notchAPI.setFeature('notes',false)`);await until(`document.getElementById('tab-button-notes').hidden`);assert.equal(await js(`document.getElementById('ui-open-notes').hidden`),true);
- await js(`notchAPI.setFeature('notes',true);setActiveTab('home')`);await until(`!document.getElementById('ui-open-notes').hidden`);
+ assert.equal(reachable,true,'quick-note mode and save controls fit compact tiles');
+ assert.equal(await js(`document.getElementById('ui-open-notes')`),null,'the quick note has no library shortcut');
+ await js(`document.getElementById('home-note').value='# 保存验证';document.getElementById('home-note').dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('note-save-btn').click()`);
+ assert.equal(await js(`activeTab`),'home','saving a quick note stays on Home');
+ await capture('home-note-without-open');
+ const noteBounds=await js(`(()=>{const r=document.querySelector('.home-note').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,dpr:devicePixelRatio}})()`);
+ fs.writeFileSync(path.join(output,'home-note-without-open-crop.png'),(await c.capturePage()).crop({x:Math.round(noteBounds.x*noteBounds.dpr),y:Math.round(noteBounds.y*noteBounds.dpr),width:Math.round(noteBounds.width*noteBounds.dpr),height:Math.round(noteBounds.height*noteBounds.dpr)}).toPNG());
+ await js(`document.getElementById('tab-button-notes').click()`);await until(`activeTab==='notes'`);
+ assert.match(await js(`document.getElementById('notes-editor').value`),/保存验证/);
+ await js(`notchAPI.setFeature('notes',false)`);await until(`document.getElementById('tab-button-notes').hidden`);
+ await js(`notchAPI.setFeature('notes',true);setActiveTab('home')`);await until(`!document.getElementById('tab-button-notes').hidden`);
+ assert.equal(await js(`document.getElementById('ui-open-notes')`),null,'reenabling Notes does not recreate the removed button');
  await js(`document.getElementById('ui-open-recordings').click()`);await until(`activeTab==='recordings'`);
  await js(`notchAPI.setFeature('recordings',false)`);await until(`document.getElementById('tab-button-recordings').hidden`);assert.equal(await js(`document.getElementById('ui-open-recordings').hidden`),true);await js(`notchAPI.setFeature('recordings',true);setActiveTab('home')`);
  // A second renderer simulates Windows capability branches without enabling native code on this Mac.
