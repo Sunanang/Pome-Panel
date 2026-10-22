@@ -17,7 +17,16 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   let lastRequest = null;
   let renderedSize = null, renderedOrder = '';
   let pinnedDetails = null;
+  let hoverDetailsTimer = null;
+  let hoverDetailsId = null;
+  const HOVER_DETAILS_DELAY_MS = 2000;
+  function clearHoverDetailsTimer() {
+    if (hoverDetailsTimer) clearTimeout(hoverDetailsTimer);
+    hoverDetailsTimer = null;
+    hoverDetailsId = null;
+  }
   function closeDetails() {
+    clearHoverDetailsTimer();
     tile.querySelectorAll('.cursor-usage-rows:popover-open').forEach(node => node.hidePopover());
     tile.querySelectorAll('[data-quota-toggle]').forEach(node => node.setAttribute('aria-expanded', 'false'));
   }
@@ -41,11 +50,21 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   });
   tile.addEventListener('pointerover', event => {
     const provider = event.target.closest('.ai-usage-provider');
-    if (!pinnedDetails && provider && !provider.contains(event.relatedTarget)) showDetails(provider.dataset.provider);
+    if (pinnedDetails || !provider || provider.contains(event.relatedTarget)) return;
+    const id = provider.dataset.provider;
+    if (hoverDetailsId === id) return;
+    clearHoverDetailsTimer();
+    hoverDetailsId = id;
+    hoverDetailsTimer = setTimeout(() => {
+      hoverDetailsTimer = null;
+      if (!pinnedDetails && hoverDetailsId === id) showDetails(id);
+    }, HOVER_DETAILS_DELAY_MS);
   });
   tile.addEventListener('pointerout', event => {
     const provider = event.target.closest('.ai-usage-provider');
-    if (!pinnedDetails && provider && !provider.contains(event.relatedTarget)) closeDetails();
+    if (!provider || provider.contains(event.relatedTarget)) return;
+    if (!pinnedDetails) closeDetails();
+    else clearHoverDetailsTimer();
   });
   tile.addEventListener('keydown', event => { if (event.target.matches('#ai-usage-footer[role=button]') && ['Enter', ' '].includes(event.key)) { event.preventDefault(); event.target.click(); } if (event.key === 'Escape') { pinnedDetails = null; closeDetails(); event.stopPropagation(); } });
   document.addEventListener('pointerdown', event => { if (!tile.contains(event.target)) { pinnedDetails = null; closeDetails(); } });

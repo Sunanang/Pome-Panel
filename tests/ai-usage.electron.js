@@ -261,6 +261,8 @@ async function main() {
           await js(`document.querySelector('#ai-provider-codex [data-quota-toggle]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
           assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
           await js(`document.getElementById('ai-provider-cursor').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}))`);
+          assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`),false,'hover details wait before opening');
+          await new Promise((r) => setTimeout(r, 2100));
           assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`),true);
           await js(`document.getElementById('ai-provider-cursor').dispatchEvent(new PointerEvent('pointerout',{bubbles:true,relatedTarget:document.body}))`);
           assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
