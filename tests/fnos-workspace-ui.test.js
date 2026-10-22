@@ -333,7 +333,7 @@ test('panel controller renders synced notes and switches to devices', async () =
       ],
     }],
     todos: [{ id: 't1', text: '写周报', done: false, categoryId: 'P0', deadline: '23:30' }],
-    categories: { P0: '课程', P1: '自媒体&写作', P2: 'Vibe coding', P3: '日常' },
+    categories: { P0: '课程', P1: '自媒体&写作', P2: 'Vibe coding', P3: '日常', P4: '分类 5', P5: '分类 6', P6: '分类 7', P7: '分类 8' },
     ai: { configured: true, asr: '已配置', llm: '未配置', model: 'qwen', region: '', workspaceId: '' },
     secrets: [{ id: 's1', service: 'OpenAI', account: 'a…m', configured: true }],
     counts: { notes: 1, clipboard: 1, recordings: 1, links: 2, todos: 1, secrets: 1 },

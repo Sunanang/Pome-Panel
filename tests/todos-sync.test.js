@@ -61,7 +61,7 @@ test('accountIdFromBinding is stable per serverId+uid', () => {
 });
 
 test('LS projection contract keeps P0–P3 keys and item field set', () => {
-  const todos = { P0: [], P1: [], P2: [], P3: [] };
+  const todos = { P0: [], P1: [], P2: [], P3: [], P4: [], P5: [], P6: [], P7: [] };
   todos.P0.push({
     id: 't1',
     text: 'hello',
@@ -81,7 +81,7 @@ test('LS projection contract keeps P0–P3 keys and item field set', () => {
   const badKeys = { P0: [], P1: [], extras: [] };
   assert.equal(assertTodosProjectionContract(badKeys).ok, false);
 
-  const names = { P0: 'a', P1: 'b', P2: 'c', P3: 'd' };
+  const names = { P0: 'a', P1: 'b', P2: 'c', P3: 'd', P4: 'e', P5: 'f', P6: 'g', P7: 'h' };
   assert.equal(assertCategoryNamesProjectionContract(names).ok, true);
   assert.equal(assertCategoryNamesProjectionContract({ P0: 'a' }).ok, false);
 });
@@ -381,8 +381,8 @@ test('applyTodosProjectionToStorage writes only projection keys', () => {
       bag.set(key, value);
     },
   };
-  const todos = { P0: [], P1: [], P2: [], P3: [] };
-  const categoryNames = { P0: '课程', P1: '自媒体&写作', P2: 'Vibe coding', P3: '日常' };
+  const todos = { P0: [], P1: [], P2: [], P3: [], P4: [], P5: [], P6: [], P7: [] };
+  const categoryNames = { P0: '课程', P1: '自媒体&写作', P2: 'Vibe coding', P3: '日常', P4: '分类 5', P5: '分类 6', P6: '分类 7', P7: '分类 8' };
   applyTodosProjectionToStorage(storage, {
     todos,
     categoryNames,

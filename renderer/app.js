@@ -1,12 +1,22 @@
 const pomeLocaleRendererApp = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 const STORAGE_KEY = 'notch-todo-data';
-const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
+const PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
 const TODO_CATEGORY_KEY = 'notch-todo-category-names-v1';
+const TODO_CATEGORY_ORDER_KEY = 'notch-todo-category-order-v1';
+const TODO_CATEGORY_DEFAULT_ORDER = ['P0', 'P1', 'P2', 'P3'];
 const TODO_CATEGORY_DEFAULTS = {
   get P0() { return pomeLocaleRendererApp.t("copy.courses.60db1a"); },
   get P1() { return pomeLocaleRendererApp.t("copy.mediaWriting.4672dc"); },
   P2: 'Vibe coding',
   get P3() { return pomeLocaleRendererApp.t("copy.dailyLife.f648d6"); },
+  P4: '分类 5',
+  P5: '分类 6',
+  P6: '分类 7',
+  P7: '分类 8',
+};
+const TODO_DOT_CLASS = {
+  P0: 'dot-p0', P1: 'dot-p1', P2: 'dot-p2', P3: 'dot-p3',
+  P4: 'dot-p4', P5: 'dot-p5', P6: 'dot-p6', P7: 'dot-p7',
 };
 
 const app = document.getElementById('app');
@@ -53,11 +63,17 @@ function applyTodosSyncProjectionPayload(projection) {
     localStorage.setItem(TODO_CATEGORY_KEY, categoryNamesJson);
     data = loadData();
     todoCategoryNames = loadTodoCategoryNames();
-    PRIORITIES.forEach((priority) => {
-      if (typeof renderList === 'function') renderList(priority);
-      if (typeof updateCount === 'function') updateCount(priority);
-    });
-    if (typeof applyTodoCategoryNames === 'function') applyTodoCategoryNames();
+    if (typeof reconcileTodoCategoryOrderFromData === 'function') {
+      reconcileTodoCategoryOrderFromData();
+    }
+    if (typeof renderTodoBoard === 'function') renderTodoBoard();
+    else {
+      PRIORITIES.forEach((priority) => {
+        if (typeof renderList === 'function') renderList(priority);
+        if (typeof updateCount === 'function') updateCount(priority);
+      });
+      if (typeof applyTodoCategoryNames === 'function') applyTodoCategoryNames();
+    }
   } finally {
     applyingSyncTodosProjection = false;
   }
@@ -240,19 +256,21 @@ if (statusToastAction) {
 
 window.addEventListener('beforeunload', () => dismissStatusToast(true));
 
+function emptyTodoData() {
+  return Object.fromEntries(PRIORITIES.map((priority) => [priority, []]));
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { P0: [], P1: [], P2: [], P3: [] };
+    if (!raw) return emptyTodoData();
     const parsed = JSON.parse(raw);
-    return {
-      P0: normalizeTodoItems(parsed && parsed.P0),
-      P1: normalizeTodoItems(parsed && parsed.P1),
-      P2: normalizeTodoItems(parsed && parsed.P2),
-      P3: normalizeTodoItems(parsed && parsed.P3),
-    };
+    return Object.fromEntries(PRIORITIES.map((priority) => [
+      priority,
+      normalizeTodoItems(parsed && parsed[priority]),
+    ]));
   } catch (e) {
-    return { P0: [], P1: [], P2: [], P3: [] };
+    return emptyTodoData();
   }
 }
 
@@ -284,7 +302,7 @@ function normalizeTodoItems(value) {
 }
 
 function getLocalTodosForSync() {
-  const snapshot = { P0: [], P1: [], P2: [], P3: [] };
+  const snapshot = emptyTodoData();
   PRIORITIES.forEach((priority) => {
     snapshot[priority] = (data[priority] || []).map((item) => ({
       id: item.id,
@@ -323,9 +341,11 @@ function saveData(data) {
 
 let data = loadData();
 let todoCategoryNames = loadTodoCategoryNames();
+let todoCategoryOrder = loadTodoCategoryOrder();
 const todoSelections = Object.fromEntries(PRIORITIES.map((priority) => [priority, new Set()]));
 const todoSelectionAnchors = Object.fromEntries(PRIORITIES.map((priority) => [priority, null]));
 let editingTodo = null;
+let todoBoardBound = false;
 
 function loadTodoCategoryNames() {
   try {
@@ -336,6 +356,53 @@ function loadTodoCategoryNames() {
   } catch (error) {
     return { ...TODO_CATEGORY_DEFAULTS };
   }
+}
+
+function loadTodoCategoryOrder() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TODO_CATEGORY_ORDER_KEY) || 'null');
+    const order = Array.isArray(parsed)
+      ? parsed.filter((id, index, list) => PRIORITIES.includes(id) && list.indexOf(id) === index)
+      : [];
+    if (order.length) return order;
+  } catch (error) {
+    // Fall through to the default four columns.
+  }
+  return [...TODO_CATEGORY_DEFAULT_ORDER];
+}
+
+/**
+ * Category order is local-only. After sync/hydration, surface any priority that
+ * already has todos so remote P4–P7 items are not invisible on this device.
+ */
+function reconcileTodoCategoryOrderFromData() {
+  const order = [...todoCategoryOrder];
+  let changed = false;
+  PRIORITIES.forEach((priority) => {
+    if ((data[priority] || []).length > 0 && !order.includes(priority)) {
+      order.push(priority);
+      changed = true;
+    }
+  });
+  if (!order.length) {
+    todoCategoryOrder = [...TODO_CATEGORY_DEFAULT_ORDER];
+    persistTodoCategoryOrder();
+    return;
+  }
+  if (changed) {
+    todoCategoryOrder = order;
+    persistTodoCategoryOrder();
+  }
+}
+
+function persistTodoCategoryOrder() {
+  if (window.__nasTodoReadonly === true) return false;
+  try {
+    localStorage.setItem(TODO_CATEGORY_ORDER_KEY, JSON.stringify(todoCategoryOrder));
+  } catch (error) {
+    // Keep the in-memory order for this session.
+  }
+  return true;
 }
 
 function persistTodoCategoryNames() {
@@ -354,13 +421,105 @@ function persistTodoCategoryNames() {
 }
 
 function applyTodoCategoryNames() {
-  PRIORITIES.forEach((categoryId) => {
-    const name = todoCategoryNames[categoryId];
+  todoCategoryOrder.forEach((categoryId) => {
+    const name = todoCategoryNames[categoryId] || TODO_CATEGORY_DEFAULTS[categoryId] || categoryId;
     const input = document.querySelector(`.todo-category-name[data-category="${categoryId}"]`);
     const addInput = document.querySelector(`.add-row input[data-priority="${categoryId}"]`);
     if (input) input.value = name;
     if (addInput) addInput.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.addATaskTo.efb0ec", { arg1: (name) }));
   });
+}
+
+function quadrantHtml(priority) {
+  const name = escapeHtml(todoCategoryNames[priority] || TODO_CATEGORY_DEFAULTS[priority] || priority);
+  const dot = TODO_DOT_CLASS[priority] || 'dot-p3';
+  const canRemove = todoCategoryOrder.length > 1;
+  return (
+    `<section class="quadrant tile" data-priority="${priority}">` +
+    `<div class="quadrant-header">` +
+    `<span class="dot ${dot}"></span>` +
+    `<input class="todo-category-name" data-category="${priority}" value="${name}" maxlength="24" aria-label="修改待办分类名称" />` +
+    `<button class="bulk-delete todo-bulk-delete" type="button" data-bulk-priority="${priority}" hidden>删除</button>` +
+    (canRemove
+      ? `<button class="todo-remove-category" type="button" data-remove-priority="${priority}" aria-label="删除分类" title="删除分类">×</button>`
+      : '') +
+    `<span class="count" data-priority="${priority}">0</span>` +
+    `</div>` +
+    `<ul class="todo-list" data-priority="${priority}"></ul>` +
+    `<div class="add-row">` +
+    `<input type="text" placeholder="添加待办，回车保存…" aria-label="添加待办" data-priority="${priority}" maxlength="80" />` +
+    `<button class="todo-deadline-trigger" type="button" data-deadline-priority="${priority}" aria-label="选择截止时间"><span>日期</span></button>` +
+    `</div>` +
+    `</section>`
+  );
+}
+
+function syncTodoAddCategoryButton() {
+  const button = document.getElementById('todo-add-category');
+  if (!button) return;
+  button.disabled = todoCategoryOrder.length >= PRIORITIES.length || window.__nasTodoReadonly === true;
+}
+
+function renderTodoBoard() {
+  const root = document.getElementById('todo-sections');
+  if (!root) return;
+  // Keep the date popover alive across board rebuilds (it may be parked inside a quadrant).
+  const popover = document.getElementById('todo-date-popover');
+  const host = document.getElementById('tab-todo') || document.body;
+  if (popover && host && popover.parentElement && popover.parentElement !== host) {
+    host.appendChild(popover);
+  }
+  root.dataset.count = String(todoCategoryOrder.length);
+  root.innerHTML = todoCategoryOrder.map((priority) => quadrantHtml(priority)).join('');
+  syncTodoAddCategoryButton();
+  applyTodoCategoryNames();
+  todoCategoryOrder.forEach((priority) => {
+    renderList(priority);
+    updateCount(priority);
+    applyDefaultTodoDeadline(document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${priority}"]`));
+  });
+}
+
+function addTodoCategory() {
+  if (window.__nasTodoReadonly === true) return;
+  const next = PRIORITIES.find((priority) => !todoCategoryOrder.includes(priority));
+  if (!next) return;
+  todoCategoryOrder = [...todoCategoryOrder, next];
+  if (!Array.isArray(data[next])) data[next] = [];
+  if (!todoCategoryNames[next]) {
+    todoCategoryNames = window.NotchDomain.normalizeTodoCategoryNames(todoCategoryNames, TODO_CATEGORY_DEFAULTS);
+  }
+  persistTodoCategoryOrder();
+  persistTodoCategoryNames();
+  saveData(data);
+  mirrorTodoToSync({
+    op: 'upsert-category',
+    priority: next,
+    name: todoCategoryNames[next],
+  });
+  renderTodoBoard();
+}
+
+function removeTodoCategory(priority) {
+  if (window.__nasTodoReadonly === true) return;
+  if (!todoCategoryOrder.includes(priority) || todoCategoryOrder.length <= 1) return;
+  const count = (data[priority] || []).length;
+  if (count > 0) {
+    const ok = window.confirm(`删除「${todoCategoryNames[priority] || priority}」将同时删除其中的 ${count} 条待办，确定吗？`);
+    if (!ok) return;
+  }
+  const removedItems = [...(data[priority] || [])];
+  data[priority] = [];
+  todoCategoryOrder = todoCategoryOrder.filter((id) => id !== priority);
+  todoSelections[priority] = new Set();
+  todoSelectionAnchors[priority] = null;
+  persistTodoCategoryOrder();
+  saveData(data);
+  // Main process delete-todo expects entityId (same as deleteTodo).
+  removedItems.forEach((item) => {
+    mirrorTodoToSync({ op: 'delete-todo', entityId: item.id });
+  });
+  renderTodoBoard();
 }
 if (window.notchAPI && typeof window.notchAPI.scheduleTodoReminders === 'function') {
   window.notchAPI
@@ -497,7 +656,11 @@ function updateCount(priority) {
 }
 
 function renderAll() {
-  PRIORITIES.forEach((p) => {
+  if (document.getElementById('todo-sections') && !document.querySelector('#todo-sections .quadrant')) {
+    renderTodoBoard();
+    return;
+  }
+  todoCategoryOrder.forEach((p) => {
     renderList(p);
     updateCount(p);
   });
@@ -1356,35 +1519,22 @@ function initTab() {
   setActiveTab('home');
 }
 
-document.querySelectorAll('.todo-category-name[data-category]').forEach((input) => {
-  const finishCategoryEdit = () => {
-    const categoryId = input.dataset.category;
-    todoCategoryNames = window.NotchDomain.normalizeTodoCategoryNames({
-      ...todoCategoryNames,
-      [categoryId]: input.value,
-    }, TODO_CATEGORY_DEFAULTS);
-    persistTodoCategoryNames();
-    applyTodoCategoryNames();
-    mirrorTodoToSync({
-      op: 'upsert-category',
-      priority: categoryId,
-      name: todoCategoryNames[categoryId],
-    });
-  };
-  input.addEventListener('change', finishCategoryEdit);
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.isComposing) {
-      event.preventDefault();
-      input.blur();
-    }
-    if (event.key === 'Escape') {
-      input.value = todoCategoryNames[input.dataset.category];
-      input.blur();
-    }
+function finishTodoCategoryEdit(input) {
+  if (!input) return;
+  const categoryId = input.dataset.category;
+  if (!PRIORITIES.includes(categoryId)) return;
+  todoCategoryNames = window.NotchDomain.normalizeTodoCategoryNames({
+    ...todoCategoryNames,
+    [categoryId]: input.value,
+  }, TODO_CATEGORY_DEFAULTS);
+  persistTodoCategoryNames();
+  applyTodoCategoryNames();
+  mirrorTodoToSync({
+    op: 'upsert-category',
+    priority: categoryId,
+    name: todoCategoryNames[categoryId],
   });
-});
-
-applyTodoCategoryNames();
+}
 
 const todoEditorBackdrop = document.getElementById('todo-date-popover');
 const todoEditorMonth = document.getElementById('todo-editor-month');
@@ -1399,13 +1549,41 @@ let todoEditorYear = new Date().getFullYear();
 let todoEditorMonthIndex = new Date().getMonth();
 let todoEditorDay = new Date().getDate();
 
+function todoTimePickerValue(picker) {
+  return picker?.querySelector('button[aria-selected="true"]')?.dataset.value || '';
+}
+
+function setTodoTimePickerValue(picker, value) {
+  if (!picker) return;
+  const want = String(value);
+  let matched = null;
+  picker.querySelectorAll('button[data-value]').forEach((button) => {
+    const selected = button.dataset.value === want;
+    button.setAttribute('aria-selected', selected ? 'true' : 'false');
+    if (selected) matched = button;
+  });
+  if (matched) {
+    matched.scrollIntoView({ block: 'nearest' });
+  }
+}
+
 function fillTodoTimeOptions() {
-  if (todoEditorHour && !todoEditorHour.options.length) {
-    for (let hour = 0; hour < 24; hour += 1) todoEditorHour.add(new Option(String(hour).padStart(2, '0'), String(hour)));
-  }
-  if (todoEditorMinute && !todoEditorMinute.options.length) {
-    for (let minute = 0; minute < 60; minute += 5) todoEditorMinute.add(new Option(String(minute).padStart(2, '0'), String(minute)));
-  }
+  const fill = (picker, values) => {
+    if (!picker || picker.dataset.filled === '1') return;
+    picker.replaceChildren();
+    values.forEach((value) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.role = 'option';
+      button.dataset.value = String(value);
+      button.textContent = String(value).padStart(2, '0');
+      button.setAttribute('aria-selected', 'false');
+      picker.append(button);
+    });
+    picker.dataset.filled = '1';
+  };
+  fill(todoEditorHour, Array.from({ length: 24 }, (_, hour) => hour));
+  fill(todoEditorMinute, Array.from({ length: 12 }, (_, index) => index * 5));
 }
 
 function renderTodoCalendar() {
@@ -1443,8 +1621,8 @@ function selectedTodoDeadline() {
     year: todoEditorYear,
     month: todoEditorMonthIndex,
     day: todoEditorDay,
-    hour: todoEditorHour?.value,
-    minute: todoEditorMinute?.value,
+    hour: todoTimePickerValue(todoEditorHour),
+    minute: todoTimePickerValue(todoEditorMinute),
   });
 }
 
@@ -1490,8 +1668,8 @@ function openTodoEditor(priority, item = null, anchor = null) {
   todoEditorMonthIndex = selectedDate.getMonth();
   todoEditorDay = selectedDate.getDate();
   fillTodoTimeOptions();
-  if (todoEditorHour) todoEditorHour.value = String(selectedDate.getHours());
-  if (todoEditorMinute) todoEditorMinute.value = String(Math.floor(selectedDate.getMinutes() / 5) * 5);
+  setTodoTimePickerValue(todoEditorHour, selectedDate.getHours());
+  setTodoTimePickerValue(todoEditorMinute, Math.floor(selectedDate.getMinutes() / 5) * 5);
   if (todoEditorError) todoEditorError.textContent = '';
   renderTodoCalendar();
   if (todoEditorBackdrop) {
@@ -1531,8 +1709,15 @@ function moveTodoCalendar(offset) {
 
 todoCalendarPrevious?.addEventListener('click', () => moveTodoCalendar(-1));
 todoCalendarNext?.addEventListener('click', () => moveTodoCalendar(1));
-todoEditorHour?.addEventListener('change', () => applyTodoEditorSelection(true));
-todoEditorMinute?.addEventListener('change', () => applyTodoEditorSelection(true));
+function onTodoTimePickerClick(event) {
+  const button = event.target.closest('button[data-value]');
+  const picker = event.currentTarget;
+  if (!button || !picker) return;
+  setTodoTimePickerValue(picker, button.dataset.value);
+  applyTodoEditorSelection(true);
+}
+todoEditorHour?.addEventListener('click', onTodoTimePickerClick);
+todoEditorMinute?.addEventListener('click', onTodoTimePickerClick);
 
 document.addEventListener('pointerdown', (event) => {
   if (todoEditorBackdrop?.hidden) return;
@@ -1567,56 +1752,126 @@ function refreshDefaultTodoDeadlines(now = new Date()) {
   });
 }
 
-PRIORITIES.forEach((priority) => {
-  const input = document.querySelector(`.add-row input[data-priority="${priority}"]`);
+function submitTodoFromInput(input) {
+  const priority = input?.dataset?.priority;
+  if (!PRIORITIES.includes(priority)) return;
   const deadlineInput = document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${priority}"]`);
-  if (!input) return;
+  const value = input.value;
+  if (!value.trim()) return;
   applyDefaultTodoDeadline(deadlineInput);
+  if (!deadlineInput || !deadlineInput.dataset.deadline) {
+    deadlineInput?.classList.add('invalid');
+    openTodoEditor(priority);
+    return;
+  }
+  if (!addTodo(priority, value, deadlineInput.dataset.deadline)) {
+    deadlineInput.classList.add('invalid');
+    showStatusToast(pomeLocaleRendererApp.t("copy.invalidDeadlineFormat.88c2cb"));
+    return;
+  }
+  input.value = '';
+  if (todoEditorContext?.mode === 'add' && todoEditorContext.priority === priority) closeTodoEditor();
+  resetTodoDraftDeadline(deadlineInput);
+  deadlineInput.classList.remove('invalid');
+  input.focus({ preventScroll: true });
+}
 
-  const submitTodo = () => {
-    const value = input.value;
-    if (!value.trim()) return;
-    // Sleep or midnight may have passed since the form was rendered.
-    applyDefaultTodoDeadline(deadlineInput);
-    if (!deadlineInput || !deadlineInput.dataset.deadline) {
-      deadlineInput?.classList.add('invalid');
-      openTodoEditor(priority);
-      return;
-    }
-    if (!addTodo(priority, value, deadlineInput.dataset.deadline)) {
-      deadlineInput.classList.add('invalid');
-      showStatusToast(pomeLocaleRendererApp.t("copy.invalidDeadlineFormat.88c2cb"));
-      return;
-    }
-    input.value = '';
-    if (todoEditorContext?.mode === 'add' && todoEditorContext.priority === priority) closeTodoEditor();
-    resetTodoDraftDeadline(deadlineInput);
-    deadlineInput.classList.remove('invalid');
-    input.focus({ preventScroll: true });
-  };
+function bindTodoBoardOnce() {
+  if (todoBoardBound) return;
+  const root = document.getElementById('todo-sections');
+  if (!root) return;
+  todoBoardBound = true;
 
-  input.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
-    e.preventDefault();
-    if (e.repeat) return;
-    submitTodo();
+  document.getElementById('todo-add-category')?.addEventListener('click', () => addTodoCategory());
+
+  root.addEventListener('change', (event) => {
+    const input = event.target.closest('.todo-category-name[data-category]');
+    if (input) finishTodoCategoryEdit(input);
   });
-  input.addEventListener('focus', () => applyDefaultTodoDeadline(deadlineInput));
-  deadlineInput?.addEventListener('click', () => openTodoEditor(priority));
-});
 
-PRIORITIES.forEach((priority) => {
-  const list = document.querySelector(`.todo-list[data-priority="${priority}"]`);
-  if (!list) return;
-  list.addEventListener('click', (e) => {
-    const item = e.target.closest('.todo-item');
+  root.addEventListener('keydown', (event) => {
+    const categoryInput = event.target.closest('.todo-category-name[data-category]');
+    if (categoryInput) {
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        categoryInput.blur();
+      }
+      if (event.key === 'Escape') {
+        categoryInput.value = todoCategoryNames[categoryInput.dataset.category] || '';
+        categoryInput.blur();
+      }
+      return;
+    }
+    const inline = event.target.closest('.todo-inline-name');
+    if (inline) {
+      const item = event.target.closest('.todo-item');
+      const priority = item?.dataset?.priority;
+      if (!item || !priority) return;
+      if (event.key === 'Escape') {
+        editingTodo = null;
+        renderList(priority);
+      } else if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        item.querySelector('[data-action="save-edit"]')?.click();
+      }
+      return;
+    }
+    const addInput = event.target.closest('.add-row input[data-priority]');
+    if (!addInput) return;
+    if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    if (event.repeat) return;
+    submitTodoFromInput(addInput);
+  });
+
+  root.addEventListener('focusin', (event) => {
+    const addInput = event.target.closest('.add-row input[data-priority]');
+    if (!addInput) return;
+    applyDefaultTodoDeadline(
+      document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${addInput.dataset.priority}"]`)
+    );
+  });
+
+  root.addEventListener('click', (event) => {
+    const remove = event.target.closest('[data-remove-priority]');
+    if (remove) {
+      removeTodoCategory(remove.dataset.removePriority);
+      return;
+    }
+    const bulk = event.target.closest('.todo-bulk-delete[data-bulk-priority]');
+    if (bulk) {
+      const priority = bulk.dataset.bulkPriority;
+      const selected = todoSelections[priority];
+      if (!selected || !selected.size) return;
+      const removed = (data[priority] || []).filter((item) => selected.has(item.id));
+      data[priority] = (data[priority] || []).filter((item) => !selected.has(item.id));
+      selected.clear();
+      todoSelectionAnchors[priority] = null;
+      saveData(data);
+      removed.forEach((item) => {
+        mirrorTodoToSync({ op: 'delete-todo', entityId: item.id });
+      });
+      renderList(priority);
+      updateCount(priority);
+      showStatusToast(pomeLocaleRendererApp.t("copy.selectedTasksDeleted.8f28c4"));
+      return;
+    }
+    const deadline = event.target.closest('.todo-deadline-trigger[data-deadline-priority]');
+    if (deadline) {
+      openTodoEditor(deadline.dataset.deadlinePriority);
+      return;
+    }
+    const list = event.target.closest('.todo-list[data-priority]');
+    if (!list) return;
+    const priority = list.dataset.priority;
+    const item = event.target.closest('.todo-item');
     if (!item) return;
     const id = item.dataset.id;
-    if (e.shiftKey) {
-      e.preventDefault();
+    if (event.shiftKey) {
+      event.preventDefault();
       const result = window.NotchDomain.updateRangeSelection(
         window.NotchDomain.sortTodosForDisplay(data[priority] || []).map((todo) => todo.id),
-        [...todoSelections[priority]],
+        [...(todoSelections[priority] || [])],
         id,
         todoSelectionAnchors[priority],
         true
@@ -1626,13 +1881,13 @@ PRIORITIES.forEach((priority) => {
       renderList(priority);
       return;
     }
-    const target = e.target.closest('[data-action]');
+    const target = event.target.closest('[data-action]');
     if (!target) return;
     const action = target.dataset.action;
     if (action === 'toggle') {
       toggleTodo(priority, id);
     } else if (action === 'edit') {
-      const todo = (data[priority] || []).find((item) => item.id === id);
+      const todo = (data[priority] || []).find((row) => row.id === id);
       if (todo) {
         editingTodo = { priority, id };
         renderList(priority);
@@ -1651,33 +1906,11 @@ PRIORITIES.forEach((priority) => {
       deleteTodo(priority, id);
     }
   });
-  list.addEventListener('keydown', (event) => {
-    const item = event.target.closest('.todo-item');
-    if (!item || !event.target.matches('.todo-inline-name')) return;
-    if (event.key === 'Escape') {
-      editingTodo = null;
-      renderList(priority);
-    } else if (event.key === 'Enter' && !event.isComposing) {
-      event.preventDefault();
-      item.querySelector('[data-action="save-edit"]')?.click();
-    }
-  });
-});
+}
 
-document.querySelectorAll('.todo-bulk-delete[data-bulk-priority]').forEach((button) => {
-  button.addEventListener('click', () => {
-    const priority = button.dataset.bulkPriority;
-    const selected = todoSelections[priority];
-    if (!selected || !selected.size) return;
-    data[priority] = (data[priority] || []).filter((item) => !selected.has(item.id));
-    selected.clear();
-    todoSelectionAnchors[priority] = null;
-    saveData(data);
-    renderList(priority);
-    updateCount(priority);
-    showStatusToast(pomeLocaleRendererApp.t("copy.selectedTasksDeleted.8f28c4"));
-  });
-});
+bindTodoBoardOnce();
+reconcileTodoCategoryOrderFromData();
+renderTodoBoard();
 
 // ============ 待办 · 常驻跨天刷新 ============
 // Draft dates must not depend on a home clock widget being present or visible.
@@ -5095,7 +5328,8 @@ document.addEventListener('nas-sync:todos-projection', (event) => {
     /* ignore */
   }
   data = loadData();
-  renderAll();
+  reconcileTodoCategoryOrderFromData();
+  renderTodoBoard();
 });
 renderClipList(); // 首屏确保 clip-list DOM 就绪时渲染一次（幂等）
 renderClipFavs(); // 首屏渲染收藏剪贴块

@@ -5,7 +5,7 @@
  *
  * Bound devices: local todo/category writes → SyncStore entity + outbox,
  * then online push; pull applies remote changes and rebuilds LS projection.
- * LocalStorage `notch-todo-data` stays a {P0..P3} projection only.
+ * LocalStorage `notch-todo-data` stays a {P0..P7} projection only.
  *
  * Todo rows still use the todos collection. Notes and the rest of the workspace
  * sync through workspace-sync.js; this module refuses to write them as todos.
@@ -84,10 +84,13 @@ function assertTodosProjectionContract(todos) {
   if (!todos || typeof todos !== 'object' || Array.isArray(todos)) {
     return { ok: false, reason: 'todos_not_object' };
   }
-  const keys = Object.keys(todos).sort();
-  const expected = [...TODO_PRIORITIES].sort();
-  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
-    return { ok: false, reason: `todos_keys_invalid:${keys.join(',')}` };
+  const keys = Object.keys(todos);
+  if (keys.some((key) => !TODO_PRIORITIES.includes(key))) {
+    return { ok: false, reason: `todos_keys_invalid:${keys.sort().join(',')}` };
+  }
+  // Legacy projections only carried P0–P3; pad the rest before field checks.
+  for (const priority of TODO_PRIORITIES) {
+    if (todos[priority] == null) todos[priority] = [];
   }
   for (const priority of TODO_PRIORITIES) {
     if (!Array.isArray(todos[priority])) {
@@ -123,12 +126,21 @@ function assertCategoryNamesProjectionContract(categoryNames) {
   if (!categoryNames || typeof categoryNames !== 'object' || Array.isArray(categoryNames)) {
     return { ok: false, reason: 'category_names_not_object' };
   }
-  const keys = Object.keys(categoryNames).sort();
-  const expected = [...TODO_PRIORITIES].sort();
-  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
-    return { ok: false, reason: `category_names_keys_invalid:${keys.join(',')}` };
+  const keys = Object.keys(categoryNames);
+  if (keys.some((key) => !TODO_PRIORITIES.includes(key))) {
+    return { ok: false, reason: `category_names_keys_invalid:${keys.sort().join(',')}` };
   }
-  for (const priority of TODO_PRIORITIES) {
+  // Core four names must be present; optional P4–P7 are padded for older snapshots.
+  for (const priority of ['P0', 'P1', 'P2', 'P3']) {
+    if (typeof categoryNames[priority] !== 'string') {
+      return { ok: false, reason: `category_name_${priority}_not_string` };
+    }
+  }
+  const defaults = {
+    P4: '分类 5', P5: '分类 6', P6: '分类 7', P7: '分类 8',
+  };
+  for (const priority of ['P4', 'P5', 'P6', 'P7']) {
+    if (categoryNames[priority] == null) categoryNames[priority] = defaults[priority];
     if (typeof categoryNames[priority] !== 'string') {
       return { ok: false, reason: `category_name_${priority}_not_string` };
     }

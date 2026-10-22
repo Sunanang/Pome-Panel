@@ -68,11 +68,19 @@ function normalizeStorage(input) {
   let todos, categories;
   try { todos = JSON.parse(storage['notch-todo-data']); categories = JSON.parse(storage['notch-todo-category-names-v1']); }
   catch { throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.couldnTReadTasksOrCategories.8c8e65")); }
+  const todoPriorities = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
+  // Legacy backups may only carry P0–P3; newer ones include P4–P7.
   if (!todos || typeof todos !== 'object' || ['P0', 'P1', 'P2', 'P3'].some((k) => !Array.isArray(todos[k]))) {
     throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.invalidTaskStructureForP0P3.428b7d"));
   }
+  for (const priority of todoPriorities) {
+    if (todos[priority] == null) todos[priority] = [];
+    else if (!Array.isArray(todos[priority])) {
+      throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.invalidTaskStructureForP0P3.428b7d"));
+    }
+  }
   const todoIds = new Set();
-  for (const priority of ['P0', 'P1', 'P2', 'P3']) for (const row of todos[priority]) {
+  for (const priority of todoPriorities) for (const row of todos[priority]) {
     if (!row || typeof row.id !== 'string' || !row.id || todoIds.has(row.id) || typeof row.text !== 'string') throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.tasksContainInvalidContentOrDuplicateIds.beb910"));
     todoIds.add(row.id);
   }
@@ -85,7 +93,9 @@ function collectionCounts(storage) {
   const todos = JSON.parse(storage['notch-todo-data']);
   const groups = JSON.parse(storage['notch-link-groups']);
   return {
-    todos: Object.fromEntries(['P0', 'P1', 'P2', 'P3'].map((k) => [k, todos[k].length])),
+    todos: Object.fromEntries(['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7']
+      .filter((k) => Array.isArray(todos[k]))
+      .map((k) => [k, todos[k].length])),
     categoryNames: Object.keys(JSON.parse(storage['notch-todo-category-names-v1'])).length,
     notes: { archive: JSON.parse(storage['notch-note-archive-v1']).length, homeIncluded: true },
     links: { groups: groups.length, items: groups.reduce((n, g) => n + (Array.isArray(g.links) ? g.links.length : 0), 0) },

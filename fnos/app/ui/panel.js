@@ -37,7 +37,7 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
     { id: 'credentials', label: pomeLocaleFnosAppUiPanel.t("copy.credentials.f67bca") },
   ]);
 
-  const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
+  const PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
 
   function resolveApiPrefix(pathname, metaPrefix) {
     if (metaPrefix != null && String(metaPrefix).trim() !== '') {

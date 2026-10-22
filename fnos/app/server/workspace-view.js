@@ -12,6 +12,10 @@ const TODO_LABELS = Object.freeze({
   P1: '自媒体&写作',
   P2: 'Vibe coding',
   P3: '日常',
+  P4: '分类 5',
+  P5: '分类 6',
+  P6: '分类 7',
+  P7: '分类 8',
 });
 
 const AUDIO_MIMES = new Set(['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/x-m4a']);

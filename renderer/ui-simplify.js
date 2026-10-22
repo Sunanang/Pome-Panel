@@ -158,9 +158,9 @@
 
   const recordingOpen = button('ui.openRecordings', () => setActiveTab('recordings'));
   recordingOpen.id = 'ui-open-recordings'; recordingOpen.classList.add('ui-quick-entry');
-  document.querySelector('#home-recorder .recording-toolbar')?.append(recordingOpen);
-  if (!recordingOpen.isConnected) document.querySelector('#home-recorder .tile-header')?.append(recordingOpen);
-  if (!recordingOpen.isConnected) el('home-recorder')?.append(recordingOpen);
+  // Park on the tile itself (bottom-right). Grid placement spans the full card so
+  // absolute coords are not trapped in a tiny auto-placed cell beside the title.
+  el('home-recorder')?.append(recordingOpen);
   function quickEntries(settings) {
     recordingOpen.hidden = settings?.features?.recordings === false;
   }

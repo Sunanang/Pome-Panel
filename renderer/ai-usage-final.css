@@ -63,7 +63,9 @@
 #home-cursor .q-inline-rows {
   display:block; grid-column:1; grid-row:2; flex:none; justify-self:center;
   width:calc(100% + 2 * var(--q-cell-pad-x)); min-width:0; height:var(--q-window-height); max-height:none;
-  overflow-x:hidden; overflow-y:auto; scrollbar-width:thin;
+  /* Keep overflow for many pools; Windows must not fall back to classic ▲/▼
+     steppers beside the percent (scrollbar-width:thin disables webkit skin). */
+  overflow-x:hidden; overflow-y:auto; scrollbar-width:auto; scrollbar-color:auto;
 }
 #home-cursor .q-inline-content {
   display:grid; grid-template-columns:var(--q-window-label-width) 3px minmax(0,1fr) 2px var(--q-window-value-width);

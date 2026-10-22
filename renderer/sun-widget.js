@@ -40,7 +40,27 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
     }
   }
 
-  let location = loadLocation();
+  function defaultCity() {
+    return Sun.suggestCity(cities(), Intl.DateTimeFormat().resolvedOptions().timeZone)
+      || cities().find((city) => city.name === '上海' || city.en === 'Shanghai')
+      || null;
+  }
+
+  function seedDefaultLocation() {
+    const city = defaultCity();
+    const next = city ? Sun.locationFromCity(city) : null;
+    if (!next) return null;
+    try {
+      localStorage.setItem(LOCATION_KEY, JSON.stringify(next));
+    } catch (error) {
+      // Keep the in-memory default even if LocalStorage is unavailable.
+    }
+    return next;
+  }
+
+  // First launch should show Shanghai (or the timezone suggestion) immediately —
+  // never the empty “set location” card. Clearing location in tests still works.
+  let location = loadLocation() || seedDefaultLocation();
 
   function saveLocation(next, persist) {
     location = next;

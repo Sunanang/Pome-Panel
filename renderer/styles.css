@@ -1502,12 +1502,29 @@ body.panel-dragging #app.collapsed .notch {
 }
 
 /* ============ 待办 · P0–P3 四象限 ============ */
+.todo-board-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+  margin-bottom: 8px;
+}
 .sections {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
   gap: var(--s-3);
   height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+.sections[data-count='1'] { grid-template-columns: minmax(0, 1fr); }
+.sections[data-count='3'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sections[data-count='5'],
+.sections[data-count='6'],
+.sections[data-count='7'],
+.sections[data-count='8'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(180px, 1fr);
 }
 
 /* ============ 象限 tile ============ */
@@ -1550,6 +1567,28 @@ body.panel-dragging #app.collapsed .notch {
 
 .dot-p3 {
   background: var(--p3);
+}
+.dot-p4 { background: #9b7bff; }
+.dot-p5 { background: #5ec8ff; }
+.dot-p6 { background: #ff7ab8; }
+.dot-p7 { background: #8ad4a0; }
+
+.todo-remove-category {
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.todo-remove-category:hover {
+  background: rgba(255, 95, 87, 0.14);
+  color: #ff817b;
 }
 
 .quadrant-label {
@@ -2183,6 +2222,8 @@ body.panel-dragging #app.collapsed .notch {
   display: flex;
   align-items: center;
   gap: 7px;
+  flex: none;
+  min-width: 0;
 }
 
 .recorder-head time {
@@ -2191,6 +2232,29 @@ body.panel-dragging #app.collapsed .notch {
   font-family: var(--font-mono);
   font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
+}
+
+/* 「在录音中打开」贴卡片右下；与左下录音控件分边，不进标题行。 */
+.home-recorder > .ui-quick-entry {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: auto;
+  top: auto;
+  z-index: 9;
+  margin: 0;
+  width: max-content;
+  max-width: calc(100% - 96px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-bento > .home-recorder[data-layout-variant] > .ui-quick-entry {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  justify-self: end;
+  align-self: end;
+  width: max-content;
+  height: max-content;
 }
 
 .transcription-settings-backdrop {
@@ -3526,7 +3590,7 @@ body.panel-dragging #app.collapsed .notch {
   background: url('assets/recorder-bg.webp') center / cover no-repeat;
   opacity: 0.5;
 }
-.home-recorder > :not(.recording-strands):not(.widget-size-control) { position: relative; z-index: 2; }
+.home-recorder > :not(.recording-strands):not(.widget-size-control):not(.ui-quick-entry) { position: relative; z-index: 2; }
 
 .recording-strands {
   position: absolute;
@@ -3795,11 +3859,58 @@ body.panel-dragging #app.collapsed .notch {
 .todo-calendar-grid button.selected { background: #edf1f7; color: #111318; box-shadow: 0 7px 18px rgba(0,0,0,.28); }
 .todo-time-row { justify-content: flex-end; gap: 7px; margin-top: 12px; }
 .todo-time-row > span { margin-right: auto; color: var(--text-3); font-size: 10px; }
-.todo-time-row select { width: 66px; height: 34px; padding: 0 8px; border: 0; border-radius: 11px; outline: none; background: rgba(255,255,255,.06); color: var(--text-1); font: 11px var(--font-mono); }
+.todo-time-row select {
+  width: 66px;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 11px;
+  outline: none;
+  background: rgba(255,255,255,.06);
+  color: var(--text-1);
+  font: 11px var(--font-mono);
+  color-scheme: dark;
+}
+.todo-time-row select option {
+  background-color: #14151a;
+  color: #f3f5f8;
+}
+/* Windows native <select> popups ignore most option CSS; self-drawn lists stay readable. */
+.todo-time-pickers {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.todo-time-picker {
+  width: 58px;
+  max-height: 118px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: 10px;
+  background: rgba(255,255,255,.05);
+  scrollbar-width: thin;
+}
+.todo-time-picker button {
+  display: block;
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: 11px var(--font-mono);
+  cursor: pointer;
+}
+.todo-time-picker button:hover { background: rgba(255,255,255,.08); color: var(--text-1); }
+.todo-time-picker button[aria-selected='true'] {
+  background: rgba(237,241,247,.92);
+  color: #111318;
+}
+.todo-time-row > b { color: var(--text-3); align-self: center; }
 #todo-editor-error { min-height: 16px; margin: 8px 0 0; color: #ff817b; font-size: var(--fs-micro); }
 .todo-editor-card footer { justify-content: flex-end; gap: 7px; }
 
-/* 录音只保留底部三枚控制按钮。 */
+/* 录音只保留底部三枚控制按钮；入口钮在标题行。 */
 .home-recorder .recorder-controls { position: absolute; left: 15px; right: auto; bottom: 14px; justify-content: flex-start; }
 .recording-strands { display: none !important; }
 
@@ -4423,7 +4534,7 @@ body.panel-dragging #app.collapsed .notch {
   z-index: 8;
   transform-origin: left bottom;
 }
-.home-recorder .home-transcript { padding-bottom: 2px; }
+.home-recorder .home-transcript { padding-bottom: 2px; min-height: 0; flex: 1; }
 
 .note-toolbar { justify-content: space-between; }
 .note-persist-actions .note-mode {
@@ -4494,7 +4605,8 @@ body.panel-dragging #app.collapsed .notch {
 .todo-date-popover .todo-calendar-week { margin-bottom: 2px; font-size: 8px; }
 .todo-date-popover .todo-time-row { margin-top: 6px; }
 .todo-date-popover .todo-time-row > span { display: none; }
-.todo-date-popover .todo-time-row select { width: 58px; height: 29px; border-radius: 9px; font-size: 10px; }
+.todo-date-popover .todo-time-picker { width: 52px; max-height: 104px; }
+.todo-date-popover .todo-time-picker button { height: 24px; font-size: 10px; }
 .todo-date-popover #todo-editor-error { min-height: 0; margin: 5px 0 0; font-size: 8px; }
 
 /* ============ Vue Bits inspired motion + radius audit ============ */
@@ -5258,7 +5370,8 @@ body.panel-dragging #app.collapsed .notch {
 .quadrant > .todo-date-popover .todo-calendar-grid { min-height: 104px; gap: 1px; }
 .quadrant > .todo-date-popover .todo-calendar-grid button { height: 17px; border-radius: 6px; font-size: 8px; }
 .quadrant > .todo-date-popover .todo-time-row { margin-top: 4px; }
-.quadrant > .todo-date-popover .todo-time-row select { width: 55px; height: 27px; }
+.quadrant > .todo-date-popover .todo-time-picker { width: 50px; max-height: 96px; }
+.quadrant > .todo-date-popover .todo-time-picker button { height: 22px; font-size: 10px; }
 
 /* 待办 Line Sidebar：象限色、内缩竖线和安全位移，避免穿过复选框或右侧裁切。 */
 .quadrant[data-priority='P0'] .todo-list { --line-accent: var(--p0); }
@@ -6618,10 +6731,21 @@ html[data-liquid-glass='1'] .command-list::-webkit-scrollbar-thumb:hover {
   gap: var(--s-2, 8px);
 }
 .settings-nas-migration-actions[hidden] { display: none !important; }
+#tab-todo {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#tab-todo > .sections {
+  flex: 1;
+  min-height: 0;
+}
 #tab-todo.is-migration-readonly .add-row input,
 #tab-todo.is-migration-readonly .todo-category-name,
 #tab-todo.is-migration-readonly .todo-deadline-trigger,
-#tab-todo.is-migration-readonly .todo-bulk-delete {
+#tab-todo.is-migration-readonly .todo-bulk-delete,
+#tab-todo.is-migration-readonly .todo-remove-category,
+#tab-todo.is-migration-readonly #todo-add-category {
   pointer-events: none;
   opacity: 0.55;
 }
@@ -6957,6 +7081,14 @@ html[data-platform="win32"] *::-webkit-scrollbar {
   height: var(--scrollbar-w);
 }
 
+/* Classic Windows scrollbars paint ▲/▼ buttons; hide them so a one-line
+   overflow (e.g. quota pool rows) cannot look like a number stepper. */
+html[data-platform="win32"] *::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 html[data-platform="win32"] *::-webkit-scrollbar-track {
   background: transparent;
 }
@@ -6980,7 +7112,11 @@ html[data-platform="win32"] :is(
   .window-list,
   .command-list,
   .settings-column-primary,
-  .settings-column-secondary
+  .settings-column-secondary,
+  .home-cursor .q-inline-rows,
+  .home-cursor .cursor-usage-rows,
+  .home-cursor .ai-usage-providers,
+  .home-inbox-list
 ) {
   scrollbar-width: auto;
   scrollbar-color: auto;
@@ -7725,7 +7861,6 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 #ui-nas-troubleshoot > summary { cursor:pointer; color:var(--text-2); }
 #ui-nas-troubleshoot > :not(summary) { margin-top:10px; }
 .ui-quick-entry { font-size:9px; padding:3px 6px; min-height:22px; white-space:nowrap; }
-.home-recorder > .ui-quick-entry { position:absolute; right:12px; bottom:10px; }
 .ui-welcome { width:min(540px,calc(100vw - 48px)); max-height:calc(100vh - 36px); padding:24px; border-radius:var(--r-card,20px); border:1px solid var(--hairline-soft); background:var(--bg-base); color:var(--text-1); box-shadow:0 24px 80px #0008; }
 .ui-welcome::backdrop { background:#0005; backdrop-filter:blur(8px); }
 .ui-welcome h2 { font-size:20px; margin:12px 0; }

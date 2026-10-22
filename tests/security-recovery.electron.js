@@ -26,7 +26,7 @@ fs.mkdirSync(target);
 fs.writeFileSync(sourceFile, JSON.stringify({ version: 1, localStorage: { 'notch-home-note': 'Source workspace' } }));
 fs.writeFileSync(path.join(target, 'workspace.json'), JSON.stringify({ version: 1, localStorage: {
   'notch-home-note': 'Target workspace',
-  'notch-todo-data': JSON.stringify({ P0: [], P1: [], P2: [], P3: [] }),
+  'notch-todo-data': JSON.stringify({ P0: [], P1: [], P2: [], P3: [], P4: [], P5: [], P6: [], P7: [] }),
 } }));
 dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [target] });
 dialog.showMessageBox = async () => ({ response: 0 });

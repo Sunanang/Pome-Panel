@@ -263,87 +263,10 @@
 
           <section id="tab-todo" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-todo" aria-hidden="true" inert>
             <div class="settings-nas-migration-banner" id="todo-migration-banner" data-control-id="migration.state-banner" hidden role="status"><span data-i18n="copy.migratingPleaseWait.7aed12">迁移中，稍候</span></div>
-            <div class="sections">
-              <section class="quadrant tile" data-priority="P0">
-                <div class="quadrant-header">
-                  <span class="dot dot-p0"></span>
-                  <input class="todo-category-name" data-category="P0" value="课程" maxlength="24" aria-label="修改待办分类名称"  data-i18n-aria-label="copy.renameTaskCategory.5f6c58"/>
-                  <button class="bulk-delete todo-bulk-delete" type="button" data-bulk-priority="P0" hidden><span data-i18n="copy.delete.2f9daa">删除</span></button>
-                  <span class="count" data-priority="P0">0</span>
-                </div>
-                <ul class="todo-list" data-priority="P0"></ul>
-                <div class="add-row">
-                  <input
-                    type="text"
-                    placeholder="添加待办，回车保存…"
-                    aria-label="添加课程待办"
-                    data-priority="P0"
-                    maxlength="80"
-                   data-i18n-placeholder="copy.addATaskAndPressEnterTo.e40a0f" data-i18n-aria-label="copy.addACourseTask.5dda18"/>
-                  <button class="todo-deadline-trigger" type="button" data-deadline-priority="P0" aria-label="选择课程待办截止时间" data-i18n-aria-label="copy.chooseACourseTaskDeadline.f668e4"><span><span data-i18n="copy.date.70d0c1">日期</span></span></button>
-                </div>
-              </section>
-
-              <section class="quadrant tile" data-priority="P1">
-                <div class="quadrant-header">
-                  <span class="dot dot-p1"></span>
-                  <input class="todo-category-name" data-category="P1" value="自媒体&amp;写作" maxlength="24" aria-label="修改待办分类名称"  data-i18n-aria-label="copy.renameTaskCategory.5f6c58"/>
-                  <button class="bulk-delete todo-bulk-delete" type="button" data-bulk-priority="P1" hidden><span data-i18n="copy.delete.2f9daa">删除</span></button>
-                  <span class="count" data-priority="P1">0</span>
-                </div>
-                <ul class="todo-list" data-priority="P1"></ul>
-                <div class="add-row">
-                  <input
-                    type="text"
-                    placeholder="添加待办，回车保存…"
-                    aria-label="添加自媒体和写作待办"
-                    data-priority="P1"
-                    maxlength="80"
-                   data-i18n-placeholder="copy.addATaskAndPressEnterTo.e40a0f" data-i18n-aria-label="copy.addAMediaAndWritingTask.58d129"/>
-                  <button class="todo-deadline-trigger" type="button" data-deadline-priority="P1" aria-label="选择自媒体待办截止时间" data-i18n-aria-label="copy.chooseAMediaTaskDeadline.12fabc"><span><span data-i18n="copy.date.70d0c1">日期</span></span></button>
-                </div>
-              </section>
-
-              <section class="quadrant tile" data-priority="P2">
-                <div class="quadrant-header">
-                  <span class="dot dot-p2"></span>
-                  <input class="todo-category-name" data-category="P2" value="Vibe coding" maxlength="24" aria-label="修改待办分类名称"  data-i18n-aria-label="copy.renameTaskCategory.5f6c58"/>
-                  <button class="bulk-delete todo-bulk-delete" type="button" data-bulk-priority="P2" hidden><span data-i18n="copy.delete.2f9daa">删除</span></button>
-                  <span class="count" data-priority="P2">0</span>
-                </div>
-                <ul class="todo-list" data-priority="P2"></ul>
-                <div class="add-row">
-                  <input
-                    type="text"
-                    placeholder="添加待办，回车保存…"
-                    aria-label="添加 Vibe coding 待办"
-                    data-priority="P2"
-                    maxlength="80"
-                   data-i18n-placeholder="copy.addATaskAndPressEnterTo.e40a0f" data-i18n-aria-label="copy.addAVibeCodingTask.520e1e"/>
-                  <button class="todo-deadline-trigger" type="button" data-deadline-priority="P2" aria-label="选择 Vibe coding 待办截止时间" data-i18n-aria-label="copy.chooseAVibeCodingTaskDeadline.6d791d"><span><span data-i18n="copy.date.70d0c1">日期</span></span></button>
-                </div>
-              </section>
-
-              <section class="quadrant tile" data-priority="P3">
-                <div class="quadrant-header">
-                  <span class="dot dot-p3"></span>
-                  <input class="todo-category-name" data-category="P3" value="日常" maxlength="24" aria-label="修改待办分类名称"  data-i18n-aria-label="copy.renameTaskCategory.5f6c58"/>
-                  <button class="bulk-delete todo-bulk-delete" type="button" data-bulk-priority="P3" hidden><span data-i18n="copy.delete.2f9daa">删除</span></button>
-                  <span class="count" data-priority="P3">0</span>
-                </div>
-                <ul class="todo-list" data-priority="P3"></ul>
-                <div class="add-row">
-                  <input
-                    type="text"
-                    placeholder="添加待办，回车保存…"
-                    aria-label="添加日常待办"
-                    data-priority="P3"
-                    maxlength="80"
-                   data-i18n-placeholder="copy.addATaskAndPressEnterTo.e40a0f" data-i18n-aria-label="copy.addADailyTask.bfb485"/>
-                  <button class="todo-deadline-trigger" type="button" data-deadline-priority="P3" aria-label="选择日常待办截止时间" data-i18n-aria-label="copy.chooseADailyTaskDeadline.eea109"><span><span data-i18n="copy.date.70d0c1">日期</span></span></button>
-                </div>
-              </section>
+            <div class="todo-board-toolbar">
+              <button type="button" class="workspace-button compact" id="todo-add-category">添加分类</button>
             </div>
+            <div class="sections" id="todo-sections"></div>
           </section>
 
           <section id="tab-notes" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-notes" aria-hidden="true" inert>
@@ -691,7 +614,14 @@
             </header>
             <div class="todo-calendar-week"><span><span data-i18n="copy.mon.51a75f">一</span></span><span><span data-i18n="copy.tue.084b42">二</span></span><span><span data-i18n="copy.wed.a4c331">三</span></span><span><span data-i18n="copy.thu.754a9d">四</span></span><span><span data-i18n="copy.fri.c9b87f">五</span></span><span><span data-i18n="copy.sat.de07b5">六</span></span><span><span data-i18n="copy.sun.85217f">日</span></span></div>
             <div class="todo-calendar-grid" id="todo-calendar-grid"></div>
-            <div class="todo-time-row"><span><span data-i18n="copy.dueTime.15f266">截止时间</span></span><select id="todo-editor-hour" aria-label="小时" data-i18n-aria-label="copy.hours.3b6fef"></select><b>:</b><select id="todo-editor-minute" aria-label="分钟" data-i18n-aria-label="copy.minutes.bd957b"></select></div>
+            <div class="todo-time-row">
+              <span><span data-i18n="copy.dueTime.15f266">截止时间</span></span>
+              <div class="todo-time-pickers">
+                <div class="todo-time-picker" id="todo-editor-hour" role="listbox" aria-label="小时" data-i18n-aria-label="copy.hours.3b6fef"></div>
+                <b>:</b>
+                <div class="todo-time-picker" id="todo-editor-minute" role="listbox" aria-label="分钟" data-i18n-aria-label="copy.minutes.bd957b"></div>
+              </div>
+            </div>
             <p id="todo-editor-error" role="status"></p>
           </section>
         </div>

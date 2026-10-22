@@ -22,7 +22,7 @@ const {
 } = require('../sync-migration');
 
 function liveTodos(n = 1) {
-  const data = { P0: [], P1: [], P2: [], P3: [] };
+  const data = { P0: [], P1: [], P2: [], P3: [], P4: [], P5: [], P6: [], P7: [] };
   for (let i = 0; i < n; i += 1) {
     data.P0.push({
       id: `t${i}`,

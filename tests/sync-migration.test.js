@@ -31,7 +31,7 @@ const { openSyncStore } = require('../sync-store');
 const { createMemoryStore } = require('../fnos/app/server/store');
 
 function emptyTodos() {
-  return { P0: [], P1: [], P2: [], P3: [] };
+  return { P0: [], P1: [], P2: [], P3: [], P4: [], P5: [], P6: [], P7: [] };
 }
 
 function liveTodos(count = 1) {
@@ -68,7 +68,7 @@ test('parseLocalTodosStrict: empty ok; corrupt blocks; live counts', () => {
 
 test('empty screen todos fall back to workspace.json; corrupt screen does not', () => {
   const workspace = JSON.stringify(liveTodos(3));
-  const empty = JSON.stringify({ P0: [], P1: [], P2: [], P3: [] });
+  const empty = JSON.stringify({ P0: [], P1: [], P2: [], P3: [], P4: [], P5: [], P6: [], P7: [] });
   const picked = selectMigrationLocalTodos(empty, workspace);
   assert.equal(picked.ok, true);
   assert.equal(picked.live, 3);
