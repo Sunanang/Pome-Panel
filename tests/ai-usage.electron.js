@@ -307,6 +307,24 @@ async function main() {
           assert.equal(await js(`document.getElementById('codex-usage-rows').matches(':popover-open')`), true, 'second item hover opens after 1s');
           await js(`document.getElementById('ai-provider-codex').dispatchEvent(new PointerEvent('pointerout',{bubbles:true,relatedTarget:document.body}))`);
           assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
+          if (size === 'medium') {
+            // Native input catches hover state lost when refresh replaces the DOM.
+            const point = await js(`(()=>{const r=document.getElementById('ai-provider-cursor').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`);
+            const move = (x, y) => win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+            await move(1230, 690);
+            await move(point.x, point.y);
+            await new Promise(r => setTimeout(r, 1100));
+            assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`), true);
+            await js(`NotchAiUsage.refresh({force:true})`);
+            await settle();
+            assert.equal(await js(`document.querySelector('.ai-usage-provider:hover')?.dataset.provider`), 'cursor');
+            assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`), true, 'refresh preserves visible hover details without moving the pointer');
+            await capture('hover-details-after-refresh');
+            await move(point.x + 1, point.y);
+            assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`), true);
+            await move(1230, 690);
+            assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`), false, 'leaving still closes restored details');
+          }
         }
         await resize(size,currentSizes);
         const real = await inspect();

@@ -307,18 +307,19 @@ test('the layout settings survive the read-modify-write path of writePanelPositi
     layoutVersion: 2,
     legacyWinLayout: true,
     winNative: true,
+    taskNotifications: false,
     features: { clip: true },
   };
   const whitelisted = appSettingsLayoutPreferences(stored);
-  assert.deepEqual(whitelisted, { layoutVersion: 2, legacyWinLayout: true, winNative: true });
+  assert.deepEqual(whitelisted, { layoutVersion: 2, legacyWinLayout: true, winNative: true, taskNotifications: false });
   // writePanelPosition 读回白名单字段、改 panelPosition 再整体写回，键必须还在。
   const rewritten = { ...whitelisted, panelPosition: { x: 0, y: 0, edge: 'top', displayId: null } };
   assert.deepEqual(appSettingsLayoutPreferences(rewritten), whitelisted);
-  // 缺失或脏值退到"未迁移 / 开关关闭"。
-  assert.deepEqual(appSettingsLayoutPreferences({}), { layoutVersion: 0, legacyWinLayout: false, winNative: false });
+  // 布局与原生能力默认关闭；顶部通知默认开启。
+  assert.deepEqual(appSettingsLayoutPreferences({}), { layoutVersion: 0, legacyWinLayout: false, winNative: false, taskNotifications: true });
   assert.deepEqual(
     appSettingsLayoutPreferences({ layoutVersion: '2', legacyWinLayout: 'yes', winNative: 1 }),
-    { layoutVersion: 0, legacyWinLayout: false, winNative: false }
+    { layoutVersion: 0, legacyWinLayout: false, winNative: false, taskNotifications: true }
   );
 });
 

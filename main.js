@@ -1324,16 +1324,16 @@ function startTaskNotificationServer() {
       if (policy.event) {
         try {
           if (isMcpAuthSessionResolution(policy.event)) {
-            // Persist the success delivery identity first so replaying the same
-            // eventId/requestId cannot clear a later auth for this service.
-            const receipt = getAiAttention().apply(policy.event);
+            const store = getAiAttention();
+            const expansions = expandMcpAuthSessionResolution(policy.event, store.list());
+            // Commit the receipt and its effects together so a failed write
+            // remains retryable without weakening replay protection.
+            const [receipt] = store.applyBatch([policy.event, ...expansions], { dedupeFirst: true });
+            refreshAttentionNotifications();
             if (receipt.duplicate) {
               sendTaskNotificationResponse(response, 202, { ok: true, result: 'duplicate' });
               return;
             }
-            const expansions = expandMcpAuthSessionResolution(policy.event, getAiAttention().list());
-            if (expansions.length) getAiAttention().applyBatch(expansions);
-            refreshAttentionNotifications();
             sendTaskNotificationResponse(response, 202, {
               ok: true,
               result: expansions.length ? 'accepted' : 'ignored',

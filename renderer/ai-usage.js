@@ -38,9 +38,13 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   function showDetails(id) {
     clearHoverDetailsTimer();
     hideOpenPopover();
-    hoverDetailsId = id;
     const provider = byId(`ai-provider-${id}`), rows = byId(`${id}-usage-rows`);
-    if (!provider || !rows) return;
+    if (!provider || !rows) {
+      hoverDetailsId = null;
+      if (pinnedDetails === id) pinnedDetails = null;
+      return;
+    }
+    hoverDetailsId = id;
     const r = provider.getBoundingClientRect();
     rows.style.width = `${Math.min(240, innerWidth - 24)}px`;
     rows.style.left = `${Math.max(12, Math.min(innerWidth - 252, r.left))}px`;
@@ -447,6 +451,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const models = ids.map(id => model(id, size));
     const visible = layout.shown.map(id => models.find(m => m.id === id));
     const providers = byId('ai-usage-providers');
+    const hoverToRestore = !pinnedDetails && openDetailsId
+      && byId(`${openDetailsId}-usage-rows`)?.matches(':popover-open') ? openDetailsId : null;
     const focused = tile.contains(document.activeElement) ? document.activeElement?.dataset.quotaSettings : undefined;
     const order = visible.map(m => m.id).join('/');
     const sameLayout = renderedSize === size && renderedOrder === order;
@@ -459,7 +465,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     providers.style.setProperty('--q-rows', layout.rows);
     providers.innerHTML = visible.map(m => provider(m, layout)).join('')
       + (size === 'mini' && layout.hidden.length ? `<button class="q-more-ring" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}" aria-label="${escape(t('quota.moreSources', { count: layout.hidden.length }))}">+${layout.hidden.length}</button>` : '');
-    if (pinnedDetails) showDetails(pinnedDetails);
+    openDetailsId = null; // The previous popover node was removed with the grid.
     providers.scrollTop = scroll;
     for (const [id, offset] of rowScroll) if (byId(id)) byId(id).scrollTop = offset;
     providers.hidden = !ids.length;
@@ -501,6 +507,10 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     else footer.removeAttribute('aria-expanded');
     if (focused !== undefined) [...tile.querySelectorAll('[data-quota-settings]')].find(el => el.dataset.quotaSettings === focused)?.focus({ preventScroll: true });
     syncGeometry(layout, visible);
+    // Refreshes replace the grid even while the pointer stays still. Restore
+    // visible details after geometry is settled, alongside the existing pin.
+    if (pinnedDetails || hoverToRestore) showDetails(pinnedDetails || hoverToRestore);
+    else if (hoverDetailsId && !byId(`ai-provider-${hoverDetailsId}`)) closeDetails();
     animateModels(visible);
     animatePositions(oldRings, visible);
     fadeState(footer, 'footer', miniSummary.severity);

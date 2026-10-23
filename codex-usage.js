@@ -6,6 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 const CHUNK_BYTES = 64 * 1024;
 const MAX_LINE_BYTES = 1024 * 1024;
+// Keep parsed telemetry only, never session text. Unchanged files need no tail read.
+const usageFileCache = new Map();
 
 function codexHomes({ env = process.env, home = os.homedir(), platform = process.platform } = {}) {
   const candidates = [env.CODEX_HOME || path.join(home, '.codex')];
@@ -111,9 +113,9 @@ async function sessionFiles(homes) {
             for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
               if (!entry.isFile() || !/^rollout-.*\.jsonl$/.test(entry.name)) continue;
               const file = path.join(dir, entry.name);
-              // Session filenames encode creation time; mtime reflects recent usage in resumed sessions.
+              // mtime tracks writes, including unrelated content in resumed sessions.
               const stat = await fs.stat(file);
-              files.push({ file, mtime: stat.mtimeMs });
+              files.push({ file, mtime: stat.mtimeMs, ctime: stat.ctimeMs, size: stat.size });
             }
           } catch (error) { if (error.code !== 'ENOENT') failed = true; }
         }
@@ -126,13 +128,22 @@ async function sessionFiles(homes) {
 
 async function readCodexUsage({ homes = codexHomes(), configured = false, now = Date.now() } = {}) {
   const { files, failed } = await sessionFiles(homes);
+  const knownFiles = new Set(files.map(({ file }) => file));
+  for (const file of usageFileCache.keys()) if (!knownFiles.has(file)) usageFileCache.delete(file);
   let readFailed = failed;
-  for (const { file } of files) {
+  let latest = null;
+  for (const { file, mtime, ctime, size } of files) {
     try {
-      const snapshot = await readLatestUsage(file);
-      if (snapshot) return { ...withExpiry(snapshot, now), configured };
+      const cached = usageFileCache.get(file);
+      const snapshot = cached && cached.mtime === mtime && cached.ctime === ctime && cached.size === size
+        ? cached.snapshot : await readLatestUsage(file);
+      usageFileCache.set(file, { mtime, ctime, size, snapshot });
+      // A resumed session can append commentary long after its last quota event.
+      // File mtime orders reads/ties; the telemetry timestamp chooses the quota.
+      if (snapshot && (!latest || Date.parse(snapshot.updatedAt) > Date.parse(latest.updatedAt))) latest = snapshot;
     } catch { readFailed = true; }
   }
+  if (latest) return { ...withExpiry(latest, now), configured };
   return { ok: !readFailed, detected: files.length > 0 || readFailed, configured, updatedAt: null,
     primary: null, secondary: null, error: readFailed ? 'codex_read_failed' : null };
 }

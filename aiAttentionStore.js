@@ -55,12 +55,15 @@ function createAiAttentionStore({ filePath, now = Date.now, disk = fs } = {}) {
     }
     return { next: { version: 1, records, turns }, result: { changed: true } };
   }
-  function applyBatch(events) {
+  function applyBatch(events, { dedupeFirst = false } = {}) {
     let next = state;
     const results = [];
     for (const event of events) {
       if (classifyAiEvent(event, event?.source).category === 'invalid') throw new Error('invalid_attention_event');
       const reduced = reduceEvent(next, event);
+      // A receipt and its effects are one transaction; a duplicate receipt
+      // must skip the entire transaction, including any newly supplied effects.
+      if (dedupeFirst && results.length === 0 && reduced.result.duplicate) return [reduced.result];
       next = reduced.next; results.push(reduced.result);
     }
     if (next !== state) {

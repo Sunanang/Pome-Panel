@@ -6,6 +6,10 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Fix Codex remaining quota jumping back to an older value on refresh: select the newest telemetry timestamp across sessions, cache unchanged parsed files, and preserve legitimate increases after a reset. Unrelated writes to older sessions no longer override newer quota readings.
+- Preserve visible hover details when the AI quota dashboard refreshes, and clear hover/pinned state when a provider disappears.
+- Commit MCP authorization success receipts and their request resolutions atomically so failed writes remain retryable. Duplicate success deliveries skip the entire batch without affecting new requests.
+
 - Simplify UI throughout: benefit-focused settings names, a concise NAS summary with troubleshooting, one-step encrypted local-token saving and folded manual entry, short overwrite summaries with details, and repairable errors with redacted diagnostics. Add three-step first-run welcome, four-widget defaults and layout presets while preserving existing users. Add quick-note/recording library links, three initial activation hints, and an inline Windows native switch. Quota shows one value with hover/click details. Preserve liquid glass, frosted white primary buttons, navigation, and two-column display settings; clarify the Cursor Sand source of Grok Bot quota.
 
 - Slim settings: merge completion and quota into one AI configuration card (inline tokens, no capability matrix or Send test UI); combine workspace/home display toggles; move language under Device & activation; open pending requests as an in-place home list. Primary column mirror → API → AI; secondary NAS → Display → Device.

@@ -120,7 +120,7 @@ Claude usage uses local Claude Code OAuth. Copilot / Grok / Antigravity accept o
 
 Manus retains account-scoped pagination checkpoints and terminal candidates across same-account key changes, network failures and normal restarts. Turning collection off and back on starts a new listening period. Discovery, active tasks and older task pages share a request budget and fair scheduling; large accounts and long offline periods increase delay, and arbitrary offline intervals are not guaranteed complete. Completion history shares the latest-100 limit and NAS sync with other sources. Control state retains necessary deduplication identities, while confirmed outbox bodies are removed. Task titles, summaries and synced fields filter sensitive credentials before persistence. The key itself has broader permissions; the panel calls only read endpoints and does not answer, approve or modify tasks.
 
-Codex **Get local token** reads only the access token from local `auth.json` when you explicitly click it; Save encrypts it with `safeStorage`. A saved token queries ChatGPT usage with a short timeout; otherwise bounded local session reads apply. 401/403 marks a token invalid with local fallback; network errors do not. Reset labels use local dates.
+Codex **Get local token** reads only the access token from local `auth.json` when you explicitly click it; Save encrypts it with `safeStorage`. A saved token queries ChatGPT usage with a short timeout; otherwise bounded local session reads apply. Local readings use the newest quota-record timestamp across sessions, so unrelated writes to an older session cannot replace newer quota data. 401/403 marks a token invalid with local fallback; network errors do not. Reset labels use local dates.
 
 ## Data, backup and NAS sync
 

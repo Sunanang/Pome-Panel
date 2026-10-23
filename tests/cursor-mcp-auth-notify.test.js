@@ -22,10 +22,9 @@ function ingestMcpAuth(store, payload) {
   const policy = classifyAiEvent(payload, 'cursor');
   assert.ok(policy.event);
   if (isMcpAuthSessionResolution(policy.event)) {
-    const receipt = store.apply(policy.event);
-    if (receipt.duplicate) return { result: 'duplicate' };
     const expansions = expandMcpAuthSessionResolution(policy.event, store.list());
-    if (expansions.length) store.applyBatch(expansions);
+    const [receipt] = store.applyBatch([policy.event, ...expansions], { dedupeFirst: true });
+    if (receipt.duplicate) return { result: 'duplicate' };
     return { result: expansions.length ? 'accepted' : 'ignored' };
   }
   store.apply(policy.event);
@@ -123,6 +122,44 @@ test('replaying an old MCP auth success must not close a later request', (t) => 
   const staleOtherId = buildMcpAuthResolvedNotification({ service: 'Google Drive', requestId: 'forged-old', now: 1_500 });
   assert.equal(ingestMcpAuth(store, staleOtherId).result, 'ignored');
   assert.equal(store.list()[0].event.requestId, 'b');
+});
+
+test('MCP success is atomic and retryable across pre/post-rename failures', (t) => {
+  for (const afterRename of [false, true]) {
+    let clock = 1_000, fail = false, writes = 0;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pome-mcp-atomic-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const filePath = path.join(dir, 'ai-attention.json');
+    const disk = Object.create(fs);
+    disk.renameSync = (from, to) => {
+      writes++;
+      if (fail && !afterRename) throw new Error('fixture ENOSPC');
+      fs.renameSync(from, to);
+      if (fail) throw new Error('fixture after rename');
+    };
+    const store = createAiAttentionStore({ filePath, now: () => clock, disk });
+    ingestMcpAuth(store, buildMcpAuthNotification({ service: 'Drive', requestId: 'a', now: clock }));
+    const before = fs.readFileSync(filePath, 'utf8');
+    clock = 1_500;
+    const done = buildMcpAuthResolvedNotification({ service: 'Drive', requestId: 'done', now: clock });
+    writes = 0; fail = true;
+    assert.throws(() => ingestMcpAuth(store, done), /fixture/);
+    assert.equal(writes, 1, 'receipt and request resolution use one write');
+    assert.equal(store.list().length, afterRename ? 0 : 1);
+    if (!afterRename) assert.equal(fs.readFileSync(filePath, 'utf8'), before);
+    fail = false;
+    assert.equal(ingestMcpAuth(store, done).result, afterRename ? 'duplicate' : 'accepted');
+    assert.equal(store.list().length, 0);
+    // Even a new request in the same millisecond must survive a duplicate receipt.
+    ingestMcpAuth(store, buildMcpAuthNotification({ service: 'Drive', requestId: 'b', now: clock }));
+    writes = 0;
+    assert.equal(ingestMcpAuth(store, done).result, 'duplicate');
+    assert.equal(writes, 0);
+    assert.equal(store.list()[0].event.requestId, 'b');
+    const reopened = createAiAttentionStore({ filePath, now: () => clock });
+    assert.equal(ingestMcpAuth(reopened, done).result, 'duplicate');
+    assert.equal(reopened.list()[0].event.requestId, 'b');
+  }
 });
 
 test('postNotification reaches the local Pome notify port', async () => {

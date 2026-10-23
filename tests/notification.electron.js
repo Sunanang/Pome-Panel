@@ -329,6 +329,34 @@ async function verifyMcpAuthorization(mainContents) {
   assert.match(await resolveAuth(), /^resolved:/);
   await until(async () => !notificationWindow() || !notificationWindow().isVisible(), 'MCP --resolved must auto-dismiss the top bubble');
   assert.equal((await pending()).items.filter((row) => String(row.event?.sessionId || '').startsWith('mcp-auth:google-drive')).length, 0);
+  const { buildMcpAuthNotification, buildMcpAuthResolvedNotification } = require('../scripts/cursor-mcp-auth-notify');
+  const retryAuth = buildMcpAuthNotification({ service: 'Retry Drive' });
+  await send('cursor', retryAuth);
+  win = await shown(retryAuth.question);
+  const done = buildMcpAuthResolvedNotification({ service: 'Retry Drive' });
+  const filePath = path.join(profile, 'ai-attention.json');
+  const beforeFailure = fs.readFileSync(filePath, 'utf8');
+  const rename = fs.renameSync;
+  let writes = 0;
+  fs.renameSync = (from, to) => {
+    if (to === filePath) { writes++; throw Object.assign(new Error('fixture ENOSPC'), { code: 'ENOSPC' }); }
+    return rename(from, to);
+  };
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/notify/cursor`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(done),
+    });
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).error, 'ENOSPC');
+  } finally { fs.renameSync = rename; }
+  assert.equal(writes, 1);
+  assert.equal(fs.readFileSync(filePath, 'utf8'), beforeFailure);
+  assert.equal((await pending()).items.some(row => row.event.requestId === retryAuth.requestId), true);
+  await capture(win, 'cursor-mcp-retry-pending');
+  assert.equal((await send('cursor', done)).result, 'accepted', 'failed success delivery stays retryable');
+  await until(async () => !notificationWindow() || !notificationWindow().isVisible(), 'retry must close the auth bubble');
+  assert.equal((await pending()).items.length, 0);
+  assert.equal((await send('cursor', done)).result, 'duplicate');
 }
 
 async function previewVariants() {
