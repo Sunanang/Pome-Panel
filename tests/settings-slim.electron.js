@@ -69,16 +69,18 @@ async function run(c) {
   assert.equal(await js(`!!document.querySelector('.settings-device-card .settings-language-row #settings-language')`),true,'language is a device setting');
   assert.equal(await js(`!!document.getElementById('settings-task-notifications')`),true,'top bubble toggle lives with device settings');
   assert.equal(await js(`document.getElementById('settings-task-notifications').checked`),true,'top bubble reminders default on');
-  await js(`document.getElementById('settings-task-notifications').click()`);
+  assert.equal(await js(`(()=>{const a=getComputedStyle(document.querySelector('.settings-auto-launch-row > i'));const t=getComputedStyle(document.querySelector('.settings-task-notifications-row > i'));return t.width===a.width&&t.height===a.height&&t.borderRadius===a.borderRadius&&t.width==='32px'})()`),true,'top bubble uses the same pill switch as launch at login');
+  // Click the label (same as a real pointer); the checkbox itself is visually hidden.
+  await js(`document.querySelector('.settings-task-notifications-row').click()`);
   await until(`!document.getElementById('settings-task-notifications').disabled && document.getElementById('settings-task-notifications').checked===false`);
   assert.equal((await js('notchAPI.getAppSettings()')).taskNotifications,false);
   if (output) {
     fs.mkdirSync(output, { recursive: true });
-    await js(`document.getElementById('settings-task-notifications').closest('label').scrollIntoView({block:'center',behavior:'instant'});document.activeElement.blur();document.getElementById('ui-capsule-hint').hidden=true;document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))`);
+    await js(`document.querySelector('.settings-task-notifications-row').scrollIntoView({block:'center',behavior:'instant'});document.activeElement.blur();document.getElementById('ui-capsule-hint').hidden=true;document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))`);
     c.invalidate(); await delay(200);
     fs.writeFileSync(path.join(output, 'task-notifications-off.png'), (await c.capturePage()).toPNG());
   }
-  await js(`document.getElementById('settings-task-notifications').click()`);
+  await js(`document.querySelector('.settings-task-notifications-row').click()`);
   await until(`!document.getElementById('settings-task-notifications').disabled && document.getElementById('settings-task-notifications').checked===true`);
   assert.equal((await js('notchAPI.getAppSettings()')).taskNotifications,true);
   assert.equal(await js(`document.querySelector('.settings-language-card')`),null);

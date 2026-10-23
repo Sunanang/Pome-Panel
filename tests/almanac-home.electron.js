@@ -124,6 +124,16 @@ async function main() {
     assert.equal(overflow.overflowX, false, `${size} overflowX`);
     assert.equal(overflow.overflowY, false, `${size} overflowY`);
     assert.ok(Math.abs(overflow.scaleX - 1) < .01 && Math.abs(overflow.scaleY - 1) < .01, `${size}: screenshot must capture the settled layout`);
+    const bg = await js(`(() => {
+      const tile = document.getElementById('home-almanac');
+      const glass = document.documentElement.dataset.liquidGlass === '1';
+      // Liquid-glass clears .tile background-image; the photo lives on ::before.
+      const image = getComputedStyle(tile, glass ? '::before' : undefined).backgroundImage;
+      const expect = ${JSON.stringify(size === 'mini' ? 'almanac-bg-mini.webp' : size === 'large' ? 'almanac-bg-tall.webp' : 'almanac-bg.webp')};
+      const beforeOpacity = parseFloat(getComputedStyle(tile, '::before').opacity || '0');
+      return { image, expect, glass, beforeOpacity, ok: image.includes(expect) && image.includes('linear-gradient') && (!glass || beforeOpacity > 0.5) };
+    })()`);
+    assert.equal(bg.ok, true, `${size} background must use ${bg.expect}: ${bg.image}`);
     // capturePage rect uses DIP, matching getBoundingClientRect().
     const dip = await js(`(() => {
       const r = document.querySelector('#home-almanac').getBoundingClientRect();

@@ -5,6 +5,7 @@
 - AI 额度：`cursor-usage-bg.webp`。
 - 笔记：`note-bg-ink.webp` / `note-bg-ink-tall.webp`。
 - 当前窗口、常用指令、录音：各自的 `*-bg.webp`。
+- 黄历：`almanac-bg-mini.webp`（mini）、`almanac-bg.webp`（small / medium）、`almanac-bg-tall.webp`（large）。
 - 汽水音乐与番茄钟：`music-bg-{mini,small,medium,large}.webp` 和 `pomodoro-bg-{mini,small,medium,large}.webp`。
 - 天气/日照：保留 `sun-sky-*` 的横向和纵向 WebP 版本。
 - 应用打包标识使用 `build/pome-panel-icon.png`；`inbox/` 保存 AI 来源图标（旧 GPT 复用 `openai.svg`），`notification/{task,todo}.svg` 保存任务汇总与待办来源图标，`notification/glyphs.svg` 保存提醒状态符号，许可证见对应目录。
