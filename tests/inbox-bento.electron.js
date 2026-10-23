@@ -39,6 +39,15 @@ async function run(c){
  const initial=await js(`({sizes:{...homeSizes},hidden:[...hiddenHomeModules],order:[...homeOrder],layout:JSON.parse(JSON.stringify(homeWorkingLayout))})`);
  assert.equal(await js(`document.getElementById('task-inbox-toggle')===null && document.getElementById('task-inbox-dialog')===null`),true);
  assert.equal(await js(`document.querySelectorAll('.home-inbox-row').length`),5);
+ // Hover mask must inset the icon the same way the trailing side insets the time.
+ const hoverPad=await js(`(()=>{const rows=[...document.querySelectorAll('.home-inbox-row')];const read=rows.find(r=>r.dataset.unread==='false')||rows[0];const unread=rows.find(r=>r.dataset.unread==='true');const measure=row=>{const icon=row.querySelector('.home-inbox-source-wrap').getBoundingClientRect();const time=row.querySelector('time').getBoundingClientRect();const box=row.getBoundingClientRect();const cs=getComputedStyle(row);return {padL:cs.paddingLeft,padR:cs.paddingRight,insetL:icon.left-box.left,insetR:box.right-time.right,dotDisplay:getComputedStyle(row.querySelector('.home-inbox-dot')).display}};return {read:measure(read),unread:unread?measure(unread):null,readId:read.dataset.id}})()`);
+ assert.equal(hoverPad.read.padL,hoverPad.read.padR);assert.equal(hoverPad.read.padL,'10px');
+ assert.ok(Math.abs(hoverPad.read.insetL-hoverPad.read.insetR)<1.5,'hover mask left/right insets stay matched');
+ assert.equal(hoverPad.read.dotDisplay,'none','read rows must not reserve flex space for a hidden unread dot');
+ if(hoverPad.unread)assert.equal(hoverPad.unread.dotDisplay,'block');
+ await js(`document.querySelector('.home-inbox-row[data-id="${hoverPad.readId}"]').classList.add('force-hover')`);
+ await capture('row-hover-inset');
+ await js(`document.querySelector('.home-inbox-row.force-hover')?.classList.remove('force-hover')`);
  const positions=await js(`({inbox:homeWorkingLayout.placements.inbox,windows:homeWorkingLayout.placements.windows,linkMargin:getComputedStyle(document.getElementById('tab-button-links')).marginRight})`);
  const windowsAvailable=await js(`!notchAPI.capabilities.unavailableHomeModules.includes('windows')`);
  assert.deepEqual(positions.inbox,{column:8,row:0,width:4,height:2});assert.deepEqual(positions.windows,windowsAvailable?{column:8,row:2,width:4,height:2}:undefined);assert.equal(positions.linkMargin,'0px');
@@ -51,8 +60,25 @@ async function run(c){
  for(const [size,count] of [['mini',0],['small',3],['medium',5],['large',10]]){
   await js(`(() => {homeSizes={...homeSizes,inbox:${JSON.stringify(size)}};hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!['recorder','inbox'].includes(id));homeWorkingLayout=null;const layout=NotchDomain.resolveHomeWidgetLayout(homeOrder,homeSizes,hiddenHomeModules);applyHomeLayout(layout,{reason:'initial'});})()`);
   await until(c,`document.getElementById('home-inbox').dataset.widgetSize==='${size}' && document.querySelectorAll('.home-inbox-row').length===${count}`);
-  assert.equal(await js(`Array.from(document.querySelectorAll('.home-inbox-copy strong')).every(el=>el.title===el.textContent)`),true);
-  if(size==='small')assert.equal(await js(`getComputedStyle(document.getElementById('home-inbox-read-all')).display!=='none' && getComputedStyle(document.getElementById('home-inbox-latest')).display!=='none'`),true);
+  assert.equal(await js(`Array.from(document.querySelectorAll('.home-inbox-row')).every(el=>{const text=el.querySelector('.home-inbox-copy strong').textContent;return !el.querySelector('.home-inbox-copy strong').title&&el.title.includes(text)})`),true);
+  if(size==='small'){
+    assert.equal(await js(`getComputedStyle(document.getElementById('home-inbox-read-all')).display!=='none' && getComputedStyle(document.getElementById('home-inbox-latest')).display!=='none'`),true);
+    // Long unread titles must ellipsis before the absolute unread dot (time is hidden).
+    const unreadClearance=await js(`(()=>{
+      const row=document.querySelector('.home-inbox-row[data-unread="true"]');
+      if(!row)return {ok:true,skipped:true};
+      const title=row.querySelector('.home-inbox-copy strong');
+      title.textContent=${JSON.stringify('未读 '+ 'i'.repeat(80)+'H')};
+      const titleBox=title.getBoundingClientRect(),dot=row.querySelector('.home-inbox-dot').getBoundingClientRect();
+      const after=getComputedStyle(row,'::after');
+      const reserve=after&&after.content!=='none'?parseFloat(after.width)||0:0;
+      return {ok:titleBox.right<=dot.left+0.5,reserve,gap:dot.left-titleBox.right};
+    })()`);
+    if(!unreadClearance.skipped){
+      assert.ok(unreadClearance.reserve>=16,'small unread rows reserve a trailing slot without <time>');
+      assert.equal(unreadClearance.ok,true,`small unread title must clear the dot (gap=${unreadClearance.gap})`);
+    }
+  }
   if(size==='mini')assert.equal(await js(`document.getElementById('home-inbox-unread').textContent`),'3');
   const overflow=await js(`(()=>{const t=document.getElementById('home-inbox');return {w:t.scrollWidth<=t.clientWidth+1,h:t.scrollHeight<=t.clientHeight+1}})()`);assert(overflow.w&&overflow.h,`inbox ${size} overflows`);await capture(size);
  }
@@ -92,11 +118,13 @@ async function run(c){
  const migrated=await js(`({sizes:JSON.parse(localStorage.getItem('notch-home-widget-sizes-v2')),placements:homeWorkingLayout.placements,hidden:NotchHome.getVisibility().hiddenIds})`);
  for(const id of Object.keys(oldSizes))assert.equal(migrated.sizes[id],oldSizes[id]);assert.deepEqual(migrated.placements,oldPositions);assert(migrated.hidden.includes('inbox'));assert.equal(await js(`NotchDomain.validateHomeWidgetLayout(homeWorkingLayout,['cursor','recorder','note'])`),true);
  const legacyOrder=['music','pomodoro','cursor','windows','recorder','mirror','note','commands','sun'];
- const legacySizes={...initial.sizes,windows:'large'};delete legacySizes.inbox;
+ // This profile predates both modules. Inheriting today's almanac size would
+ // falsely claim it was already installed and skip its introduction guard.
+ const legacySizes={...initial.sizes,windows:'large'};delete legacySizes.inbox;delete legacySizes.almanac;
  const legacyPositions=await js(`NotchDomain.resolveHomeWidgetLayout(${JSON.stringify(legacyOrder)},${JSON.stringify(legacySizes)},['sun']).placements`);
  await js(`localStorage.setItem('notch-home-placements-v1',${JSON.stringify(JSON.stringify(legacyPositions))});localStorage.setItem('notch-home-widget-sizes-v2',${JSON.stringify(JSON.stringify(legacySizes))});localStorage.setItem('notch-home-order-v3',${JSON.stringify(JSON.stringify(legacyOrder))});localStorage.setItem('notch-home-hidden-modules-v1','["sun"]');`);await reload();
  await until(c,`!!window.NotchHome && !!window.NotchTaskInbox && document.getElementById('home-inbox-badge').textContent==='1'`);
- assert.equal(await js(`NotchHome.isVisible('inbox')`),true);assert.equal(await js(`homeSizes.windows`),'medium');assert.deepEqual(await js(`homeWorkingLayout.placements.inbox`),{column:8,row:0,width:4,height:2});
+ assert.equal(await js(`NotchHome.isVisible('inbox')`),true);assert.equal(await js(`NotchHome.isVisible('almanac')`),false,'a full legacy layout keeps the new almanac hidden instead of shrinking existing cards');assert.equal(await js(`homeSizes.windows`),'medium');assert.deepEqual(await js(`homeWorkingLayout.placements.inbox`),{column:8,row:0,width:4,height:2});
  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(artifacts,'result.json'),JSON.stringify({fourSizes:true,inlinePaging:true,readAll:true,badge:true,disabledModule:true,corruption:true,rebuild:true,legacyLayout:true,selectedHomeBadgeHidden:true,disabledBadgeDot:true,togglePreservesLayout:true,consoleErrors:errors},null,2));
 }
 require('../main.js');

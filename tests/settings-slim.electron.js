@@ -6,6 +6,9 @@ const { app } = require('electron');
 const profile = process.env.TODO_TEST_USER_DATA;
 const home = path.join(profile, 'isolated-home');
 for (const name of ['.cursor', '.codex', '.claude']) fs.mkdirSync(path.join(home, name), { recursive: true });
+// Skip first-run welcome so settings interactions are not blocked by the dialog.
+fs.writeFileSync(path.join(profile, '.first-run-done'), '1');
+fs.writeFileSync(path.join(profile, '.ui-welcome-done'), '1');
 process.env.POME_HOOK_TEST_HOME = home;
 process.env.POME_TEST_NOTIFICATIONS = '1';
 app.commandLine.appendSwitch('user-data-dir', profile);
@@ -64,6 +67,20 @@ async function run(c) {
   assert.equal(await js(`document.querySelectorAll('.settings-page .tile-label').length`),1,'only mirror cover keeps its eyebrow');
   assert.equal(await js(`!!document.querySelector('.settings-mirror-card .tile-label')`),true);
   assert.equal(await js(`!!document.querySelector('.settings-device-card .settings-language-row #settings-language')`),true,'language is a device setting');
+  assert.equal(await js(`!!document.getElementById('settings-task-notifications')`),true,'top bubble toggle lives with device settings');
+  assert.equal(await js(`document.getElementById('settings-task-notifications').checked`),true,'top bubble reminders default on');
+  await js(`document.getElementById('settings-task-notifications').click()`);
+  await until(`!document.getElementById('settings-task-notifications').disabled && document.getElementById('settings-task-notifications').checked===false`);
+  assert.equal((await js('notchAPI.getAppSettings()')).taskNotifications,false);
+  if (output) {
+    fs.mkdirSync(output, { recursive: true });
+    await js(`document.getElementById('settings-task-notifications').closest('label').scrollIntoView({block:'center',behavior:'instant'});document.activeElement.blur();document.getElementById('ui-capsule-hint').hidden=true;document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))`);
+    c.invalidate(); await delay(200);
+    fs.writeFileSync(path.join(output, 'task-notifications-off.png'), (await c.capturePage()).toPNG());
+  }
+  await js(`document.getElementById('settings-task-notifications').click()`);
+  await until(`!document.getElementById('settings-task-notifications').disabled && document.getElementById('settings-task-notifications').checked===true`);
+  assert.equal((await js('notchAPI.getAppSettings()')).taskNotifications,true);
   assert.equal(await js(`document.querySelector('.settings-language-card')`),null);
   assert.equal(await js(`(()=>{const props=['height','minWidth','paddingLeft','paddingRight','backgroundColor','borderColor','borderRadius','fontSize','fontFamily','color','appearance','colorScheme'];const [a,b]=['settings-language','settings-default-tab'].map(id=>getComputedStyle(document.getElementById(id)));return props.every(p=>a[p]===b[p])})()`),true,'language and default-page selects share the same appearance');
 
@@ -72,7 +89,7 @@ async function run(c) {
   assert.equal(structure.oldQuota,false); assert.equal(structure.obsolete,0); assert.equal(structure.testButtons,0);
   assert.equal(structure.tokens.length,6);
   for (const token of structure.tokens) { assert(token.provider && token.id.includes(token.provider)); assert.equal(token.visible,false); }
-  assert.equal(structure.features,6); assert.equal(structure.modules,10);
+  assert.equal(structure.features,6); assert.equal(structure.modules,11);
   assert.equal(structure.columns,2); assert.equal(structure.homeColumns,2);
   assert.equal(structure.primaryColor,'rgb(18, 19, 24)');
   assert.equal(structure.quotaOnly,'solid'); assert.equal(structure.quotaAction,'无需接入'); assert.equal(structure.claudeButton,true);

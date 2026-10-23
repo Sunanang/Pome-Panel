@@ -8,6 +8,7 @@
   let timer = 0;
   let renderedKey = '';
   let previewDate = null;
+  let cachedDay = null;
 
   function nowDate() {
     return previewDate ? new Date(previewDate.getTime()) : new Date();
@@ -130,7 +131,9 @@
       return;
     }
     const size = tile.dataset.widgetSize || 'medium';
-    const day = Almanac.buildAlmanacDay(nowDate());
+    const date = nowDate();
+    if (cachedDay?.key !== Almanac.civilKey(date)) cachedDay = Almanac.buildAlmanacDay(date);
+    const day = cachedDay;
     const view = Almanac.formatForSize(day, size);
     renderedKey = `${day.key}:${size}`;
     const html = size === 'mini' ? renderMini(view)
@@ -169,7 +172,7 @@
   });
   document.addEventListener('notch:home-layout-applied', refreshIfNeeded);
 
-  const sizeObserver = new MutationObserver(() => render());
+  const sizeObserver = new MutationObserver(refreshIfNeeded);
   sizeObserver.observe(tile, { attributes: true, attributeFilter: ['data-widget-size', 'hidden'] });
 
   window.PomeAlmanac = Object.freeze({

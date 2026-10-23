@@ -25,7 +25,7 @@ async function main() {
   fs.mkdirSync(shots, { recursive: true });
   const win = new BrowserWindow({
     width: 1240,
-    height: 700,
+    height: 638,
     frame: false,
     show: false,
     webPreferences: {
@@ -61,6 +61,8 @@ async function main() {
     PomeAlmanac.setPreviewDate(new Date(2026, 9, 23, 12, 0, 0));
   })()`);
   await until(`!!document.querySelector('#home-almanac .almanac-daynum')`);
+  await until(`isExpanded && !modeBusy && document.getElementById('app').classList.contains('expanded')`);
+  await js(`document.fonts.ready`);
 
   const probe = await js(`(() => {
     const day = NotchAlmanac.buildAlmanacDay(new Date(2026, 9, 23, 12, 0, 0));
@@ -91,6 +93,17 @@ async function main() {
     })()`);
     await until(`document.querySelector('#home-almanac')?.dataset.widgetSize === ${JSON.stringify(size)}
       && document.querySelector('#home-almanac .almanac-${size}')`);
+    const aspectPreserved = await js(`(() => {
+      const tile = document.getElementById('home-almanac');
+      return tile.getAnimations().every(animation => animation.effect.getKeyframes().every(frame => {
+        if (!frame.transform || frame.transform === 'none') return true;
+        const matrix = new DOMMatrixReadOnly(frame.transform);
+        return Math.abs(matrix.a - 1) < .001 && Math.abs(matrix.d - 1) < .001;
+      }));
+    })()`);
+    assert.equal(aspectPreserved, true, `${size}: layout animation must not stretch glyphs`);
+    await js(`Promise.allSettled(homeLayoutMotionAnimations.map(animation => animation.finished))`);
+    await until(`!document.getElementById('home-bento').classList.contains('layout-motion-active')`);
     await js(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
     const overflow = await js(`(() => {
       const tile = document.querySelector('#home-almanac');
@@ -101,6 +114,8 @@ async function main() {
         overflowY: tile.scrollHeight > tile.clientHeight + 1,
         day: tile.querySelector('.almanac-daynum')?.textContent,
         height: Math.round(tile.getBoundingClientRect().height),
+        scaleX: tile.getBoundingClientRect().width / tile.offsetWidth,
+        scaleY: tile.getBoundingClientRect().height / tile.offsetHeight,
       };
     })()`);
     assert.equal(overflow.size, size);
@@ -108,6 +123,7 @@ async function main() {
     assert.equal(overflow.day, '23');
     assert.equal(overflow.overflowX, false, `${size} overflowX`);
     assert.equal(overflow.overflowY, false, `${size} overflowY`);
+    assert.ok(Math.abs(overflow.scaleX - 1) < .01 && Math.abs(overflow.scaleY - 1) < .01, `${size}: screenshot must capture the settled layout`);
     // capturePage rect uses DIP, matching getBoundingClientRect().
     const dip = await js(`(() => {
       const r = document.querySelector('#home-almanac').getBoundingClientRect();

@@ -28,7 +28,7 @@ const { createTaskInbox, completionEventId, rebuildTaskInbox } = require('./task
 const { createAiSourceHooks } = require('./aiSourceHooks');
 const { classifyAiEvent, MANUS_TRUSTED_ADAPTER } = require('./aiEventPolicy');
 const { createAiAttentionStore, rebuildAiAttention } = require('./aiAttentionStore');
-const { createAiNotificationScheduler, countQueuedNotifications } = require('./aiNotificationScheduler');
+const { createAiNotificationScheduler } = require('./aiNotificationScheduler');
 const { createClaudeAttentionAdapter } = require('./claudeAttentionAdapter');
 const claudeAttentionAdapter = createClaudeAttentionAdapter();
 let aiSourceHooks;
@@ -365,7 +365,8 @@ const TASK_NOTIFICATION_SCREEN_MARGIN = 12;
 const TASK_NOTIFICATION_VISIBLE_MS = 6000;
 const TASK_NOTIFICATION_LEAVE_MS = 420;
 const TASK_NOTIFICATION_DEDUPE_MS = 2000;
-const TASK_NOTIFICATION_MAX_QUEUE = 5;
+// AI bubbles keep only the newest completion/awaiting item. Todo deadline
+// reminders retain their own FIFO and cannot be discarded by AI arrivals.
 const TASK_NOTIFICATION_BODY_LIMIT = 64 * 1024;
 const TASK_NOTIFICATION_HOST = '127.0.0.1';
 const TASK_NOTIFICATION_PORT = 43821;
@@ -431,25 +432,61 @@ function attentionNotification(row) {
     title: event.commandPreview ? PomeI18n.t('attention.commandMasked', { command: event.commandPreview }) : event.question || PomeI18n.t(event.sensitive ? 'attention.sensitive' : 'attention.generic'),
     commandPreview: event.commandPreview,
     attentionTitleKey: event.commandPreview ? 'attention.commandMasked' : event.question ? null : event.sensitive ? 'attention.sensitive' : 'attention.generic',
+    manualResolution: event.evidence.adapter === 'cursor-mcp-auth-notify',
     project: event.project, completedAt: event.occurredAt, occurredAt: event.occurredAt,
     window: { app: event.source === 'claude' ? 'Terminal' : event.source === 'cursor' ? 'Cursor' : 'Codex' } };
 }
+function taskNotificationsEnabled() {
+  return readAppSettings().taskNotifications !== false;
+}
+function dismissActiveTaskNotificationShell() {
+  const eventId = activeTaskNotification?.eventId;
+  clearTaskNotificationTimers();
+  taskNotificationLeaving = false;
+  taskNotificationPaused = false;
+  taskNotificationSwitching = false;
+  if (notificationWindow && !notificationWindow.isDestroyed()) {
+    // Stop the renderer timeTicker before hiding the BrowserWindow shell.
+    if (eventId != null && notificationWindowReady) {
+      try { notificationWindow.webContents.send('task-notification:hide', { eventId, keepShell: false }); } catch { /* renderer may already be gone */ }
+    }
+    try { notificationWindow.hide(); } catch { /* window may already be gone */ }
+  }
+  activeTaskNotification = null;
+}
 function refreshAttentionNotifications(preferredKey = null) {
   const records = getAiAttention().list();
-  notificationScheduler.sync(records, attentionNotification);
-  if (preferredKey && preferredKey !== activeTaskNotification?.attentionKey) notificationScheduler.select(preferredKey);
+  const newestKey = notificationScheduler.sync(records, attentionNotification);
+  const reopen = preferredKey && preferredKey !== activeTaskNotification?.attentionKey;
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('ai-attention:changed');
-  if (activeTaskNotification?.attentionKey && !notificationScheduler.hasAttention(activeTaskNotification.attentionKey)) beginTaskNotificationDismiss();
-  else if (preferredKey && activeTaskNotification && preferredKey !== activeTaskNotification.attentionKey) preemptTaskNotification();
-  else if (notificationScheduler.shouldPreempt(activeTaskNotification, taskNotificationPaused)) preemptTaskNotification();
+  if (!taskNotificationsEnabled()) {
+    notificationScheduler.clearDisplay();
+    if (activeTaskNotification) dismissActiveTaskNotificationShell();
+    return;
+  }
+  if (reopen) notificationScheduler.select(preferredKey);
+  if (newestKey || reopen) replaceAiTaskNotification();
+  else if (activeTaskNotification?.attentionKey && !notificationScheduler.hasAttention(activeTaskNotification.attentionKey)) beginTaskNotificationDismiss();
   else if (!activeTaskNotification) showNextTaskNotification();
   else { scheduleTaskNotificationDismiss(); sendTaskNotificationQueueCount(); }
 }
-function preemptTaskNotification() {
-  if (!activeTaskNotification || taskNotificationLeaving) return;
-  const remaining = taskNotificationTimer ? notificationScheduler.remaining(taskNotificationRemainingMs, taskNotificationTimerStartedAt) : taskNotificationRemainingMs;
-  notificationScheduler.suspend(activeTaskNotification, Math.max(0, remaining));
-  beginTaskNotificationDismiss();
+function replaceAiTaskNotification() {
+  if (!taskNotificationsEnabled()) {
+    if (activeTaskNotification) dismissActiveTaskNotificationShell();
+    return;
+  }
+  if (activeTaskNotification?.source === 'todo') {
+    sendTaskNotificationQueueCount();
+    return;
+  }
+  if (activeTaskNotification) {
+    clearTaskNotificationTimers();
+    taskNotificationLeaving = false;
+    taskNotificationPaused = false;
+    taskNotificationSwitching = Boolean(notificationWindow && !notificationWindow.isDestroyed() && notificationWindow.isVisible());
+    activeTaskNotification = null;
+  }
+  showNextTaskNotification();
 }
 const recentTaskNotifications = new Map();
 let taskInboxStore = null;
@@ -828,13 +865,7 @@ function normalizeTaskNotification(payload, source) {
 }
 
 function getPendingTaskNotificationCount() {
-  let attentionRows = [];
-  try { attentionRows = getAiAttention().list(); } catch { /* corrupt storage is reported elsewhere */ }
-  return countQueuedNotifications({
-    attentionRows,
-    completions: taskNotificationQueue,
-    activeAttentionKey: activeTaskNotification?.attentionKey || null,
-  });
+  return notificationScheduler.count();
 }
 
 function sendTaskNotificationQueueCount() {
@@ -883,31 +914,13 @@ function enqueueTaskNotification(notification) {
   if (notification.source === 'todo' && lastSeenAt && now - lastSeenAt <= TASK_NOTIFICATION_DEDUPE_MS) return 'duplicate';
   recentTaskNotifications.set(dedupeKey, now);
 
-  if (taskNotificationQueue.length < TASK_NOTIFICATION_MAX_QUEUE) {
-    taskNotificationQueue.push(notification);
-  } else if (notification.status === 'completed' && taskNotificationQueue.at(-1)?.status === 'completed') {
-    const lastIndex = taskNotificationQueue.length - 1;
-    const previous = taskNotificationQueue[lastIndex];
-    const summaryCount = previous.isSummary ? previous.summaryCount + 1 : 2;
-    taskNotificationQueue[lastIndex] = {
-      ...notification,
-      source: 'task',
-      taskId: '',
-      title: PomeI18n.t("copy.moreTasksCompleted.1ac38a", { arg1: (summaryCount) }),
-      project: '',
-      isSummary: true,
-      summaryCount,
-    };
+  if (!taskNotificationsEnabled()) return 'suppressed';
+  notificationScheduler.enqueue(notification);
+  if (notification.source === 'todo') {
+    if (!activeTaskNotification) showNextTaskNotification();
+    else { sendTaskNotificationQueueCount(); scheduleTaskNotificationDismiss(); }
   } else {
-    // Actionable alerts must never turn into a misleading completion summary.
-    taskNotificationQueue.push(notification);
-  }
-
-  if (activeTaskNotification) {
-    sendTaskNotificationQueueCount();
-    scheduleTaskNotificationDismiss();
-  } else {
-    showNextTaskNotification();
+    replaceAiTaskNotification();
   }
   return 'queued';
 }
@@ -1010,9 +1023,7 @@ function recoverClosedTaskNotificationWindow(targetWindow) {
   taskNotificationLeaving = false;
   taskNotificationPaused = false;
   taskNotificationRemainingMs = TASK_NOTIFICATION_VISIBLE_MS;
-  if (!isQuitting && interruptedNotification) {
-    if (!interruptedNotification.attentionKey) taskNotificationQueue.unshift(interruptedNotification);
-  }
+  if (!isQuitting && interruptedNotification) notificationScheduler.restore(interruptedNotification);
   if (!isQuitting) setTimeout(showNextTaskNotification, 80);
 }
 
@@ -1103,10 +1114,7 @@ function scheduleTaskNotificationDismiss() {
   }
   if (taskNotificationTimer) return;
   taskNotificationTimerStartedAt = Date.now();
-  taskNotificationTimer = setTimeout(() => {
-    if (activeTaskNotification?.status === 'awaiting' && !activeTaskNotification.attentionKey) notificationScheduler.suspend(activeTaskNotification, 8000);
-    beginTaskNotificationDismiss();
-  }, Math.max(0, taskNotificationRemainingMs));
+  taskNotificationTimer = setTimeout(beginTaskNotificationDismiss, Math.max(0, taskNotificationRemainingMs));
   sendTaskNotificationTiming();
 }
 
@@ -1130,14 +1138,13 @@ function setTaskNotificationPaused(paused) {
       taskNotificationTimer = null;
     }
   } else {
-    if (notificationScheduler.shouldPreempt(activeTaskNotification, false)) { preemptTaskNotification(); return; }
     scheduleTaskNotificationDismiss();
   }
   sendTaskNotificationTiming();
 }
 
 function showNextTaskNotification() {
-  if (activeTaskNotification || notificationScheduler.count() === 0 || isQuitting) return;
+  if (!taskNotificationsEnabled() || activeTaskNotification || notificationScheduler.count() === 0 || isQuitting) return;
   const targetWindow = createTaskNotificationWindow();
   if (!notificationWindowReady || !targetWindow || targetWindow.isDestroyed()) return;
 
@@ -1170,7 +1177,7 @@ function beginTaskNotificationDismiss() {
   clearTaskNotificationTimers();
   const eventId = activeTaskNotification.eventId;
   if (notificationWindow && !notificationWindow.isDestroyed() && notificationWindowReady) {
-    taskNotificationSwitching = activeTaskNotification.attentionKey ? notificationScheduler.count() > 1 || taskNotificationQueue.length > 0 : notificationScheduler.count() > 0;
+    taskNotificationSwitching = notificationScheduler.count() > 0;
     notificationWindow.webContents.send('task-notification:hide', { eventId, keepShell: taskNotificationSwitching });
   }
   taskNotificationFallbackTimer = setTimeout(
@@ -2168,6 +2175,18 @@ ipcMain.handle('settings:set-auto-launch', (event, enabled) => {
   refreshTrayMenu();
   return { ok: true, autoLaunch: settings.autoLaunch };
 });
+ipcMain.handle('settings:set-task-notifications', (event, enabled) => {
+  if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
+  const next = { ...readAppSettings(), taskNotifications: enabled };
+  if (!saveAppSettings(next)) return { ok: false, error: 'save_failed', taskNotifications: taskNotificationsEnabled() };
+  if (!enabled) {
+    notificationScheduler.clearDisplay();
+    dismissActiveTaskNotificationShell();
+  }
+  const settings = publicAppSettings();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', settings);
+  return { ok: true, taskNotifications: settings.taskNotifications === true };
+});
 ipcMain.handle('settings:set-shortcut', (event, accelerator) => {
   if (!isValidPanelShortcut(accelerator)) return { ok: false, error: 'invalid' };
   if (!setPanelShortcut(accelerator)) {
@@ -2381,6 +2400,9 @@ ipcMain.handle('ai-attention:list', event => {
 ipcMain.handle('ai-attention:show', (event, key) => {
   requireWorkspaceOwner(event);
   try {
+    if (!taskNotificationsEnabled()) {
+      return { ok: false, message: PomeI18n.t('attention.topBubbleDisabled') };
+    }
     const row = getAiAttention().get(key);
     if (row?.state !== 'pending') return { ok: false, message: PomeI18n.t('attention.unverified') };
     const result = getAiAttention().display(key, false); refreshAttentionNotifications(key); return result;

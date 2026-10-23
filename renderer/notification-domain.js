@@ -50,12 +50,12 @@ const pomeNotificationProviders = typeof module === 'object' && module.exports ?
   function attentionKind(value) {
     return ['input', 'choice', 'authorization'].includes(value) ? value : null;
   }
-  function attentionCopy(kind, source, canFocus = true) {
+  function attentionCopy(kind, source, canFocus = true, manualResolution = false) {
     const t = (key, params) => pomeLocaleRendererNotificationDomain.t(`attention.${key}`, params);
     return {
       label: t(kind),
       action: canFocus ? t(`return.${kind}`, { source }) : t('return.manual'),
-      hint: canFocus ? t('hint', { source }) : t('hint.manual'),
+      hint: canFocus ? t(manualResolution ? 'hint.oauth' : 'hint', { source }) : t('hint.manual'),
     };
   }
   function normalize(payload, now = Date.now()) {
@@ -67,6 +67,7 @@ const pomeNotificationProviders = typeof module === 'object' && module.exports ?
     return {
       sourceKey: source, source: sources[source], status, project,
       attentionKind: status === 'awaiting' ? attentionKind(data.attentionKind) : null,
+      manualResolution: data.manualResolution === true,
       commandPreview: data.commandPreview === 'npm install' ? data.commandPreview : null,
       attentionTitleKey: ['attention.commandMasked', 'attention.sensitive', 'attention.generic'].includes(data.attentionTitleKey) ? data.attentionTitleKey : null,
       titleIsFallback: data.titleIsFallback === true || !concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])),

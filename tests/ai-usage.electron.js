@@ -146,6 +146,34 @@ async function main() {
         await js(`document.querySelector('#ai-provider-${id} [data-quota-toggle]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
       }
     }
+    // Monthly Cursor cycles must show a calendar day on the card, not a bare weekday.
+    // Domain and live UI both freeze "now" so week-boundary runs stay calendar-form.
+    const D = require('../renderer/ai-usage-domain');
+    const fixedNow = new Date(2026, 9, 21, 8).getTime();
+    const monthBillingTime = new Date(2026, 10, 18, 11, 42).getTime();
+    const yearBoundaryTime = new Date(2027, 0, 7, 9, 30).getTime();
+    const monthStamp = D.recoveryTime(monthBillingTime, fixedNow);
+    const monthDay = D.recoveryTime(monthBillingTime, fixedNow, { compact: true });
+    assert.equal(monthStamp, '11/18 11:42');
+    assert.equal(monthDay, '11/18');
+    assert.equal(D.recoveryTime(yearBoundaryTime, fixedNow), '2027/1/7 09:30');
+    assert.equal(D.recoveryTime(yearBoundaryTime, fixedNow, { compact: true }), '2027/1/7');
+    const monthBilling = require('../cursor-usage').buildSnapshot({ billingCycleEnd: monthBillingTime }, {}).billing;
+    await js(`(()=>{const fixed=${fixedNow};const orig=Date.now.bind(Date);Date.now=()=>fixed;window.__restoreDateNow=()=>{Date.now=orig;delete window.__restoreDateNow;};})()`);
+    try {
+      await supply({ cursor: { ...cursor, billing: monthBilling } });
+      await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);
+      await resize('small');
+      const smallCaption = await js(`document.querySelector('#ai-provider-cursor .q-compact-caption').textContent`);
+      assert.equal(smallCaption, `${monthDay} 重置`, 'small calendar captions keep spaces and drop the clock');
+      await capture('cursor-monthly-reset-date-small');
+      await resize('large');
+      assert.equal(await js(`document.querySelector('#ai-provider-cursor .q-compact-caption').textContent`), `${monthStamp} 重置`);
+      await capture('cursor-monthly-reset-date');
+    } finally {
+      await js(`window.__restoreDateNow?.()`);
+    }
+
     // Cursor billing and all provider reset labels share minute precision in the visible UI.
     const billingTime=new Date(2026,9,28,13,4,9).getTime();
     const billing=require('../cursor-usage').buildSnapshot({billingCycleEnd:billingTime},{}).billing;

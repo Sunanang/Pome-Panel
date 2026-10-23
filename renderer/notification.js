@@ -89,6 +89,9 @@ function stopTickers() {
   clearTimeout(enterFallback);
   clearInterval(timeTicker);
   cancelAnimationFrame(progressFrame);
+  enterFallback = null;
+  timeTicker = null;
+  progressFrame = null;
 }
 function showNotification(payload) {
   stopTickers();
@@ -182,7 +185,7 @@ shell.addEventListener('focusout', () => { if (!activationError && !shell.matche
 function renderAttention() {
   const notification = currentNotification;
   if (notification.attentionTitleKey) notification.title = pomeLocaleRendererNotification.t(notification.attentionTitleKey, { command: notification.commandPreview });
-  const copy = domain.attentionCopy(notification.attentionKind, notification.source, canFocusWindows());
+  const copy = domain.attentionCopy(notification.attentionKind, notification.source, canFocusWindows(), notification.manualResolution);
   document.getElementById('attention-label').textContent = copy.label;
   document.getElementById('attention-source').textContent = notification.source;
   const project = document.getElementById('attention-project');

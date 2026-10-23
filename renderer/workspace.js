@@ -796,6 +796,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const settingsWorkspaceOpen = document.getElementById('settings-workspace-open');
   const settingsWorkspaceChoose = document.getElementById('settings-workspace-choose');
   const settingsAutoLaunch = document.getElementById('settings-auto-launch');
+  const settingsTaskNotifications = document.getElementById('settings-task-notifications');
   const settingsWinNativeRow = document.getElementById('settings-win-native-row');
   const settingsWinNative = document.getElementById('settings-win-native');
   const settingsInlineNote = document.getElementById('settings-inline-note');
@@ -1035,6 +1036,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       settingsWorkspacePath.title = summary.workspacePath || '';
     }
     if (settingsAutoLaunch) settingsAutoLaunch.checked = summary.autoLaunch;
+    if (settingsTaskNotifications) settingsTaskNotifications.checked = settingsAppSettings?.taskNotifications !== false;
     // Windows 原生能力（P4 / D16）：杀软首轮测试没跑，默认关，只在 Windows 上露出这一行。
     if (settingsWinNativeRow) {
       settingsWinNativeRow.hidden = window.notchAPI?.capabilities?.features?.winNativeSetting !== true;
@@ -2925,6 +2927,22 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     settingsAutoLaunch.checked = result.autoLaunch === true;
     if (settingsAppSettings) settingsAppSettings.autoLaunch = result.autoLaunch === true;
     setSettingsNote(result.autoLaunch ? pomeLocaleRendererWorkspace.t("copy.launchAtLoginEnabled.61caec") : pomeLocaleRendererWorkspace.t("copy.launchAtLoginDisabled.ced994"));
+  });
+  settingsTaskNotifications?.addEventListener('change', async () => {
+    if (!window.notchAPI?.setTaskNotifications) return;
+    settingsTaskNotifications.disabled = true;
+    const result = await window.notchAPI.setTaskNotifications(settingsTaskNotifications.checked).catch(() => ({ ok: false }));
+    settingsTaskNotifications.disabled = false;
+    if (!result?.ok) {
+      settingsTaskNotifications.checked = !settingsTaskNotifications.checked;
+      setSettingsNote(pomeLocaleRendererWorkspace.t('settings.notifications.topBubbleFailed'), true);
+      return;
+    }
+    settingsTaskNotifications.checked = result.taskNotifications === true;
+    if (settingsAppSettings) settingsAppSettings.taskNotifications = result.taskNotifications === true;
+    setSettingsNote(result.taskNotifications
+      ? pomeLocaleRendererWorkspace.t('settings.notifications.topBubbleEnabled')
+      : pomeLocaleRendererWorkspace.t('settings.notifications.topBubbleDisabled'));
   });
   settingsWinNative?.addEventListener('change', async () => {
     if (!window.notchAPI?.setWinNative) return;

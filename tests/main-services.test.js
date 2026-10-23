@@ -416,6 +416,9 @@ test('WIN_NATIVE_DEFAULT stays off until the antivirus gate (D16) passes', () =>
   assert.equal(appSettingsLayoutPreferences({}).winNative, WIN_NATIVE_DEFAULT);
   assert.equal(appSettingsLayoutPreferences({ winNative: true }).winNative, true);
   assert.equal(appSettingsLayoutPreferences({ winNative: false }).winNative, false);
+  assert.equal(appSettingsLayoutPreferences({}).taskNotifications, true);
+  assert.equal(appSettingsLayoutPreferences({ taskNotifications: false }).taskNotifications, false);
+  assert.equal(appSettingsLayoutPreferences({ taskNotifications: true }).taskNotifications, true);
 });
 
 test('todoReminderState fires once within the final hour and expires after the DDL', () => {

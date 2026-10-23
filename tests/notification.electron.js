@@ -41,7 +41,9 @@ async function send(source, payload) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: source === 'codex' ? 'agent-turn-complete' : 'Stop', event_id: `notification-fixture-${++sequence}`, ...payload }),
   });
-  assert.equal(response.status, 202, await response.text());
+  const body = await response.json();
+  assert.equal(response.status, 202, JSON.stringify(body));
+  return body;
 }
 async function shown(title) {
   await until(async () => {
@@ -180,24 +182,36 @@ async function run(mainContents) {
   await evaluate(win, `document.getElementById('notification-shell').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
   await delay(6400);
   assert.equal(await evaluate(win, 'isVisible && !isHiding'), true, 'awaiting must never auto dismiss');
-  // Real queue count and delayed event time are retained when the next item is shown.
-  const queuedTitle = '五分钟前完成，等待前一条确认';
-  await send('codex', { title: queuedTitle, project: 'Pome-Panel', completed_at: Date.now()-300000 });
-  await delay(60); await capture(win, 'claude-awaiting-confirmation');
-  await send('cursor', { title: '排队二', project: 'Pome-Panel' });
-  await send('claude', { title: '排队三', project: 'Pome-Panel' });
-  await until(() => evaluate(win, 'document.getElementById("notification-queue").textContent === "+3"'), 'queue count');
-  // Capture the specified completed +3 and hover designs through the real renderer.
-  await evaluate(win, `document.getElementById('notification-close').click()`);
-  await delay(50);
-  assert.equal(await evaluate(win, `root.classList.contains('is-visible') && !root.classList.contains('is-hiding')`),true,'queued notifications keep the island open');
-  await delay(550);
-  win = await shown(queuedTitle);
+  // A newer completion replaces the on-screen awaiting bubble; no backlog to click through.
+  const latestTitle = '五分钟前完成，替换前一条';
+  await send('codex', { title: latestTitle, project: 'Pome-Panel', completed_at: Date.now()-300000 });
+  win = await shown(latestTitle);
   assert.equal(await evaluate(win, 'document.getElementById("notification-time").textContent'), '5 分钟前');
   await capture(win, 'queued-event-relative-time');
+  await send('cursor', { title: '只会留下最新这一条', project: 'Pome-Panel' });
+  await send('claude', { title: '最终展示的最新气泡', project: 'Pome-Panel' });
+  win = await shown('最终展示的最新气泡');
+  assert.equal(await evaluate(win, 'document.getElementById("notification-queue").hidden || !document.getElementById("notification-queue").textContent'), true, 'no completion backlog badge');
   await dismiss(win);
-  win = await shown('排队二'); await dismiss(win);
-  win = await shown('排队三'); await dismiss(win);
+  await delay(700);
+  const afterLatest = notificationWindow();
+  assert.equal(!afterLatest || !afterLatest.isVisible(), true, 'no older queued bubbles remain');
+  // Settings can suppress the top bubble while completions still save, and must
+  // clear queued shells so a later re-enable does not resurrect them.
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'suppressed-due',text:'关闭后不应再弹出的待办',deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0}])`);
+  win = await shown('关闭后不应再弹出的待办');
+  assert.equal((await mainContents.executeJavaScript('notchAPI.setTaskNotifications(false)')).ok, true);
+  await delay(400);
+  assert.equal(!win.isDestroyed() && !win.isVisible(), true, 'disabling must hide the active bubble');
+  assert.equal(await evaluate(win, 'timeTicker == null'), true, 'hide must stop the renderer timeTicker');
+  await send('codex', { title: '关闭气泡后不应弹出', project: 'Pome-Panel' });
+  await delay(900);
+  const suppressed = notificationWindow();
+  assert.equal(!suppressed || !suppressed.isVisible(), true, 'disabled setting must not show a bubble');
+  assert.equal((await mainContents.executeJavaScript('notchAPI.setTaskNotifications(true)')).ok, true);
+  await delay(700);
+  const afterEnable = notificationWindow();
+  assert.equal(!afterEnable || !afterEnable.isVisible(), true, 're-enable must not resurrect cleared display queues');
   // Legacy status-less completion auto dismisses, with a paused and resumed real timer.
   const hoverTitle = '悬停期间进度暂停';
   await send('codex', { title: hoverTitle, project: 'Pome-Panel' });
@@ -235,9 +249,76 @@ async function run(mainContents) {
   assert.equal(await evaluate(win, `document.getElementById('attention-brand').decode().then(()=>document.getElementById('attention-brand').naturalWidth>0).catch(()=>false)`),true,'real todo reminder loads its source icon');
   await capture(win, 'todo-due-soon'); await dismiss(win);
   assert.equal(JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length, before);
+  // Two deadlines in the same turn retain FIFO order through AI bursts and a
+  // notification-window crash. No reminder is marked then silently dropped.
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders(['a','b'].map(id=>({id:'batch-'+id,text:'批量待办 '+id,deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0})))`);
+  win = await shown('批量待办 a');
+  assert.equal(await evaluate(win, 'queueElement.textContent'), '+1');
+  await send('codex', { title: '较早排队的 AI 完成' });
+  await send('cursor', { title: '待办之后的最新 AI 完成' });
+  assert.equal(await evaluate(win, 'currentNotification.title'), '批量待办 a', 'AI cannot interrupt an active deadline reminder');
+  assert.equal(await evaluate(win, 'queueElement.textContent'), '+2');
+  win.destroy();
+  win = await shown('批量待办 a');
+  await capture(win, 'todo-batch-preserved');
+  await dismiss(win); win = await shown('批量待办 b'); await dismiss(win);
+  win = await shown('待办之后的最新 AI 完成'); await dismiss(win);
+  await delay(700);
+  assert.equal(!notificationWindow() || !notificationWindow().isVisible(), true);
+  await verifyMcpAuthorization(mainContents);
   assert(timings.length > 5);
   await previewVariants();
   assert.deepEqual(errors, []);
+}
+
+async function verifyMcpAuthorization(mainContents) {
+  const inbox = () => mainContents.executeJavaScript('notchAPI.getTaskInbox()');
+  const pending = () => mainContents.executeJavaScript('notchAPI.getAiAttention()');
+  const before = await inbox();
+  const trigger = () => new Promise((resolve, reject) => {
+    const child = require('node:child_process').spawn(process.execPath, [path.join(__dirname, '../scripts/cursor-mcp-auth-notify.js'), '--service', 'Google Drive'], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', POME_NOTIFY_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+    });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; });
+    child.on('error', reject);
+    child.on('exit', code => code === 0 ? resolve(stdout.trim().replace(/^notified:/, '')) : reject(new Error(stderr)));
+  });
+  const firstId = await trigger();
+  let win = await shown('请到 Cursor 完成 Google Drive 授权');
+  const firstDisplay = await evaluate(win, 'currentNotification.eventId');
+  assert.equal(await evaluate(win, 'currentNotification.attentionKind'), 'authorization');
+  assert.equal(await evaluate(win, 'document.getElementById("attention-hint").textContent'), '授权后可关闭此提醒');
+  assert.equal(win.getBounds().height, process.platform === 'win32' ? 114 : 146);
+  const first = (await pending()).items.find(row => row.event.eventId === firstId);
+  assert(first); assert.equal(first.state, 'pending');
+  assert.equal((await send('cursor', first.event)).result, 'duplicate');
+  assert.equal(await evaluate(win, 'currentNotification.eventId'), firstDisplay, 'same delivery never restarts a bubble');
+  const secondId = await trigger();
+  assert.notEqual(firstId, secondId);
+  await until(async () => await evaluate(win, 'currentNotification.eventId') !== firstDisplay, 'same service can request authorization again');
+  win = await shown('请到 Cursor 完成 Google Drive 授权');
+  assert.equal((await pending()).items.length, 2);
+  const after = await inbox();
+  assert.equal(after.total, before.total); assert.equal(after.unread, before.unread);
+  await evaluate(win, `PomeI18n.setState({preference:'en-US',effectiveLocale:'en-US'});window.dispatchEvent(new Event('pome:language-changed'))`);
+  assert.equal(await evaluate(win, 'document.getElementById("attention-hint").textContent'), 'Dismiss after authorizing');
+  await capture(win, 'cursor-mcp-authorization-english');
+  await evaluate(win, `PomeI18n.setState({preference:'zh-CN',effectiveLocale:'zh-CN'});window.dispatchEvent(new Event('pome:language-changed'))`);
+  await capture(win, 'cursor-mcp-authorization');
+  await evaluate(win, 'document.getElementById("attention-close").click()'); await delay(800);
+  assert.equal(!notificationWindow() || !notificationWindow().isVisible(), true, 'older authorization does not replay');
+  assert.equal((await mainContents.executeJavaScript('notchAPI.setTaskNotifications(false)')).ok, true);
+  const reopenWhileOff = await mainContents.executeJavaScript(`notchAPI.showAiAttention(${JSON.stringify(first.key)})`);
+  assert.equal(reopenWhileOff.ok, false, 'reopen must fail while top bubbles are off');
+  assert.match(String(reopenWhileOff.message || ''), /顶部气泡|Top bubble/);
+  assert.equal(!notificationWindow() || !notificationWindow().isVisible(), true, 'failed reopen must not show a bubble');
+  assert.equal((await mainContents.executeJavaScript('notchAPI.setTaskNotifications(true)')).ok, true);
+  await mainContents.executeJavaScript(`notchAPI.showAiAttention(${JSON.stringify(first.key)})`);
+  win = await shown(first.event.question);
+  assert.notEqual(await evaluate(win, 'currentNotification.eventId'), firstDisplay);
+  for (const row of (await pending()).items) await send('cursor', { ...row.event, kind: 'attention.resolved', eventId: row.event.eventId + '-resolved', reason: 'answered', occurredAt: Date.now() });
+  await delay(800);
 }
 
 async function previewVariants() {
@@ -252,12 +333,12 @@ async function previewVariants() {
   ipcMain.on('task-notification:shown', clock);
   try {
     const specs = [
-      ['codex-completed-queue','darwin',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:3}],
-      ['codex-completed-hover','darwin',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:3},true],
+      ['codex-completed-queue','darwin',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:0}],
+      ['codex-completed-hover','darwin',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:0},true],
       ['gpt-completed-no-project','darwin',{source:'gpt',title:'周报摘要已生成，共 6 条要点',completedAt:Date.now()-300000}],
       ['task-completed','darwin',{source:'task',title:'导出 10 月账单 CSV',project:'Pome-Panel'}],
-      ['windows-codex-completed','win32',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:3}],
-      ['windows-codex-completed-hover','win32',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:3},true],
+      ['windows-codex-completed','win32',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:0}],
+      ['windows-codex-completed-hover','win32',{source:'codex',title:'重构通知队列，补齐悬停暂停逻辑',project:'Pome-Panel',queueCount:0},true],
       ['windows-grok-native-off','win32',{source:'grok',title:'Grok 完成测试',project:'Pome-Panel'}],
       ['windows-copilot-native-off','win32',{source:'copilot',title:'Copilot 完成测试',project:'Pome-Panel'}],
       ['windows-antigravity-native-off','win32',{source:'antigravity',title:'Antigravity 完成测试',project:'Pome-Panel'}],

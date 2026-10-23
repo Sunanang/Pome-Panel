@@ -93,13 +93,31 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
       badge: row.key !== display?.key && row.remaining <= 20 && !sameCycle,
       resetAt: typeof row.windowUsage?.resetsAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.windowUsage.resetsAt) ? null : toMillis(row.windowUsage?.resetsAt) };
   }
-  function recoveryTime(value, now = Date.now()) {
+  function recoveryTime(value, now = Date.now(), options = {}) {
     const ms = toMillis(value);
     if (ms == null) return '';
     const d = new Date(ms), today = new Date(now);
     const sameDay = d.toDateString() === today.toDateString();
-    const day = sameDay ? '' : d.toLocaleDateString(pomeLocaleRendererAiUsageDomain.getState().formatLocale, { weekday: 'short' });
-    return [day, clock(ms)].filter(Boolean).join(' ');
+    if (sameDay) return clock(ms);
+    // Within a week, weekday is enough for weekly quotas. Farther out (typical
+    // monthly Cursor cycles) weekday alone is misleading — show the calendar day.
+    const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startReset = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const dayDiff = Math.round((startReset - startToday) / 86400000);
+    let day;
+    let weekdayForm = false;
+    if (dayDiff >= 1 && dayDiff <= 7) {
+      day = d.toLocaleDateString(pomeLocaleRendererAiUsageDomain.getState().formatLocale, { weekday: 'short' });
+      weekdayForm = true;
+    } else if (d.getFullYear() === today.getFullYear()) {
+      day = `${d.getMonth() + 1}/${d.getDate()}`;
+    } else {
+      day = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+    }
+    // Small cards: keep weekday + clock (spaces may be stripped in zh UI), but
+    // calendar dates drop the clock so "11/20 重置" stays readable.
+    if (options.compact && !weekdayForm) return day;
+    return `${day} ${clock(ms)}`;
   }
   function miniSummary(snapshots, now = Date.now()) {
     const ids = dashboard(snapshots, 'mini', now).ids;

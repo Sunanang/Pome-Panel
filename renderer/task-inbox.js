@@ -135,20 +135,28 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
         const item = document.createElement('div'); item.className = 'home-inbox-item';
         const rowButton = button('', () => void openRecord(row), 'home-inbox-row');
         rowButton.dataset.id = row.id; rowButton.dataset.status = recordStatus(row); rowButton.dataset.unread = String(row.readAt === null);
-        rowButton.title = openLabel(row.source);
-        rowButton.setAttribute('aria-label', `${source.label} · ${statusLabels[recordStatus(row)]} · ${(row.titleIsFallback ? window.PomeNotification.fallbackTitle(row.source, row.status) : row.title) || pomeLocaleRendererTaskInbox.t("copy.taskCompleted.e9a880")} · ${relativeTime(row.receivedAt)}${row.readAt === null ? pomeLocaleRendererTaskInbox.t("copy.unread.4557d3") : ''}`);
+        const titleText = () => (row.titleIsFallback ? window.PomeNotification.fallbackTitle(row.source, row.status) : row.title)
+          || pomeLocaleRendererTaskInbox.t('copy.taskCompleted.e9a880');
+        const detailBody = () => {
+          const display = titleText();
+          return row.titleIsFallback ? display : (row.completionSummary || row.title || display);
+        };
+        // One tooltip for the whole row: session + summary. Avoid child titles that
+        // otherwise show "打开 Codex" on icon/time while only the text shows detail.
+        rowButton.title = [row.sessionTitle, detailBody()].filter(Boolean).join('\n');
+        rowButton.setAttribute('aria-label', `${source.label} · ${statusLabels[recordStatus(row)]} · ${titleText()} · ${relativeTime(row.receivedAt)}${row.readAt === null ? pomeLocaleRendererTaskInbox.t("copy.unread.4557d3") : ''} · ${openLabel(row.source)}`);
         const iconWrap = document.createElement('span'); iconWrap.className = 'home-inbox-source-wrap'; iconWrap.dataset.source = sources[row.source] ? row.source : 'other';
         const icon = document.createElement('img'); icon.src = source.icon; icon.alt = ''; icon.className = 'home-inbox-source'; icon.dataset.source = iconWrap.dataset.source;
         const copy = document.createElement('span'); copy.className = 'home-inbox-copy';
-        const title = document.createElement('strong'); pomeLocaleRendererTaskInbox.bind(title, "textContent", () => ((row.titleIsFallback ? window.PomeNotification.fallbackTitle(row.source, row.status) : row.title) || pomeLocaleRendererTaskInbox.t("copy.taskCompleted.e9a880"))); title.title = [row.sessionTitle, row.titleIsFallback ? window.PomeNotification.fallbackTitle(row.source, row.status) : row.completionSummary || row.title].filter(Boolean).join('\n'); copy.append(title);
+        const title = document.createElement('strong'); pomeLocaleRendererTaskInbox.bind(title, 'textContent', titleText); copy.append(title);
         if (recordStatus(row) !== 'completed') {
           const state = document.createElement('small'); state.className = 'home-inbox-event-status';
           state.textContent = statusLabels[recordStatus(row)]; copy.append(state);
         }
         if (size === 'large') {
-          const summary = document.createElement('small'); summary.textContent = row.project || source.label; summary.title = rowButton.title; copy.append(summary);
+          const summary = document.createElement('small'); summary.textContent = row.project || source.label; copy.append(summary);
         }
-        const time = document.createElement('time'); time.dateTime = new Date(row.receivedAt).toISOString(); time.textContent = relativeTime(row.receivedAt); time.title = rowButton.title;
+        const time = document.createElement('time'); time.dateTime = new Date(row.receivedAt).toISOString(); time.textContent = relativeTime(row.receivedAt);
         const dot = document.createElement('i'); dot.className = 'home-inbox-dot'; dot.setAttribute('aria-hidden', 'true');
         iconWrap.append(icon); rowButton.append(iconWrap, copy, time, dot); item.append(rowButton);
         list.append(item);

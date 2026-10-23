@@ -3676,12 +3676,10 @@ function animateCommittedHomeLayout(reason, beforeState) {
     const moved = Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5;
     const resized = Math.abs(scaleX - 1) >= 0.01 || Math.abs(scaleY - 1) >= 0.01;
     if (previous && !moved && !resized) return;
-    // 预览让位只做平移，避免缩放造成顿挫；正式提交才允许轻微缩放
-    const useScale = !isPreview && resized;
-    const fromTransform = useScale
-      ? `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`
-      : `translate(${dx}px, ${dy}px)`;
-    const toTransform = useScale ? 'translate(0, 0) scale(1, 1)' : 'translate(0, 0)';
+    // Animate placement, not the text's aspect ratio. A size change can have
+    // very different width/height ratios and must never stretch the content.
+    const fromTransform = `translate(${dx}px, ${dy}px)`;
+    const toTransform = 'translate(0, 0)';
     const animation = tile.animate(
       previous
         ? [

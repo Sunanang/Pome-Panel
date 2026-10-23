@@ -161,6 +161,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   setDefaultTab: (tab) => ipcRenderer.invoke('settings:set-default-tab', tab),
   setWinNative: (enabled) => ipcRenderer.invoke('settings:set-win-native', enabled === true),
   setAutoLaunch: (enabled) => ipcRenderer.invoke('settings:set-auto-launch', enabled === true),
+  setTaskNotifications: (enabled) => ipcRenderer.invoke('settings:set-task-notifications', enabled === true),
   setPanelShortcut: (accelerator) => ipcRenderer.invoke('settings:set-shortcut', accelerator),
   onAppSettingsChanged: (cb) => subscribe('settings:changed', (event, settings) => cb(settings)),
   onRecordShortcut: (cb) => subscribe('app:record-shortcut', () => cb()),
@@ -201,7 +202,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   taskNotificationResize: (size) => ipcRenderer.send('task-notification:resize', size),
   dismissTaskNotification: (eventId) => ipcRenderer.send('task-notification:close', eventId),
   onTaskNotificationHide: (cb) =>
-    subscribe('task-notification:hide', (event, eventId) => cb(eventId)),
+    subscribe('task-notification:hide', (event, payload) => cb(payload)),
   onTaskCompletion: (cb) =>
     subscribe('task-completion:new', (event, notification) => cb(notification)),
   onTaskInboxChanged: (cb) => subscribe('tasks:inbox-changed', () => cb()),

@@ -189,14 +189,16 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
         <small class="ai-quota-help">${escape(row.help)}</small></div>`;
     }).join('')}${updated}${inline ? '</div>' : ''}</div>`;
   }
-  function captionLines(m) {
+  function captionLines(m, { compact = false } = {}) {
     if (m.size === 'mini') return [];
     const constrained = m.bottleneck && m.bottleneck.remaining <= 20;
     const raw = constrained ? m.bottleneck.resetAt : m.selected.windowUsage?.resetsAt || (m.id === 'cursor' ? m.data?.billing?.cycleEnd : null);
     if (D.toMillis(raw) == null) return [];
-    if (constrained) return [t(m.depleted ? 'quota.recoveryAt' : 'quota.resetAt', { time:D.recoveryTime(raw) })];
-    if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return [t('quota.resetAt', { time:date(raw) })];
-    return [t('quota.resetAt', { time:D.recoveryTime(raw) })];
+    const time = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)
+      ? date(raw)
+      : D.recoveryTime(raw, Date.now(), compact ? { compact: true } : {});
+    if (constrained) return [t(m.depleted ? 'quota.recoveryAt' : 'quota.resetAt', { time })];
+    return [t('quota.resetAt', { time })];
   }
   function provider(m, layout) {
     const error = m.status === 'error', caption = captionContent(m);
@@ -216,9 +218,18 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   }
 
   function captionContent(m) {
-    const lines = captionLines(m).filter(Boolean);
-    const compact = m.size === 'small' && I.getState().effectiveLocale === 'zh-CN';
-    return { title:lines.join(' · '), html:lines.map(line => `<span>${escape(compact ? line.replace(/\s+/g, '') : line)}</span>`).join('') };
+    const fullLines = captionLines(m).filter(Boolean);
+    const displayLines = captionLines(m, { compact: m.size === 'small' }).filter(Boolean);
+    const zhSmall = m.size === 'small' && I.getState().effectiveLocale === 'zh-CN';
+    return {
+      title: fullLines.join(' · '),
+      html: displayLines.map((line) => {
+        // Weekday captions may drop spaces ("周一16:58重置"). Calendar dates keep
+        // spaces ("11/20 重置") after the clock was already omitted for small.
+        const stripSpaces = zhSmall && !/\d+\//.test(line);
+        return `<span>${escape(stripSpaces ? line.replace(/\s+/g, '') : line)}</span>`;
+      }).join(''),
+    };
   }
 
   function fadeState(node, key, next) {

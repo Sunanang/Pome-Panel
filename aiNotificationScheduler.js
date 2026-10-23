@@ -1,52 +1,63 @@
 'use strict';
-// The main process owns window animations; this module owns fair selection and
-// preserves a completion's actual remaining display time across preemption.
-
-// +N counts everything that will still be shown after the current item:
-// other visible pending attention requests plus the completion FIFO.
-function countQueuedNotifications({
-  attentionRows = [],
-  completions = [],
-  activeAttentionKey = null,
-} = {}) {
-  const attention = attentionRows.filter((row) => (
-    row.state === 'pending' && !row.hidden && row.key !== activeAttentionKey
-  )).length;
-  const completion = completions.reduce((total, item) => total + (item.summaryCount || 1), 0);
-  return attention + completion;
-}
-
+// Pending requests remain in the store, but only a new request or an explicit
+// reopen earns a bubble. Todo reminders retain their independent FIFO.
 function createAiNotificationScheduler({ completions = [], now = Date.now, slotMs = 8000 } = {}) {
-  let attention = new Map(), lastAttentionKey = null, lastKind = 'completion', preferAttention = false, selectedKey = null;
+  let attention = new Map(), selectedKey = null;
+  function dropAiCompletions() {
+    for (let index = completions.length - 1; index >= 0; index -= 1) {
+      if (completions[index].source !== 'todo') completions.splice(index, 1);
+    }
+  }
   function sync(records, toNotification) {
     const prior = attention;
     attention = new Map(records.filter(row => row.state === 'pending' && !row.hidden).map(row => [row.key, toNotification(row)]));
-    if (lastKind === 'completion' && [...attention.keys()].some(key => !prior.has(key))) preferAttention = true;
+    const newest = [...attention.keys()].filter(key => !prior.has(key)).at(-1);
+    if (selectedKey && !attention.has(selectedKey)) selectedKey = null;
+    if (newest) select(newest);
+    return newest || null;
+  }
+  function select(key) {
+    if (!attention.has(key)) return;
+    dropAiCompletions();
+    selectedKey = key;
+  }
+  // Drop on-screen selection and queued shells; store-backed pending stays.
+  function clearDisplay() {
+    selectedKey = null;
+    completions.length = 0;
+  }
+  function enqueue(item) {
+    if (item.source !== 'todo') {
+      dropAiCompletions();
+      selectedKey = null;
+    }
+    completions.push(item);
   }
   function next() {
+    // AI bursts must not discard or indefinitely postpone deadline reminders.
+    const todoIndex = completions.findIndex(item => item.source === 'todo');
+    if (todoIndex >= 0) return completions.splice(todoIndex, 1)[0];
     if (selectedKey && attention.has(selectedKey)) {
-      const selected = attention.get(selectedKey); lastAttentionKey = selectedKey; selectedKey = null;
-      preferAttention = false; lastKind = 'attention'; return selected;
+      const selected = attention.get(selectedKey); selectedKey = null;
+      return selected;
     }
-    selectedKey = null;
-    if (attention.size && (preferAttention || !completions.length || lastKind === 'completion')) {
-      preferAttention = false; lastKind = 'attention';
-      const keys = [...attention.keys()];
-      const key = keys[(keys.indexOf(lastAttentionKey) + 1) % keys.length];
-      lastAttentionKey = key; return attention.get(key);
-    }
-    if (completions.length) { lastKind = 'completion'; return completions.shift(); }
-    return null;
+    return completions.shift() || null;
   }
-  function hasOthers(item) { return completions.length > 0 || [...attention.values()].some(row => row.attentionKey !== item?.attentionKey); }
-  function suspend(item, remainingMs) { if (!item?.attentionKey) completions.unshift({ ...item, remainingMs }); }
+  function restore(item) {
+    if (!item) return;
+    if (item.attentionKey) {
+      if (!selectedKey && !completions.some(row => row.source !== 'todo') && attention.has(item.attentionKey)) selectedKey = item.attentionKey;
+    } else if (item.source === 'todo' || !selectedKey && !completions.some(row => row.source !== 'todo')) {
+      completions.unshift(item);
+    }
+  }
+  const count = () => completions.length + (selectedKey ? 1 : 0);
   function budget(item) { return item?.status === 'awaiting' || item?.attentionKey ? slotMs : item?.remainingMs ?? 6000; }
-  function shouldPreempt(item, paused) { return Boolean(preferAttention && attention.size && item && !item.attentionKey && !paused); }
-  return { sync, next, hasOthers, suspend, budget, shouldPreempt,
-    count: () => completions.length + attention.size,
+  return { sync, next, enqueue, restore, budget, count, clearDisplay,
+    hasOthers: () => count() > 0,
     hasAttention: key => attention.has(key),
-    select: key => { if (attention.has(key)) selectedKey = key; },
+    select,
     remaining: (budgetMs, startedAt) => Math.max(0, budgetMs - Math.max(0, now() - startedAt)),
   };
 }
-module.exports = { createAiNotificationScheduler, countQueuedNotifications };
+module.exports = { createAiNotificationScheduler };

@@ -8,6 +8,7 @@
  *   node scripts/cursor-mcp-auth-notify.js --service "Google Drive"
  */
 const http = require('node:http');
+const { randomUUID } = require('node:crypto');
 
 function parseArgs(argv = process.argv.slice(2)) {
   const out = { service: process.env.POME_MCP_SERVICE || '', dryRun: false };
@@ -29,18 +30,21 @@ function slug(value) {
     .slice(0, 64) || 'mcp';
 }
 
-function buildMcpAuthNotification({ service = '', now = Date.now() } = {}) {
+function buildMcpAuthNotification({ service = '', now = Date.now(), requestId = randomUUID() } = {}) {
   const label = String(service || '').trim() || 'MCP';
   return {
     source: 'cursor',
-    status: 'awaiting',
-    attentionKind: 'authorization',
-    title: `请到 Cursor 完成 ${label} 授权`,
+    schemaVersion: 2,
+    kind: 'attention.required',
+    action: 'approve',
+    question: `请到 Cursor 完成 ${label} 授权`,
     project: label,
-    event_id: `mcp-auth:${slug(label)}`,
-    session_id: 'mcp-auth',
-    completed_at: now,
-    cwd: process.cwd(),
+    eventId: `mcp-auth:${slug(label)}:${requestId}`,
+    sessionId: `mcp-auth:${slug(label)}`,
+    turnId: requestId,
+    requestId,
+    occurredAt: now,
+    evidence: { adapter: 'cursor-mcp-auth-notify', surface: 'ide', providerVersion: 'manual', signal: 'mcp-needs-auth' },
   };
 }
 
@@ -87,7 +91,7 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  process.stdout.write(`notified:${payload.event_id}\n`);
+  process.stdout.write(`notified:${payload.eventId}\n`);
 }
 
 module.exports = { parseArgs, slug, buildMcpAuthNotification, postNotification };

@@ -3,7 +3,7 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
 const { classifyAiEvent, knownControlEnvelope, safeQuestion } = require('../aiEventPolicy');
 const { createAiAttentionStore, rebuildAiAttention } = require('../aiAttentionStore');
-const { createAiNotificationScheduler, countQueuedNotifications } = require('../aiNotificationScheduler');
+const { createAiNotificationScheduler } = require('../aiNotificationScheduler');
 const { createClaudeAttentionAdapter } = require('../claudeAttentionAdapter');
 const { createTaskInbox } = require('../taskInbox');
 const { observation } = require('../scripts/claude-attention');
@@ -74,50 +74,72 @@ test('atomic failures, external edits and corrupt storage preserve bytes and sup
   const repaired = rebuildAiAttention({ filePath, confirmed: true, expectedDigest }); assert.equal(fs.readFileSync(repaired.backupPath, 'utf8'), '{broken');
   assert.deepEqual(createAiAttentionStore({ filePath }).list(), []);
 });
-test('queue +N counts other visible waiting requests and completions together, skipping hidden ones', () => {
-  const rows = [
-    { key: 'active', state: 'pending', hidden: false },
-    { key: 'other', state: 'pending', hidden: false },
-    { key: 'hidden', state: 'pending', hidden: true },
-    { key: 'unverified', state: 'unverified', hidden: false },
-  ];
-  assert.equal(countQueuedNotifications({
-    attentionRows: rows,
-    completions: [{ eventId: 'c1' }, { eventId: 'c2', summaryCount: 2 }],
-    activeAttentionKey: 'active',
-  }), 4);
-  assert.equal(countQueuedNotifications({
-    attentionRows: rows,
-    completions: [{ eventId: 'c1' }],
-    activeAttentionKey: null,
-  }), 3);
-  assert.equal(countQueuedNotifications({
-    attentionRows: rows.filter((row) => row.key !== 'active'),
-    completions: [],
-    activeAttentionKey: null,
-  }), 1);
-});
-test('scheduler alternates waiting and completions, pauses preemption, keeps remaining completion budget', () => {
-  const completions = [{ eventId: 'c1' }, { eventId: 'c2' }]; let clock = 0;
-  const scheduler = createAiNotificationScheduler({ completions, now: () => clock });
-  const first = scheduler.next(); assert.equal(first.eventId, 'c1');
-  const rows = [1, 2].map(i => ({ key: `a${i}`, state: 'pending' })); const map = row => ({ attentionKey: row.key });
-  scheduler.sync(rows, map); assert(scheduler.shouldPreempt(first, false)); assert(!scheduler.shouldPreempt(first, true));
-  clock += 1234; scheduler.suspend(first, scheduler.remaining(6000, 0));
-  assert.equal(scheduler.next().attentionKey, 'a1');
-  const resumed = scheduler.next(); assert.equal(resumed.eventId, 'c1'); assert.equal(scheduler.budget(resumed), 4766);
-  const next = scheduler.next(); assert.equal(next.attentionKey, 'a2'); assert.equal(scheduler.budget(next), 8000);
-  assert.equal(scheduler.next().eventId, 'c2');
-  scheduler.sync([{ key: 'a2', state: 'pending' }], map); assert(!scheduler.hasOthers(next));
-});
-test('new waiting arrivals do not repeat the current item or starve an already queued completion', () => {
-  const completions = [], scheduler = createAiNotificationScheduler({ completions });
+test('only the latest waiting request displays, duplicates and resolution never replay older requests', () => {
+  const scheduler = createAiNotificationScheduler();
   const row = key => ({ key, state: 'pending' }), map = row => ({ attentionKey: row.key });
   scheduler.sync([row('a')], map); assert.equal(scheduler.next().attentionKey, 'a');
   scheduler.sync([row('a'), row('b')], map); assert.equal(scheduler.next().attentionKey, 'b');
-  completions.push({ eventId: 'done' });
-  scheduler.sync([row('a'), row('b'), row('c')], map); assert.equal(scheduler.next().eventId, 'done');
-  scheduler.select('c'); assert.equal(scheduler.next().attentionKey, 'c');
+  assert.equal(scheduler.count(), 0);
+  scheduler.sync([row('a'), row('b')], map); assert.equal(scheduler.next(), null);
+  scheduler.sync([row('a')], map); assert.equal(scheduler.next(), null);
+  assert.equal(scheduler.hasAttention('a'), true, 'superseded request remains available for explicit reopen');
+  scheduler.select('a'); assert.equal(scheduler.next().attentionKey, 'a');
+  assert.equal(scheduler.next(), null);
+});
+test('new completion replaces pending attention and new attention replaces a queued completion', () => {
+  const scheduler = createAiNotificationScheduler();
+  const row = key => ({ key, state: 'pending' }), map = row => ({ attentionKey: row.key });
+  scheduler.sync([row('a')], map);
+  scheduler.enqueue({ eventId: 'done' });
+  assert.equal(scheduler.next().eventId, 'done'); assert.equal(scheduler.next(), null);
+  scheduler.enqueue({ eventId: 'old' });
+  scheduler.sync([row('a'), row('b')], map);
+  assert.equal(scheduler.next().attentionKey, 'b'); assert.equal(scheduler.next(), null);
+  scheduler.sync([row('a')], map); assert.equal(scheduler.next(), null);
+});
+test('AI bursts preserve every todo reminder in order and +N counts only future bubbles', () => {
+  const scheduler = createAiNotificationScheduler();
+  scheduler.enqueue({ source: 'todo', eventId: 'due-a' });
+  scheduler.enqueue({ eventId: 'old' });
+  scheduler.enqueue({ source: 'todo', eventId: 'due-b' });
+  scheduler.enqueue({ eventId: 'latest' });
+  assert.equal(scheduler.count(), 3);
+  assert.equal(scheduler.next().eventId, 'due-a');
+  assert.equal(scheduler.count(), 2);
+  scheduler.sync([{ key: 'wait', state: 'pending' }, { key: 'hidden', state: 'pending', hidden: true }, { key: 'restart', state: 'unverified' }], row => ({ attentionKey: row.key }));
+  assert.equal(scheduler.count(), 2);
+  assert.equal(scheduler.next().eventId, 'due-b');
+  assert.equal(scheduler.next().attentionKey, 'wait');
+  assert.equal(scheduler.next(), null);
+});
+test('window recovery retains queued todos and never resurrects a superseded AI bubble', () => {
+  let clock = 0;
+  const scheduler = createAiNotificationScheduler({ now: () => clock });
+  scheduler.enqueue({ source: 'todo', eventId: 'due-b' });
+  scheduler.restore({ source: 'todo', eventId: 'due-a', remainingMs: 2300 });
+  const recovered = scheduler.next(); assert.equal(recovered.eventId, 'due-a'); assert.equal(scheduler.budget(recovered), 2300);
+  scheduler.enqueue({ eventId: 'latest' });
+  scheduler.restore({ eventId: 'old' });
+  assert.equal(scheduler.next().eventId, 'due-b'); assert.equal(scheduler.next().eventId, 'latest');
+  assert.equal(scheduler.next(), null);
+  scheduler.sync([{ key: 'wait', state: 'pending' }], row => ({ attentionKey: row.key }));
+  const waiting = scheduler.next(); scheduler.restore(waiting);
+  assert.equal(scheduler.next().attentionKey, 'wait');
+  clock = 1234; assert.equal(scheduler.remaining(6000, 0), 4766);
+});
+test('clearDisplay drops selection and queues but keeps store-backed pending for reopen', () => {
+  const scheduler = createAiNotificationScheduler();
+  const row = key => ({ key, state: 'pending' }), map = row => ({ attentionKey: row.key });
+  scheduler.sync([row('wait')], map);
+  scheduler.enqueue({ source: 'todo', eventId: 'due' });
+  scheduler.enqueue({ eventId: 'done' });
+  assert.equal(scheduler.count(), 2);
+  scheduler.clearDisplay();
+  assert.equal(scheduler.count(), 0);
+  assert.equal(scheduler.next(), null);
+  assert.equal(scheduler.hasAttention('wait'), true);
+  scheduler.select('wait');
+  assert.equal(scheduler.next().attentionKey, 'wait');
 });
 test('legacy noisy history uses one projection for pagination/unread and retains original identities', t => {
   const { dir } = fixture(t), filePath = path.join(dir, 'inbox.json'), inbox = createTaskInbox({ filePath });

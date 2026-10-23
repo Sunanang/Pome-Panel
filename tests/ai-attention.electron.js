@@ -170,40 +170,39 @@ async function run() {
   await evaluate(fallbackWindow, 'document.getElementById("attention-action").click()'); await delay(650);
   assert.equal(activations, countBeforeFallback); assert.equal((await pending()).items[0].hidden, true);
   await resolve(fallback);
-  // Real 8-second slot and hover budget, including a stale hover IPC.
-  const a = event('input', 'codex', { question: '轮换 A' }), b = event('select', 'cursor', { question: '轮换 B' });
+  // A fresh waiting request replaces even a hovered bubble. Pending records
+  // remain actionable but do not count as an automatic display backlog.
+  const a = event('input', 'codex', { question: '较早等待 A' }), b = event('select', 'cursor', { question: '最新等待 B' });
   await send(a); const win = await shown(a.question); await evaluate(win, 'reportHover(true)'); await send(b);
-  assert.equal(await evaluate(win, 'document.getElementById("attention-queue").textContent'), '+1'); await capture(win, 'queue-hover');
-  if (process.platform === 'darwin') { await evaluate(win, 'document.getElementById("attention-action").click()'); await delay(150); }
-  await delay(8300); assert.equal(await evaluate(win, 'currentNotification.title'), a.question, 'hover must stop rotation');
-  const oldId = await evaluate(win, 'currentNotification.eventId');
-  await evaluate(win, 'reportHover(false)'); await shown(b.question);
-  await evaluate(win, `window.notchAPI.taskNotificationHover(true, ${JSON.stringify(oldId)})`); await delay(100);
-  assert.equal(await evaluate(win, 'timing.paused'), true, 'waiting has no countdown even while scheduling slots');
+  await shown(b.question);
+  assert.equal(await evaluate(win, 'document.getElementById("attention-queue").hidden'), true);
+  assert.equal((await pending()).items.length, 2);
   const after = await evaluate(win, 'currentNotification.eventId');
-  // Rotation includes an 8s slot plus the outgoing animation/IPC fallback.
-  // Observe the next display generation instead of racing it at exactly 8.3s.
-  try {
-    await until(async () => await evaluate(win, 'currentNotification.eventId') !== after, 'stale hover cannot stop current rotation', 12000);
-  } catch (error) {
-    console.error('Rotation state:', await evaluate(win, '({id:currentNotification.eventId,title:currentNotification.title,isHovering,hover:shell.matches(":hover"),focus:shell.matches(":focus-within"),isVisible,isHiding,timing})'));
-    console.error('Recent hover events:', hoverEvents);
-    throw error;
-  }
-  const selected = (await pending()).items.find(row => row.event.question === b.question);
-  await mainEval(`notchAPI.showAiAttention(${JSON.stringify(selected.key)})`); await shown(b.question);
+  await delay(8300); assert.equal(await evaluate(win, 'currentNotification.eventId'), after, 'waiting never rotates back to an old request');
+  await capture(win, 'latest-waiting-no-backlog');
+  const selected = (await pending()).items.find(row => row.event.question === a.question);
+  await mainEval(`notchAPI.showAiAttention(${JSON.stringify(selected.key)})`); await shown(a.question);
   await resolve(a); await resolve(b); await delay(650);
-  // Completion temporarily yields to a new waiting request and then returns.
+  // Replacing a completion with attention must not suspend/replay completion.
   await send({ source: 'codex', event_id: 'mixed-completion', type: 'agent-turn-complete', title: '普通完成仍展示' });
   const completionWindow = await shown('普通完成仍展示');
   await evaluate(completionWindow, 'reportHover(true)');
-  const newer = event('input', 'claude', { question: '新等待优先' }); await send(newer); await delay(200);
-  assert.equal(await evaluate(completionWindow, 'currentNotification.title'), '普通完成仍展示');
-  assert.equal(await evaluate(completionWindow, 'document.getElementById("notification-queue").textContent'), '+1',
-    'completion bubble +N includes a waiting request that will show next');
-  await evaluate(completionWindow, 'reportHover(false)'); await shown(newer.question); await resolve(newer);
-  const resumed = await shown('普通完成仍展示'); assert.equal(await evaluate(resumed, 'progressElement.hidden'), false);
-  await evaluate(resumed, 'document.getElementById("notification-close").click()'); await delay(650);
+  const oldId = await evaluate(completionWindow, 'currentNotification.eventId');
+  const newer = event('input', 'claude', { question: '新等待优先' }); await send(newer); await shown(newer.question);
+  assert.equal(await evaluate(completionWindow, 'queueElement.hidden'), true);
+  await resolve(newer); await delay(800);
+  assert.equal(!window() || !window().isVisible(), true, 'superseded completion does not return');
+  const oldWaiting = event('approve', 'cursor', { question: '完成前的等待' }); await send(oldWaiting); await shown(oldWaiting.question);
+  await send({ source: 'codex', event_id: 'latest-completion', type: 'agent-turn-complete', title: '完成顶替旧等待' });
+  const latest = await shown('完成顶替旧等待');
+  await evaluate(latest, `window.notchAPI.taskNotificationHover(true, ${JSON.stringify(oldId)})`); await delay(100);
+  assert.equal(await evaluate(latest, 'timing.paused'), false, 'stale hover cannot pause a new completion');
+  assert.equal(await evaluate(latest, 'queueElement.hidden'), true);
+  await capture(latest, 'latest-completion-no-old-waiting');
+  await evaluate(latest, 'document.getElementById("notification-close").click()'); await delay(800);
+  assert.equal(!window() || !window().isVisible(), true, 'superseded waiting does not return');
+  assert.equal((await pending()).items.length, 1);
+  await resolve(oldWaiting);
   await previewWindows();
   await verifyClaudeObservations();
   const attentionPath = path.join(profile, 'ai-attention.json'); fs.writeFileSync(attentionPath, '{corrupt fixture');

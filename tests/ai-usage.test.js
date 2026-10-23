@@ -234,14 +234,22 @@ test('a full five-hour ring can be constrained by a depleted weekly quota', () =
   assert.equal(b.name, '周');assert.equal(b.remaining, 0);assert.equal(b.badge, true);assert.equal(b.resetAt, 2000000000000);
   assert.equal(D.bottleneckInfo({ ...data, secondary: { ...data.secondary, resetsAt: null } }, 'codex').resetAt, null);
 });
-test('recovery copy separates weekday and clock in both locales without inventing a date', () => {
+test('recovery copy uses weekday within a week and calendar dates beyond', () => {
   const I = require('../localization/runtime'), before = I.getState();
-  const now = new Date(2026, 9, 21, 8).getTime(), later = new Date(2026, 9, 26, 16, 58, 42).getTime();
+  const now = new Date(2026, 9, 21, 8).getTime();
+  const later = new Date(2026, 9, 26, 16, 58, 42).getTime();
+  const monthLater = new Date(2026, 10, 18, 16, 58, 42).getTime();
+  const nextYear = new Date(2027, 0, 7, 9, 30).getTime();
   try {
     for (const locale of ['zh-CN', 'en-US']) {
       I.setState(I.snapshot(locale, [locale]));
       assert.equal(D.recoveryTime(now, now), '08:00');
       assert.equal(D.recoveryTime(later, now), locale === 'zh-CN' ? '周一 16:58' : 'Mon 16:58');
+      assert.equal(D.recoveryTime(monthLater, now), '11/18 16:58');
+      assert.equal(D.recoveryTime(nextYear, now), '2027/1/7 09:30');
+      assert.equal(D.recoveryTime(later, now, { compact: true }), locale === 'zh-CN' ? '周一 16:58' : 'Mon 16:58');
+      assert.equal(D.recoveryTime(monthLater, now, { compact: true }), '11/18');
+      assert.equal(D.recoveryTime(nextYear, now, { compact: true }), '2027/1/7');
       assert.equal(D.recoveryTime(null, now), '');
     }
   } finally { I.setState({ ...before, revision: I.getState().revision + 1 }); }

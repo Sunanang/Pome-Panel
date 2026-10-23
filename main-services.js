@@ -576,6 +576,8 @@ function appSettingsLayoutPreferences(stored) {
     legacyWinLayout: source.legacyWinLayout === true,
     // 只认布尔值：没存过时用 WIN_NATIVE_DEFAULT（D16 关卡未过 → false）。
     winNative: typeof source.winNative === 'boolean' ? source.winNative : WIN_NATIVE_DEFAULT,
+    // Top bubble tips default on; only an explicit false disables them.
+    taskNotifications: source.taskNotifications !== false,
   };
 }
 
