@@ -29,7 +29,6 @@ const SYNC_DB_FILENAME = 'sync.db';
 const TODO_STORAGE_KEY = 'notch-todo-data';
 const TODO_CATEGORY_KEY = 'notch-todo-category-names-v1';
 const TODO_PRIORITIES = Object.freeze(['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7']);
-const TODO_PRIORITIES_DEFAULT_VISIBLE = Object.freeze(['P0', 'P1', 'P2', 'P3']);
 const CATEGORY_ENTITY_PREFIX = 'category:';
 const OUTBOX_STATUS_PENDING = 'pending';
 const OUTBOX_STATUS_ACKED = 'acked';
@@ -974,7 +973,6 @@ module.exports = {
   TODO_STORAGE_KEY,
   TODO_CATEGORY_KEY,
   TODO_PRIORITIES,
-  TODO_PRIORITIES_DEFAULT_VISIBLE,
   TODO_ITEM_FIELDS,
   CATEGORY_ENTITY_PREFIX,
   OUTBOX_STATUS_PENDING,

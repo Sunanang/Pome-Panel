@@ -120,7 +120,7 @@ const {
   MAX_SUPPORTED_SCHEMA_VERSION,
   completionSyncKey,
 } = require('./packages/sync-protocol');
-const { openSyncStore, resolveSyncDbPath } = require('./sync-store');
+const { openSyncStore, resolveSyncDbPath, TODO_PRIORITIES } = require('./sync-store');
 const {
   classifyFromLocalAndNas,
   resolveMigrationChoice,
@@ -3575,9 +3575,9 @@ async function recoveryEntities(storage) {
   snapshot.aiSettings = null; snapshot.secrets = [];
   const entities = buildWorkspaceEntities(snapshot).entities.filter((e) => RECOVERY_SCOPE.includes(e.collection));
   const todos = JSON.parse(storage['notch-todo-data'] || '{}');
-  for (const priority of ['P0','P1','P2','P3']) for (const row of todos[priority] || []) entities.push({ collection: 'todos', entityId: row.id, payload: { ...row, categoryId: priority } });
+  for (const priority of TODO_PRIORITIES) for (const row of todos[priority] || []) entities.push({ collection: 'todos', entityId: row.id, payload: { ...row, categoryId: priority } });
   const categories = JSON.parse(storage['notch-todo-category-names-v1'] || '{}');
-  for (const priority of ['P0','P1','P2','P3']) if (typeof categories[priority] === 'string') entities.push({ collection: 'todos', entityId: `category:${priority}`, payload: { name: categories[priority] } });
+  for (const priority of TODO_PRIORITIES) if (typeof categories[priority] === 'string') entities.push({ collection: 'todos', entityId: `category:${priority}`, payload: { name: categories[priority] } });
   return entities.map(({ collection, entityId, payload }) => ({ collection, entityId, payload }));
 }
 async function recoveryRequest(action, body) {

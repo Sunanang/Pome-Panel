@@ -629,7 +629,7 @@ async function main() {
           document.dispatchEvent(new CustomEvent('notch:tabchange', { detail: { tab: 'todo' } }));
           const tab = triggers.every(t => t.dataset.deadline === today());
           stale();
-          input.dispatchEvent(new Event('focus'));
+          input.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
           const inputFocus = trigger.dataset.deadline === today();
           stale();
           trigger.click();
@@ -645,7 +645,7 @@ async function main() {
           trigger.dataset.deadline = manualDeadline;
           trigger.dataset.deadlineSource = 'manual';
           window.dispatchEvent(new Event('focus'));
-          input.dispatchEvent(new Event('focus'));
+          input.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
           const manual = submit('rollover-manual') === manualDeadline;
           const resetAfterManual = trigger.dataset.deadline === today() && trigger.dataset.deadlineSource === 'default';
           return { automatic, wake, expand, tab, inputFocus, calendar, submits, manual, resetAfterManual };

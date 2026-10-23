@@ -45,9 +45,13 @@ async function main() {
   });
   const js = (code) => win.webContents.executeJavaScript(code);
   const frames = () => js('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))');
-  async function capture(label) {
+  async function capture(label, selector) {
+    // capturePage can otherwise catch the tab/expand transition's previous paint.
+    await new Promise(resolve => setTimeout(resolve, 600));
     await frames();
-    fs.writeFileSync(path.join(shots, `${label}.png`), (await win.webContents.capturePage()).toPNG());
+    const rect = selector && await js(`(() => {const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+      return {x:Math.floor(r.x),y:Math.floor(r.y),width:Math.ceil(r.width),height:Math.ceil(r.height)};})()`);
+    fs.writeFileSync(path.join(shots, `${label}.png`), (await win.webContents.capturePage(rect || undefined)).toPNG());
   }
   async function until(code, tries = 120) {
     for (let i = 0; i < tries; i += 1) {
@@ -231,6 +235,11 @@ async function main() {
   assert.equal(popHost.clippedByPanel, false);
   assert.equal(popHost.fullyOnScreen, true, JSON.stringify(popHost));
   assert.equal(popHost.cardFullyVisible, true, JSON.stringify(popHost));
+  assert.equal(await js(`['todo-editor-hour','todo-editor-minute'].every(id => {
+    const picker=document.getElementById(id), selected=picker.querySelector('[aria-selected="true"]');
+    const p=picker.getBoundingClientRect(), s=selected.getBoundingClientRect();
+    return s.top>=p.top&&s.bottom<=p.bottom;
+  })`), true, 'first open must reveal the selected hour and minute, not start both lists at 00');
   const hitTest = await js(`(() => {
     const pop = document.getElementById('todo-date-popover');
     const card = pop.querySelector('.todo-editor-card');
@@ -316,6 +325,209 @@ async function main() {
   assert.equal(await js(`document.querySelector('.quadrant[data-priority="P5"] .todo-text')?.textContent`), '远端分类条目');
   await capture('06-todo-order-reconcile');
 
+  // Opening is read-only, including imported minutes/seconds and missing dates.
+  const deadlineSafety = await js(`(() => {
+    const exact=new Date(Date.now()+3*86400000);exact.setHours(18,32,45,123);
+    const regular=new Date(exact);regular.setMinutes(30,0,0);
+    const rows=[
+      {id:'deadline-exact',text:'18:32 打开不改期',deadline:exact.toISOString()},
+      {id:'deadline-grid',text:'18:30 不重复保存',deadline:regular.toISOString()},
+      {id:'deadline-empty',text:'无截止时间',deadline:''},
+      {id:'deadline-past',text:'已过期不自动改期',deadline:new Date(2020,0,1,18,32,45,123).toISOString()},
+    ].map(row=>({...row,done:false,createdAt:Date.now(),remindedAt:0}));
+    data.P0.push(...rows);localStorage.setItem(STORAGE_KEY,JSON.stringify(data));renderList('P0');
+    const baseline=localStorage.getItem(STORAGE_KEY), originalSet=Storage.prototype.setItem;
+    const reminders=notchAPI.fixtureReminderScheduleCount();let writes=0;
+    Storage.prototype.setItem=function(key,value){if(key===STORAGE_KEY)writes++;return originalSet.call(this,key,value);};
+    const open=row=>{
+      closeTodoEditor();editingTodo=null;renderList('P0');
+      document.querySelector('[data-id="'+row.id+'"] [data-action="edit"]').click();
+      document.querySelector('[data-id="'+row.id+'"] [data-action="edit-deadline"]').click();
+    };
+    try {
+      open(rows[0]);
+      const minuteShown=todoTimePickerValue(todoEditorMinute);
+      document.querySelector('#todo-editor-hour button[aria-selected="true"]').click();
+      document.querySelector('#todo-editor-minute button[aria-selected="true"]').click();
+      document.querySelector('#todo-calendar-grid button.selected').click();
+      closeTodoEditor();open(rows[0]);
+      const readOnly={writes,reminders:notchAPI.fixtureReminderScheduleCount()-reminders,
+        storageUnchanged:localStorage.getItem(STORAGE_KEY)===baseline,deadlineUnchanged:rows[0].deadline===exact.toISOString(),minuteShown};
+      document.querySelector('#todo-editor-hour button[data-value="19"]').click();
+      const changed=new Date(exact);changed.setHours(19,32,0,0);
+      const changedOnce={writes,reminders:notchAPI.fixtureReminderScheduleCount()-reminders,
+        stored:JSON.parse(localStorage.getItem(STORAGE_KEY)).P0.find(row=>row.id===rows[0].id).deadline===changed.toISOString()};
+      document.querySelector('#todo-editor-hour button[data-value="19"]').click();
+      document.querySelector('#todo-editor-minute button[data-value="32"]').click();
+      closeTodoEditor();open(rows[0]);open(rows[1]);open(rows[2]);open(rows[3]);
+      const noExtraWrites=writes===1&&notchAPI.fixtureReminderScheduleCount()-reminders===1;
+      const missingUnchanged=data.P0.find(row=>row.id==='deadline-empty').deadline===''
+        &&JSON.parse(localStorage.getItem(STORAGE_KEY)).P0.find(row=>row.id==='deadline-empty').deadline==='';
+      closeTodoEditor();openTodoEditor('P0');
+      document.querySelector('#todo-editor-minute button[data-value="45"]').click();
+      const draftOnly=writes===1&&notchAPI.fixtureReminderScheduleCount()-reminders===1
+        &&document.querySelector('.todo-deadline-trigger[data-deadline-priority="P0"]').dataset.deadlineSource==='manual';
+      return {readOnly,changedOnce,noExtraWrites,missingUnchanged,draftOnly};
+    } finally {Storage.prototype.setItem=originalSet;closeTodoEditor();editingTodo=null;renderList('P0');}
+  })()`);
+  assert.deepEqual(deadlineSafety,{readOnly:{writes:0,reminders:0,storageUnchanged:true,deadlineUnchanged:true,minuteShown:'32'},
+    changedOnce:{writes:1,reminders:1,stored:true},noExtraWrites:true,missingUnchanged:true,draftOnly:true});
+  fs.writeFileSync(path.join(shots,'deadline-readonly.json'),JSON.stringify(deadlineSafety,null,2));
+  // Reopen the untouched 18:32 example for a visual check of its real minute.
+  await js(`(() => {
+    const row=data.P0.find(item=>item.id==='deadline-exact');const date=new Date(row.deadline);date.setHours(18,32,45,123);row.deadline=date.toISOString();
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(data));editingTodo={priority:'P0',id:row.id};renderList('P0');
+    document.querySelector('[data-id="deadline-exact"]').scrollIntoView({block:'nearest'});
+    document.querySelector('[data-id="deadline-exact"] [data-action="edit-deadline"]').click();
+  })()`);
+  await capture('06b-deadline-exact-minute');
+  await capture('06c-deadline-exact-minute-popover', '#todo-date-popover');
+
+  const unsetBehavior = await js(`(() => {
+    const row=data.P0.find(item=>item.id==='deadline-empty');
+    const originalSet=Storage.prototype.setItem;let writes=0;
+    Storage.prototype.setItem=function(key,value){if(key===STORAGE_KEY)writes++;return originalSet.call(this,key,value);};
+    const summary=()=>({writes,reminders:notchAPI.fixtureReminderScheduleCount()-baseline,
+      pending:todoEditorContext.unset,state:todoEditorState.textContent,
+      selected:document.querySelectorAll('#todo-calendar-grid .selected,#todo-date-popover .todo-time-picker [aria-selected="true"]').length,
+      deadline:data.P0.find(item=>item.id===row.id).deadline,
+      stored:JSON.parse(localStorage.getItem(STORAGE_KEY)).P0.find(item=>item.id===row.id).deadline});
+    let baseline=0;
+    const reopenEmpty=()=>{
+      closeTodoEditor();row.deadline='';
+      originalSet.call(localStorage,STORAGE_KEY,JSON.stringify(data));writes=0;baseline=notchAPI.fixtureReminderScheduleCount();
+      editingTodo={priority:'P0',id:row.id};renderList('P0');
+      document.querySelector('[data-id="deadline-empty"] [data-action="edit-deadline"]').click();
+    };
+    try {
+      reopenEmpty();const initial=summary();
+      document.getElementById('todo-calendar-next').click();const browsed=summary();
+      PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));const english=summary();
+      document.querySelector('#todo-calendar-grid [data-day="1"]').click();
+      const selectedDay=summary();
+      document.querySelector('#todo-calendar-grid [data-day="1"]').click();
+      const repeatWrites=writes;
+      closeTodoEditor();openTodoEditor('P0',row);const existingHasNoHint=todoEditorState.hidden;
+      const timeSelections=[];
+      for(const id of ['todo-editor-hour','todo-editor-minute']) {
+        reopenEmpty();document.getElementById('todo-calendar-next').click();
+        // Explicitly selecting the suggested value is a real empty -> set change.
+        document.querySelector('#'+id+' [data-value="'+document.getElementById(id).dataset.value+'"]').click();
+        timeSelections.push(summary());
+      }
+      reopenEmpty();document.getElementById('todo-calendar-previous').click();
+      document.querySelector('#todo-calendar-grid [data-day="1"]').click();const invalid=summary();
+      return {initial,browsed,english,selectedDay,repeatWrites,existingHasNoHint,timeSelections,invalid};
+    } finally {Storage.prototype.setItem=originalSet;closeTodoEditor();PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));}
+  })()`);
+  const empty={writes:0,reminders:0,pending:true,state:'尚未设置 · 选择后生效',selected:0,deadline:'',stored:''};
+  assert.deepEqual(unsetBehavior.initial,empty,'empty deadlines show no committed selection and do not write');
+  assert.deepEqual(unsetBehavior.browsed,empty,'browsing months does not imply a selection');
+  assert.deepEqual(unsetBehavior.english,{...empty,state:'Not set · Select to apply'});
+  for(const value of [unsetBehavior.selectedDay,...unsetBehavior.timeSelections]) {
+    assert.equal(value.writes,1);assert.equal(value.reminders,1);assert.equal(value.pending,false);
+    assert.equal(value.state,'Set');assert.equal(value.selected,3);assert.equal(value.deadline,value.stored);
+    assert(Number.isFinite(Date.parse(value.stored))&&Date.parse(value.stored)>Date.now());
+  }
+  assert.equal(unsetBehavior.repeatWrites,1);assert.equal(unsetBehavior.existingHasNoHint,true);
+  assert.deepEqual(unsetBehavior.invalid,{...empty,state:'Not set · Select to apply'},'invalid choices stay unset');
+  fs.writeFileSync(path.join(shots,'deadline-unset.json'),JSON.stringify(unsetBehavior,null,2));
+  await js(`editingTodo={priority:'P0',id:'deadline-empty'};renderList('P0');
+    document.querySelector('[data-id="deadline-empty"]').scrollIntoView({block:'nearest'});
+    document.querySelector('[data-id="deadline-empty"] [data-action="edit-deadline"]').click();void 0`);
+  await capture('06d-deadline-unset-zh', '#todo-date-popover');
+  await js(`PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));void 0`);
+  await capture('06e-deadline-unset-en', '#todo-date-popover');
+  await js(`document.getElementById('todo-calendar-next').click();document.querySelector('#todo-calendar-grid [data-day="1"]').click();void 0`);
+  await capture('06f-deadline-set-en', '#todo-date-popover');
+  await js(`closeTodoEditor();PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));void 0`);
+  await js(`closeTodoEditor();editingTodo=null;data.P0=data.P0.filter(row=>!row.id.startsWith('deadline-'));localStorage.setItem(STORAGE_KEY,JSON.stringify(data));renderList('P0');void 0`);
+
+  // An identical or changed NAS projection must retain all unsaved form state.
+  const preserved = await js(`(() => {
+    const input=document.querySelector('.add-row input[data-priority="P0"]');
+    const trigger=document.querySelector('.todo-deadline-trigger[data-deadline-priority="P0"]');
+    const name=document.querySelector('.todo-category-name[data-category="P0"]');
+    input.value='同步中仍保留的草稿';
+    trigger.dataset.deadline=new Date(Date.now()+5*86400000).toISOString();trigger.dataset.deadlineSource='manual';
+    const deadline=trigger.dataset.deadline;
+    name.value='尚未提交的分类名';
+    editingTodo={priority:'P5',id:'remote-p5'};renderList('P5');
+    let inline=document.querySelector('.todo-inline-name');inline.value='尚未提交的编辑';inline.focus();inline.setSelectionRange(1,4);
+    const project=()=>applyTodosSyncProjectionPayload({todosJson:JSON.stringify(data),categoryNamesJson:JSON.stringify(todoCategoryNames)});
+    project();
+    const identical=input===document.querySelector('.add-row input[data-priority="P0"]')&&input.value==='同步中仍保留的草稿'&&trigger.dataset.deadline===deadline;
+    data.P1.push({id:'remote-added',text:'同步新增待办',done:false,createdAt:Date.now(),deadline:'',remindedAt:0});
+    project();
+    inline=document.querySelector('.todo-inline-name');
+    return {identical, draft:input.value,deadline:trigger.dataset.deadline===deadline,manual:trigger.dataset.deadlineSource,
+      name:name.value,inline:inline.value,focused:document.activeElement===inline,selection:[inline.selectionStart,inline.selectionEnd],
+      remoteVisible:!!document.querySelector('[data-id="remote-added"]')};
+  })()`);
+  assert.deepEqual(preserved, {identical:true,draft:'同步中仍保留的草稿',deadline:true,manual:'manual',name:'尚未提交的分类名',
+    inline:'尚未提交的编辑',focused:true,selection:[1,4],remoteVisible:true});
+  await capture('08-sync-preserves-drafts');
+
+  // A structural update preserves surviving forms and invalidates popup anchors.
+  await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P0"]').click()`);
+  await js(`data.P6=[{id:'remote-p6',text:'新分类',done:false,createdAt:Date.now(),deadline:'',remindedAt:0}];
+    applyTodosSyncProjectionPayload({todosJson:JSON.stringify(data),categoryNamesJson:JSON.stringify(todoCategoryNames)});void 0`);
+  assert.equal(await js(`document.querySelector('.add-row input[data-priority="P0"]').value`),'同步中仍保留的草稿');
+  assert.equal(await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P0"]').dataset.deadlineSource`),'manual');
+  assert.equal(await js(`document.getElementById('todo-date-popover').hidden`),true);
+  assert.equal(await js(`todoEditorContext===null`),true);
+
+  // No pointerdown: exercise keyboard/programmatic page changes and shortcut collapse.
+  await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P0"]').click();setActiveTab('settings')`);
+  await until(`document.getElementById('tab-settings').getAttribute('aria-hidden')==='false'`);
+  assert.equal(await js(`document.getElementById('todo-date-popover').hidden`),true);
+  await capture('09-settings-no-calendar');
+  await js(`setActiveTab('todo')`);
+  await until(`document.getElementById('tab-todo').getAttribute('aria-hidden')==='false'`);
+  await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P0"]').click();notchAPI.fixtureCollapse()`);
+  await until(`!modeBusy&&!isExpanded`);
+  assert.equal(await js(`document.getElementById('todo-date-popover').hidden`),true);
+  assert.equal(await js(`todoEditorContext===null`),true);
+  await capture('10-collapse-no-calendar');
+  await js(`setMode(true)`);await until(`!modeBusy&&isExpanded`);
+  await js(`setActiveTab('todo')`);
+  await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P0"]').click();
+    Object.defineProperty(document,'hidden',{configurable:true,value:true});
+    document.dispatchEvent(new Event('visibilitychange'));delete document.hidden;void 0`);
+  assert.equal(await js(`document.getElementById('todo-date-popover').hidden`),true);
+  // Remote removal must not leave an editor capable of mutating a deleted task.
+  await js(`openTodoEditor('P5',data.P5[0]);data.P5=[];
+    applyTodosSyncProjectionPayload({todosJson:JSON.stringify(data),categoryNamesJson:JSON.stringify(todoCategoryNames)});void 0`);
+  assert.equal(await js(`todoEditorContext===null&&editingTodo===null&&document.getElementById('todo-date-popover').hidden`),true);
+
+  // Seed stale Chinese chrome on an empty deadline trigger + bulk delete before switching locale.
+  await js(`(() => {
+    const trigger=document.querySelector('.todo-deadline-trigger[data-deadline-priority="P2"]');
+    delete trigger.dataset.deadline; delete trigger.dataset.deadlineSource;
+    trigger.classList.remove('selected'); trigger.querySelector('span').textContent='日期';
+    document.querySelector('.todo-bulk-delete').textContent='删除';
+  })()`);
+  await js(`PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));void 0`);
+  assert.equal(await js(`document.querySelector('.add-row input').placeholder`),'Add a task and press Enter to save…');
+  assert.match(await js(`document.querySelector('.add-row input').getAttribute('aria-label')`),/^Add a task to /);
+  assert.equal(await js(`document.querySelector('[data-remove-priority]').title`),'Delete category');
+  assert.equal(await js(`document.querySelector('.todo-category-name').getAttribute('aria-label')`),'Rename task category');
+  assert.equal(await js(`document.querySelector('.todo-deadline-trigger').getAttribute('aria-label')`),'Choose deadline');
+  assert.equal(await js(`document.getElementById('todo-add-category').title`),'Add category');
+  assert.equal(await js(`TODO_CATEGORY_DEFAULTS.P7`),'Category 8');
+  assert.equal(await js(`document.querySelector('.todo-category-name').value`),'尚未提交的分类名','language changes preserve unsubmitted user names');
+  assert.equal(await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P2"] span').textContent`),'Date');
+  assert.equal(await js(`document.querySelector('.todo-bulk-delete').textContent`),'Delete');
+  await js(`window.confirm=message=>{window.lastCategoryConfirmation=message;return false;};removeTodoCategory('P6');void 0`);
+  assert.match(await js(`window.lastCategoryConfirmation`),/^Delete .* and its 1 task\?$/);
+  await capture('11-english-todo-controls');
+  await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));void 0`);
+  assert.equal(await js(`document.querySelector('.add-row input').placeholder`),'添加待办，回车保存…');
+  assert.match(await js(`document.querySelector('.add-row input').getAttribute('aria-label')`),/^添加.+待办$/);
+  assert.equal(await js(`document.getElementById('todo-add-category').title`),'添加分类');
+  assert.equal(await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P2"] span').textContent`),'日期');
+  assert.equal(await js(`document.querySelector('.todo-bulk-delete').textContent`),'删除');
+
   // Fill to 8 categories — FAB must disappear.
   await js(`(() => {
     todoCategoryOrder = ['P0','P1','P2','P3','P4','P5','P6','P7'];
@@ -328,7 +540,7 @@ async function main() {
   await capture('07-todo-fab-hidden-at-8');
 
   assert.deepEqual(errors, [], errors.join('\\n'));
-  console.log('todo-board-fixes: sun seed, recorder head entry, time pickers, categories OK');
+  console.log('todo-board-fixes: categories, visible time selection, sync drafts/edits/focus, popup lifecycle and bilingual controls OK');
   console.log(`shots: ${shots}`);
   clearTimeout(watchdog);
   app.exit(0);

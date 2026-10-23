@@ -234,7 +234,6 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   }
   let currentLayout = null, currentModels = [];
   const compactNames = { claude:'Claude', antigravity:'Antigrav' };
-  const measure = document.createElement('canvas').getContext('2d');
   const textWidths = new Map();
   function textWidth(style, text) {
     const properties = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariantNumeric', 'fontFeatureSettings', 'fontVariationSettings', 'letterSpacing'];
@@ -310,8 +309,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       const labels = [...card.querySelectorAll('.q-inline-rows .q-window-short')];
       if (!labels.length) { animation.remove(`${m.id}/rows-offset`); return; }
       const font = getComputedStyle(labels[0]);
-      measure.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
-      const labelWidth = Math.ceil(Math.max(...labels.map(label=>measure.measureText(label.textContent).width)));
+      const labelWidth = Math.ceil(Math.max(...labels.map(label => textWidth(font, label.textContent))));
       const valueStyle = getComputedStyle(card.querySelector('.q-inline-rows .q-pct'));
       const valueWidth = Math.ceil(textWidth(valueStyle, '100%') * 10) / 10 + .25;
       card.style.setProperty('--q-window-label-width', `${Math.min(labelWidth, card.clientWidth*.36)}px`);

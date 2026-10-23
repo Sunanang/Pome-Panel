@@ -45,7 +45,7 @@ Use the menu bar or tray to show the panel, configure the summon shortcut, enabl
 | Page | Purpose |
 | --- | --- |
 | Home | Resizable Bento modules. Keep at least one module; the others fill available space when a module is hidden. |
-| Tasks | Four renameable workflows, internally still `P0`–`P3`. Defaults are Courses, Media & writing, Vibe coding and Daily life. New tasks default to 23:30 today, sort by deadline and remind you one hour before they are due. |
+| Tasks | Four renameable categories by default: Courses, Media & writing, Vibe coding and Daily life. Add or remove categories to keep 1–8, using internal keys `P0`–`P7`; visible order stays local. New tasks default to 23:30 today, sort by deadline and remind you one hour before they are due. Opening an existing task's date picker does not save. Tasks without a deadline show a selection prompt and save only after you choose a valid time. Sync preserves unsaved drafts and manually selected dates. The date picker closes when leaving Tasks or collapsing the panel. Backup, restore and NAS overwrite include tasks and names from all eight categories. |
 | Notes | Save Home notes to a searchable library; rename, edit or delete them. |
 | Links | Save public HTTP/HTTPS URLs. Title fetching rejects local addresses, private networks and unsafe redirects. |
 | Recordings | Audio stays in the local `recordings/` directory. Optional Model Studio Qwen3-ASR live transcription uses an encrypted API key or an environment variable. |

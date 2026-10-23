@@ -9,10 +9,10 @@ const TODO_CATEGORY_DEFAULTS = {
   get P1() { return pomeLocaleRendererApp.t("copy.mediaWriting.4672dc"); },
   P2: 'Vibe coding',
   get P3() { return pomeLocaleRendererApp.t("copy.dailyLife.f648d6"); },
-  P4: '分类 5',
-  P5: '分类 6',
-  P6: '分类 7',
-  P7: '分类 8',
+  get P4() { return pomeLocaleRendererApp.t('todo.categoryDefault', { number: 5 }); },
+  get P5() { return pomeLocaleRendererApp.t('todo.categoryDefault', { number: 6 }); },
+  get P6() { return pomeLocaleRendererApp.t('todo.categoryDefault', { number: 7 }); },
+  get P7() { return pomeLocaleRendererApp.t('todo.categoryDefault', { number: 8 }); },
 };
 const TODO_DOT_CLASS = {
   P0: 'dot-p0', P1: 'dot-p1', P2: 'dot-p2', P3: 'dot-p3',
@@ -420,12 +420,16 @@ function persistTodoCategoryNames() {
   return true;
 }
 
-function applyTodoCategoryNames() {
+function applyTodoCategoryNames({ preserveDrafts = false } = {}) {
   todoCategoryOrder.forEach((categoryId) => {
     const name = todoCategoryNames[categoryId] || TODO_CATEGORY_DEFAULTS[categoryId] || categoryId;
     const input = document.querySelector(`.todo-category-name[data-category="${categoryId}"]`);
     const addInput = document.querySelector(`.add-row input[data-priority="${categoryId}"]`);
-    if (input) input.value = name;
+    if (input) {
+      const dirty = preserveDrafts && input.value !== input.defaultValue;
+      input.defaultValue = name;
+      if (!dirty) input.value = name;
+    }
     if (addInput) addInput.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.addATaskTo.efb0ec", { arg1: (name) }));
   });
 }
@@ -434,21 +438,20 @@ function quadrantHtml(priority) {
   const name = escapeHtml(todoCategoryNames[priority] || TODO_CATEGORY_DEFAULTS[priority] || priority);
   const dot = TODO_DOT_CLASS[priority] || 'dot-p3';
   const canRemove = todoCategoryOrder.length > 1;
+  const attr = key => escapeHtml(pomeLocaleRendererApp.t(key));
   return (
     `<section class="quadrant tile" data-priority="${priority}">` +
     `<div class="quadrant-header">` +
     `<span class="dot ${dot}"></span>` +
-    `<input class="todo-category-name" data-category="${priority}" value="${name}" maxlength="24" aria-label="修改待办分类名称" />` +
-    `<button class="bulk-delete todo-bulk-delete" type="button" data-bulk-priority="${priority}" hidden>删除</button>` +
-    (canRemove
-      ? `<button class="todo-remove-category" type="button" data-remove-priority="${priority}" aria-label="删除分类" title="删除分类">×</button>`
-      : '') +
+    `<input class="todo-category-name" data-category="${priority}" value="${name}" maxlength="24" aria-label="${attr('copy.renameTaskCategory.5f6c58')}" data-i18n-aria-label="copy.renameTaskCategory.5f6c58" />` +
+    `<button class="bulk-delete todo-bulk-delete" type="button" data-bulk-priority="${priority}" hidden>${attr('copy.delete.2f9daa')}</button>` +
+    `<button class="todo-remove-category" type="button" data-remove-priority="${priority}" aria-label="${attr('todo.removeCategory')}" title="${attr('todo.removeCategory')}" data-i18n-aria-label="todo.removeCategory" data-i18n-title="todo.removeCategory"${canRemove ? '' : ' hidden'}>×</button>` +
     `<span class="count" data-priority="${priority}">0</span>` +
     `</div>` +
     `<ul class="todo-list" data-priority="${priority}"></ul>` +
     `<div class="add-row">` +
-    `<input type="text" placeholder="添加待办，回车保存…" aria-label="添加待办" data-priority="${priority}" maxlength="80" />` +
-    `<button class="todo-deadline-trigger" type="button" data-deadline-priority="${priority}" aria-label="选择截止时间"><span>日期</span></button>` +
+    `<input type="text" placeholder="${attr('copy.addATaskAndPressEnterTo.e40a0f')}" data-i18n-placeholder="copy.addATaskAndPressEnterTo.e40a0f" data-priority="${priority}" maxlength="80" />` +
+    `<button class="todo-deadline-trigger" type="button" data-deadline-priority="${priority}" aria-label="${attr('todo.chooseDeadline')}" data-i18n-aria-label="todo.chooseDeadline"><span>${attr('copy.date.70d0c1')}</span></button>` +
     `</div>` +
     `</section>`
   );
@@ -502,10 +505,23 @@ function renderTodoBoard() {
   const root = document.getElementById('todo-sections');
   if (!root) return;
   parkTodoDatePopover();
+  const existing = [...root.querySelectorAll('.quadrant')];
+  const structural = existing.map(node => node.dataset.priority).join('/') !== todoCategoryOrder.join('/');
+  if (todoEditorContext && (structural || (todoEditorContext.mode === 'edit'
+    && !(data[todoEditorContext.priority] || []).some(item => item.id === todoEditorContext.id)))) closeTodoEditor();
   root.dataset.count = String(todoCategoryOrder.length);
-  root.innerHTML = todoCategoryOrder.map((priority) => quadrantHtml(priority)).join('');
+  existing.filter(node => !todoCategoryOrder.includes(node.dataset.priority)).forEach(node => node.remove());
+  todoCategoryOrder.forEach((priority, index) => {
+    let quadrant = root.querySelector(`.quadrant[data-priority="${priority}"]`);
+    if (!quadrant) {
+      root.insertAdjacentHTML('beforeend', quadrantHtml(priority));
+      quadrant = root.lastElementChild;
+    }
+    if (root.children[index] !== quadrant) root.insertBefore(quadrant, root.children[index]);
+    quadrant.querySelector('.todo-remove-category').hidden = todoCategoryOrder.length <= 1;
+  });
   syncTodoAddCategoryButton();
-  applyTodoCategoryNames();
+  applyTodoCategoryNames({ preserveDrafts: true });
   todoCategoryOrder.forEach((priority) => {
     renderList(priority);
     updateCount(priority);
@@ -538,7 +554,7 @@ function removeTodoCategory(priority) {
   if (!todoCategoryOrder.includes(priority) || todoCategoryOrder.length <= 1) return;
   const count = (data[priority] || []).length;
   if (count > 0) {
-    const ok = window.confirm(`删除「${todoCategoryNames[priority] || priority}」将同时删除其中的 ${count} 条待办，确定吗？`);
+    const ok = window.confirm(pomeLocaleRendererApp.t('todo.removeCategoryConfirm', { name: todoCategoryNames[priority] || priority, count }));
     if (!ok) return;
   }
   const removedItems = [...(data[priority] || [])];
@@ -661,7 +677,20 @@ function renderList(priority, options = {}) {
   const list = document.querySelector(`.todo-list[data-priority="${priority}"]`);
   if (!list) return;
   const items = window.NotchDomain.sortTodosForDisplay(data[priority] || []);
+  if (editingTodo?.priority === priority && !items.some(item => item.id === editingTodo.id)) editingTodo = null;
+  const editor = list.querySelector('.todo-inline-name');
+  const draft = editor ? { id: editor.closest('.todo-item').dataset.id, value: editor.value,
+    focused: document.activeElement === editor, start: editor.selectionStart, end: editor.selectionEnd,
+    direction: editor.selectionDirection } : null;
   list.innerHTML = items.map((item) => todoItemHtml(priority, item)).join('');
+  const restored = draft && list.querySelector(`.todo-item[data-id="${CSS.escape(draft.id)}"] .todo-inline-name`);
+  if (restored) {
+    restored.value = draft.value;
+    if (draft.focused) {
+      restored.focus({ preventScroll: true });
+      restored.setSelectionRange(draft.start, draft.end, draft.direction);
+    }
+  }
   updateTodoBulkButton(priority);
   animateTodoOrder(priority, options.previousPositions);
   if (options.focusId) {
@@ -1577,32 +1606,38 @@ const todoCalendarGrid = document.getElementById('todo-calendar-grid');
 const todoEditorHour = document.getElementById('todo-editor-hour');
 const todoEditorMinute = document.getElementById('todo-editor-minute');
 const todoEditorError = document.getElementById('todo-editor-error');
+const todoEditorState = document.getElementById('todo-editor-state');
 let todoEditorContext = null;
 let todoEditorYear = new Date().getFullYear();
 let todoEditorMonthIndex = new Date().getMonth();
 let todoEditorDay = new Date().getDate();
 
 function todoTimePickerValue(picker) {
-  return picker?.querySelector('button[aria-selected="true"]')?.dataset.value || '';
+  return picker?.querySelector('button[aria-selected="true"]')?.dataset.value ?? picker?.dataset.value ?? '';
 }
 
 function setTodoTimePickerValue(picker, value) {
   if (!picker) return;
   const want = String(value);
+  picker.dataset.value = want;
   let matched = null;
   picker.querySelectorAll('button[data-value]').forEach((button) => {
-    const selected = button.dataset.value === want;
+    const matches = button.dataset.value === want;
+    const selected = matches && !todoEditorContext?.unset;
     button.setAttribute('aria-selected', selected ? 'true' : 'false');
-    if (selected) matched = button;
+    if (matches) matched = button;
   });
   if (matched) {
-    matched.scrollIntoView({ block: 'nearest' });
+    // Scroll only this list. scrollIntoView can move the board or panel as well.
+    picker.scrollTop += matched.getBoundingClientRect().top - picker.getBoundingClientRect().top
+      - picker.clientTop - (picker.clientHeight - matched.offsetHeight) / 2;
   }
 }
 
-function fillTodoTimeOptions() {
+function fillTodoTimeOptions(selectedMinute) {
   const fill = (picker, values) => {
-    if (!picker || picker.dataset.filled === '1') return;
+    const signature = values.join(',');
+    if (!picker || picker.dataset.values === signature) return;
     picker.replaceChildren();
     values.forEach((value) => {
       const button = document.createElement('button');
@@ -1613,14 +1648,35 @@ function fillTodoTimeOptions() {
       button.setAttribute('aria-selected', 'false');
       picker.append(button);
     });
-    picker.dataset.filled = '1';
+    picker.dataset.values = signature;
   };
   fill(todoEditorHour, Array.from({ length: 24 }, (_, hour) => hour));
-  fill(todoEditorMinute, Array.from({ length: 12 }, (_, index) => index * 5));
+  const minutes = Array.from({ length: 12 }, (_, index) => index * 5);
+  // Imported/synced deadlines may not be on the five-minute grid. Show their
+  // actual minute instead of rounding an existing deadline just to open it.
+  if (Number.isInteger(selectedMinute) && !minutes.includes(selectedMinute)) minutes.push(selectedMinute);
+  fill(todoEditorMinute, minutes.sort((a, b) => a - b));
+}
+
+function renderTodoEditorState() {
+  if (todoEditorState) {
+    todoEditorState.hidden = !todoEditorContext?.initiallyUnset;
+    if (!todoEditorState.hidden) {
+      const key = todoEditorContext.unset ? 'todo.deadlineUnset' : 'todo.deadlineSet';
+      pomeLocaleRendererApp.bind(todoEditorState, 'textContent', () => pomeLocaleRendererApp.t(key));
+    }
+  }
+  for (const picker of [todoEditorHour, todoEditorMinute]) {
+    const value = todoTimePickerValue(picker);
+    picker?.querySelectorAll('button[data-value]').forEach(button => {
+      button.setAttribute('aria-selected', String(!todoEditorContext?.unset && button.dataset.value === value));
+    });
+  }
 }
 
 function renderTodoCalendar() {
   if (!todoCalendarGrid) return;
+  renderTodoEditorState();
   const now = new Date();
   const days = new Date(todoEditorYear, todoEditorMonthIndex + 1, 0).getDate();
   const firstWeekday = (new Date(todoEditorYear, todoEditorMonthIndex, 1).getDay() + 6) % 7;
@@ -1632,7 +1688,9 @@ function renderTodoCalendar() {
     button.type = 'button';
     button.textContent = String(day);
     button.dataset.day = String(day);
-    button.className = day === todoEditorDay ? 'selected' : '';
+    const selected = day === todoEditorDay && !todoEditorContext?.unset;
+    button.className = selected ? 'selected' : '';
+    button.setAttribute('aria-pressed', String(selected));
     if (todoEditorYear === now.getFullYear() && todoEditorMonthIndex === now.getMonth() && day === now.getDate()) {
       button.classList.add('today');
     }
@@ -1659,8 +1717,9 @@ function selectedTodoDeadline() {
   });
 }
 
-function applyTodoEditorSelection(markManual = true) {
-  if (!todoEditorContext) return false;
+function applyTodoEditorSelection(userChanged = true) {
+  if (!todoEditorContext || window.__nasTodoReadonly === true) return false;
+  if (!userChanged && todoEditorContext.unset) return true;
   const deadline = selectedTodoDeadline();
   if (!deadline || Date.parse(deadline) <= Date.now()) {
     if (todoEditorError) pomeLocaleRendererApp.bind(todoEditorError, "textContent", () => (pomeLocaleRendererApp.t("copy.chooseADeadlineLaterThanNow.c1cc99")));
@@ -1671,13 +1730,20 @@ function applyTodoEditorSelection(markManual = true) {
   if (mode === 'edit') {
     const todo = (data[priority] || []).find((item) => item.id === id);
     if (!todo) return false;
+    // Opening only initializes/validates the controls. Selecting the same visible
+    // minute also preserves any existing seconds and timezone representation.
+    if (!userChanged || Math.floor(Date.parse(todo.deadline) / 60_000) === Math.floor(Date.parse(deadline) / 60_000)) return true;
     todo.deadline = deadline;
     saveData(data);
+    if (todoEditorContext.unset) {
+      todoEditorContext.unset = false;
+      renderTodoCalendar();
+    }
   } else {
     const trigger = document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${priority}"]`);
     if (!trigger) return false;
     trigger.dataset.deadline = deadline;
-    trigger.dataset.deadlineSource = markManual ? 'manual' : (trigger.dataset.deadlineSource || 'default');
+    trigger.dataset.deadlineSource = userChanged ? 'manual' : (trigger.dataset.deadlineSource || 'default');
     trigger.querySelector('span').textContent = new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
       day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
     }).format(new Date(deadline));
@@ -1688,21 +1754,22 @@ function applyTodoEditorSelection(markManual = true) {
 }
 
 function openTodoEditor(priority, item = null, anchor = null) {
+  if (window.__nasTodoReadonly === true) return;
   const now = new Date();
-  const addInput = document.querySelector(`.add-row input[data-priority="${priority}"]`);
   const trigger = document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${priority}"]`);
   if (!item) applyDefaultTodoDeadline(trigger, now);
-  const candidate = item && item.deadline ? new Date(item.deadline) : trigger?.dataset.deadline ? new Date(trigger.dataset.deadline) : null;
-  const selectedDate = candidate && Number.isFinite(candidate.getTime())
+  const current = item ? item.deadline : trigger?.dataset.deadline;
+  const candidate = current ? new Date(current) : null;
+  const hasDeadline = candidate && Number.isFinite(candidate.getTime());
+  const selectedDate = hasDeadline
     ? candidate
     : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 30, 0, 0);
-  todoEditorContext = { priority, id: item && item.id || '', mode: item ? 'edit' : 'add' };
+  const unset = Boolean(item && !hasDeadline);
+  todoEditorContext = { priority, id: item && item.id || '', mode: item ? 'edit' : 'add', unset, initiallyUnset: unset };
   todoEditorYear = selectedDate.getFullYear();
   todoEditorMonthIndex = selectedDate.getMonth();
   todoEditorDay = selectedDate.getDate();
-  fillTodoTimeOptions();
-  setTodoTimePickerValue(todoEditorHour, selectedDate.getHours());
-  setTodoTimePickerValue(todoEditorMinute, Math.floor(selectedDate.getMinutes() / 5) * 5);
+  fillTodoTimeOptions(selectedDate.getMinutes());
   if (todoEditorError) todoEditorError.textContent = '';
   renderTodoCalendar();
   if (todoEditorBackdrop) {
@@ -1711,6 +1778,8 @@ function openTodoEditor(priority, item = null, anchor = null) {
       : trigger);
     positionTodoDatePopover(target || trigger);
   }
+  setTodoTimePickerValue(todoEditorHour, selectedDate.getHours());
+  setTodoTimePickerValue(todoEditorMinute, selectedDate.getMinutes());
   applyTodoEditorSelection(false);
 }
 
@@ -1751,6 +1820,9 @@ document.addEventListener('pointerdown', (event) => {
   if (todoEditorBackdrop.contains(event.target) || event.target.closest('.todo-deadline-trigger, .todo-inline-deadline')) return;
   closeTodoEditor();
 }, true);
+document.addEventListener('notch:will-collapse', closeTodoEditor);
+document.addEventListener('notch:tabchange', event => { if (event.detail?.tab !== 'todo') closeTodoEditor(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) closeTodoEditor(); });
 
 function applyDefaultTodoDeadline(trigger, now = new Date()) {
   if (!trigger || (trigger.dataset.deadline && trigger.dataset.deadlineSource !== 'default')) return;
@@ -5372,17 +5444,32 @@ window.addEventListener('pome:language-changed', () => {
   let savedCategories = {};
   try { savedCategories = JSON.parse(localStorage.getItem(TODO_CATEGORY_KEY) || '{}') || {}; } catch {}
   for (const priority of PRIORITIES) {
-    if (savedCategories[priority]) continue; // Saved names are user data, even if they equal an old default.
-    const input = document.querySelector(`.todo-category-name[data-category="${priority}"]`);
-    const previous = todoCategoryNames[priority];
-    todoCategoryNames[priority] = TODO_CATEGORY_DEFAULTS[priority];
-    if (input && input.value === previous) input.value = todoCategoryNames[priority];
+    // Saved names are user data; surrounding control labels still follow the UI language.
+    if (!savedCategories[priority]) {
+      const input = document.querySelector(`.todo-category-name[data-category="${priority}"]`);
+      const previous = todoCategoryNames[priority];
+      todoCategoryNames[priority] = TODO_CATEGORY_DEFAULTS[priority];
+      if (input) {
+        const dirty = input.value !== input.defaultValue;
+        input.defaultValue = todoCategoryNames[priority];
+        if (!dirty || input.value === previous) input.value = todoCategoryNames[priority];
+      }
+    }
     const addInput = document.querySelector(`.add-row input[data-priority="${priority}"]`);
     if (addInput) addInput.setAttribute('aria-label', pomeLocaleRendererApp.t('copy.addATaskTo.efb0ec', { arg1: todoCategoryNames[priority] }));
+  }
+  for (const button of document.querySelectorAll('.todo-bulk-delete')) {
+    button.textContent = pomeLocaleRendererApp.t('copy.delete.2f9daa');
   }
   for (const trigger of document.querySelectorAll('.todo-deadline-trigger')) {
     const deadline = trigger.dataset.deadline;
     const label = trigger.querySelector('span');
-    if (label && deadline) label.textContent = pomeLocaleRendererApp.date(deadline, { day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    if (!label) continue;
+    // Keep selected deadlines reformatted; empty triggers need the localized "日期/Date" label.
+    if (deadline && trigger.classList.contains('selected')) {
+      label.textContent = pomeLocaleRendererApp.date(deadline, { day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    } else {
+      label.textContent = pomeLocaleRendererApp.t('copy.date.70d0c1');
+    }
   }
 });
