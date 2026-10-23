@@ -1,17 +1,20 @@
 (function (root, factory) {
   const node = typeof module === 'object' && module.exports;
-  const api = factory(node ? { 'zh-CN': require('./locales/zh-CN.json'), 'en-US': require('./locales/en-US.json') } : root.PomeTranslations || {});
+  const languages = node ? require('./languages.json') : root.PomeLanguages;
+  const api = factory(node ? Object.fromEntries(languages.map(({ id }) => [id, require(`./locales/${id}.json`)])) : root.PomeTranslations || {}, languages);
   if (node) module.exports = api;
   else root.PomeI18n = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (resources) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (resources, catalog) {
   'use strict';
+  const languages = Object.freeze((catalog || Object.keys(resources).map(id => ({ id, name: id }))).map(row => Object.freeze({ ...row })));
+  const supported = new Set(languages.map(row => row.id));
   const listeners = new Set();
   const formats = new Map();
   const knownMessages = new Map();
   const messagePatterns = [];
   const prefixMessages = [];
   const escapePattern = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  for (const locale of ['zh-CN', 'en-US']) for (const [key, entry] of Object.entries(resources[locale] || {})) {
+  for (const locale of supported) for (const [key, entry] of Object.entries(resources[locale] || {})) {
     for (const text of typeof entry === 'string' ? [entry] : Object.values(entry || {})) {
       if (!/\{[A-Za-z]/.test(text)) {
         knownMessages.set(text, { key });
@@ -26,13 +29,16 @@
     }
   }
   let current = { preference: 'system', effectiveLocale: 'zh-CN', formatLocale: 'zh-CN', revision: 0 };
-  function preference(value) { return ['system', 'zh-CN', 'en-US'].includes(value) ? value : 'system'; }
-  function resolve(value, languages = []) {
+  function preference(value) { return value === 'system' || supported.has(value) ? value : 'system'; }
+  function resolve(value, preferredLanguages = []) {
     if (preference(value) !== 'system') return value;
-    for (const input of languages) {
+    for (const input of preferredLanguages) {
       const lang = String(input || '').replace(/_/g, '-').toLowerCase();
+      if (/^zh-(?:tw|hk|mo)(?:-|$)/.test(lang) || lang.startsWith('zh-hant')) return 'zh-TW';
       if (lang === 'zh' || lang === 'zh-cn' || lang.startsWith('zh-hans')) return 'zh-CN';
-      if (lang === 'en' || lang.startsWith('en-')) return 'en-US';
+      const base = lang.split('-')[0];
+      const match = languages.find(row => row.id.split('-')[0] === base);
+      if (match) return match.id;
     }
     return 'en-US';
   }
@@ -43,13 +49,13 @@
       // Keep regional conventions while the language of month/day names
       // follows the interface. English UI must not show Chinese date suffixes.
       const region = new Intl.Locale(format).region;
-      format = region ? new Intl.Locale(effectiveLocale, { region }).toString() : effectiveLocale;
+      format = region ? new Intl.Locale(effectiveLocale === 'zh-TW' ? 'zh-Hant' : effectiveLocale, { region }).toString() : effectiveLocale;
       new Intl.DateTimeFormat(format);
     } catch { format = effectiveLocale; }
     return { preference: preference(value), effectiveLocale, formatLocale: format };
   }
   function setState(next) {
-    if (!next || !['zh-CN', 'en-US'].includes(next.effectiveLocale)) return false;
+    if (!next || !supported.has(next.effectiveLocale)) return false;
     if (Number.isInteger(next.revision) && next.revision < current.revision) return false;
     current = { ...current, ...snapshot(next.preference, [next.effectiveLocale], next.formatLocale), effectiveLocale: next.effectiveLocale,
       revision: Number.isInteger(next.revision) ? next.revision : current.revision + 1 };
@@ -113,5 +119,5 @@
       time: Number(conflict.createdAt) > 0 ? date(conflict.createdAt, { hour12: false }) : '—' });
   }
   function bind(node, property, read) { return node ? (node[property] = read()) : ''; }
-  return { preference, resolve, snapshot, setState, getState, onChange, t, attribute, date, number, relativeTime, formatter, transcriptionLanguage, describeMessage, systemText, noteTitle, bind };
+  return { languages, preference, resolve, snapshot, setState, getState, onChange, t, attribute, date, number, relativeTime, formatter, transcriptionLanguage, describeMessage, systemText, noteTitle, bind };
 });

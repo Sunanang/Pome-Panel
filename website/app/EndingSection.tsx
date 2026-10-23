@@ -1,9 +1,10 @@
 "use client";
+import { useReducedMotion } from "./useReducedMotion";
 import { useSiteLocale } from "./SiteLocale";
 import { siteT } from "./siteI18n";
 
 
-import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import { assetPath } from "./assetPath.mjs";
 import Prism from "./reactbits/Prism/Prism";

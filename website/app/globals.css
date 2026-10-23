@@ -67,7 +67,7 @@ button, input, textarea, select { font: inherit; }
 .hero-nav { position: absolute; top: 28px; right: clamp(24px, 3.5vw, 58px); left: clamp(24px, 3.5vw, 58px); z-index: 7; display: flex; align-items: center; justify-content: space-between; }
 .brand-lockup { display: flex; align-items: center; gap: 11px; font: 700 15px/1 "Kanit", sans-serif; letter-spacing: 0.025em; }
 .brand-lockup img { width: 34px; height: 34px; border-radius: 10px; }
-.hero-nav-links { display: flex; gap: clamp(20px, 3vw, 48px); color: var(--silver); font: 500 clamp(12px, 1.15vw, 17px)/1 "Kanit", sans-serif; letter-spacing: 0.075em; }
+.hero-nav-links { margin-left: auto; margin-right: 24px; display: flex; gap: clamp(20px, 3vw, 48px); color: var(--silver); font: 500 clamp(12px, 1.15vw, 17px)/1 "Kanit", sans-serif; letter-spacing: 0.075em; }
 .hero-nav-links a { opacity: 0.66; text-shadow: 0 1px 18px rgba(0, 0, 0, 0.72); transition: opacity 180ms ease; }
 .hero-nav-links a:hover { opacity: 1; }
 
@@ -229,7 +229,7 @@ button, input, textarea, select { font: inherit; }
 .hero-panel-toggle.is-expanded .hero-panel-image-collapsed { opacity: 0; transition-delay: 0ms; }
 
 .hero-bottom { position: absolute; right: clamp(24px, 3.5vw, 58px); bottom: 34px; left: clamp(24px, 3.5vw, 58px); z-index: 7; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
-.hero-bottom > p { margin: 0; color: #edf2f5; font-size: clamp(18px, 1.65vw, 27px); font-weight: 650; letter-spacing: -0.035em; line-height: 1.25; text-shadow: 0 2px 20px rgba(0, 0, 0, 0.88); white-space: nowrap; }
+.hero-bottom > p { margin: 0; color: #edf2f5; font-size: clamp(18px, 1.65vw, 27px); font-weight: 650; letter-spacing: -0.035em; line-height: 1.25; text-shadow: 0 2px 20px rgba(0, 0, 0, 0.88); white-space: normal; }
 .hero-actions { display: flex; flex: none; flex-direction: column; justify-content: flex-end; gap: 12px; }
 .hero-actions .landing-cta { width: 100%; }
 .hero-bottom { flex-wrap: wrap; }
@@ -368,7 +368,7 @@ button, input, textarea, select { font: inherit; }
   .brand-lockup img { width: 30px; height: 30px; }
   .hero-wordmark { top: 20.5%; width: 96vw; font-size: 10.1vw; letter-spacing: 0.006em; }
   .hero-bottom { right: 18px; bottom: 22px; left: 18px; align-items: stretch; flex-direction: column; gap: 15px; }
-  .hero-bottom > p { font-size: clamp(16px, 4.55vw, 19px); text-align: center; white-space: nowrap; }
+  .hero-bottom > p { font-size: clamp(16px, 4.55vw, 19px); text-align: center; white-space: normal; }
   .hero-actions { width: 100%; flex-direction: column; }
   .landing-cta { width: 100%; min-height: 47px; }
   .marquee-section { padding-block: 86px 72px; }
@@ -411,6 +411,9 @@ button, input, textarea, select { font: inherit; }
   .tab-card { position: relative; top: auto; transform: none !important; }
 }
 
-.site-language { position: absolute; z-index: 50; right: 24px; top: 16px; display: flex; gap: 14px; font-size: 12px; }
-.site-language a { color: #999; text-decoration: none; }
+.site-language { position: relative; z-index: 50; flex: 0 0 auto; margin-left: 16px; font-size: 12px; max-width: min(180px, 40vw); }
+.site-language summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; padding: 8px 12px; border: 1px solid #454545; border-radius: 8px; background: #171717; color: #eee; }
+.site-language nav { position: absolute; right: 0; top: calc(100% + 6px); display: grid; min-width: 190px; max-height: min(70vh, 480px); overflow: auto; padding: 8px; border: 1px solid #454545; border-radius: 12px; background: #171717; box-shadow: 0 12px 40px #0008; }
+.site-language a { color: #aaa; text-decoration: none; padding: 7px 10px; border-radius: 5px; }
+.site-language a:hover, .site-language a:focus-visible { background: #333; color: #fff; }
 .site-language a[aria-current="page"] { color: #f5f5f5; }

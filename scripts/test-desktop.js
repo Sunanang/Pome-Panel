@@ -20,11 +20,18 @@ env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-t
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
 env.NODE_OPTIONS = `${env.NODE_OPTIONS || ''} --require=${JSON.stringify(path.join(root, 'tests/provider-usage-fixtures.cjs'))}`.trim();
-for (const file of ['notch-focus', 'retained-workspace', 'startup', 'todo-board-fixes', 'ai-usage', 'ai-usage-final', 'quota-refresh', 'codex-usage-accuracy', 'provider-credentials', 'home-layout-swap', 'sun-home', 'almanac-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'settings-slim', 'ui-simplify', 'nas-settings-card', 'localization', 'normal-startup']) {
+for (const file of ['notch-focus', 'retained-workspace', 'startup', 'user-data-directory', 'todo-board-fixes', 'ai-usage', 'ai-usage-final', 'quota-refresh', 'codex-usage-accuracy', 'provider-credentials', 'home-layout-swap', 'sun-home', 'almanac-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'settings-slim', 'ui-simplify', 'nas-settings-card', 'localization', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   if (file === 'ui-simplify') env.POME_TEST_WELCOME = '1';
   run(require('electron'), [`tests/${file}.electron.js`]);
+  if (file === 'user-data-directory') {
+    for (const phase of ['migrate', 'restart', 'switch', 'switched-restart', 'custom', 'fresh']) {
+      env.POME_PROFILE_PHASE = phase;
+      run(require('electron'), ['tests/user-data-directory.electron.js']);
+    }
+    delete env.POME_PROFILE_PHASE;
+  }
   if (file === 'ui-simplify') {
     env.POME_UI_RESTART = '1';
     run(require('electron'), ['tests/ui-simplify.electron.js']);
@@ -45,6 +52,7 @@ for (const file of ['notch-focus', 'retained-workspace', 'startup', 'todo-board-
 for (const file of [
   'scripts/localization-resources.js',
   'localization/runtime.js',
+  'userDataDirectory.js',
   'renderer/localization.js',
   'scripts/check-work-hub-baseline.js',
   'scripts/build-fpk.js',

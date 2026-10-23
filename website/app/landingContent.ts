@@ -59,7 +59,7 @@ const TAB_ITEMS: TabItem[] = [
   { id: "credentials", eyebrow: "KEEP IT SAFE", title: siteT(locale, "copy.credentials.f67bca"), description: siteT(locale, "copy.accountsPasswordsAndApiKeysAreEncrypted.73f485"), capture: assetPath("/tab-captures/credentials.mp4"), capturePoster: assetPath("/product-captures/credentials.webp"), captureKind: "video", accent: "violet" },
 ];
 
-if (locale === "en-US") {
+if (!locale.startsWith("zh-")) {
   for (const item of MARQUEE_ITEMS) item.src = assetPath(`/product-captures/en/${item.id}.jpg`);
   for (const item of TAB_ITEMS) {
     item.capture = assetPath(`/product-captures/en/${item.id}.jpg`);

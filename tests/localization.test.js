@@ -16,7 +16,12 @@ test.afterEach(() => L.setState({ ...L.snapshot('zh-CN'), revision: L.getState()
 test('first launch resolves supported system languages and falls back without using region as language', () => {
   for (const tag of ['zh-CN', 'zh_Hans_CN', 'zh-Hans-SG']) assert.equal(L.resolve('system', [tag]), 'zh-CN');
   for (const tag of ['en', 'en-GB', 'en-US']) assert.equal(L.resolve('system', [tag]), 'en-US');
-  assert.equal(L.resolve('system', ['ja-JP']), 'en-US');
+  for (const locale of L.languages) assert.equal(L.resolve('system', [locale.id]), locale.id);
+  assert.equal(L.resolve('system', ['ar-SA']), 'en-US');
+  assert.equal(L.resolve('system', ['zh_Hant_HK']), 'zh-TW');
+  assert.equal(L.resolve('system', ['zh-TW-u-ca-chinese']), 'zh-TW');
+  assert.equal(L.resolve('system', ['pt-PT']), 'pt-BR');
+  assert.equal(L.resolve('system', ['es-MX']), 'es-ES');
   assert.equal(L.resolve('en-US', ['zh-CN']), 'en-US');
   assert.equal(L.resolve('zh-CN', ['en-US']), 'zh-CN');
   assert.equal(L.preference('../../secret'), 'system');
@@ -42,7 +47,10 @@ test('relative time uses the actual event timestamp with English singular and pl
   assert.equal(L.relativeTime(2_000_000, 1_000_000), 'Just now');
 });
 
-test('both dictionaries, native resources and generated browser files stay complete', () => {
+test('all dictionaries, native resources and generated browser files stay complete', () => {
+  assert.equal(L.languages.length, 10);
+  const all = Object.fromEntries(L.languages.map(({ id }) => [id, require(`../localization/locales/${id}.json`)]));
+  assert(resources.validate(all) > 1400);
   assert(resources.validate({ 'zh-CN': require('../localization/locales/zh-CN.json'), 'en-US': require('../localization/locales/en-US.json') }) > 1000);
   resources.generate(true);
   const output = resources.generatedResources();
@@ -51,7 +59,32 @@ test('both dictionaries, native resources and generated browser files stay compl
   assert(output.get('build/i18n/messages.nsh').includes('2052 "安装 Pome Panel"'));
   assert(output.get('build/i18n/en.lproj/InfoPlist.strings').includes('NSMicrophoneUsageDescription'));
   assert(output.get('build/i18n/zh-Hans.lproj/InfoPlist.strings').includes('摄像头'));
+  for (const { mac } of L.languages) assert.match(output.get(`build/i18n/${mac}.lproj/InfoPlist.strings`), /NSMicrophoneUsageDescription/);
   assert.throws(() => resources.validate({ 'zh-CN': { key: '{count}' }, 'en-US': { key: '{name}' } }), /Parameters differ/);
+  assert.throws(() => resources.validate({ 'zh-CN': { key: '值' }, 'en-US': { key: 'Value' }, 'ja-JP': { key: { one: '値' } } }), /Invalid translation/);
+});
+
+test('all ten languages support persisted preferences, substitutions and regional formatting', () => {
+  for (const { id } of L.languages) {
+    assert.equal(L.preference(id), id);
+    assert.equal(L.setState(L.snapshot(id)), true);
+    assert.equal(L.getState().effectiveLocale, id);
+    assert(L.t('settings.language').length > 0);
+    const text = L.t('todo.removeCategoryConfirm', { name: '用户原文', count: 5 });
+    assert(text.includes('用户原文'));
+    assert(text.includes('5'));
+    assert.doesNotMatch(text, /\{(?:count|name)\}/);
+    assert(L.number(1234.5).length > 0);
+    assert(L.date('2026-10-23T12:00:00Z', { month: 'long' }).length > 0);
+  }
+  assert.equal(new Intl.Locale(L.snapshot('zh-TW', [], 'zh-CN').formatLocale).script, 'Hant');
+});
+
+test('Russian relative times select singular, few and many forms', () => {
+  L.setState(L.snapshot('ru-RU'));
+  for (const [count, expected] of [[1, '1 минуту назад'], [2, '2 минуты назад'], [5, '5 минут назад'], [21, '21 минуту назад']]) {
+    assert.equal(L.t('time.minutesAgo', { count }), expected);
+  }
 });
 
 test('duplicate JSON keys are rejected rather than silently replacing translations', t => {
@@ -113,6 +146,11 @@ test('recognition language is independent from the interface preference', () => 
 
 test('installation is bilingual, follows system and retains existing directory and shortcut settings', () => {
   const config = require('../package.json');
+  assert.deepEqual(config.build.mac.extendInfo.CFBundleLocalizations, L.languages.map(row => row.mac));
+  for (const files of [config.build.files, config.build.mac.files]) {
+    assert(files.includes('localization/languages.json'));
+    assert(files.includes('localization/locales/*.json'));
+  }
   assert.deepEqual(config.build.nsis.installerLanguages, ['en_US', 'zh_CN']);
   assert.equal(config.build.nsis.displayLanguageSelector, false);
   assert.equal(config.build.nsis.allowToChangeInstallationDirectory, true);
@@ -129,7 +167,8 @@ test('NAS browser language comes from the current host, with independent browser
   function page(browserLanguage) {
     // Each browser gets its own runtime and preferences, not the Node singleton.
     const context = { console, Intl, WeakMap, WeakRef, Set, Map, Object, String, Number, Date,
-      PomeTranslations: { 'zh-CN': require('../localization/locales/zh-CN.json'), 'en-US': require('../localization/locales/en-US.json') } };
+      PomeLanguages: L.languages,
+      PomeTranslations: Object.fromEntries(L.languages.map(({ id }) => [id, require(`../localization/locales/${id}.json`)])) };
     context.globalThis = context;
     vm.createContext(context); vm.runInContext(fs.readFileSync(path.join(__dirname, '../localization/runtime.js'), 'utf8'), context);
     const events = new Map();
@@ -145,7 +184,7 @@ test('NAS browser language comes from the current host, with independent browser
   chinese.host('en-US'); assert.equal(chinese.L.getState().effectiveLocale, 'en-US');
   chinese.L.setState(chinese.L.snapshot('zh-CN')); chinese.host('en-US');
   assert.equal(chinese.L.getState().effectiveLocale, 'zh-CN', 'host changes cannot override manual choice');
-  english.host('de-DE'); assert.equal(english.L.getState().effectiveLocale, 'en-US');
+  english.host('de-DE'); assert.equal(english.L.getState().effectiveLocale, 'de-DE');
   assert.doesNotMatch(source, /TRIM_API_TOKEN|PomeNasSystemLanguage/);
   const host = fs.readFileSync(path.join(__dirname, '../fnos/app/ui/i18n/host.js'), 'utf8');
   assert.match(host, /getPlatformConfig/); assert.match(host, /1500/); assert.match(host, /os\/language/);

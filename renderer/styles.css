@@ -7800,10 +7800,10 @@ html[data-liquid-glass='1'] .tile.home-inbox[data-source-state='error'] { backgr
 
 .home-cursor .ai-quota-row .cursor-usage-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-html[lang="en-US"] .settings-nas-recovery-actions { flex-wrap: wrap; }
-html[lang="en-US"] .settings-nas-recovery-actions .workspace-button { max-width: 100%; white-space: normal; line-height: 1.45; text-align: left; }
-html[lang="en-US"] .settings-nas-content-row { grid-template-columns: minmax(88px, auto) minmax(0, 1fr) auto; }
-html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
+html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-recovery-actions { flex-wrap: wrap; }
+html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-recovery-actions .workspace-button { max-width: 100%; white-space: normal; line-height: 1.45; text-align: left; }
+html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row { grid-template-columns: minmax(88px, auto) minmax(0, 1fr) auto; }
+html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { overflow-wrap: anywhere; }
 /* Pending requests remain accessible even with the home inbox hidden. */
 .ai-attention-section { margin-top: 12px; display: grid; gap: 8px; }
 #ai-attention-list { display: grid; gap: 8px; max-height: 180px; overflow-y: auto; }
@@ -8127,10 +8127,22 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 }
 .home-almanac .almanac-jieqi {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
 }
+.home-almanac .almanac-jq-top { display: flex; align-items: center; gap: 8px; }
+.home-almanac .almanac-jq-time {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 5px;
+  color: var(--almanac-muted);
+  font-size: 10px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.home-almanac .almanac-jq-time > span { white-space: nowrap; }
 .home-almanac .almanac-jq-count {
   color: var(--almanac-jieqi);
   font-size: 12px;
@@ -8216,6 +8228,7 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 .home-almanac .almanac-small .almanac-row,
 .home-almanac .almanac-small .almanac-jieqi { flex: 1 1 0; display: flex; align-items: center; min-height: 0; }
 .home-almanac .almanac-small .almanac-row { display: grid; }
+.home-almanac .almanac-small .almanac-jieqi { flex-direction: row; flex-wrap: wrap; gap: 4px 8px; }
 .home-almanac .almanac-date-line { gap: 10px; }
 .home-almanac .almanac-date-line span { color: var(--almanac-muted); font-size: 12px; }
 
@@ -8296,3 +8309,8 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
   line-height: 1.35;
 }
 .home-almanac .almanac-hours span { letter-spacing: .04em; }
+.home-almanac .almanac-hour-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 12px; }
+.home-almanac .almanac-hour { display: flex; align-items: baseline; gap: 7px; min-width: 0; font-size: 11px; }
+.home-almanac .almanac-hour em { min-width: 2em; color: var(--text-2); font-style: normal; }
+.home-almanac .almanac-hour > span { color: var(--almanac-muted); white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.home-almanac .almanac-hours .almanac-hours-note { margin-left: 8px; color: var(--almanac-muted); font-size: 10px; font-weight: 400; letter-spacing: 0; }

@@ -53,6 +53,17 @@
     return Math.round((b - a) / 86_400_000);
   }
 
+  function jieQiTiming(solar) {
+    if (!solar) return null;
+    // The library returns China standard time. Round its calculated seconds
+    // to a minute without letting the host timezone shift the clock fields.
+    const minute = new Date(Math.round(Date.UTC(solar.getYear(), solar.getMonth() - 1, solar.getDay(),
+      solar.getHour(), solar.getMinute(), solar.getSecond()) / 60_000) * 60_000);
+    const key = minute.toISOString().slice(0, 10);
+    const hm = minute.toISOString().slice(11, 16);
+    return { key, hm, dateTime: `${key}T${hm}:00+08:00` };
+  }
+
   function buildAlmanacDay(date = new Date()) {
     if (typeof Solar !== 'function' && typeof Solar?.fromYmd !== 'function') {
       throw new Error('lunar-javascript Solar is unavailable');
@@ -64,8 +75,10 @@
     const yi = [...(lunar.getDayYi() || [])];
     const ji = [...(lunar.getDayJi() || [])];
     const jieQiToday = String(lunar.getJieQi() || '');
+    const todayTiming = jieQiTiming(lunar.getCurrentJieQi()?.getSolar());
     const nextJieQi = lunar.getNextJieQi(true);
     const nextSolar = nextJieQi?.getSolar?.();
+    const nextTiming = jieQiTiming(nextSolar);
     const nextParts = nextSolar
       ? { year: nextSolar.getYear(), month: nextSolar.getMonth(), day: nextSolar.getDay() }
       : null;
@@ -77,11 +90,14 @@
       .filter((time) => time && time.getTianShenLuck && time.getTianShenLuck() === '吉')
       .map((time) => {
         const ganZhi = String(time.getGanZhi() || '');
+        const branch = ganZhi.slice(-1);
+        const startHm = String(time.getMinHm() || '');
         return {
-          branch: ganZhi.slice(-1),
+          branch,
+          label: branch === '子' ? (startHm === '00:00' ? '早子' : '晚子') : branch,
           ganZhi,
           deity: String(time.getTianShen() || ''),
-          startHm: String(time.getMinHm() || ''),
+          startHm,
           endHm: String(time.getMaxHm() || ''),
         };
       });
@@ -106,12 +122,14 @@
       },
       jieQi: {
         today: jieQiToday,
+        todayTiming,
         isToday: Boolean(jieQiToday),
         nextName: nextJieQi ? String(nextJieQi.getName() || '') : '',
         nextKey: nextParts
           ? `${nextParts.year}-${String(nextParts.month).padStart(2, '0')}-${String(nextParts.day).padStart(2, '0')}`
           : '',
         daysToNext,
+        nextTiming,
       },
       yi,
       ji,
@@ -147,6 +165,10 @@
     const jieQiCountdown = day.jieQi.isToday
       ? ''
       : (Number.isInteger(day.jieQi.daysToNext) ? `${day.jieQi.daysToNext}天` : '');
+    const timing = day.jieQi.isToday ? day.jieQi.todayTiming : day.jieQi.nextTiming;
+    const jieQiTimeText = timing
+      ? `${day.jieQi.isToday ? '' : `${Number(timing.key.slice(5, 7))}/${Number(timing.key.slice(8, 10))} `}约${timing.hm}`
+      : '';
     return {
       size,
       day,
@@ -156,8 +178,10 @@
       jiText: joinItems(ji),
       jieQiLabel,
       jieQiCountdown,
+      jieQiTiming: timing,
+      jieQiTimeText,
       jiShen: takeList(day.jiShen, limits.jiShen || day.jiShen.length),
-      luckyHourText: day.luckyHours.map((item) => item.branch).filter(Boolean).join(' '),
+      luckyHourText: day.luckyHours.map((item) => `${item.label} ${item.startHm}–${item.endHm}`).join(' · '),
     };
   }
 

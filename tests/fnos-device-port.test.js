@@ -263,19 +263,23 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.equal(manifestJson.name, 'Pome Panel');
   assert.equal(manifestJson.author, 'Lando');
   assert.equal(manifestJson.maintainer, 'Lando');
+  assert.equal(manifestJson.maintainer_url, 'https://github.com/Sunanang/Pome-Panel');
   assert.equal(manifestJson.version, require('../package.json').version);
   assert.equal(manifestJson.distributor, 'Lando');
+  assert.equal(manifestJson.distributor_url, 'https://github.com/Sunanang');
   assert.equal(manifestJson.id, 'pome-panel');
   assert.equal(manifestJson.appPath, '/app/pome-panel');
   assert.equal(manifestJson.appPath.includes('.'), false);
   assert.equal(manifestJson.devicePort.field, 'wizard_port');
   assert.equal(manifestJson.devicePort.bindField, 'wizard_lan');
-  assert.doesNotMatch(JSON.stringify(manifestJson), /Sunanang|Pome Panel Sync/);
+  assert.doesNotMatch(JSON.stringify(manifestJson), /Pome Panel Sync/);
 
   const official = resolvePackageCopy(fs.readFileSync(path.join(root, 'manifest'), 'utf8'));
   assert.match(official, /^display_name=Pome Panel$/m);
   assert.match(official, /^maintainer=Lando$/m);
+  assert.match(official, /^maintainer_url=https:\/\/github\.com\/Sunanang\/Pome-Panel$/m);
   assert.match(official, /^distributor=Lando$/m);
+  assert.match(official, /^distributor_url=https:\/\/github\.com\/Sunanang$/m);
   assert.equal(official.split('\n').find(line => line.startsWith('version=')), `version=${require('../package.json').version}`);
   assert.match(official, /^install_dep_apps=nodejs_v22$/m);
   assert.match(official, /^desktop_uidir=ui$/m);
@@ -283,7 +287,8 @@ test('install wizard and package identity use a user-chosen port', () => {
   assert.ok(fs.existsSync(path.join(root, 'app/ui/config')));
   assert.match(official, /^appname=pome-panel$/m);
   assert.match(official, /^checkport=false$/m);
-  assert.doesNotMatch(official, /service_port\s*=\s*5001|Sunanang|Pome Panel Sync/);
+  assert.doesNotMatch(official, /service_port\s*=\s*5001|Pome Panel Sync/);
+  assert.doesNotMatch(official.replace(/^maintainer_url=.*$/m, '').replace(/^distributor_url=.*$/m, ''), /Sunanang/);
   const changelog = official.split('\n').find((line) => line.startsWith('changelog='));
   assert.ok(changelog && changelog.includes('TRIM_APPDEST/server'));
   assert.ok(changelog && changelog.includes('sync-protocol'));

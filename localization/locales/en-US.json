@@ -50,7 +50,7 @@
   "copy.launchAtLogin.b5d24c": "Launch at login",
   "copy.about.52d25a": "About",
   "copy.aboutPomePanel.f74e41": "About Pome Panel",
-  "copy.versionDeveloperLandoADesktopWorkspaceFor.8c62b9": "Version {arg1}\nDeveloper: Lando\n\nA desktop workspace for notes, clipboard history, recordings and commands, with optional NAS sync.",
+  "copy.versionDeveloperLandoADesktopWorkspaceFor.8c62b9": "Version {arg1}\nDeveloper: Lando\n\nA short capsule at the screen edge that opens into a ready glass workspace. Tasks, notes, recordings and everyday tools live inside; data stays on this computer, and can sync to fnOS NAS when needed.",
   "copy.viewOnGithub.f95c40": "View on GitHub",
   "copy.ok.f867f3": "OK",
   "copy.quit.498e1d": "Quit",
@@ -1507,5 +1507,6 @@
   "quota.oneZero": "{source} at zero",
   "copy.almanac.7c2e11": "Almanac",
   "copy.lunarYiJiJieQi.3a91d0": "Lunar date, yi/ji & solar terms",
-  "copy.showAlmanac.6f4b2c": "Show Almanac"
+  "copy.showAlmanac.6f4b2c": "Show Almanac",
+  "profile.migrationFailed": "Could not prepare the new data folder. The old data has not been changed. Quit apps using the old folder, check free disk space and folder permissions, then try again.\nOld folder: {source}\nNew folder: {target}"
 }

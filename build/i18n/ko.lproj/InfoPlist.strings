@@ -1,0 +1,4 @@
+"NSAppleEventsUsageDescription" = "Pome Panel는 시스템 이벤트를 사용하여 창을 나열하고 초점을 맞추고 Soda Music 바로가기를 보냅니다.";
+"NSCameraUsageDescription" = "Pome Panel는 열 때 거울 미리보기를 위해 카메라를 사용합니다.";
+"NSLocalNetworkUsageDescription" = "Pome Panel는 로컬 네트워크의 NAS에 액세스하여 작업 공간을 동기화합니다.";
+"NSMicrophoneUsageDescription" = "Pome Panel는 녹음을 시작할 때 마이크를 사용하여 오디오를 녹음합니다. 전사는 선택사항입니다.";

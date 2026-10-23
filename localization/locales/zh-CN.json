@@ -44,7 +44,7 @@
   "copy.launchAtLogin.b5d24c": "开机自动启动",
   "copy.about.52d25a": "关于",
   "copy.aboutPomePanel.f74e41": "关于 Pome Panel",
-  "copy.versionDeveloperLandoADesktopWorkspaceFor.8c62b9": "版本 {arg1}\n开发者 Lando\n\n贴在屏幕顶部的个人工作台。可以记笔记、管剪贴板、录音、放常用指令，并和飞牛 NAS 同步。",
+  "copy.versionDeveloperLandoADesktopWorkspaceFor.8c62b9": "版本 {arg1}\n开发者 Lando\n\n在屏幕边缘收成一颗短胶囊，点开就是一块随手可用的玻璃工作台。待办、笔记、录制和常用工具都在里面；数据留在本机，需要时还可同步到飞牛 NAS。",
   "copy.viewOnGithub.f95c40": "查看 GitHub",
   "copy.ok.f867f3": "好",
   "copy.quit.498e1d": "退出",
@@ -1474,5 +1474,6 @@
   "quota.oneZero": "{source} 额度为零",
   "copy.almanac.7c2e11": "黄历",
   "copy.lunarYiJiJieQi.3a91d0": "农历、宜忌与节气",
-  "copy.showAlmanac.6f4b2c": "显示黄历"
+  "copy.showAlmanac.6f4b2c": "显示黄历",
+  "profile.migrationFailed": "无法准备新的数据文件夹，旧数据未改动。请退出使用旧目录的应用，确认磁盘空间和目录权限后重试。\n旧目录：{source}\n新目录：{target}"
 }

@@ -1,4 +1,4 @@
-import { siteT, type SiteLocale } from "./siteI18n";
+import { siteT, siteLanguages, siteRoute, type SiteLocale } from "./siteI18n";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { assetPath } from "./assetPath.mjs";
@@ -6,22 +6,22 @@ import { assetPath } from "./assetPath.mjs";
 export function siteMetadata(locale: SiteLocale): Metadata {
 const title = siteT(locale, "copy.pomePanelADesktopWorkspaceForMac.6be5f6");
 const description = siteT(locale, "copy.aLocalWorkspaceForMacosAndWindows.0d2324");
-const shareImage = assetPath(locale === "en-US" ? "/product-captures/en/home.jpg" : "/product-captures/home.jpg");
+const shareImage = assetPath(!locale.startsWith("zh-") ? "/product-captures/en/home.jpg" : "/product-captures/home.jpg");
 
 const metadata: Metadata = {
   metadataBase: new URL("https://Sunanang.github.io/"),
   title,
   description,
   alternates: {
-    canonical: assetPath(locale === 'en-US' ? '/en/' : '/'),
-    languages: { 'zh-CN': assetPath('/'), en: assetPath('/en/') },
+    canonical: assetPath(siteRoute(locale)),
+    languages: Object.fromEntries(siteLanguages.map(row => [row.id, assetPath(row.route)])),
   },
   applicationName: "Pome Panel",
   keywords: ["Pome Panel", "macOS", "Windows", "Local workspace", "Tasks", "Apple Silicon"],
   icons: { icon: [{ url: assetPath("/favicon.png"), type: "image/png" }], shortcut: assetPath("/favicon.png"), apple: assetPath("/favicon.png") },
   openGraph: {
     type: "website",
-    locale: locale === "en-US" ? "en_US" : "zh_CN",
+    locale: locale.replace("-", "_"),
     siteName: "Pome Panel",
     title,
     description,

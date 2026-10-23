@@ -1,7 +1,8 @@
 "use client";
+import { useReducedMotion } from "./useReducedMotion";
 import { useSiteLocale } from "./SiteLocale";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { getLandingContent } from "./landingContent";
 
 export default function CapabilitiesSection() {

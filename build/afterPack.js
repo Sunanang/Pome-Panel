@@ -16,7 +16,7 @@ exports.default = async function afterPack(context) {
   const projectRoot = path.resolve(__dirname, '..');
   // Install native purpose strings before signing. Writing them afterwards
   // invalidates the bundle signature.
-  for (const locale of ['en', 'zh-Hans']) {
+  for (const { mac: locale } of require('../localization/languages.json')) {
     const source = path.join(projectRoot, 'build', 'i18n', `${locale}.lproj`, 'InfoPlist.strings');
     const destination = path.join(appPath, 'Contents', 'Resources', `${locale}.lproj`);
     fs.mkdirSync(destination, { recursive: true });

@@ -26,7 +26,19 @@
         try { binding.lastValue = node[name] = binding.read(); } catch { properties.delete(name); }
       }
     }
-    for (const control of document.querySelectorAll('[data-language-preference]')) control.value = L.getState().preference;
+    for (const control of document.querySelectorAll('[data-language-preference]')) {
+      if (control.options && control.replaceChildren) {
+        const choices = [{ id: 'system', name: L.t('settings.system') }, ...L.languages];
+        if ([...control.options].map(row => row.value).join('/') !== choices.map(row => row.id).join('/')) {
+          control.replaceChildren(...choices.map(({ id, name }) => {
+            const option = document.createElement('option'); option.value = id; option.textContent = name;
+            if (id === 'system') option.dataset.i18n = 'settings.system';
+            return option;
+          }));
+        }
+      }
+      control.value = L.getState().preference;
+    }
     window.dispatchEvent(new CustomEvent('pome:language-changed', { detail: L.getState() }));
   }
   L.bind = (node, property, read) => {

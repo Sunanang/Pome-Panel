@@ -1,9 +1,10 @@
 "use client";
+import { useReducedMotion } from "./useReducedMotion";
 import { useSiteLocale } from "./SiteLocale";
 import { siteT } from "./siteI18n";
 
 
-import { motion, type MotionValue, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { motion, type MotionValue, useMotionValueEvent, useScroll, useTransform } from "framer-motion";
 import { type CSSProperties, useRef, useState } from "react";
 import RealProductMedia from "./RealProductMedia";
 import { type TabItem, getLandingContent } from "./landingContent";

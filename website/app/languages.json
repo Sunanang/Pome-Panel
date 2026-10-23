@@ -1,0 +1,62 @@
+[
+  {
+    "id": "en-US",
+    "name": "English",
+    "route": "/en/",
+    "mac": "en"
+  },
+  {
+    "id": "zh-CN",
+    "name": "简体中文",
+    "route": "/",
+    "mac": "zh-Hans"
+  },
+  {
+    "id": "zh-TW",
+    "name": "繁體中文",
+    "route": "/zh-tw/",
+    "mac": "zh-Hant"
+  },
+  {
+    "id": "ja-JP",
+    "name": "日本語",
+    "route": "/ja/",
+    "mac": "ja"
+  },
+  {
+    "id": "ko-KR",
+    "name": "한국어",
+    "route": "/ko/",
+    "mac": "ko"
+  },
+  {
+    "id": "es-ES",
+    "name": "Español",
+    "route": "/es/",
+    "mac": "es"
+  },
+  {
+    "id": "fr-FR",
+    "name": "Français",
+    "route": "/fr/",
+    "mac": "fr"
+  },
+  {
+    "id": "de-DE",
+    "name": "Deutsch",
+    "route": "/de/",
+    "mac": "de"
+  },
+  {
+    "id": "ru-RU",
+    "name": "Русский",
+    "route": "/ru/",
+    "mac": "ru"
+  },
+  {
+    "id": "pt-BR",
+    "name": "Português (Brasil)",
+    "route": "/pt-br/",
+    "mac": "pt-BR"
+  }
+]

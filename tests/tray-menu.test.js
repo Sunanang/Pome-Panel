@@ -56,7 +56,7 @@ test('about dialog names Pome Panel and Lando and opens the current GitHub repo'
   const menu = trayMenuSource();
   assertCopy(menu, '关于 Pome Panel');
   assert.match(menu, /message: 'Pome Panel'/);
-  assertCopy(menu, '版本 {arg1}\n开发者 Lando\n\n贴在屏幕顶部的个人工作台。可以记笔记、管剪贴板、录音、放常用指令，并和飞牛 NAS 同步。');
+  assertCopy(menu, '版本 {arg1}\n开发者 Lando\n\n在屏幕边缘收成一颗短胶囊，点开就是一块随手可用的玻璃工作台。待办、笔记、录制和常用工具都在里面；数据留在本机，需要时还可同步到飞牛 NAS。');
   assert.match(menu, /app\.getVersion\(\)/);
   assert.match(menu, /shell\.openExternal\('https:\/\/github\.com\/Sunanang\/Pome-Panel'\)/);
   assert.doesNotMatch(menu, /to-do-panel|todo-panel|Todo Panel/);

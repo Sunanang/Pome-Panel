@@ -803,8 +803,8 @@ function createSyncCredentialsStore(deps = {}) {
     return pathMod.join(getUserDataPath(), fileName);
   }
 
-  // userData is pinned to "Dynamic Panel". Older runs may have written the
-  // same ciphertext under the product name or the pre-rename folder.
+  // Optional recovery for callers that explicitly supply getAppDataPath.
+  // Production migrates the profile once and reads only its new Pome folder.
   function credentialCandidates() {
     const primary = credentialsPath();
     const paths = [primary];

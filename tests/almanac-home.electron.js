@@ -36,8 +36,8 @@ async function main() {
     },
   });
   const errors = [];
-  win.webContents.on('console-message', (_e, _level, message) => {
-    if (/error|failed|registry/i.test(message)) errors.push(message);
+  win.webContents.on('console-message', detail => {
+    if (detail.level === 'error') errors.push(detail.message);
   });
   await win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   const js = (code) => win.webContents.executeJavaScript(code, true);
@@ -124,6 +124,16 @@ async function main() {
     assert.equal(overflow.overflowX, false, `${size} overflowX`);
     assert.equal(overflow.overflowY, false, `${size} overflowY`);
     assert.ok(Math.abs(overflow.scaleX - 1) < .01 && Math.abs(overflow.scaleY - 1) < .01, `${size}: screenshot must capture the settled layout`);
+    if (size !== 'mini') {
+      const timing = await js(`(() => {
+        const el = document.querySelector('#home-almanac .almanac-jq-time');
+        const r = el.getBoundingClientRect(), tile = document.getElementById('home-almanac').getBoundingClientRect();
+        return { text: el.textContent, dateTime: el.dateTime, visible: r.left >= tile.left && r.right <= tile.right && r.bottom <= tile.bottom };
+      })()`);
+      assert.match(timing.text, /约17:38北京时间/);
+      assert.equal(timing.dateTime, '2026-10-23T17:38:00+08:00');
+      assert.equal(timing.visible, true, `${size}: term time visible`);
+    }
     if (size === 'mini') {
       const miniFoot = await js(`(() => {
         const foot = document.querySelector('#home-almanac .almanac-mini-foot');
@@ -175,8 +185,28 @@ async function main() {
     fs.writeFileSync(path.join(shots, `${size}.png`), image.toPNG());
   }
 
-  assert.equal(errors.filter((line) => /registry/i.test(line)).length, 0, errors.join('\n'));
-  console.log('almanac-home: four sizes OK');
+  for (const [name, year, month, date, expected] of [
+    ['early-and-late-zi', 2026, 1, 4, ['早子00:00–00:59', '晚子23:00–23:59']],
+    ['late-zi-only', 2026, 10, 24, ['晚子23:00–23:59']],
+    ['next-year-term', 2026, 12, 31, ['小寒', '1/5 约', '北京时间']],
+  ]) {
+    await js(`PomeAlmanac.setPreviewDate(new Date(${year}, ${month - 1}, ${date}, 12))`);
+    await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    const probe = await js(`(() => {
+      const tile = document.getElementById('home-almanac'), r = tile.getBoundingClientRect();
+      return { text: tile.textContent, title: tile.title, early: [...tile.querySelectorAll('.almanac-hour em')].filter(el => el.textContent === '早子').length,
+        fits: [...tile.querySelectorAll('.almanac-hour, .almanac-jq-time')].every(el => { const e=el.getBoundingClientRect(); return e.left >= r.left && e.right <= r.right && e.bottom <= r.bottom; }),
+        rect: {x:Math.floor(r.x), y:Math.floor(r.y), width:Math.ceil(r.width), height:Math.ceil(r.height)} };
+    })()`);
+    for (const text of expected) assert(probe.text.includes(text), `${name}: ${text}`);
+    if (name === 'late-zi-only') assert.equal(probe.early, 0);
+    assert.equal(probe.fits, true, `${name}: time intervals visible`);
+    assert.match(probe.title, /北京时间（UTC\+8）/);
+    assert.match(probe.title, /倒计时按日历天/);
+    fs.writeFileSync(path.join(shots, `${name}.png`), (await win.capturePage(probe.rect)).toPNG());
+  }
+  assert.deepEqual(errors, []);
+  console.log('almanac-home: four sizes, minute precision, timezone, early/late Zi and year boundary OK');
   console.log('shots:', shots);
   clearTimeout(watchdog);
   app.exit(0);

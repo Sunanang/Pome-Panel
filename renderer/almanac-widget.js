@@ -35,7 +35,10 @@
     const countdown = view.jieQiCountdown
       ? `<span class="almanac-jq-count">${escapeHtml(view.jieQiCountdown)}</span>`
       : '';
-    return `<div class="almanac-jieqi">${chip(view.jieQiLabel || '—', 'jieqi')}${countdown}</div>`;
+    const time = view.jieQiTiming
+      ? `<time class="almanac-jq-time" datetime="${escapeHtml(view.jieQiTiming.dateTime)}"><span>${escapeHtml(view.jieQiTimeText)}</span><span>北京时间</span></time>`
+      : '';
+    return `<div class="almanac-jieqi"><div class="almanac-jq-top">${chip(view.jieQiLabel || '—', 'jieqi')}${countdown}</div>${time}</div>`;
   }
 
   function renderMini(view) {
@@ -120,7 +123,9 @@
         <div><b>吉神宜趋</b><span>${escapeHtml(view.jiShen.join(' '))}</span></div>
         <div><b>彭祖百忌</b><span>${escapeHtml(day.pengZu.line)}</span></div>
       </div>
-      <div class="almanac-hours"><b>吉时</b><span>${escapeHtml(view.luckyHourText)}</span></div>
+      <div class="almanac-hours"><b>吉时<span class="almanac-hours-note">传统黄历 · 当地钟表时间</span></b>
+        <div class="almanac-hour-list">${day.luckyHours.map((hour) => `<span class="almanac-hour"><em>${escapeHtml(hour.label)}</em><span>${escapeHtml(hour.startHm)}–${escapeHtml(hour.endHm)}</span></span>`).join('')}</div>
+      </div>
     </div>`;
   }
 
@@ -140,6 +145,8 @@
         : size === 'large' ? renderLarge(view)
           : renderMedium(view);
     tile.innerHTML = html;
+    const timing = view.jieQiTiming;
+    tile.title = `公历按电脑本地日期显示。${timing ? `${view.jieQiLabel}交节：${timing.key} 约${timing.hm}，北京时间（UTC+8）。` : ''}节气按日期标记，倒计时按日历天计算。宜忌、吉时为传统黄历参考；早子为当天00:00–00:59，晚子为当天23:00–23:59。`;
     schedule();
   }
 

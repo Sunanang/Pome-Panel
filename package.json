@@ -58,6 +58,7 @@
       "syncRecovery.js",
       "main.js",
       "main-services.js",
+      "userDataDirectory.js",
       "public-http.js",
       "aiProviderCatalog.js",
       "cursor-usage.js",
@@ -105,8 +106,8 @@
       "build/pome-trayTemplate@2x.png",
       "localization/runtime.js",
       "localization/resources.js",
-      "localization/locales/en-US.json",
-      "localization/locales/zh-CN.json"
+      "localization/languages.json",
+      "localization/locales/*.json"
     ],
     "mac": {
       "icon": "build/pome-panel-icon.icns",
@@ -127,6 +128,7 @@
         "syncRecovery.js",
         "main.js",
         "main-services.js",
+        "userDataDirectory.js",
         "public-http.js",
         "aiProviderCatalog.js",
         "cursor-usage.js",
@@ -176,8 +178,8 @@
         "!node_modules/@koromix/**",
         "localization/runtime.js",
         "localization/resources.js",
-        "localization/locales/en-US.json",
-        "localization/locales/zh-CN.json"
+        "localization/languages.json",
+        "localization/locales/*.json"
       ],
       "category": "public.app-category.productivity",
       "minimumSystemVersion": "13.0",
@@ -205,7 +207,15 @@
         "CFBundleDevelopmentRegion": "en",
         "CFBundleLocalizations": [
           "en",
-          "zh-Hans"
+          "zh-Hans",
+          "zh-Hant",
+          "ja",
+          "ko",
+          "es",
+          "fr",
+          "de",
+          "ru",
+          "pt-BR"
         ]
       }
     },

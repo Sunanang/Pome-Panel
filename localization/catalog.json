@@ -515,8 +515,8 @@
   },
   {
     "key": "copy.versionDeveloperLandoADesktopWorkspaceFor.8c62b9",
-    "zh": "版本 {arg1}\n开发者 Lando\n\n贴在屏幕顶部的个人工作台。可以记笔记、管剪贴板、录音、放常用指令，并和飞牛 NAS 同步。",
-    "en": "Version {arg1}\nDeveloper: Lando\n\nA desktop workspace for notes, clipboard history, recordings and commands, with optional NAS sync.",
+    "zh": "版本 {arg1}\n开发者 Lando\n\n在屏幕边缘收成一颗短胶囊，点开就是一块随手可用的玻璃工作台。待办、笔记、录制和常用工具都在里面；数据留在本机，需要时还可同步到飞牛 NAS。",
+    "en": "Version {arg1}\nDeveloper: Lando\n\nA short capsule at the screen edge that opens into a ready glass workspace. Tasks, notes, recordings and everyday tools live inside; data stays on this computer, and can sync to fnOS NAS when needed.",
     "locations": [
       {
         "file": "main.js",

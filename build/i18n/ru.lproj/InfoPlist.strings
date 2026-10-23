@@ -1,0 +1,4 @@
+"NSAppleEventsUsageDescription" = "Pome Panel использует системные события для отображения и фокусировки окон, а также для отправки ярлыков Soda Music.";
+"NSCameraUsageDescription" = "Pome Panel использует камеру для предварительного просмотра зеркала при его открытии.";
+"NSLocalNetworkUsageDescription" = "Pome Panel получает доступ к вашему NAS в локальной сети для синхронизации вашего рабочего пространства.";
+"NSMicrophoneUsageDescription" = "Pome Panel использует микрофон для записи звука, когда вы начинаете запись. Транскрипция не является обязательной.";

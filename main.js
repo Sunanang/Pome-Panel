@@ -180,12 +180,28 @@ const {
   evaluateTrustAcceptance,
 } = require('./sync-tls-trust');
 
-// Keep the historical data directory so upgrading users retain notes, links,
-// recordings and encrypted settings after the public product rename.
-const LEGACY_USER_DATA_PATH = path.join(app.getPath('appData'), 'Dynamic Panel');
+const { prepareUserDataDirectory, MIGRATION_FILE: PROFILE_MIGRATION_FILE } = require('./userDataDirectory');
 app.setName('Pome Panel');
-// Honor Electron's standard profile switch for isolated automated tests.
-app.setPath('userData', app.commandLine.getSwitchValue('user-data-dir') || LEGACY_USER_DATA_PATH);
+let previousDefaultDataPath;
+// Give Pome its own profile. Copy a consistent legacy snapshot once, without
+// removing or writing to the old app's folder. Tests keep their explicit profile.
+try {
+  const profile = prepareUserDataDirectory({
+    appDataPath: app.getPath('appData'),
+    overridePath: app.commandLine.getSwitchValue('user-data-dir'),
+  });
+  app.setPath('userData', profile.path);
+  previousDefaultDataPath = profile.previousPath;
+} catch (error) {
+  let languages = ['en-US'];
+  try { languages = app.getPreferredSystemLanguages(); } catch {}
+  dialog.showErrorBox('Pome Panel', PomeI18n.t('profile.migrationFailed', {
+    source: path.join(app.getPath('appData'), 'Dynamic Panel'),
+    target: path.join(app.getPath('appData'), 'Pome Panel'),
+  }, PomeI18n.resolve('system', languages)));
+  app.exit(1);
+  throw error;
+}
 
 // ============ 托盘图标 PNG 生成 ============
 // 直接在主进程编码 PNG，避免引入额外资源文件
@@ -1832,6 +1848,13 @@ async function chooseWorkspaceFolder() {
     for (const directory of [RECORDINGS_DIR_NAME, CLIP_IMAGES_DIR_NAME]) {
       fs.mkdirSync(path.join(selected, directory), { recursive: true });
     }
+    // An explicit folder choice ends startup migration recovery. Remove its
+    // durable marker before committing the new root so a crash cannot later
+    // mistake the selected legacy workspace for the copied startup profile.
+    if (previousDefaultDataPath) {
+      fs.rmSync(path.join(app.getPath('userData'), PROFILE_MIGRATION_FILE), { force: true });
+      previousDefaultDataPath = undefined;
+    }
     if (!writeJsonFile(getJsonSettingsPath(WORKSPACE_SETTINGS_FILE), { path: selected })) return false;
     mainWindow.webContents.send('workspace:changed', { path: selected });
     refreshTrayMenu();
@@ -2147,7 +2170,7 @@ ipcMain.handle('settings:complete-welcome', (event) => {
 });
 ipcMain.handle('settings:set-language', (event, value) => {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return { ok: false, error: 'invalid_sender' };
-  if (!['system', 'zh-CN', 'en-US'].includes(value)) return { ok: false, error: 'invalid_language' };
+  if (PomeI18n.preference(value) !== value) return { ok: false, error: 'invalid_language' };
   if (!saveAppSettings({ ...readAppSettings(), language: value })) return { ok: false, error: 'save_failed' };
   localizationRevision += 1;
   return { ok: true, localization: broadcastLocalization() };
@@ -2219,11 +2242,12 @@ ipcMain.handle('settings:set-shortcut', (event, accelerator) => {
   refreshTrayMenu();
   return { ok: true, shortcut: accelerator };
 });
-ipcMain.handle('workspace:get', () => ({ path: workspaceRoot(), portable: workspaceRoot() !== app.getPath('userData') }));
+ipcMain.handle('workspace:get', () => ({ path: workspaceRoot(), portable: workspaceRoot() !== app.getPath('userData'),
+  ...(workspaceRoot() === app.getPath('userData') && previousDefaultDataPath ? { previousDefaultPath: previousDefaultDataPath } : {}) }));
 ipcMain.handle('workspace:load-data', () => {
   const payload = readJsonFile(workspacePath(WORKSPACE_DATA_FILE), {});
   return payload && payload.localStorage && typeof payload.localStorage === 'object'
-    ? payload.localStorage
+    ? (previousDefaultDataPath ? normalizePortableStorage(payload.localStorage) : payload.localStorage)
     : {};
 });
 
@@ -2900,7 +2924,6 @@ ipcMain.handle('credentials:copy', async (event, payload) => {
 
 const syncCredentialsStore = createSyncCredentialsStore({
   getUserDataPath: () => app.getPath('userData'),
-  getAppDataPath: () => app.getPath('appData'),
   safeStorage,
   fs,
   path,

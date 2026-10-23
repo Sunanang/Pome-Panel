@@ -1,7 +1,8 @@
 "use client";
+import { useReducedMotion } from "./useReducedMotion";
 import { useSiteLocale } from "./SiteLocale";
 
-import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import RealProductMedia from "./RealProductMedia";
 import { type MediaItem, getLandingContent } from "./landingContent";

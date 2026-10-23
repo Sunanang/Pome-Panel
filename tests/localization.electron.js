@@ -25,15 +25,16 @@ ipcMain.handle = (channel, fn) => handle(channel, {
 let port, started = false;
 app.on('pome-test-notification-port', value => { port = value; });
 const errors = [];
-const output = path.join(__dirname, '../dist.noindex/localization'); fs.mkdirSync(output, { recursive: true });
+const output = process.env.POME_LOCALIZATION_SCREENSHOTS || path.join(__dirname, '../dist.noindex/localization'); fs.mkdirSync(output, { recursive: true });
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const withoutLanguageNames = text => require('../localization/languages.json').reduce((value, row) => value.replaceAll(row.name, ''), text);
 const watchdog = setTimeout(() => { console.error('Localization integration timed out', errors); app.exit(1); }, 90000);
 app.on('web-contents-created', (_event, c) => {
   c.on('console-message', detail => { if (detail.level === 'error' && !detail.message.includes('ERR_')) errors.push(detail.message); });
   c.once('did-finish-load', () => {
     if (started || !c.getURL().endsWith('/renderer/index.html')) return;
     started = true;
-    run(c).then(() => { clearTimeout(watchdog); console.log('Bilingual production UI, preferences, drafts, sync states and notification lifecycle passed'); app.exit(0); })
+    run(c).then(() => { clearTimeout(watchdog); console.log('Ten-language production UI, preferences, drafts, sync states and notification lifecycle passed'); app.exit(0); })
       .catch(error => { console.error(error, errors); app.exit(1); });
   });
 });
@@ -55,6 +56,21 @@ async function run(c) {
   await js('window.notchAPI.setDefaultTab("notes")');
   assert.equal(JSON.parse(fs.readFileSync(path.join(profile, 'app-settings.json'))).language, 'zh-CN');
   assert.equal((await js('window.notchAPI.setLanguage("../../bad")')).ok, false);
+  assert.equal(await js('document.getElementById("settings-language").options.length'), 11);
+  for (const { id } of require('../localization/languages.json')) {
+    await js(`{ const select=document.getElementById('settings-language');select.value=${JSON.stringify(id)};select.dispatchEvent(new Event('change')); }`);
+    await until(`document.documentElement.lang===${JSON.stringify(id)}`);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(profile, 'app-settings.json'))).language, id);
+    assert.equal(await js('document.getElementById("settings-cursor-token").value'), 'unsaved-token-draft');
+    await js('document.querySelectorAll(".settings-column").forEach(column => column.scrollTop=0)');
+    await sleep(100);
+    assert.equal(await js('document.documentElement.scrollWidth <= innerWidth'), true, id + ' page stays within viewport');
+    fs.writeFileSync(path.join(output, `${id}-settings.png`), (await c.capturePage()).toPNG());
+    await js('document.getElementById("settings-language").scrollIntoView({block:"center"})'); await sleep(80);
+    assert.equal(await js('(()=>{const r=document.getElementById("settings-language").getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight})()'), true, id + ' language control visible');
+    fs.writeFileSync(path.join(output, `${id}-language.png`), (await c.capturePage()).toPNG());
+  }
+  await js('document.querySelectorAll(".settings-column").forEach(column => column.scrollTop=0)');
   await js('window.notchAPI.setLanguage("en-US")'); await until('document.documentElement.lang === "en-US"');
   await js('window.notchAPI.setTranscriptionConfig({region:"beijing",transcriptionLanguage:"en",llmBaseUrl:"https://api.deepseek.com"})');
   await js('window.notchAPI.setLanguage("zh-CN")'); await until('document.documentElement.lang === "zh-CN"');
@@ -78,7 +94,7 @@ async function run(c) {
   for (const tab of ['home', 'todo', 'notes', 'links', 'recordings', 'credentials', 'settings']) {
     await js(`setActiveTab(${JSON.stringify(tab)})`); await sleep(450);
     pageText[tab] = await js('document.body.innerText');
-    assert.doesNotMatch(pageText[tab].replaceAll('简体中文', ''), /[\p{sc=Han}]/u, `untranslated product labels on ${tab}`);
+    assert.doesNotMatch(withoutLanguageNames(pageText[tab]), /[\p{sc=Han}]/u, `untranslated product labels on ${tab}`);
     fs.writeFileSync(path.join(output, `english-${tab}.png`), (await c.capturePage()).toPNG());
     if (process.env.POME_CAPTURE_ENGLISH_ASSETS === '1') {
       const directory = path.join(__dirname, '../website/public/product-captures/en'); fs.mkdirSync(directory, { recursive: true });
@@ -139,13 +155,13 @@ async function verifyNasPage() {
     await js('window.dispatchEvent(new CustomEvent("pome:host-language", {detail:"en-US"}))');
     assert.equal(await js('document.documentElement.lang'), 'en-US');
     assert.match(await js('document.getElementById("session-pill").textContent'), /Signed in/);
-    assert.doesNotMatch((await js('document.body.innerText')).replaceAll('简体中文', ''), /[\p{sc=Han}]/u);
+    assert.doesNotMatch(withoutLanguageNames(await js('document.body.innerText')), /[\p{sc=Han}]/u);
     await sleep(100);
     fs.writeFileSync(path.join(output, 'english-nas-web.png'), (await nas.webContents.capturePage()).toPNG());
     await js('document.getElementById("pair-start-btn").click()');
     for (let i = 0; i < 200; i++) { if (await js('document.getElementById("pair-status").textContent.includes("expired")')) break; await sleep(20); }
     assert.match(await js('document.getElementById("pair-status").textContent'), /expired/);
-    await js('const select=document.querySelector("[data-language-preference]"); select.value="zh-CN"; select.dispatchEvent(new Event("change"))');
+    await js('{ const select=document.querySelector("[data-language-preference]"); select.value="zh-CN"; select.dispatchEvent(new Event("change")); }');
     assert.equal(await js('document.documentElement.lang'), 'zh-CN');
     await js('window.dispatchEvent(new CustomEvent("pome:host-language", {detail:"en-US"}))');
     assert.equal(await js('document.documentElement.lang'), 'zh-CN', 'manual preference overrides host changes');
@@ -154,6 +170,16 @@ async function verifyNasPage() {
     fs.writeFileSync(path.join(output, 'chinese-nas-web.png'), (await nas.webContents.capturePage()).toPNG());
     await js('document.getElementById("tab-button-notes").click()'); await sleep(100);
     assert.match(await js('document.body.innerText'), /用户原文标题/);
+    for (const { id } of require('../localization/languages.json')) {
+      await js(`{ const select=document.querySelector('[data-language-preference]');select.value=${JSON.stringify(id)};select.dispatchEvent(new Event('change')); }`);
+      assert.equal(await js('document.documentElement.lang'), id);
+      assert.equal(await js('document.querySelector("[data-language-preference]").options.length'), 11);
+      assert.match(await js('document.body.innerText'), /用户原文标题/);
+      await js('document.getElementById("tab-button-devices").click()'); await sleep(80);
+      assert.equal(await js('document.documentElement.scrollWidth <= innerWidth'), true, id + ' NAS page stays within viewport');
+      fs.writeFileSync(path.join(output, `${id}-nas.png`), (await nas.webContents.capturePage()).toPNG());
+      await js('document.getElementById("tab-button-notes").click()'); await sleep(80);
+    }
     assert(requests.includes('/api/v1/pair/start'));
   } finally { nas.destroy(); await new Promise(resolve => server.close(resolve)); }
 }

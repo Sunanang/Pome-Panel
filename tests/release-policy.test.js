@@ -10,6 +10,7 @@ const releasePolicyScript = path.join(projectRoot, 'scripts', 'release-policy.js
 const releaseWorkflowPath = path.join(projectRoot, '.github', 'workflows', 'release-dmg.yml');
 const entitlementsPath = path.join(projectRoot, 'build', 'entitlements.mac.plist');
 const readmePath = path.join(projectRoot, 'README.md');
+const userGuidePath = path.join(projectRoot, 'docs', 'user-guide.md');
 const websiteDownloadPath = path.join(projectRoot, 'website', 'app', 'landingDownload.mjs');
 const websiteContentPath = path.join(projectRoot, 'website', 'app', 'landingContent.ts');
 const packageVersion = require(path.join(projectRoot, 'package.json')).version;
@@ -180,19 +181,21 @@ test('Windows reads the effective login-item state instead of just the Run key',
 });
 
 // P3-4：Windows 用户装完之后要能自己配通知钩子、跨过 SmartScreen、知道哪些事做不到。
-test('the README documents the Windows hooks, SmartScreen and known limits', () => {
+test('the README links to Windows hook, SmartScreen and platform-limit guidance', () => {
   const readme = fs.readFileSync(readmePath, 'utf8');
-  assert.match(readme, /%USERPROFILE%\\\.codex\\config\.toml/);
-  assert.match(readme, /%USERPROFILE%\\\.claude\\settings\.json/);
-  assert.match(readme, /%LOCALAPPDATA%\\Programs\\Pome Panel/);
-  assert.match(readme, /SmartScreen/);
-  assert.match(readme, /仍要运行/);
+  assert.match(readme, /\]\(docs\/user-guide\.md#windows-上的几件事\)/);
+  const guide = fs.readFileSync(userGuidePath, 'utf8');
+  assert.match(guide, /%USERPROFILE%\\\.codex\\config\.toml/);
+  assert.match(guide, /%USERPROFILE%\\\.claude\\settings\.json/);
+  assert.match(guide, /%LOCALAPPDATA%\\Programs\\Pome Panel/);
+  assert.match(guide, /SmartScreen/);
+  assert.match(guide, /仍要运行/);
   for (const limit of ['不签名', '虚拟桌面', '汽水音乐', 'arm64', '9px']) {
-    assert.match(readme, new RegExp(limit), `已知限制里缺少「${limit}」`);
+    assert.match(guide, new RegExp(limit), `已知限制里缺少「${limit}」`);
   }
   // P1 之后 Windows 也能拖到四边，旧的"仍贴在工作区顶部居中"说明必须撤掉。
-  assert.doesNotMatch(readme, /Windows 仍贴在工作区顶部居中/);
-  assert.doesNotMatch(readme, /Windows 的折叠态是工作区顶部居中的 200×38/);
+  assert.doesNotMatch(guide, /Windows 仍贴在工作区顶部居中/);
+  assert.doesNotMatch(guide, /Windows 的折叠态是工作区顶部居中的 200×38/);
 });
 
 test('website download entry points stay on the latest release', () => {

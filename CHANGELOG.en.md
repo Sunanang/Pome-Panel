@@ -6,6 +6,14 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Fix old workspace content overwriting the Pome workspace when switching between the legacy folder and `Pome Panel` after migration. Explicit folder changes end migration recovery and remain correct after restart. Fix quick-start anchors in five translated READMEs.
+
+- Isolate the default data folder as `Pome Panel`. Copy and verify persistent data from `Dynamic Panel` once while preserving the original folder, current browser storage, custom workspace paths, media and encrypted records. Existing Pome profiles are not overwritten; normal startup no longer falls back to another app’s NAS credential files.
+
+- Show approximate solar-term times to the nearest minute in China standard time (UTC+8). List traditional lucky clock intervals in the large almanac, distinguishing early and late Zi on the same day; clarify calendar-day countdowns.
+
+- Expand the desktop app, website and NAS web UI to ten languages, adding Traditional Chinese, Japanese, Korean, Spanish, French, German, Russian and Brazilian Portuguese. Share language metadata, system detection and local preferences. New translations await native-speaker review; screenshots and traditional almanac content retain their original language.
+
 - Fix Codex remaining quota jumping back to an older value on refresh: select the newest telemetry timestamp across sessions, cache unchanged parsed files, and preserve legitimate increases after a reset. Unrelated writes to older sessions no longer override newer quota readings.
 - Preserve visible hover details when the AI quota dashboard refreshes, and clear hover/pinned state when a provider disappears.
 - Commit MCP authorization success receipts and their request resolutions atomically so failed writes remain retryable. Duplicate success deliveries skip the entire batch without affecting new requests.

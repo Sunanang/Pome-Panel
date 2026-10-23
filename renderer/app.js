@@ -134,11 +134,29 @@ async function hydratePortableWorkspace() {
     ]);
     workspacePersistenceRoot = workspace.path;
     const previousRoot = localStorage.getItem('notch-workspace-root');
-    if (previousRoot && previousRoot !== workspace.path) {
+    const replacingWorkspace = sessionStorage.getItem('notch-workspace-replace') === '1';
+    const movedDefault = !replacingWorkspace && workspace.previousDefaultPath
+      && (!previousRoot || previousRoot === workspace.previousDefaultPath);
+    if (previousRoot && previousRoot !== workspace.path && !movedDefault) {
       sessionStorage.removeItem('notch-workspace-hydrated');
       sessionStorage.setItem('notch-workspace-replace', '1');
     }
     let imported = false;
+    if (movedDefault) {
+      // Keep the latest copied browser storage, which can be newer than the
+      // last workspace.json snapshot. Rebase media references before reloading.
+      for (const [key, field, directory] of [['notch-recordings', 'audioPath', 'recordings'], ['notch-clip-history', 'imagePath', 'clipboard-images']]) {
+        try {
+          const rows = JSON.parse(localStorage.getItem(key));
+          if (!Array.isArray(rows)) continue;
+          localStorage.setItem(key, JSON.stringify(rows.map(row => row && row[field]
+            ? { ...row, [field]: window.NotchPlatform.portableMediaPath(directory, row[field]) } : row)));
+        } catch {}
+      }
+      sessionStorage.removeItem('notch-workspace-replace');
+      localStorage.setItem('notch-workspace-root', workspace.path);
+      imported = true;
+    }
     if (sessionStorage.getItem('notch-workspace-hydrated') !== '1' && snapshot && typeof snapshot === 'object') {
       const replace = sessionStorage.getItem('notch-workspace-replace') === '1';
       if (replace) {

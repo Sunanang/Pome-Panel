@@ -1,0 +1,4 @@
+"NSAppleEventsUsageDescription" = "Pome Panel utilise les événements système pour répertorier et focaliser les fenêtres et envoyer des raccourcis Soda Music.";
+"NSCameraUsageDescription" = "Pome Panel utilise la caméra pour l'aperçu miroir lorsque vous l'ouvrez.";
+"NSLocalNetworkUsageDescription" = "Pome Panel accède à votre NAS sur le réseau local pour synchroniser votre espace de travail.";
+"NSMicrophoneUsageDescription" = "Pome Panel utilise le microphone pour enregistrer l'audio lorsque vous démarrez l'enregistrement. La transcription est facultative.";

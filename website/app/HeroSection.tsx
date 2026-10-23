@@ -1,9 +1,10 @@
 "use client";
-import { useSiteLocale } from "./SiteLocale";
+import { useReducedMotion } from "./useReducedMotion";
+import { SiteLanguageMenu, useSiteLocale } from "./SiteLocale";
 import { siteT } from "./siteI18n";
 
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   useEffect,
   useMemo,
@@ -205,7 +206,7 @@ export default function HeroSection() {
             >
               {/* Product UI is shown only through real screenshots from the running app. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="hero-panel-image hero-panel-image-expanded" src={assetPath(locale === "en-US" ? "/product-captures/en/home.jpg" : "/product-captures/home.jpg")} alt={siteT(locale, "copy.pomePanelExpandedHomeView.bd7e81")} />
+              <img className="hero-panel-image hero-panel-image-expanded" src={assetPath(!locale.startsWith("zh-") ? "/product-captures/en/home.jpg" : "/product-captures/home.jpg")} alt={siteT(locale, "copy.pomePanelExpandedHomeView.bd7e81")} />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img className="hero-panel-image hero-panel-image-collapsed" src={assetPath("/hero/panel-collapsed.png")} alt={siteT(locale, "copy.pomePanelCollapsedView.378ce5")} />
               <button
@@ -256,6 +257,7 @@ export default function HeroSection() {
             </a>
           ))}
         </div>
+        <SiteLanguageMenu />
       </motion.nav>
 
       <motion.div

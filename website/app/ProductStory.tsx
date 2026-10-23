@@ -1,9 +1,10 @@
 "use client";
+import { useReducedMotion } from "./useReducedMotion";
 import { useSiteLocale } from "./SiteLocale";
 import { siteT } from "./siteI18n";
 
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 
 export default function ProductStory() {
   const locale = useSiteLocale();

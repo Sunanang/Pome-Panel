@@ -429,7 +429,7 @@ const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? req
 
   function cityLabel(city) {
     if (!city || !city.name) return '';
-    const english = pomeLocaleRendererSun.getState().effectiveLocale === 'en-US';
+    const english = !pomeLocaleRendererSun.getState().effectiveLocale.startsWith('zh-');
     const name = english && city.source !== 'manual' ? city.en || city.name : city.name;
     const admin = english ? city.adminEn || pomeLocaleRendererSun.systemText(city.admin) : city.admin;
     return admin ? `${name}, ${admin}` : String(name);

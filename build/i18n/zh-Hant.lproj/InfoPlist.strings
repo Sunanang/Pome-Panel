@@ -1,0 +1,4 @@
+"NSAppleEventsUsageDescription" = "Pome Panel 需要控制「系統事件」來列舉並聚焦當前視窗、傳送汽水音樂快捷鍵。";
+"NSCameraUsageDescription" = "Pome Panel 需要使用攝像頭來顯示「鏡子」預覽。";
+"NSLocalNetworkUsageDescription" = "Pome Panel 需要訪問區域網中的飛牛 NAS 以同步資料。";
+"NSMicrophoneUsageDescription" = "Pome Panel 需要使用麥克風來錄音並生成轉寫文字。";

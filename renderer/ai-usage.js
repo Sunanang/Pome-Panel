@@ -240,7 +240,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   function captionContent(m) {
     const fullLines = captionLines(m).filter(Boolean);
     const displayLines = captionLines(m, { compact: m.size === 'small' }).filter(Boolean);
-    const zhSmall = m.size === 'small' && I.getState().effectiveLocale === 'zh-CN';
+    const zhSmall = m.size === 'small' && I.getState().effectiveLocale.startsWith('zh-');
     return {
       title: fullLines.join(' · '),
       html: displayLines.map((line) => {

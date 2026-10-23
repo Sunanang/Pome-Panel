@@ -1,0 +1,4 @@
+"NSAppleEventsUsageDescription" = "Pome Panel は、システム イベントを使用してウィンドウをリストおよびフォーカスし、Soda Music のショートカットを送信します。";
+"NSCameraUsageDescription" = "Pome Panel uses the camera for the Mirror preview when you open it.";
+"NSLocalNetworkUsageDescription" = "Pome Panel は、ローカル ネットワーク上の NAS にアクセスして、ワークスペースを同期します。";
+"NSMicrophoneUsageDescription" = "Pome Panel uses the microphone to record audio when you start recording.転写はオプションです。";
