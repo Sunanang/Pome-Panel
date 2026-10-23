@@ -294,7 +294,18 @@ async function main() {
           assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`),true);
           assert.equal(await js(`!document.getElementById('ai-provider-cursor').title`),true,'native title tooltip must stay off');
           assert.match(await js(`document.querySelector('#cursor-usage-rows .ai-usage-detail-updated')?.textContent || ''`),/更新于/);
-          await js(`document.getElementById('ai-provider-cursor').dispatchEvent(new PointerEvent('pointerout',{bubbles:true,relatedTarget:document.body}))`);
+          // Switch to another provider while the first bubble is open — must reopen after 1s.
+          await js(`(() => {
+            const from = document.getElementById('ai-provider-cursor');
+            const to = document.getElementById('ai-provider-codex');
+            from.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: to }));
+            to.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, relatedTarget: from }));
+          })()`);
+          assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`), false, 'leaving for another item closes the old bubble');
+          assert.equal(await js(`document.getElementById('codex-usage-rows').matches(':popover-open')`), false, 'new item still waits 1s');
+          await new Promise((r) => setTimeout(r, 1100));
+          assert.equal(await js(`document.getElementById('codex-usage-rows').matches(':popover-open')`), true, 'second item hover opens after 1s');
+          await js(`document.getElementById('ai-provider-codex').dispatchEvent(new PointerEvent('pointerout',{bubbles:true,relatedTarget:document.body}))`);
           assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
         }
         await resize(size,currentSizes);

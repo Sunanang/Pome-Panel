@@ -18,20 +18,27 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   let renderedSize = null, renderedOrder = '';
   let pinnedDetails = null;
   let hoverDetailsTimer = null;
-  let hoverDetailsId = null;
+  let hoverDetailsId = null; // pending or currently hovered provider
+  let openDetailsId = null; // provider whose popover is visible
   const HOVER_DETAILS_DELAY_MS = 1000;
   function clearHoverDetailsTimer() {
     if (hoverDetailsTimer) clearTimeout(hoverDetailsTimer);
     hoverDetailsTimer = null;
-    hoverDetailsId = null;
+  }
+  function hideOpenPopover() {
+    tile.querySelectorAll('.cursor-usage-rows:popover-open').forEach(node => node.hidePopover());
+    tile.querySelectorAll('[data-quota-toggle]').forEach(node => node.setAttribute('aria-expanded', 'false'));
+    openDetailsId = null;
   }
   function closeDetails() {
     clearHoverDetailsTimer();
-    tile.querySelectorAll('.cursor-usage-rows:popover-open').forEach(node => node.hidePopover());
-    tile.querySelectorAll('[data-quota-toggle]').forEach(node => node.setAttribute('aria-expanded', 'false'));
+    hoverDetailsId = null;
+    hideOpenPopover();
   }
   function showDetails(id) {
-    closeDetails();
+    clearHoverDetailsTimer();
+    hideOpenPopover();
+    hoverDetailsId = id;
     const provider = byId(`ai-provider-${id}`), rows = byId(`${id}-usage-rows`);
     if (!provider || !rows) return;
     const r = provider.getBoundingClientRect();
@@ -39,7 +46,19 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     rows.style.left = `${Math.max(12, Math.min(innerWidth - 252, r.left))}px`;
     rows.style.top = `${Math.max(12, Math.min(innerHeight - 190, r.bottom - 8))}px`;
     rows.showPopover();
+    openDetailsId = id;
     tile.querySelectorAll('[data-quota-toggle]').forEach(node => { if (node.dataset.quotaToggle === id) node.setAttribute('aria-expanded', 'true'); });
+  }
+  function scheduleHoverDetails(id) {
+    if (pinnedDetails || hoverDetailsId === id) return;
+    clearHoverDetailsTimer();
+    hoverDetailsId = id;
+    // Switching providers: drop the previous bubble immediately, then wait again.
+    if (openDetailsId && openDetailsId !== id) hideOpenPopover();
+    hoverDetailsTimer = setTimeout(() => {
+      hoverDetailsTimer = null;
+      if (!pinnedDetails && hoverDetailsId === id) showDetails(id);
+    }, HOVER_DETAILS_DELAY_MS);
   }
   tile.addEventListener('click', event => {
     const toggle = event.target.closest('[data-quota-toggle]');
@@ -51,18 +70,15 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   tile.addEventListener('pointerover', event => {
     const provider = event.target.closest('.ai-usage-provider');
     if (pinnedDetails || !provider || provider.contains(event.relatedTarget)) return;
-    const id = provider.dataset.provider;
-    if (hoverDetailsId === id) return;
-    clearHoverDetailsTimer();
-    hoverDetailsId = id;
-    hoverDetailsTimer = setTimeout(() => {
-      hoverDetailsTimer = null;
-      if (!pinnedDetails && hoverDetailsId === id) showDetails(id);
-    }, HOVER_DETAILS_DELAY_MS);
+    scheduleHoverDetails(provider.dataset.provider);
   });
   tile.addEventListener('pointerout', event => {
     const provider = event.target.closest('.ai-usage-provider');
     if (!provider || provider.contains(event.relatedTarget)) return;
+    // Moving to another provider in this tile: pointerover retargets. Closing here
+    // races hidePopover layout with the next hover and drops the new timer.
+    const next = event.relatedTarget?.closest?.('.ai-usage-provider');
+    if (next && tile.contains(next)) return;
     if (!pinnedDetails) closeDetails();
     else clearHoverDetailsTimer();
   });
