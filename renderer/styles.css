@@ -8100,7 +8100,7 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: -.045em;
-  line-height: .92;
+  line-height: .9;
   color: var(--text-1);
 }
 .home-almanac[data-widget-size='mini'] .almanac-daynum { font-size: 52px; }
@@ -8179,7 +8179,7 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 }
 .home-almanac .almanac-meta-wide { grid-template-columns: 1fr 1fr 1fr; }
 
-.home-almanac .almanac-mini { justify-content: space-between; gap: 8px; }
+.home-almanac .almanac-mini { justify-content: space-between; gap: 6px; }
 .home-almanac .almanac-mini-top { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
 .home-almanac .almanac-mini-meta {
   display: flex;
@@ -8191,17 +8191,25 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 }
 .home-almanac .almanac-mini-foot {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 5px;
   min-width: 0;
   font-size: 12px;
+  line-height: 1.35;
   color: var(--text-2);
-  white-space: nowrap;
+}
+.home-almanac .almanac-mini-foot .yi,
+.home-almanac .almanac-mini-foot .ji {
+  display: block;
+  min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .home-almanac .almanac-mini-foot .yi b { color: var(--almanac-yi); margin-right: 4px; }
 .home-almanac .almanac-mini-foot .ji b { color: var(--almanac-ji); margin-right: 4px; }
-.home-almanac .almanac-mini-foot .sep { color: var(--almanac-muted); }
 
 .home-almanac .almanac-small { justify-content: space-between; }
 .home-almanac .almanac-small .almanac-line,
@@ -8224,12 +8232,20 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
   min-width: 0;
   gap: 6px;
 }
+.home-almanac .almanac-medium-left > .almanac-daynum { align-self: flex-start; }
 .home-almanac .almanac-medium-right {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
+}
+/* Day numerals keep top leading inside the line box; nudge 霜降 to the ink top. */
+.home-almanac[data-widget-size='medium'] .almanac-medium-right > .almanac-jieqi {
+  align-self: flex-start;
+  align-items: flex-start;
+  min-height: 0;
+  margin-top: 10px;
 }
 .home-almanac .almanac-medium .almanac-k { font-size: 14px; }
 .home-almanac .almanac-medium .almanac-lunar,
@@ -8242,7 +8258,23 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
   justify-content: space-between;
   gap: 12px;
 }
-.home-almanac .almanac-large-date { display: flex; align-items: flex-end; gap: 12px; min-width: 0; }
+.home-almanac[data-widget-size='large'] .almanac-large-head > .almanac-jieqi {
+  align-self: flex-start;
+  align-items: flex-start;
+  min-height: 0;
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+.home-almanac .almanac-large-date { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.home-almanac .almanac-large-date > .almanac-daynum { align-self: flex-start; }
+.home-almanac .almanac-large-date > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  /* Optical: weekday sits near the mid/lower half of the tall day number. */
+  padding-top: 0.28em;
+}
 .home-almanac .almanac-dual {
   display: grid;
   grid-template-columns: 1fr 1fr;

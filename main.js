@@ -30,6 +30,7 @@ const { classifyAiEvent, MANUS_TRUSTED_ADAPTER } = require('./aiEventPolicy');
 const { createAiAttentionStore, rebuildAiAttention } = require('./aiAttentionStore');
 const { createAiNotificationScheduler } = require('./aiNotificationScheduler');
 const { createClaudeAttentionAdapter } = require('./claudeAttentionAdapter');
+const { expandMcpAuthSessionResolution, isMcpAuthSessionResolution } = require('./scripts/cursor-mcp-auth-notify');
 const claudeAttentionAdapter = createClaudeAttentionAdapter();
 let aiSourceHooks;
 function getAiSourceHooks() {
@@ -1322,6 +1323,24 @@ function startTaskNotificationServer() {
       if (policy.category === 'ignore') { sendTaskNotificationResponse(response, 202, { ok: true, result: 'ignored', reason: policy.reason }); return; }
       if (policy.event) {
         try {
+          if (isMcpAuthSessionResolution(policy.event)) {
+            // Persist the success delivery identity first so replaying the same
+            // eventId/requestId cannot clear a later auth for this service.
+            const receipt = getAiAttention().apply(policy.event);
+            if (receipt.duplicate) {
+              sendTaskNotificationResponse(response, 202, { ok: true, result: 'duplicate' });
+              return;
+            }
+            const expansions = expandMcpAuthSessionResolution(policy.event, getAiAttention().list());
+            if (expansions.length) getAiAttention().applyBatch(expansions);
+            refreshAttentionNotifications();
+            sendTaskNotificationResponse(response, 202, {
+              ok: true,
+              result: expansions.length ? 'accepted' : 'ignored',
+              ...(expansions.length ? {} : { reason: 'no_pending_mcp_auth' }),
+            });
+            return;
+          }
           const applied = getAiAttention().apply(policy.event);
           refreshAttentionNotifications();
           if (policy.category !== 'completion') { sendTaskNotificationResponse(response, 202, { ok: true, result: policy.reason ? 'ignored' : applied.duplicate ? 'duplicate' : 'accepted', ...(policy.reason ? { reason: policy.reason } : {}) }); return; }

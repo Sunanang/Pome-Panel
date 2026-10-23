@@ -77,7 +77,7 @@
 - 当前窗口：macOS 通过辅助功能枚举和聚焦，Windows 仅在原生能力启用且可用时提供；使用系统应用图标，同应用多窗口编号，隐藏项保存在 LocalStorage；聚焦 IPC 只接受最近扫描缓存中的窗口 ID
 - 笔记：首页随笔记保存后进入独立笔记页，可搜索、重命名、编辑和删除
 - 动效：窗口边界变更不使用系统动画；视觉动效由渲染层完成，并支持 `prefers-reduced-motion`
-- 通知：独立 `400 × 96` 无焦点窗口；HTTP 只监听 `127.0.0.1:43821` 的 `/notify/<source>`，来源白名单以 `aiProviderCatalog` 的 HTTP notify 列表为准（含 `codex` / `claude` / `cursor` 等）；AI 完成/等待气泡只展示最新一条，新事件直接顶替旧 AI 气泡，旧等待仍可从待处理列表手动打开；待办到期提醒独立按顺序排队，不受 AI 新事件覆盖。可在设置关闭顶部气泡（默认开启）；关闭后仍落盘收件箱/待处理，不弹气泡。Codex / Claude / Cursor 完成分别由 `scripts/*-notify.js` 转发，子代理结束与云端会话不弹提醒。Cursor MCP 需要 OAuth 时，代理须先跑 `node scripts/cursor-mcp-auth-notify.js --service "<名>"`，用 v2 `attention.required` + `action=approve` 在顶部气泡提示用户回 Cursor 授权；每次调用使用独立请求身份，同一载荷重投去重，不产生完成历史或未读，不自动授权或猜测授权成功
+- 通知：独立 `400 × 96` 无焦点窗口；HTTP 只监听 `127.0.0.1:43821` 的 `/notify/<source>`，来源白名单以 `aiProviderCatalog` 的 HTTP notify 列表为准（含 `codex` / `claude` / `cursor` 等）；AI 完成/等待气泡只展示最新一条，新事件直接顶替旧 AI 气泡，旧等待仍可从待处理列表手动打开；待办到期提醒独立按顺序排队，不受 AI 新事件覆盖。可在设置关闭顶部气泡（默认开启）；关闭后仍落盘收件箱/待处理，不弹气泡。Codex / Claude / Cursor 完成分别由 `scripts/*-notify.js` 转发，子代理结束与云端会话不弹提醒。Cursor MCP 需要 OAuth 时，代理须先跑 `node scripts/cursor-mcp-auth-notify.js --service "<名>"`，用 v2 `attention.required` + `action=approve` 在顶部气泡提示用户回 Cursor 授权；授权成功后再跑同一脚本加 `--resolved` 收起气泡。成功事件按身份去重，且只关闭该成功时刻及之前已打开的同服务请求，避免旧成功重投误关新授权。不产生完成历史或未读，不自动授权或猜测授权成功
 - NAS 同步：在「设置 → NAS 同步」填写地址与一次性配对码，同步待办、笔记、链接、常用指令、剪贴板、录音（含音频）、AI 配置和密钥；首页布局不同步。设备令牌经 `safeStorage` 加密，不写入 LocalStorage；密钥与 AI Key 使用账号同步密钥的 AES-GCM 加密盒传输。明文 HTTP 默认关闭（回环地址除外），HTTPS 证书信任仅限用户确认的主机、端口和证书，不得全局关闭证书校验
 
 ## 代码规范

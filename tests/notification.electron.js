@@ -317,8 +317,18 @@ async function verifyMcpAuthorization(mainContents) {
   await mainContents.executeJavaScript(`notchAPI.showAiAttention(${JSON.stringify(first.key)})`);
   win = await shown(first.event.question);
   assert.notEqual(await evaluate(win, 'currentNotification.eventId'), firstDisplay);
-  for (const row of (await pending()).items) await send('cursor', { ...row.event, kind: 'attention.resolved', eventId: row.event.eventId + '-resolved', reason: 'answered', occurredAt: Date.now() });
-  await delay(800);
+  const resolveAuth = () => new Promise((resolve, reject) => {
+    const child = require('node:child_process').spawn(process.execPath, [path.join(__dirname, '../scripts/cursor-mcp-auth-notify.js'), '--service', 'Google Drive', '--resolved'], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', POME_NOTIFY_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+    });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; });
+    child.on('error', reject);
+    child.on('exit', code => code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr || stdout)));
+  });
+  assert.match(await resolveAuth(), /^resolved:/);
+  await until(async () => !notificationWindow() || !notificationWindow().isVisible(), 'MCP --resolved must auto-dismiss the top bubble');
+  assert.equal((await pending()).items.filter((row) => String(row.event?.sessionId || '').startsWith('mcp-auth:google-drive')).length, 0);
 }
 
 async function previewVariants() {

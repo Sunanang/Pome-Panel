@@ -124,6 +124,33 @@ async function main() {
     assert.equal(overflow.overflowX, false, `${size} overflowX`);
     assert.equal(overflow.overflowY, false, `${size} overflowY`);
     assert.ok(Math.abs(overflow.scaleX - 1) < .01 && Math.abs(overflow.scaleY - 1) < .01, `${size}: screenshot must capture the settled layout`);
+    if (size === 'mini') {
+      const miniFoot = await js(`(() => {
+        const foot = document.querySelector('#home-almanac .almanac-mini-foot');
+        const style = getComputedStyle(foot);
+        return {
+          direction: style.flexDirection,
+          yi: !!foot?.querySelector('.yi'),
+          ji: !!foot?.querySelector('.ji'),
+          sep: !!foot?.querySelector('.sep'),
+        };
+      })()`);
+      assert.equal(miniFoot.direction, 'column', 'mini 宜/忌 must stack on two lines');
+      assert.equal(miniFoot.yi && miniFoot.ji && !miniFoot.sep, true);
+    }
+    if (size === 'medium' || size === 'large') {
+      const align = await js(`(() => {
+        const day = document.querySelector('#home-almanac .almanac-daynum');
+        const chip = document.querySelector('#home-almanac .almanac-chip-jieqi');
+        if (!day || !chip) return { ok: false, reason: 'missing' };
+        const dayTop = day.getBoundingClientRect().top;
+        const chipTop = chip.getBoundingClientRect().top;
+        const delta = chipTop - dayTop;
+        // Chip is nudged below the day box top to match numeral ink.
+        return { ok: delta >= 6 && delta <= 14, dayTop, chipTop, delta };
+      })()`);
+      assert.equal(align.ok, true, `${size}: 霜降 top must sit with date ink (delta=${align.delta})`);
+    }
     const bg = await js(`(() => {
       const tile = document.getElementById('home-almanac');
       const glass = document.documentElement.dataset.liquidGlass === '1';

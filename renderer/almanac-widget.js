@@ -50,7 +50,6 @@
       </div>
       <div class="almanac-mini-foot">
         <span class="yi"><b>宜</b> ${escapeHtml(view.yiText)}</span>
-        <span class="sep">·</span>
         <span class="ji"><b>忌</b> ${escapeHtml(view.jiText)}</span>
       </div>
     </div>`;
