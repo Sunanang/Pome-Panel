@@ -36,7 +36,7 @@
 
 | Feature | What it does |
 | --- | --- |
-| **Home workspace** | Arrange widgets for focus timers, quick notes, the almanac, sunrise and sunset |
+| **Home workspace** | Arrange widgets for focus timers, quick notes, the almanac, sunrise, sunset and current weather |
 | **Tasks and notes** | Organize 1–8 task categories with due reminders; write Markdown notes and keep a searchable library |
 | **Links and recordings** | Save websites by group, record audio, and optionally enable live transcription and smart naming |
 | **AI assistants** | Check remaining quotas across providers and receive task completion alerts from connected sources |

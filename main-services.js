@@ -578,6 +578,7 @@ function appSettingsLayoutPreferences(stored) {
     winNative: typeof source.winNative === 'boolean' ? source.winNative : WIN_NATIVE_DEFAULT,
     // Top bubble tips default on; only an explicit false disables them.
     taskNotifications: source.taskNotifications !== false,
+    weatherEffects: source.weatherEffects !== false,
   };
 }
 

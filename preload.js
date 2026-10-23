@@ -162,6 +162,8 @@ contextBridge.exposeInMainWorld('notchAPI', {
   setWinNative: (enabled) => ipcRenderer.invoke('settings:set-win-native', enabled === true),
   setAutoLaunch: (enabled) => ipcRenderer.invoke('settings:set-auto-launch', enabled === true),
   setTaskNotifications: (enabled) => ipcRenderer.invoke('settings:set-task-notifications', enabled === true),
+  setWeatherEffects: (enabled) => ipcRenderer.invoke('settings:set-weather-effects', enabled === true),
+  getSunWeather: (location) => ipcRenderer.invoke('sun:weather', location),
   setPanelShortcut: (accelerator) => ipcRenderer.invoke('settings:set-shortcut', accelerator),
   onAppSettingsChanged: (cb) => subscribe('settings:changed', (event, settings) => cb(settings)),
   onRecordShortcut: (cb) => subscribe('app:record-shortcut', () => cb()),

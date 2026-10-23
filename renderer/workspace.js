@@ -797,6 +797,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const settingsWorkspaceChoose = document.getElementById('settings-workspace-choose');
   const settingsAutoLaunch = document.getElementById('settings-auto-launch');
   const settingsTaskNotifications = document.getElementById('settings-task-notifications');
+  const settingsWeatherEffects = document.getElementById('settings-weather-effects');
   const settingsWinNativeRow = document.getElementById('settings-win-native-row');
   const settingsWinNative = document.getElementById('settings-win-native');
   const settingsInlineNote = document.getElementById('settings-inline-note');
@@ -1037,6 +1038,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }
     if (settingsAutoLaunch) settingsAutoLaunch.checked = summary.autoLaunch;
     if (settingsTaskNotifications) settingsTaskNotifications.checked = settingsAppSettings?.taskNotifications !== false;
+    if (settingsWeatherEffects) settingsWeatherEffects.checked = settingsAppSettings?.weatherEffects !== false;
     // Windows 原生能力（P4 / D16）：杀软首轮测试没跑，默认关，只在 Windows 上露出这一行。
     if (settingsWinNativeRow) {
       settingsWinNativeRow.hidden = window.notchAPI?.capabilities?.features?.winNativeSetting !== true;
@@ -2927,6 +2929,16 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     settingsAutoLaunch.checked = result.autoLaunch === true;
     if (settingsAppSettings) settingsAppSettings.autoLaunch = result.autoLaunch === true;
     setSettingsNote(result.autoLaunch ? pomeLocaleRendererWorkspace.t("copy.launchAtLoginEnabled.61caec") : pomeLocaleRendererWorkspace.t("copy.launchAtLoginDisabled.ced994"));
+  });
+  settingsWeatherEffects?.addEventListener('change', async () => {
+    if (!window.notchAPI?.setWeatherEffects) return;
+    const previous = settingsAppSettings?.weatherEffects !== false;
+    settingsWeatherEffects.disabled = true;
+    const result = await window.notchAPI.setWeatherEffects(settingsWeatherEffects.checked).catch(() => ({ ok: false }));
+    settingsWeatherEffects.disabled = false;
+    settingsWeatherEffects.checked = result?.ok ? result.weatherEffects === true : previous;
+    if (result?.ok && settingsAppSettings) settingsAppSettings.weatherEffects = result.weatherEffects === true;
+    if (!result?.ok) setSettingsNote(pomeLocaleRendererWorkspace.t('settings.weather.saveFailed'), true);
   });
   settingsTaskNotifications?.addEventListener('change', async () => {
     if (!window.notchAPI?.setTaskNotifications) return;

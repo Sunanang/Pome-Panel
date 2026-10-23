@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Add a current-weather capsule beside the sunrise/sunset location, with temperature and optional large-card humidity. Fetch Open-Meteo only on a visible-panel wake after 30 minutes; keep successful data silently on failure. Add a default-on weather-effects switch and attribution in Device and activation. Mini/small remain particle-free; medium/large support distinct precipitation, wind, fog, haze and dust effects, paused when hidden, collapsed, off-page or reduced motion is enabled.
+
 - Fix old workspace content overwriting the Pome workspace when switching between the legacy folder and `Pome Panel` after migration. Explicit folder changes end migration recovery and remain correct after restart. Fix quick-start anchors in five translated READMEs.
 
 - Isolate the default data folder as `Pome Panel`. Copy and verify persistent data from `Dynamic Panel` once while preserving the original folder, current browser storage, custom workspace paths, media and encrypted records. Existing Pome profiles are not overwritten; normal startup no longer falls back to another app’s NAS credential files.

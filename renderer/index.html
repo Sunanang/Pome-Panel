@@ -607,6 +607,12 @@
                     <input id="settings-auto-launch" type="checkbox" aria-label="开机自动启动"  data-i18n-aria-label="copy.launchAtLogin.b5d24c"/>
                     <i aria-hidden="true"></i>
                   </label>
+                  <label class="settings-device-row settings-weather-effects-row">
+                    <div><span data-i18n="settings.weather.effects">天气动态效果</span><strong data-i18n="settings.weather.effectsHint">雨雪雷风等粒子；小尺寸建议省略</strong></div>
+                    <input id="settings-weather-effects" type="checkbox" aria-label="天气动态效果" data-i18n-aria-label="settings.weather.effects"/>
+                    <i aria-hidden="true"></i>
+                  </label>
+                  <p class="settings-weather-attribution"><span data-i18n="settings.weather.attribution">本应用的天气数据由</span> <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> <span data-i18n="settings.weather.provided">提供。</span></p>
                   <label class="settings-device-row settings-task-notifications-row">
                     <div><span><span data-i18n="settings.notifications.topBubble">顶部气泡提醒</span></span><strong><span data-i18n="settings.notifications.topBubbleHint">AI 完成、等待与待办到期时在顶部显示</span></strong></div>
                     <input id="settings-task-notifications" type="checkbox" aria-label="顶部气泡提醒" data-i18n-aria-label="settings.notifications.topBubble"/>
@@ -741,6 +747,9 @@
     <script src="app.js"></script>
     <script src="ai-usage-animation.js"></script>
     <script src="ai-usage.js"></script>
+    <script src="weather-domain.js"></script>
+    <script src="weather-icons.js"></script>
+    <script src="weather-effects.js"></script>
     <script src="sun-widget.js"></script>
     <script src="almanac-widget.js"></script>
     <script src="workspace.js"></script>

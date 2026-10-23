@@ -203,6 +203,11 @@ try {
   throw error;
 }
 
+const sunWeatherService = require('./sunWeather').createSunWeatherService({
+  readCache: () => readJsonFile(path.join(app.getPath('userData'), 'sun-weather-cache.json'), {}),
+  saveCache: (cache) => writeJsonFile(path.join(app.getPath('userData'), 'sun-weather-cache.json'), cache),
+});
+
 // ============ 托盘图标 PNG 生成 ============
 // 直接在主进程编码 PNG，避免引入额外资源文件
 const CRC_TABLE = (() => {
@@ -2228,6 +2233,17 @@ ipcMain.handle('settings:set-task-notifications', (event, enabled) => {
   const settings = publicAppSettings();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', settings);
   return { ok: true, taskNotifications: settings.taskNotifications === true };
+});
+ipcMain.handle('settings:set-weather-effects', (event, enabled) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return { ok: false, error: 'invalid_sender' };
+  if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
+  if (!saveAppSettings({ ...readAppSettings(), weatherEffects: enabled })) return { ok: false, error: 'save_failed' };
+  mainWindow.webContents.send('settings:changed', publicAppSettings());
+  return { ok: true, weatherEffects: enabled };
+});
+ipcMain.handle('sun:weather', (event, location) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return null;
+  return sunWeatherService.get(location);
 });
 ipcMain.handle('settings:set-shortcut', (event, accelerator) => {
   if (!isValidPanelShortcut(accelerator)) return { ok: false, error: 'invalid' };

@@ -150,3 +150,11 @@ NAS shows a brief status and primary action; pairing, endpoints, migration, roll
 Quota defaults to one value per provider; hover, click or keyboard reveals the window breakdown. Quick notes retain preview, edit and save controls; saved notes are available from the Notes tab. Recording keeps its library shortcut. Disabling a workspace hides its tab and recording shortcut where applicable. Initial activation hints stop after three openings. Confirmations summarize impact with expandable details. Errors provide repair and redacted diagnostics. Windows can enable native capabilities from Current windows; forced-off and unavailable-native cases remain recoverable.
 
 Quota panel reveals render cached readings immediately and refresh in the background, with a 30-second reveal debounce. Manual refresh remains immediate. Changed values use a 720ms ease-out ring/number transition and 60ms staggered window bars; new results continue from the current frame. First readings start at zero, unchanged or failed readings do not start an animation, and reduced motion applies values immediately. Depleted styling changes after the transition ends.
+
+## Sunrise, sunset and current weather
+
+The weather capsule uses the sunrise/sunset widget's existing location and shows only current conditions and temperature, plus humidity on large cards. Existing astronomical countdowns, the sun path and event tables remain independent.
+
+Weather data is provided by [Open-Meteo](https://open-meteo.com/). There is no background polling: a visible-panel wake can request current data only after 30 minutes since the previous attempt for that location. Keeping the panel open does not refresh it automatically. Failures silently retain the last successful reading; attempts are throttled even after a failure or app restart. This cache stays on the local device.
+
+Device and activation contains a default-on Weather effects switch. Only medium and large cards show particles. Mini/small, collapsed, off-page, hidden or reduced-motion states stop animations. Turning effects off keeps weather text visible. There is no audio.

@@ -1,3 +1,56 @@
+# 当前天气 · 方向 A r2 设计验收
+
+日期：2026-10-24。范围：已有 Electron 首页日出日落模块与「本机与唤出」设置。
+
+## 比较对象与证据
+
+- Source visual truth：[r2 定稿目录](https://drive.google.com/drive/folders/111wrYHIJ81wVwwLcSg17aSBQYLezXZSy)、其中的 NOTES、r2.html、mini/small 压力总览、设置、thunder/haze/dust 参考。
+- 本次实际读取的原图与 HTML：`/private/tmp/pome-weather-design/`。天气图标直接复用 r2 HTML 的 SVG 定义，没有重画替代资产。
+- Implementation screenshot path：`docs/screenshots/sun-weather/`；原始截图另存 `/Users/lando/.codex/visualizations/2026/10/23/01a166b0-1f8d-7ab2-bc78-c58cf7052805/weather-implementation/`。
+- Viewport：工作区 1240 × 638 CSS px，macOS Electron，深色主题；最终应用截图 density 2。mini 190 × 126 / small 190 × 264 / medium 392 × 264 / large 392 × 540 CSS px，原始 PNG 为 380 × 252 / 380 × 528 / 784 × 528 / 784 × 1080；设置页 PNG 为 2480 × 1276。展示拼图另以 density 1 输出，宽 1320 CSS/PNG px。
+- State：固定当前时间 2026-10-24 16:30，固定 current 数据 10.7°C、78%，多天气族与长地名；源图的日期、城市和数值不同，因此不以天文数值差异判定设计误差。
+- Full-view evidence：四尺寸 `four-sizes.png`、雨雪雷 `rain-snow-thunder.png`、设置 `settings.png`。
+- Combined comparison input：`design-comparison.png` 将源图与实际 thunder/haze/dust 并排，统一到 392 CSS px 宽后检查。源 thunder 图 778 × 530，实际 medium 图 784 × 528；两者约两倍密度，按同一 CSS 宽缩放，保留完整卡片，不逐像素声称相同。
+- Focused evidence：原始 `small-stress-82.png` 直接检查标题、天气和长地点；`mini.png` 检查 pin-only；`settings.png` 检查同卡开关与归属链接。无需额外浏览器框架截图。
+
+## Findings 与迭代历史
+
+1. **[P2，已修复] small 的长天气状态挤占地点，省略后可见面积不足。** 最初长文案截图发现地点可能只剩残缺字符；给地点保留 48px，缩小 small 标题，必要时移除天气装饰图标。最终 `small-stress-82.png` 能显示完整「呼…」，天气「强阵雨 · 11°」完整，胶囊与地点不重叠。
+2. **[P2，已修复] 布局变换期间测量宽度可能误判图标是否能保留。** 改为 `offsetWidth`；回归等待已有布局动画结束，再检查几何。最终四尺寸和四组长文案均通过，最终截图重新捕获，未使用旧截图覆盖失败。
+3. 后续复查并排源图与实现：无剩余 P0/P1/P2。保留现有卡片玻璃边缘、真实天文计算、弧线上的当前时刻标签；这些属于既有产品约束。雷使用规定的短闪，简化闪电路径为可选项，未额外添加。
+
+## 五项视觉检查
+
+| 表面 | 结论 |
+| --- | --- |
+| 字体与排版 | 沿用现有系统/PingFang 字体；胶囊按 r2 的 10/11px 层级；数值可读，small 无半字裁切，mini 只保留温度与图标 |
+| 间距与布局节奏 | 胶囊始终在地点左侧；四尺寸保持原卡片大小，small 省略、mini pin-only；large 日期纵排为湿度让出空间 |
+| 色彩与视觉值 | 半透明深底胶囊、各天气图标色来自 r2；fog 白、haze 黄褐、dust 暖色独立；文字/太阳点处于粒子上方 |
+| 图像与资产 | 原天空图片和天文 SVG 保留；天气图标使用原设计 SVG，retina 截图无拉伸；动态采用用户指定 canvas 管线 |
+| 产品文案 | 仅当前天气、温度与 large 湿度；开关说明与提供方链接齐全，无预报/建议或额外设置 |
+
+## 交互、错误与残余覆盖
+
+- 使用真实应用 BrowserWindow 及隔离 userData，测试四尺寸、长文案、静默失败、切地点并发、开关持久化、全部特效族和 reduced motion。模块隐藏、切页、面板收起和实际窗口隐藏均停止动画。
+- 天气 Electron 验收没有捕获到 console error。测试窗口后台配置与正式版不同的部分，在隐藏检查时恢复正式版的 background throttling 语义，避免把测试配置误认为产品缺陷。
+- 完整桌面回归、官网回归与十语言资源检查通过；最后几何与隐藏检查单独复跑通过。
+- 当前 API 不直接提供 haze/dust/sleet；其独立视觉用明确兜底输入验收，不从湿度猜测。Windows 真机、安装包和其他系统缩放尚未验收。
+
+## Implementation Checklist
+
+- [x] 四尺寸与小尺寸压力布局
+- [x] r2 图标、胶囊位置和现有天文内容
+- [x] 雨雪雷等运动、生命周期与减少动态效果
+- [x] 设置卡位置、默认值、持久化和来源链接
+- [x] 隔离 Electron 截图、并排对照与自动回归
+
+final result: passed
+
+
+---
+
+## 历史验收记录
+
 # 额度池名、长名与单行时间修复 · 2026-10-22
 
 final result: passed
