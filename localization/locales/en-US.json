@@ -1497,5 +1497,8 @@
   "quota.allZero": "All quotas at zero",
   "quota.manyZero": "{count} sources at zero",
   "quota.zeroAndCritical": "{source} at zero · {count} more critical",
-  "quota.oneZero": "{source} at zero"
+  "quota.oneZero": "{source} at zero",
+  "copy.almanac.7c2e11": "Almanac",
+  "copy.lunarYiJiJieQi.3a91d0": "Lunar date, yi/ji & solar terms",
+  "copy.showAlmanac.6f4b2c": "Show Almanac"
 }

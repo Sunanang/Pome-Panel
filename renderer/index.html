@@ -258,6 +258,9 @@
               <section class="tile home-sun" id="home-sun" data-home-module="sun" data-widget-size="medium" aria-label="日出日落" data-i18n-aria-label="copy.sunriseSunset.224064">
               </section>
 
+              <section class="tile home-almanac" id="home-almanac" data-home-module="almanac" data-widget-size="small" aria-label="黄历" data-i18n-aria-label="copy.almanac.7c2e11">
+              </section>
+
             </div>
           </section>
 
@@ -547,6 +550,7 @@
                     <label><span><b><span data-i18n="copy.quickNote.990572">随笔记</span></b><small><span data-i18n="copy.writeQuicklyOnHome.500789">首页快速记录</span></small></span><input type="checkbox" data-settings-home-module="note" aria-label="显示随笔记"  data-i18n-aria-label="copy.showQuickNote.d789a7"/><i aria-hidden="true"></i></label>
                     <label><span><b><span data-i18n="copy.commands.b85789">常用指令</span></b><small><span data-i18n="copy.quickAccessToPrompts.4b0162">提示词快捷入口</span></small></span><input type="checkbox" data-settings-home-module="commands" aria-label="显示常用指令"  data-i18n-aria-label="copy.showCommands.b9dc81"/><i aria-hidden="true"></i></label>
                     <label><span><b><span data-i18n="copy.sunriseSunset.224064">日出日落</span></b><small><span data-i18n="copy.dawnGoldenHourSunset.622918">天亮、黄金时刻与日落</span></small></span><input type="checkbox" data-settings-home-module="sun" aria-label="显示日出日落"  data-i18n-aria-label="copy.showSunriseSunset.6b970f"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.almanac.7c2e11">黄历</span></b><small><span data-i18n="copy.lunarYiJiJieQi.3a91d0">农历、宜忌与节气</span></small></span><input type="checkbox" data-settings-home-module="almanac" aria-label="显示黄历" data-i18n-aria-label="copy.showAlmanac.6f4b2c"/><i aria-hidden="true"></i></label>
                   </div>
                 </section>
 
@@ -706,10 +710,12 @@
     <script src="./localization.js"></script>
     <script src="../platform.js"></script>
     <script src="vendor/suncalc/suncalc.js"></script>
+    <script src="vendor/lunar-javascript/lunar.js"></script>
     <script src="cities.js"></script>
     <script src="domain.js"></script>
     <script src="ui-simplify-domain.js"></script>
     <script src="sun.js"></script>
+    <script src="almanac.js"></script>
     <script src="effects.js"></script>
     <script src="nas-sync-pair.js"></script>
     <script src="nas-sync-migration.js"></script>
@@ -722,6 +728,7 @@
     <script src="ai-usage-animation.js"></script>
     <script src="ai-usage.js"></script>
     <script src="sun-widget.js"></script>
+    <script src="almanac-widget.js"></script>
     <script src="workspace.js"></script>
     <dialog id="ai-source-confirm" class="ai-source-confirm" aria-labelledby="ai-source-confirm-title">
       <strong id="ai-source-confirm-title"></strong>

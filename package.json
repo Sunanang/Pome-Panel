@@ -34,7 +34,7 @@
     "appId": "com.dynamicpanel.app",
     "productName": "Pome Panel",
     "artifactName": "Pome-Panel-${version}-${arch}.${ext}",
-    "copyright": "\u00a9 2026 Lando",
+    "copyright": "© 2026 Lando",
     "asar": false,
     "directories": {
       "output": "dist.noindex",
@@ -259,6 +259,7 @@
   "dependencies": {
     "jsonc-parser": "^3.3.1",
     "koffi": "~3.3.0",
+    "lunar-javascript": "^1.7.7",
     "toml-eslint-parser": "^0.10.1",
     "ws": "^8.21.3",
     "yauzl": "^3.4.0",

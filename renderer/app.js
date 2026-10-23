@@ -3277,7 +3277,7 @@ const HOME_ORDER_KEY = 'notch-home-order-v3';
 const HOME_SIZES_KEY = 'notch-home-widget-sizes-v2';
 const HOME_PLACEMENTS_KEY = 'notch-home-placements-v1';
 const HOME_HIDDEN_MODULES_KEY = 'notch-home-hidden-modules-v1';
-const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'windows', 'mirror', 'note', 'commands', 'sun'];
+const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'windows', 'mirror', 'note', 'commands', 'sun', 'almanac'];
 // 渲染层只读能力层（P0-1），不再自己判断平台。主进程通过 preload 下发 capabilities；
 // 拿不到时（例如没有 preload 的测试窗口）才用本地能力层按平台名补齐。
 function readPlatformCapabilities() {
@@ -3299,7 +3299,7 @@ window.notchAPI?.onCapabilitiesChanged?.((capabilities) => {
   unavailableHomeModules.splice(0, unavailableHomeModules.length, ...capabilities.unavailableHomeModules);
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
 });
-const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'commands', 'mirror', 'note', 'windows', 'sun'];
+const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'commands', 'mirror', 'note', 'windows', 'sun', 'almanac'];
 const HOME_SIZE_DEFAULTS = {
   music: 'small',
   windows: 'medium',
@@ -3311,6 +3311,8 @@ const HOME_SIZE_DEFAULTS = {
   pomodoro: 'mini',
   cursor: 'small',
   sun: 'medium',
+  // Small keeps the Windows first-run 12×4 fill at exactly 48 cells with sun enabled.
+  almanac: 'small',
 };
 const HOME_SIZE_LABELS = { get mini() { return pomeLocaleRendererApp.t("copy.mini.43d4ba"); }, get small() { return pomeLocaleRendererApp.t("copy.small.6a7339"); }, get medium() { return pomeLocaleRendererApp.t("copy.medium.a567bd"); }, get large() { return pomeLocaleRendererApp.t("copy.large.7d4ca7"); } };
 const homeBento = document.getElementById('home-bento');
@@ -3587,7 +3589,9 @@ function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSi
           : { layout: candidate, changed: false };
         const resolved = sealed.layout || candidate;
         homeWorkingLayout = cloneHomeLayout(resolved);
-        if (persistSeal && sealed.changed) saveHomeLayout();
+        // Fresh Windows fill must persist the sealed pack even when sealing is a no-op,
+        // otherwise reload re-packs without sealGaps and can reshuffle cards.
+        if (persistSeal) saveHomeLayout();
         return resolved;
       }
     }
@@ -3600,7 +3604,7 @@ function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSi
       : { layout, changed: false };
     const resolved = sealed.layout || layout;
     homeWorkingLayout = cloneHomeLayout(resolved);
-    if (persistSeal && sealed.changed) saveHomeLayout();
+    if (persistSeal) saveHomeLayout();
     return resolved;
   }
   return null;
@@ -3812,6 +3816,34 @@ if (introducedSunLayout.placements) {
     ))),
   };
 }
+let almanacAlreadyKnown = false;
+try { almanacAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'almanac'); } catch {}
+const introducedAlmanacLayout = (almanacAlreadyKnown || useWindowsHomeDefaults) ? {
+  order: homeOrder, sizes: homeSizes, hiddenIds: hiddenHomeModules,
+  placements: homeWorkingLayout?.placements || null,
+} : window.NotchDomain.introduceHomeModule({
+  order: homeOrder,
+  sizes: homeSizes,
+  defaults: HOME_SIZE_DEFAULTS,
+  placements: homeWorkingLayout?.placements || null,
+  hiddenIds: hiddenHomeModules,
+  moduleId: 'almanac',
+  defaultSize: HOME_SIZE_DEFAULTS.almanac,
+  registry: HOME_MODULE_REGISTRY,
+});
+const almanacHiddenChanged = JSON.stringify(hiddenHomeModules) !== JSON.stringify(introducedAlmanacLayout.hiddenIds);
+homeOrder = introducedAlmanacLayout.order;
+homeSizes = introducedAlmanacLayout.sizes;
+hiddenHomeModules = introducedAlmanacLayout.hiddenIds;
+if (introducedAlmanacLayout.placements) {
+  homeWorkingLayout = {
+    allowGaps: true,
+    placements: introducedAlmanacLayout.placements,
+    variants: Object.fromEntries(Object.entries(introducedAlmanacLayout.placements).map(([id, item]) => (
+      [id, window.NotchDomain.layoutVariantForPlacement(item)]
+    ))),
+  };
+}
 let inboxAlreadyKnown = false;
 try { inboxAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'inbox'); } catch {}
 const introducedInboxLayout = inboxAlreadyKnown ? { sizes: homeSizes, placements: homeWorkingLayout?.placements, hiddenIds: effectiveHomeHidden(hiddenHomeModules) } : window.NotchDomain.normalizeHomeInboxLayout({
@@ -3823,7 +3855,7 @@ const inboxHiddenChanged = !hiddenHomeModules.includes('inbox') && introducedInb
 if (inboxHiddenChanged) hiddenHomeModules.push('inbox');
 if (introducedInboxLayout.placements) homeWorkingLayout = { allowGaps: true, placements: introducedInboxLayout.placements };
 saveHomeLayout();
-if (repairWindowsDefaultHome || sunHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
+if (repairWindowsDefaultHome || sunHiddenChanged || almanacHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
 
 let initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
   forcePack: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,

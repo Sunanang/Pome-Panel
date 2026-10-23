@@ -8001,3 +8001,197 @@ html[lang="en-US"] .settings-nas-content-row > span { overflow-wrap: anywhere; }
 /* A fixed inherited line-height on the smaller percent sign adds extra row
    height, clipping the third pool in compact stacks. Keep its line box local. */
 .home-cursor .q-inline-rows .q-pct small { line-height:1; }
+
+/* ============ 首页 · 黄历 ============ */
+.home-almanac {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  color: var(--text-1);
+  --almanac-yi: #9ed9c8;
+  --almanac-ji: #f0a594;
+  --almanac-jieqi: #7ec8c4;
+  --almanac-muted: rgba(235, 235, 240, .62);
+}
+.home-bento > .home-almanac[data-widget-size='mini'] { padding: 12px 14px; }
+.home-bento > .home-almanac[data-widget-size='small'] { padding: 12px 13px; }
+.home-bento > .home-almanac[data-widget-size='medium'] { padding: 14px 16px; }
+.home-bento > .home-almanac[data-widget-size='large'] { padding: 16px 20px; }
+.home-almanac :is(.almanac-mini, .almanac-small, .almanac-medium, .almanac-large) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  gap: 0;
+}
+.home-almanac .almanac-daynum {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -.045em;
+  line-height: .92;
+  color: var(--text-1);
+}
+.home-almanac[data-widget-size='mini'] .almanac-daynum { font-size: 52px; }
+.home-almanac[data-widget-size='small'] .almanac-daynum { font-size: 34px; }
+.home-almanac[data-widget-size='medium'] .almanac-daynum { font-size: 88px; }
+.home-almanac[data-widget-size='large'] .almanac-daynum { font-size: 64px; }
+.home-almanac .almanac-weekday,
+.home-almanac .almanac-lunar,
+.home-almanac .almanac-ganzhi,
+.home-almanac .almanac-muted { color: var(--almanac-muted); }
+.home-almanac .almanac-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.home-almanac .almanac-chip-jieqi {
+  color: #0d2e2c;
+  background: color-mix(in srgb, var(--almanac-jieqi) 88%, white);
+}
+.home-almanac .almanac-jieqi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.home-almanac .almanac-jq-count {
+  color: var(--almanac-jieqi);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.home-almanac .almanac-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+}
+.home-almanac .almanac-k {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.home-almanac .almanac-row-yi .almanac-k { color: var(--almanac-yi); }
+.home-almanac .almanac-row-ji .almanac-k { color: var(--almanac-ji); }
+.home-almanac .almanac-v {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.home-almanac .almanac-v i {
+  font-style: normal;
+  white-space: nowrap;
+}
+.home-almanac .almanac-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.home-almanac .almanac-meta-grid b {
+  margin-right: 6px;
+  color: var(--almanac-muted);
+  font-weight: 600;
+}
+.home-almanac .almanac-meta-wide { grid-template-columns: 1fr 1fr 1fr; }
+
+.home-almanac .almanac-mini { justify-content: space-between; gap: 8px; }
+.home-almanac .almanac-mini-top { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+.home-almanac .almanac-mini-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-bottom: 4px;
+  font-size: 12px;
+}
+.home-almanac .almanac-mini-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.home-almanac .almanac-mini-foot .yi b { color: var(--almanac-yi); margin-right: 4px; }
+.home-almanac .almanac-mini-foot .ji b { color: var(--almanac-ji); margin-right: 4px; }
+.home-almanac .almanac-mini-foot .sep { color: var(--almanac-muted); }
+
+.home-almanac .almanac-small { justify-content: space-between; }
+.home-almanac .almanac-small .almanac-line,
+.home-almanac .almanac-small .almanac-row,
+.home-almanac .almanac-small .almanac-jieqi { flex: 1 1 0; display: flex; align-items: center; min-height: 0; }
+.home-almanac .almanac-small .almanac-row { display: grid; }
+.home-almanac .almanac-date-line { gap: 10px; }
+.home-almanac .almanac-date-line span { color: var(--almanac-muted); font-size: 12px; }
+
+.home-almanac .almanac-medium {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.9fr) minmax(0, 1.35fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.home-almanac .almanac-medium-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 6px;
+}
+.home-almanac .almanac-medium-right {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.home-almanac .almanac-medium .almanac-k { font-size: 14px; }
+.home-almanac .almanac-medium .almanac-lunar,
+.home-almanac .almanac-medium .almanac-ganzhi { font-size: 12px; line-height: 1.35; }
+
+.home-almanac .almanac-large { justify-content: space-between; gap: 10px; }
+.home-almanac .almanac-large-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.home-almanac .almanac-large-date { display: flex; align-items: flex-end; gap: 12px; min-width: 0; }
+.home-almanac .almanac-dual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.home-almanac .almanac-dual b,
+.home-almanac .almanac-hours b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--almanac-muted);
+  font-weight: 600;
+}
+.home-almanac .almanac-hours {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.home-almanac .almanac-hours span { letter-spacing: .04em; }

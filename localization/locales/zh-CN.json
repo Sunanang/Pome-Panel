@@ -1464,5 +1464,8 @@
   "quota.allZero": "全部额度为零",
   "quota.manyZero": "{count} 家额度为零",
   "quota.zeroAndCritical": "{source} 额度为零 · 另 {count} 家告急",
-  "quota.oneZero": "{source} 额度为零"
+  "quota.oneZero": "{source} 额度为零",
+  "copy.almanac.7c2e11": "黄历",
+  "copy.lunarYiJiJieQi.3a91d0": "农历、宜忌与节气",
+  "copy.showAlmanac.6f4b2c": "显示黄历"
 }

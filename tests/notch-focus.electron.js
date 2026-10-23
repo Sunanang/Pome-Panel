@@ -272,7 +272,7 @@ async function main() {
       api: true,
       mirror: true,
       features: 6,
-      homeModules: 10,
+      homeModules: 11,
       shortcut: true,
       defaultTab: { exists: true, value: 'home', options: 8 },
       workspace: true,
@@ -817,7 +817,7 @@ async function main() {
       `);
       assert.equal(finalWidgetGuard.checked, true);
       assert.equal(finalWidgetGuard.visibleCount, 1);
-      assert.equal(finalWidgetGuard.storedCount, 9);
+      assert.equal(finalWidgetGuard.storedCount, 10);
       assert.match(finalWidgetGuard.message, /至少保留一个/);
     }
 
@@ -882,7 +882,7 @@ async function main() {
     `);
     assert.equal(transactionAudit.first.ok, true);
     assert.equal(transactionAudit.second.ok, true);
-    assert.deepEqual(transactionAudit.rapidHidden, ['inbox', 'mirror', 'note', 'sun']);
+    assert.deepEqual(transactionAudit.rapidHidden, ['inbox', 'mirror', 'note', 'sun', 'almanac']);
     assert.equal(transactionAudit.noop.changed, false);
     assert.equal(transactionAudit.eventCount, 0);
     assert.equal(transactionAudit.noOpStorageStable, true);
