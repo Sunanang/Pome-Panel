@@ -6,6 +6,9 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Fix delayed weather refresh after restoring cached readings and redundant card rebuilds after failed requests. Validate persisted weather and wind values, keep compact and localized labels within the sun card, and deliver all ten interface languages through the preload bridge.
+- Cover silent weather fallback on timeouts, HTTP 429 and cache I/O failures. Reject blank coordinates instead of saving zero values, and clear stale errors after successfully retrying the weather effects setting.
+
 - Add a current-weather capsule beside the sunrise/sunset location, with temperature and optional large-card humidity. Fetch Open-Meteo only on a visible-panel wake after 30 minutes; keep successful data silently on failure. Add a default-on weather-effects switch and attribution in Device and activation. Mini/small remain particle-free; medium/large support distinct precipitation, wind, fog, haze and dust effects, paused when hidden, collapsed, off-page or reduced motion is enabled.
 
 - Fix old workspace content overwriting the Pome workspace when switching between the legacy folder and `Pome Panel` after migration. Explicit folder changes end migration recovery and remain correct after restart. Fix quick-start anchors in five translated READMEs.

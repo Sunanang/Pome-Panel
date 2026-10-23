@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createSunWeatherService, normalizeCurrent, weatherLocation, WEATHER_INTERVAL_MS } = require('../sunWeather');
+const { createSunWeatherService, normalizeCurrent, weatherLocation, WEATHER_INTERVAL_MS, WEATHER_TIMEOUT_MS } = require('../sunWeather');
 const Weather = require('../renderer/weather-domain');
 const FX = require('../renderer/weather-effects');
 const I18n = require('../localization/runtime');
@@ -71,6 +71,52 @@ test('weather cache isolates locations and a new service reuses successful data 
   assert.equal((await service.get({ lat: 1, lng: 2 })).temperature, 1);
   const restarted = createSunWeatherService({ now: () => 2000, readCache: () => saved, fetchImpl: () => { throw new Error('must not fetch'); } });
   assert.equal((await restarted.get(place)).temperature, place.lat);
+});
+
+test('timeouts release pending requests, retain last success and still throttle the next wake', async t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  let clock=0,calls=0,timeoutNext=false;
+  const service=createSunWeatherService({now:()=>clock,fetchImpl:async(_url,{signal})=>{
+    calls++;if(!timeoutNext)return response(current());
+    return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+  }});
+  const good=await service.get(place);timeoutNext=true;clock+=WEATHER_INTERVAL_MS;
+  const failed=service.get(place),duplicate=service.get(place);await Promise.resolve();
+  t.mock.timers.tick(WEATHER_TIMEOUT_MS);
+  assert.deepEqual(await failed,good);assert.deepEqual(await duplicate,good);assert.equal(calls,2);
+  assert.deepEqual(await service.get(place),good);assert.equal(calls,2);
+  clock+=WEATHER_INTERVAL_MS;timeoutNext=false;assert((await service.get(place)).updatedAt>good.updatedAt);assert.equal(calls,3);
+});
+
+test('HTTP errors cancel unused bodies and cache I/O errors or clock rollback do not break weather', async () => {
+  let cancelled=false;
+  const broken=createSunWeatherService({fetchImpl:async()=>new Response(new ReadableStream({cancel(){cancelled=true;}}),{status:429})});
+  assert.equal(await broken.get(place),null);assert.equal(cancelled,true);
+  let clock=2000,calls=0;
+  const service=createSunWeatherService({now:()=>clock,readCache:()=>{throw new Error('read_failed');},saveCache:()=>{throw new Error('write_failed');},
+    fetchImpl:async()=>{calls++;return response(current());}});
+  assert.equal((await service.get(place)).temperature,10.7);
+  clock=1000;assert.equal((await service.get(place)).temperature,10.7);assert.equal(calls,2);
+  clock=1001;await service.get(place);assert.equal(calls,2);
+});
+
+test('wind unit conversion accepts numbers only and never turns a missing wind reading into zero', () => {
+  for (const unit of ['m/s','mph','km/h']) for (const bad of [null,undefined,'30',-1]) {
+    const value=current();value.current.wind_speed_10m=bad;value.current_units.wind_speed_10m=unit;
+    assert.equal(normalizeCurrent(value).windSpeed,null);
+  }
+  const value=current();value.current.wind_speed_10m=10;value.current_units.wind_speed_10m='m/s';
+  assert.equal(normalizeCurrent(value).windSpeed,36);
+  value.current_units.wind_speed_10m='mph';assert.equal(normalizeCurrent(value).windSpeed,16.09344);
+});
+
+test('physically invalid persisted weather is discarded instead of hiding behind a fresh cache timestamp', async () => {
+  for (const data of [{temperature:999,humidity:78,code:0},{temperature:10,humidity:178,code:0}]) {
+    let calls=0;
+    const service=createSunWeatherService({now:()=>1000,readCache:()=>({entries:{[weatherLocation(place).key]:{attemptedAt:999,data}}}),
+      fetchImpl:async()=>{calls++;return response(current());}});
+    assert.equal((await service.get(place)).temperature,10.7);assert.equal(calls,1);
+  }
 });
 
 test('WMO and independent fallback conditions preserve rain, fog versus haze and wind thresholds', () => {

@@ -47,7 +47,7 @@
       ? ` · ${t('weather.humidity', { value: Math.round(data.humidity) })}` : '';
     const title = `${label} · ${temperature}${humidity}`;
     const shortName = t(`weather.compact.${state.name}`);
-    return { ...state, title,
+    return { ...state, title, label: size === 'small' ? shortName : label, temperature, humidity,
       text: size === 'mini' ? temperature : `${size === 'small' ? shortName : label} · ${temperature}${humidity}`,
       showIcon: size !== 'small' || [...shortName].length < 4 };
   }

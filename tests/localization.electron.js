@@ -120,6 +120,11 @@ async function run(c) {
   assert.equal(await readBubble('document.documentElement.lang'), 'zh-CN');
   assert.equal(await readBubble('currentNotification.eventId'), before.id);
   assert.equal(await readBubble('titleElement.textContent'), before.title);
+  await js('window.notchAPI.setLanguage("de-DE")');await sleep(150);
+  assert.equal(await readBubble('document.documentElement.lang'),'de-DE','non-English locale broadcasts reach the notification window');
+  assert.equal(await readBubble('currentNotification.eventId'),before.id);
+  assert.equal(await readBubble('titleElement.textContent'),before.title);
+  fs.writeFileSync(path.join(output,'german-awaiting.png'),(await bubble.webContents.capturePage()).toPNG());
   await js('window.notchAPI.setLanguage("en-US")'); await sleep(150);
   assert.equal(await readBubble('isVisible && !isHiding'), true);
   fs.writeFileSync(path.join(output, 'english-awaiting.png'), (await bubble.webContents.capturePage()).toPNG());

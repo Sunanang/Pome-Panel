@@ -6,6 +6,26 @@ const os = require('node:os');
 const path = require('node:path');
 const L = require('../localization/runtime');
 const resources = require('../scripts/localization-resources');
+
+test('sandbox preload preserves all ten startup locales and language broadcasts', () => {
+  const vm = require('node:vm'), source = fs.readFileSync(path.join(__dirname, '../preload.js'), 'utf8');
+  for (const { id } of L.languages) {
+    const state = { preference:id, effectiveLocale:id, formatLocale:id, revision:2 };
+    let api; const events = new Map();
+    const context = { Buffer, process:{ platform:'darwin', argv:['--pome-locale='+Buffer.from(JSON.stringify(state)).toString('base64')] },
+      require: name => { assert.equal(name,'electron');return {
+        contextBridge:{ exposeInMainWorld:(_name,value)=>{api=value;} },
+        ipcRenderer:{ on:(name,fn)=>events.set(name,fn), removeListener:name=>events.delete(name) },
+      }; } };
+    vm.runInNewContext(source,context);
+    assert.equal(api.localization.effectiveLocale,id);
+    let delivered; const stop = api.onLocalizationChanged(value=>{delivered=value;});
+    const next={...state,revision:3}; events.get('localization:changed')({},next);
+    assert.equal(delivered.effectiveLocale,id); assert(Object.isFrozen(delivered));
+    delivered=null;events.get('localization:changed')({},{effectiveLocale:id});assert.equal(delivered,null);
+    stop();assert.equal(events.has('localization:changed'),false);
+  }
+});
 const notifications = require('../renderer/notification-domain');
 const services = require('../main-services');
 const { createTaskInbox, completionEventId } = require('../taskInbox');

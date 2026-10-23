@@ -447,11 +447,17 @@ const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? req
     return list.find((city) => city.tz === zone) || null;
   }
 
+  function parseCoordinate(value, limit) {
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
+    if (typeof value === 'string' && !value.trim()) return null;
+    const number = Number(value);
+    return Number.isFinite(number) && Math.abs(number) <= limit ? number : null;
+  }
+
   function parseManualLocation(latText, lngText, name) {
-    const lat = Number(String(latText ?? '').trim());
-    const lng = Number(String(lngText ?? '').trim());
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90) return { ok: false, error: pomeLocaleRendererSun.t("copy.latitudeMustBeBetween90And90.5c13e0") };
-    if (!Number.isFinite(lng) || lng < -180 || lng > 180) return { ok: false, error: pomeLocaleRendererSun.t("copy.longitudeMustBeBetween180And180.71c3df") };
+    const lat = parseCoordinate(latText, 90), lng = parseCoordinate(lngText, 180);
+    if (lat === null) return { ok: false, error: pomeLocaleRendererSun.t("copy.latitudeMustBeBetween90And90.5c13e0") };
+    if (lng === null) return { ok: false, error: pomeLocaleRendererSun.t("copy.longitudeMustBeBetween180And180.71c3df") };
     const label = String(name || '').trim().slice(0, 24);
     return {
       ok: true,
@@ -504,6 +510,7 @@ const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? req
     cityLabel,
     suggestCity,
     parseManualLocation,
+    parseCoordinate,
     locationFromCity,
     floorMinute,
     roundMinute,

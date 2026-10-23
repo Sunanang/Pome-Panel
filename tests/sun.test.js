@@ -353,6 +353,18 @@ test('introducing the sun module never reorders or relocates an existing layout'
   previous.forEach((id) => assert.equal(fresh.sizes[id], defaults[id]));
 });
 
+test('blank, missing and invalid coordinates cannot become a false zero-island location', () => {
+  for (const value of ['', ' ', null, undefined, false, true, [], {}, 'NaN', 'Infinity', Infinity]) {
+    assert.equal(sun.parseCoordinate(value,90),null);
+    assert.equal(sun.parseManualLocation(value,'0').ok,false);
+    assert.equal(sun.parseManualLocation('0',value).ok,false);
+  }
+  assert.equal(sun.parseCoordinate('0',90),0);assert.equal(sun.parseCoordinate(0,180),0);
+  assert.equal(sun.parseManualLocation('-90','180').ok,true);
+  assert.equal(sun.parseManualLocation('90.001','0').ok,false);
+  assert.equal(sun.parseManualLocation('0','-180.001').ok,false);
+});
+
 function occupiedCells(placements, columns = 12, rows = 4) {
   const cells = Array(columns * rows).fill(0);
   Object.values(placements).forEach((item) => {

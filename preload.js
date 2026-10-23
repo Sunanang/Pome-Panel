@@ -45,11 +45,19 @@ function readCapabilities() {
   return deepFreeze({ platform: process.platform });
 }
 
+// The renderer's shared localization runtime owns the supported-language
+// catalog. Type-check main-process snapshots here without a second, stale
+// bilingual allowlist that drops the other eight languages' broadcasts.
+function isLocalizationState(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && typeof value.effectiveLocale === 'string' && typeof value.preference === 'string'
+    && typeof value.formatLocale === 'string' && Number.isInteger(value.revision);
+}
 function readLocalization() {
   const argument = process.argv.find(value => value.startsWith('--pome-locale='));
   try {
     const value = argument && decodeBase64Json(argument.slice('--pome-locale='.length));
-    if (value && ['zh-CN', 'en-US'].includes(value.effectiveLocale)) return deepFreeze(value);
+    if (isLocalizationState(value)) return deepFreeze(value);
   } catch {}
   return deepFreeze({ preference: 'system', effectiveLocale: 'en-US', formatLocale: 'en-US', revision: 0 });
 }
@@ -57,7 +65,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   localization: readLocalization(),
   setLanguage: value => ipcRenderer.invoke('settings:set-language', value),
   onLocalizationChanged: cb => subscribe('localization:changed', (_event, value) => {
-    if (value && ['zh-CN', 'en-US'].includes(value.effectiveLocale)) cb(deepFreeze(value));
+    if (isLocalizationState(value)) cb(deepFreeze(value));
   }),
   // platform 保留一个版本给尚未迁移到 capabilities 的调用方。
   platform: process.platform,

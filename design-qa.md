@@ -1,3 +1,21 @@
+# 天气边界与长文案复查 · 2026-10-24
+
+final result: passed
+
+本轮基于原方向 A r2 的布局约束，复查真实 Electron 在十语言、四尺寸、负温度与长地名下的表现。修复了德语 small 胶囊挤出卡片的 P2 问题；温度与状态分开，给地点保留空间，长状态省略并保留完整 title / aria-label。原有天文表的长译文不再重叠时刻，计算与数值不变。
+
+- Source visual truth：原 r2 定稿与本轮修复前截图 `docs/screenshots/sun-weather-audit/before-small-de.png`。
+- Implementation screenshots：同目录的 `after-small-de.png`、`after-small-zh.png`、`after-medium-fr.png`、`after-large-ru.png`；完整四尺寸与雨雪雷拼图均在同目录。
+- Viewport / density：工作区 1240 × 638 CSS px；修复前小号 PNG 190 × 264，修复后 380 × 528，统一为 190 CSS px 宽比较。最终 mini/small/medium/large 原始截图为 380 × 252 / 380 × 528 / 784 × 528 / 784 × 1080。
+- Combined full-view comparison：`boundary-comparison.png`；左侧为德语修复前，随后为修复后、中文负温度和法语时刻表。状态固定为冻毛毛雨、-27.7°C、长城市名与 16:30，避免把不同内容当作布局差异。
+- Focused evidence：small 的完整紧凑中文天气与负温度均可见；medium 法语表格各时刻保持独立；large 俄语长标签省略后不覆盖时刻。空坐标和设置保存失败另有全窗口截图。
+- Fonts / typography：沿用系统字体与原有数值层级，省略只用于长标签，完整文字可悬停查看。Spacing / layout：胶囊仍位于地点左侧，mini pin-only、small 地点省略，温度不裁切。Colors / tokens：维持 r2 胶囊色及天气状态色。Assets：仍复用原天空图、r2 SVG 与原天文路径。Copy：只保留当前天气与既有天文信息，无预报或建议。
+- 交互：十语言 × 四尺寸、缓存到期、静默失败保留 DOM、全部动画族、开关保存失败回滚与重试、reduced motion、切页/收起/隐藏暂停均通过；表单空坐标不保存、不请求天气。
+- 验证：完整桌面 901 通过 / 0 失败 / 1 平台跳过，Electron 与语法检查通过；54 项相关单测通过；官网 23 项、lint 与生产构建通过。详细文件清单、边界场景与残余平台限制见 [本轮验收记录](docs/weather-audit-2026-10-24.md)。
+- 未做：Windows 真机、安装包与真实 NAS 安装；没有打包发布。无剩余可操作的 P0/P1/P2 视觉发现。
+
+---
+
 # 当前天气 · 方向 A r2 设计验收
 
 日期：2026-10-24。范围：已有 Electron 首页日出日落模块与「本机与唤出」设置。

@@ -18,8 +18,7 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
   let weatherData = null;
   let weatherEffectsEnabled = true;
   let weatherIntersecting = true;
-  const weatherReadings = new Map(), weatherAttempts = new Map(), weatherPending = new Map();
-  const WEATHER_INTERVAL_MS = 30 * 60 * 1000;
+  const weatherReadings = new Map(), weatherPending = new Map();
   const weatherEffects = window.PomeWeatherEffects.create(tile, () => canShowPanel() && weatherIntersecting);
 
   function escapeHtml(value) {
@@ -31,15 +30,16 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
   function loadLocation() {
     try {
       const parsed = JSON.parse(localStorage.getItem(LOCATION_KEY) || 'null');
-      if (!parsed || !Number.isFinite(Number(parsed.lat)) || !Number.isFinite(Number(parsed.lng))) return null;
+      const lat = Sun.parseCoordinate(parsed?.lat, 90), lng = Sun.parseCoordinate(parsed?.lng, 180);
+      if (lat === null || lng === null) return null;
       return {
         source: parsed.source === 'manual' ? 'manual' : 'city',
         id: parsed.id || '',
         en: parsed.source !== 'manual' ? (window.POME_CITIES || []).find?.(city => city.id === parsed.id)?.en : undefined,
         name: String(parsed.name || pomeLocaleRendererSunWidget.t("copy.customLocation.915d7b")),
         admin: String(parsed.admin || ''),
-        lat: Number(parsed.lat),
-        lng: Number(parsed.lng),
+        lat,
+        lng,
         tz: parsed.tz || null,
       };
     } catch (error) {
@@ -210,28 +210,41 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
     if (!location || !Weather) return '';
     const v = Weather.view(weatherData, size, (key, params) => pomeLocaleRendererSunWidget.t(key, params));
     const icon = v.showIcon ? `<span class="ic" aria-hidden="true">${window.PomeWeatherIcons[v.icon] || window.PomeWeatherIcons.empty}</span>` : '';
-    return `<span class="wx t-${v.icon}${size === 'mini' ? ' mini' : size === 'small' ? ' sm' : ''}" title="${escapeHtml(v.title)}" aria-label="${escapeHtml(v.title)}">${icon}<span class="txt">${escapeHtml(v.text)}</span></span>`;
+    const text = size === 'mini' ? escapeHtml(v.text)
+      : `<span class="wx-state">${escapeHtml(v.label)}</span><span class="wx-separator">${size === 'small' ? '·' : ' · '}</span><span class="wx-reading">${escapeHtml(v.temperature)}<span class="wx-humidity">${escapeHtml(v.humidity)}</span></span>`;
+    return `<span class="wx t-${v.icon}${size === 'mini' ? ' mini' : size === 'small' ? ' sm' : ''}" title="${escapeHtml(v.title)}" aria-label="${escapeHtml(v.title)}">${icon}<span class="txt">${text}</span></span>`;
   }
   function syncWeatherEffects() {
     weatherEffects.sync({ family: Weather.classify(weatherData).family,
       enabled: weatherEffectsEnabled, size: tile.dataset.widgetSize || 'medium' });
   }
   function fitWeatherHeader() {
-    if (tile.dataset.widgetSize !== 'small') return;
+    if (tile.dataset.widgetSize === 'mini') return;
     const right = tile.querySelector('.sun-right'), wx = right?.querySelector('.wx');
-    const icon = wx?.querySelector('.ic');
-    // Reserve a complete location character and ellipsis beside its pin.
-    // Measure real text so negative temperatures and translated labels can
-    // drop the decorative weather icon before shrinking meaningful content.
-    if (icon && wx.offsetWidth + 48 + 3 > right.clientWidth) icon.style.display = 'none';
+    const icon = wx?.querySelector('.ic'), name = wx?.querySelector('.wx-state'), text = wx?.querySelector('.txt');
+    if (!text || !name) return;
+    if (icon) icon.style.display = '';
+    const humidity = wx.querySelector('.wx-humidity');
+    if (humidity) humidity.hidden = false;
+    // Constrain the capsule before measuring: localized names can be much
+    // longer than Chinese. Shrink the name with ellipsis, never the temperature.
+    // Drop decoration (and optional large humidity) before crowding that name.
+    const nameClipped = () => name.scrollWidth > name.clientWidth + 1;
+    if (icon && ((nameClipped() && (tile.dataset.widgetSize === 'small' || name.clientWidth < 24))
+      || text.scrollWidth > text.clientWidth + 1)) icon.style.display = 'none';
+    if ((nameClipped() && name.clientWidth < 16) || text.scrollWidth > text.clientWidth + 1) {
+      if (humidity) humidity.hidden = true;
+    }
   }
   async function requestWeatherOnWake() {
     if (!location || !canShowPanel() || document.hidden || !weatherIntersecting || !window.notchAPI?.getSunWeather) return;
-    const key = weatherKey(), now = Date.now(), attempted = weatherAttempts.get(key);
-    if (weatherPending.has(key) || (attempted !== undefined && now >= attempted && now - attempted < WEATHER_INTERVAL_MS)) return;
-    weatherAttempts.delete(key); weatherAttempts.set(key, now);
-    while (weatherAttempts.size > 16) weatherAttempts.delete(weatherAttempts.keys().next().value);
-    const job = window.notchAPI.getSunWeather({ lat: location.lat, lng: location.lng });
+    const key = weatherKey();
+    if (weatherPending.has(key)) return;
+    // Only the main process owns the persistent 30-minute attempt clock.
+    // Starting another renderer clock after a disk-cache hit would postpone
+    // the next refresh by up to another half hour after restart.
+    const coordinates = { lat: location.lat, lng: location.lng };
+    const job = Promise.resolve().then(() => window.notchAPI.getSunWeather(coordinates));
     weatherPending.set(key, job);
     try {
       const data = await job;
@@ -239,7 +252,11 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
         weatherReadings.delete(key); weatherReadings.set(key, data);
         while (weatherReadings.size > 16) weatherReadings.delete(weatherReadings.keys().next().value);
         // An old city's slow response must never overwrite the selected city.
-        if (weatherKey() === key) { weatherData = data; render(); }
+        const unchanged = weatherData && ['temperature', 'humidity', 'code', 'condition', 'windSpeed', 'updatedAt']
+          .every(field => weatherData[field] === data[field]);
+        // Cache hits / failures return the same successful reading. Preserve
+        // the DOM and running particle scene instead of rebuilding them.
+        if (weatherKey() === key && !unchanged) { weatherData = data; render(); }
       }
     } catch { /* Silent failure: keep the last successful reading for this city. */ }
     finally { weatherPending.delete(key); }
@@ -386,6 +403,11 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
     }
     syncWeatherEffects();
     fitWeatherHeader();
+    // Narrow translated table labels may ellipsize; keep the complete
+    // existing astronomical text available without overlapping its time.
+    tile.querySelectorAll('.sun-count .lead, .sun-time > span, .sun-group .nm > *, .sun-group .tm > small').forEach(node => {
+      node.title = node.textContent;
+    });
     // Refresh the card without rebuilding/refocusing the user's open form.
     if (panelOpen) positionPanel();
     schedule();
@@ -586,7 +608,7 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
   });
   document.addEventListener('notch:home-layout-applied', positionPanel);
   window.addEventListener('blur', closePanel);
-  window.addEventListener('resize', positionPanel);
+  window.addEventListener('resize', () => { fitWeatherHeader(); positionPanel(); });
   document.addEventListener('scroll', (event) => {
     if (!document.getElementById('sun-location-popover')?.contains(event.target)) positionPanel();
   }, true);

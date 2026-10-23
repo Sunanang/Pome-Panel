@@ -2939,6 +2939,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     settingsWeatherEffects.checked = result?.ok ? result.weatherEffects === true : previous;
     if (result?.ok && settingsAppSettings) settingsAppSettings.weatherEffects = result.weatherEffects === true;
     if (!result?.ok) setSettingsNote(pomeLocaleRendererWorkspace.t('settings.weather.saveFailed'), true);
+    else setSettingsNote('');
   });
   settingsTaskNotifications?.addEventListener('change', async () => {
     if (!window.notchAPI?.setTaskNotifications) return;
