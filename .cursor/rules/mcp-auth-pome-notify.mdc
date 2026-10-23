@@ -1,0 +1,19 @@
+---
+description: MCP 需要授权时，同步用 Pome Panel 顶部气泡提醒用户去 Cursor 确认
+alwaysApply: true
+---
+
+# MCP 授权 → Pome 顶部气泡
+
+当本仓库对话里某个 MCP（如 Google Drive、Notion、Slack）状态为 `needsAuth`，或即将调用该命名空间的 `mcp_auth` 时：
+
+1. **先**在本机打一条 Pome 顶部气泡（不抢焦点），提示用户去 Cursor 完成授权：
+   ```bash
+   node scripts/cursor-mcp-auth-notify.js --service "<服务显示名>"
+   ```
+   例：`--service "Google Drive"`。
+2. 再调用 Cursor 的 `mcp_auth`（或等价授权流程）。
+3. 气泡走现有 `/notify/cursor`，`status=awaiting` + `attentionKind=authorization`；用户点气泡应回到 Cursor 查看授权。
+4. Pome 未运行或端口不可达时，脚本失败不要阻断授权流程；在对话里用一句话说明「请到 Cursor 顶部完成授权」。
+
+不要只依赖 Cursor 应用内提示；用户可能在看桌面其它窗口，需要 Pome 刘海/顶部气泡二次提醒。

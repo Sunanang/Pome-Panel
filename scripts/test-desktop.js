@@ -62,6 +62,7 @@ for (const file of [
   'renderer/ai-attention.js',
   'renderer/ai-sources.js',
   'scripts/cursor-notify.js',
+  'scripts/cursor-mcp-auth-notify.js',
   'workspaceBackup.js',
   'syncRecovery.js',
   'renderer/task-inbox.js',
