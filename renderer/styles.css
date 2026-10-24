@@ -8365,7 +8365,9 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
 .home-sun[data-widget-size='small'] .sun-place svg { width:10px;height:10px; }
 .home-sun[data-widget-size='small'] .sun-place .chev { width:8px;height:8px; }
 .home-sun[data-widget-size='small'] .wx { max-width:calc(100% - 51px);padding:0 4px; }
-.home-sun .wx .txt { display:flex;flex:1 1 auto;overflow:hidden; }
+/* Chinese fallback glyphs and Latin digits have different normal line boxes.
+   Share a text baseline instead of stretching their separate flex items. */
+.home-sun .wx .txt { display:flex;align-items:baseline;flex:1 1 auto;overflow:hidden; }
 .home-sun .wx-state { min-width:0;overflow:hidden;text-overflow:ellipsis; }
 .home-sun .wx-separator { flex:none;white-space:pre; }
 .home-sun .wx-reading { flex:none; }

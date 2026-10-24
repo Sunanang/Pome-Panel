@@ -71,6 +71,10 @@ async function run(c) {
     assert.equal(result.textFits, true, JSON.stringify(result)); assert(result.caption && result.arc);
     assert.equal(result.readingFits,true,JSON.stringify(result));
     assert.equal(result.contentZ, '3');
+    if(value!=='mini') {
+      const baselines=await js(`(()=>{const nodes=document.querySelectorAll('#home-sun .wx-state,#home-sun .wx-separator,#home-sun .wx-reading');return [...nodes].map(node=>{const marker=document.createElement('span');marker.style.cssText='display:inline-block;width:0;height:0;vertical-align:baseline';node.append(marker);const y=marker.getBoundingClientRect().top;marker.remove();return y;});})()`);
+      assert(Math.max(...baselines)-Math.min(...baselines)<=.25,'weather name, separator and temperature share a baseline: '+JSON.stringify(baselines));
+    }
     if (value==='mini') assert(result.pinOnly);
     if (value==='small') assert(result.placeWidth>=18,'room for a whole character and ellipsis: '+JSON.stringify(result));
     if (value==='mini'||value==='small') assert.equal(result.canvas,0);

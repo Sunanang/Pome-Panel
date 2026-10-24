@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Align weather labels, separators and temperatures to a shared text baseline, preserving all four card sizes and large-card humidity.
+
 - Fix delayed weather refresh after restoring cached readings and redundant card rebuilds after failed requests. Validate persisted weather and wind values, keep compact and localized labels within the sun card, and deliver all ten interface languages through the preload bridge.
 - Cover silent weather fallback on timeouts, HTTP 429 and cache I/O failures. Reject blank coordinates instead of saving zero values, and clear stale errors after successfully retrying the weather effects setting.
 
