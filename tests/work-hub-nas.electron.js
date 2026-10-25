@@ -40,7 +40,9 @@ async function run(c){
  phase='restore preview';
  const preview=await c.executeJavaScript('window.notchAPI.backupPreview()');assert.equal(preview.ok,true,JSON.stringify(preview));
  phase='restore';
- await c.executeJavaScript(`window.notchAPI.backupRestore(${JSON.stringify(preview.previewId)})`).catch(()=>{});
+ const duplicateRestore=await c.executeJavaScript(`(()=>{window.firstRestore=window.notchAPI.backupRestore(${JSON.stringify(preview.previewId)});return window.notchAPI.backupRestore(${JSON.stringify(preview.previewId)})})()`);
+ assert.equal(duplicateRestore.error,'workspace_switching','concurrent restores must not share the staging area');
+ await c.executeJavaScript('window.firstRestore').catch(()=>{});
  await until(c,ready);
  phase='paused sync';
  let status=await c.executeJavaScript('window.notchAPI.syncGetStatus()');assert.equal(status.recovery.paused,true);
@@ -70,7 +72,7 @@ async function run(c){
  const expiredResult=await c.executeJavaScript(`window.notchAPI.recoveryExecute(${JSON.stringify(expiredImpact.previewId)})`);assert.equal(expiredResult.error,'recovery_expired');const afterExpiry=await c.executeJavaScript('window.notchAPI.syncGetStatus()');assert.equal(afterExpiry.recovery.paused,true);assert.notEqual(afterExpiry.recovery.operationId,expiredId);
  const fresh=await c.executeJavaScript('window.notchAPI.recoveryPreview()');assert.equal(fresh.ok,true,JSON.stringify(fresh));
  phase='verified recovery';
- const covered=await c.executeJavaScript(`window.notchAPI.recoveryExecute(${JSON.stringify(fresh.previewId)})`);assert.equal(covered.ok,true,JSON.stringify(covered));assert.equal(store.bucket('u').live.has('note:nas-only'),false);assert.equal(store.bucket('u').live.get('note:home').payload.markdown,'# 暂停期间新修改');
+ const [covered,duplicateRecovery]=await c.executeJavaScript(`Promise.all([window.notchAPI.recoveryExecute(${JSON.stringify(fresh.previewId)}),window.notchAPI.recoveryExecute(${JSON.stringify(fresh.previewId)})])`);assert.equal(duplicateRecovery.error,'workspace_switching');assert.equal(covered.ok,true,JSON.stringify(covered));assert.equal(store.bucket('u').live.has('note:nas-only'),false);assert.equal(store.bucket('u').live.get('note:home').payload.markdown,'# 暂停期间新修改');
  for(const priority of TODO_PRIORITIES){assert.equal(store.bucket('u').live.get(`recovery-${priority}`).payload.text,`暂停修改 ${priority}`);
    assert.equal(store.bucket('u').live.get(`category:${priority}`).payload.name,`暂停分类 ${priority}`);}
  const projection=openSyncStore(path.join(profile,'sync.db'));try{

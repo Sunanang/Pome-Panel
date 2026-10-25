@@ -8,12 +8,52 @@
   const SPECS = {
     drizzle: [14, 40, 70], 'rain-light': [22, 55, 70], 'rain-mid': [42, 80, 100], 'rain-heavy': [72, 110, 130],
     'snow-light': [16, 25, 35], 'snow-mid': [30, 30, 45], 'snow-heavy': [48, 40, 55],
-    hail: [30, 100, 160], dust: [14, 20, 40], wind: [7, 45, 55], 'wind-strong': [12, 85, 95],
+    hail: [30, 100, 160], dust: [14, 20, 40], wind: [4, 45, 55], 'wind-strong': [6, 85, 95],
   };
+  function windParticle(kind, width, height, low, high, random) {
+    const strong = kind === 'wind-strong';
+    return { kind, speed: low + random() * (high - low), low, high,
+      x: 0, y: height * (.14 + random() * .58),
+      length: Math.min(width * .55, 90 + random() * 100),
+      breadth: (strong ? 28 : 18) + random() * 28,
+      amplitude: 2 + random() * 4, period: 5 + random() * 3,
+      phase: random() * Math.PI * 2, gustPeriod: 4 + random() * 4,
+      gustPhase: random() * Math.PI * 2, tilt: (random() - .5) * .2,
+      opacity: (strong ? .14 : .1) + random() * .06, fan: random() > .4,
+      lobes: Array.from({ length: 3 }, () => ({ y: (random() - .5) * .14,
+        width: .19 + random() * .05, height: .16 + random() * .1 })), texture: null };
+  }
+  function windTexture(p, ctx) {
+    // Cache each irregular, feather-edged air sheet once. Per-frame drawing is
+    // only a transformed bitmap, with no blur filter or gradient allocation.
+    const canvas = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(256, 128)
+      : ctx.canvas.ownerDocument.createElement('canvas');
+    canvas.width = 256; canvas.height = 128;
+    const brush = canvas.getContext('2d');
+    if (!brush) return null;
+    p.lobes.forEach((lobe, i) => {
+      const x = .26 + i * .24, y = .5 + lobe.y;
+      const spread = p.fan ? .32 - i * .095 : lobe.height;
+      brush.save(); brush.translate(x * 256, y * 128);
+      brush.scale(lobe.width * 256, spread * 128);
+      const gradient = brush.createRadialGradient(0, 0, 0, 0, 0, 1);
+      gradient.addColorStop(0, 'rgba(200,222,232,.65)');
+      gradient.addColorStop(.4, 'rgba(200,222,232,.32)');
+      gradient.addColorStop(1, 'rgba(200,222,232,0)');
+      brush.fillStyle = gradient; brush.fillRect(-1, -1, 2, 2); brush.restore();
+    });
+    return canvas;
+  }
+  function smooth(value) { const t = Math.max(0, Math.min(1, value)); return t * t * (3 - 2 * t); }
   function scene(family, width, height, random = Math.random) {
     const particles = [];
     const add = (kind, count, low, high) => {
       for (let i = 0; i < count; i++) {
+        if (kind.startsWith('wind')) {
+          const p = windParticle(kind, width, height, low, high, random);
+          p.x = (i + random()) / count * (width + p.length) - p.length / 2;
+          particles.push(p); continue;
+        }
         const speed = low + random() * (high - low);
         const horizontal = kind === 'dust' || kind.startsWith('wind');
         const snow = kind.startsWith('snow');
@@ -28,13 +68,28 @@
     };
     if (family === 'sleet') { add('rain-light', 22, 55, 70); add('snow-light', 12, 25, 35); }
     else if (family === 'thunder') add('rain-mid', ...SPECS['rain-mid']);
-    else if (family === 'rain-wind') { add('rain-mid', ...SPECS['rain-mid']); add('wind', 6, 50, 60); }
+    else if (family === 'rain-wind') { add('rain-mid', ...SPECS['rain-mid']); add('wind', 3, 50, 60); }
     else if (SPECS[family]) add(family, ...SPECS[family]);
     return { family, width, height, particles, time: 0, nextFlash: 4 + random() * 4, flashAt: -1, flash: 0, random };
   }
   function step(s, dt) {
     s.time += dt;
     for (const p of s.particles) {
+      if (p.kind.startsWith('wind')) {
+        // Wind is a loose patch / opening fan of air, not a repeating stroke.
+        // Integrate each gust analytically so its flight is frame-rate independent;
+        // the small vertical sway never accumulates into unbounded drift.
+        const omega = Math.PI * 2 / p.gustPeriod;
+        p.x += p.speed * (dt + .18 / omega * (Math.sin(s.time * omega + p.gustPhase)
+          - Math.sin((s.time - dt) * omega + p.gustPhase)));
+        const sway = Math.PI * 2 / p.period;
+        p.y += p.amplitude * (Math.sin(s.time * sway + p.phase) - Math.sin((s.time - dt) * sway + p.phase));
+        if (p.x > s.width + p.length / 2 + 12) {
+          Object.assign(p, windParticle(p.kind, s.width, s.height, p.low, p.high, s.random));
+          p.x = -p.length / 2 - 12;
+        }
+        continue;
+      }
       // Snow swings sinusoidally (6–14 px / 2–4 seconds), without accumulating
       // frame-rate-dependent drift. Other particles have constant velocities.
       const swing = p.kind.startsWith('snow') ? p.amplitude * (Math.sin(s.time * Math.PI * 2 / p.period + p.phase)
@@ -73,9 +128,18 @@
       } else if (p.kind === 'hail') {
         ctx.fillStyle = 'rgba(220,235,255,.55)'; ctx.roundRect(p.x, p.y, p.radius * 1.4, p.radius * 1.4, 1); ctx.fill();
       } else if (p.kind.startsWith('wind')) {
-        const alpha = .25 * Math.max(0, Math.sin(Math.PI * Math.max(0, Math.min(1, p.x / w))));
-        ctx.strokeStyle = `rgba(220,235,245,${alpha})`;
-        ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + 14, p.y - 4, p.x + 30, p.y); ctx.stroke();
+        if (!p.texture) p.texture = windTexture(p, ctx);
+        if (!p.texture) continue;
+        const progress = Math.max(0, Math.min(1, (p.x + p.length / 2) / (w + p.length)));
+        // Separate sheets sweep through the sky, spread slightly, then dissolve.
+        // Feathering is baked into the texture; no solid outlines or fog wash.
+        const fade = smooth(progress / .18) * smooth((1 - progress) / .3);
+        ctx.save(); ctx.translate(p.x, p.y);
+        ctx.rotate(p.tilt + .025 * Math.sin(s.time * .8 + p.phase));
+        ctx.globalAlpha = p.opacity * fade * smooth(s.time / .8) * (s.family === 'rain-wind' ? .65 : 1);
+        const breadth = p.breadth * (.75 + progress * .5);
+        ctx.drawImage(p.texture, -p.length / 2, -breadth / 2, p.length, breadth);
+        ctx.restore();
       } else if (p.kind === 'dust') {
         ctx.strokeStyle = 'rgba(205,175,120,.28)'; ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 5, p.y); ctx.stroke();
       } else {

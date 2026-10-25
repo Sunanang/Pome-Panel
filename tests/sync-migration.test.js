@@ -234,6 +234,39 @@ test('runMigrationAttempt: auto upload local with CAS; 409 reclassify', async ()
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('local-authority migration preserves all eight categories in upload, SQLite and renderer projection', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-mig-eight-categories-'));
+  const store = openSyncStore(':memory:');
+  store.ensureAccount({ accountId: 'eight', uid: 'u-eight', deviceId: 'd-eight', serverId: 's-eight' });
+  const todos = emptyTodos();
+  for (const [index, key] of Object.keys(todos).entries()) {
+    todos[key].push({ id: `task-${key}`, text: `Task in ${key}`, done: index % 2 === 1,
+      createdAt: index + 1, deadline: index === 7 ? '2026-10-25T15:30:00.000Z' : '', remindedAt: index });
+  }
+  const localRaw = JSON.stringify(todos);
+  let projected, uploaded;
+  try {
+    const result = await runMigrationAttempt({
+      decision: classifyFromLocalAndNas(localRaw, { live: 0, tombstones: 0, changeLogCount: 0, serverRev: 0, pristine: true }),
+      authority: AUTHORITY.LOCAL,
+      localRaw, userDataPath: dir, accountId: 'eight', deviceId: 'd-eight', store,
+      api: {
+        async startMigration() { return { migrationId: 'eight-columns', snapshotServerRev: 0 }; },
+        async commitMigration(body) { uploaded = body.entities; return { ok: true, body: { serverRev: 8 } }; },
+      },
+      applyLocalProjection(json) { projected = JSON.parse(json); },
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(projected, todos, 'first-bind apply must not hide the fifth through eighth columns');
+    assert.deepEqual(store.buildTodosLocalStorageProjection('eight').todos, todos);
+    assert.deepEqual(uploaded.map(entity => entity.payload.categoryId), Object.keys(todos));
+    assert.equal(store.getMigration('eight-columns').state, 'applied');
+  } finally {
+    store.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('runMigrationAttempt: apply failure rolls back from backup (no half-apply)', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-mig-rb-'));
   const store = openSyncStore(':memory:');

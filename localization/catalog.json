@@ -929,11 +929,6 @@
         "type": "Literal"
       },
       {
-        "file": "website/app/landingContent.ts",
-        "line": 52,
-        "type": "StringLiteral"
-      },
-      {
         "file": "renderer/index.html",
         "line": 44,
         "type": "HTMLText"
@@ -1047,11 +1042,6 @@
         "type": "Literal"
       },
       {
-        "file": "website/app/landingContent.ts",
-        "line": 54,
-        "type": "StringLiteral"
-      },
-      {
         "file": "renderer/index.html",
         "line": 58,
         "type": "HTMLText"
@@ -1107,11 +1097,6 @@
         "file": "fnos/app/ui/panel.js",
         "line": 33,
         "type": "Literal"
-      },
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 55,
-        "type": "StringLiteral"
       },
       {
         "file": "renderer/index.html",
@@ -1312,11 +1297,6 @@
         "file": "fnos/app/ui/panel.js",
         "line": 35,
         "type": "Literal"
-      },
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 57,
-        "type": "StringLiteral"
       },
       {
         "file": "renderer/index.html",
@@ -4333,11 +4313,6 @@
         "file": "renderer/app.js",
         "line": 691,
         "type": "Literal"
-      },
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 201,
-        "type": "StringLiteral"
       },
       {
         "file": "renderer/index.html",
@@ -9630,11 +9605,6 @@
         "type": "Literal"
       },
       {
-        "file": "website/app/landingContent.ts",
-        "line": 56,
-        "type": "StringLiteral"
-      },
-      {
         "file": "renderer/index.html",
         "line": 72,
         "type": "HTMLText"
@@ -12519,11 +12489,6 @@
         "type": "Literal"
       },
       {
-        "file": "website/app/landingContent.ts",
-        "line": 53,
-        "type": "StringLiteral"
-      },
-      {
         "file": "renderer/index.html",
         "line": 51,
         "type": "HTMLText"
@@ -12732,575 +12697,6 @@
         "file": "fnos/app/ui/panel.js",
         "line": 491,
         "type": "Literal"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelCollapsedView.378ce5",
-    "zh": "Pome Panel 真实折叠态",
-    "en": "Pome Panel collapsed view",
-    "locations": [
-      {
-        "file": "website/app/EndingSection.tsx",
-        "line": 42,
-        "type": "StringLiteral"
-      },
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 196,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.expandWhenNeededCollapseWhenDone.e2ded7",
-    "zh": "需要时展开，用完即收起",
-    "en": "Expand when needed, collapse when done",
-    "locations": [
-      {
-        "file": "website/app/EndingSection.tsx",
-        "line": 47,
-        "type": "JSXText"
-      }
-    ]
-  },
-  {
-    "key": "copy.mountainWallpaperOnMac.63b097",
-    "zh": "Mac 屏幕山脉壁纸",
-    "en": "Mountain wallpaper on Mac",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 159,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.loadingProductDemo.5530a6",
-    "zh": "正在加载产品演示",
-    "en": "Loading product demo",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 160,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelExpandedHomeView.bd7e81",
-    "zh": "Pome Panel 真实首页展开态",
-    "en": "Pome Panel expanded Home view",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 194,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.collapsePomePanel.a046ad",
-    "zh": "折叠 Pome Panel",
-    "en": "Collapse Pome Panel",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 201,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.mainNavigation.968608",
-    "zh": "主要导航",
-    "en": "Main navigation",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 225,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.turnTheTopOfYourScreenInto.732c9b",
-    "zh": "把灵动岛，变成随手可用的工作台",
-    "en": "Turn the top of your screen into a workspace",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 253,
-        "type": "JSXText"
-      }
-    ]
-  },
-  {
-    "key": "copy.downloadForMacosAppleSiliconMacos13.97880c",
-    "zh": "下载 macOS 版本（Apple Silicon，macOS 13 或更高版本）",
-    "en": "Download for macOS (Apple Silicon, macOS 13 or later)",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 266,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.downloadForMacos.7a6c82",
-    "zh": "下载 macOS 版本",
-    "en": "Download for macOS",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 270,
-        "type": "JSXText"
-      }
-    ]
-  },
-  {
-    "key": "copy.downloadForWindowsWindows1011X64.2a4c51",
-    "zh": "下载 Windows 版本（Windows 10/11，x64）",
-    "en": "Download for Windows (Windows 10/11, x64)",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 279,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.downloadForWindows.4eb3ae",
-    "zh": "下载 Windows 版本",
-    "en": "Download for Windows",
-    "locations": [
-      {
-        "file": "website/app/HeroSection.tsx",
-        "line": 283,
-        "type": "JSXText"
-      }
-    ]
-  },
-  {
-    "key": "copy.oneTabForEveryEverydayTask.d5b881",
-    "zh": "一个TAB解决一种高频需求",
-    "en": "One tab for every everyday task",
-    "locations": [
-      {
-        "file": "website/app/LandingPage.tsx",
-        "line": 15,
-        "type": "JSXText"
-      }
-    ]
-  },
-  {
-    "key": "copy.keepTasksNotesLinksRecordingsAndLocal.705381",
-    "zh": "不用频繁切换应用，也不用让临时想法消失。待办、笔记、链接、录音和本机 AI 提醒，都留在屏幕顶部。",
-    "en": "Keep tasks, notes, links, recordings and local AI notifications at the top of your screen, ready when you need them.",
-    "locations": [
-      {
-        "file": "website/app/ProductStory.tsx",
-        "line": 14,
-        "type": "JSXText"
-      }
-    ]
-  },
-  {
-    "key": "copy.screenshotOrRecordingComingSoon.eff791",
-    "zh": "真实截图 / 录屏待接入",
-    "en": "Screenshot or recording coming soon",
-    "locations": [
-      {
-        "file": "website/app/RealProductMedia.tsx",
-        "line": 27,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.desktopLoopVideoComingSoon.b312de",
-    "zh": "全桌面循环视频待接入",
-    "en": "Desktop loop video coming soon",
-    "locations": [
-      {
-        "file": "website/app/TabStack.tsx",
-        "line": 28,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelTasksView.580a50",
-    "zh": "Pome Panel 待办完整面板",
-    "en": "Pome Panel Tasks view",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 34,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelClipboardView.9683d3",
-    "zh": "Pome Panel 剪贴完整面板",
-    "en": "Pome Panel Clipboard view",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 35,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelNotesView.ee0c13",
-    "zh": "Pome Panel 笔记完整面板",
-    "en": "Pome Panel Notes view",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 36,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelLinksView.e5dcc1",
-    "zh": "Pome Panel 链接完整面板",
-    "en": "Pome Panel Links view",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 37,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelRecordingsView.0e96db",
-    "zh": "Pome Panel 录制完整面板",
-    "en": "Pome Panel Recordings view",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 38,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelCredentialsView.721abf",
-    "zh": "Pome Panel 密钥完整面板",
-    "en": "Pome Panel Credentials view",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 39,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.readyAtTheScreenEdge.4ce687",
-    "zh": "贴顶待命",
-    "en": "Ready at the screen edge",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 43,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.expandWhenNeededCollapseWhenDone.bc23cd",
-    "zh": "需要时展开，用完即收起。",
-    "en": "Expand when needed, collapse when done.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 43,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.taskReminders.f741f8",
-    "zh": "任务提醒",
-    "en": "Task reminders",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 44,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.fourWorkflowsWithClearDeadlines.e93cbe",
-    "zh": "四个工作流与清晰的截止时间。",
-    "en": "Four workflows with clear deadlines.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 44,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.captureAsYouGo.3bb8e1",
-    "zh": "随手收集",
-    "en": "Capture as you go",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 45,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.notesLinksAndClipboardHistoryInOne.dd8395",
-    "zh": "笔记、链接和剪贴集中整理。",
-    "en": "Notes, links and clipboard history in one place.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 45,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.localRecording.895688",
-    "zh": "本地录音",
-    "en": "Local recording",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 46,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.recordWhenYouChooseWithOptionalLive.466e17",
-    "zh": "主动开启，可选实时转写。",
-    "en": "Record when you choose, with optional live transcription.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 46,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.aiNotifications.d94669",
-    "zh": "AI 完成提醒",
-    "en": "AI notifications",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 47,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.localTaskNotificationsFromCodexClaudeCode.8c8b56",
-    "zh": "Codex、Claude Code 与 Cursor 的本机任务通知。",
-    "en": "Local task notifications from Codex, Claude Code and Cursor.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 47,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.yourDataStaysLocal.076404",
-    "zh": "数据留在本机",
-    "en": "Your data stays local",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 48,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.yourWorkStaysOnYourOwnComputer.635445",
-    "zh": "工作内容留在自己的电脑。",
-    "en": "Your work stays on your own computer.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 48,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.fourWorkflowsYouCanRenameSortedBy.cfe3e2",
-    "zh": "四个可改名工作流，按截止时间排序，并在到期前一小时提醒。",
-    "en": "Four workflows you can rename, sorted by deadline, with reminders an hour before due time.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 52,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.optionalLocalClipboardHistoryForTextImages.d1c5a0",
-    "zh": "按需启用的本机剪贴历史，支持文本、图片、收藏与快速复制。",
-    "en": "Optional local clipboard history for text, images, starred items and quick copying.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 53,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.writeOnHomeThenSaveToYour.c4232e",
-    "zh": "首页随手写，保存后进入资料库继续编辑、搜索与重命名。",
-    "en": "Write on Home, then save to your library to edit, search and rename.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 54,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pasteAPublicUrlToFetchIts.96c0d6",
-    "zh": "粘贴公开网址，自动补全标题、图标和分组。",
-    "en": "Paste a public URL to fetch its title, icon and suggested group.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 55,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.theMicrophoneStartsOnlyWhenYouChoose.8f8615",
-    "zh": "主动点击才启用麦克风，本地保存并可选实时转写。",
-    "en": "The microphone starts only when you choose. Audio is saved locally with optional live transcription.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 56,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.accountsPasswordsAndApiKeysAreEncrypted.73f485",
-    "zh": "账号、密码与 API Key 由系统安全存储加密。",
-    "en": "Accounts, passwords and API keys are encrypted using system secure storage.",
-    "locations": [
-      {
-        "file": "website/app/landingContent.ts",
-        "line": 57,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelADesktopWorkspaceForMac.6be5f6",
-    "zh": "Pome Panel — Mac 与 Windows 的贴顶工作台",
-    "en": "Pome Panel — A desktop workspace for Mac and Windows",
-    "locations": [
-      {
-        "file": "website/app/layout.tsx",
-        "line": 5,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.aLocalWorkspaceForMacosAndWindows.0d2324",
-    "zh": "适用于 macOS 与 Windows 的本地工作台：首页、待办、笔记、链接、录制、密钥与可选剪贴板，数据留在自己的电脑。",
-    "en": "A local workspace for macOS and Windows: Home, tasks, notes, links, recordings, credentials and optional clipboard history. Your data stays on your computer.",
-    "locations": [
-      {
-        "file": "website/app/layout.tsx",
-        "line": 6,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.macosNotch.b9121d",
-    "zh": "macOS 刘海",
-    "en": "macOS notch",
-    "locations": [
-      {
-        "file": "website/app/layout.tsx",
-        "line": 13,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.macTasks.72a3b9",
-    "zh": "Mac 待办",
-    "en": "Mac tasks",
-    "locations": [
-      {
-        "file": "website/app/layout.tsx",
-        "line": 13,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.windowsTasks.7dd981",
-    "zh": "Windows 待办",
-    "en": "Windows tasks",
-    "locations": [
-      {
-        "file": "website/app/layout.tsx",
-        "line": 13,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.localWorkspace.76caaa",
-    "zh": "本地工作台",
-    "en": "Local workspace",
-    "locations": [
-      {
-        "file": "website/app/layout.tsx",
-        "line": 13,
-        "type": "StringLiteral"
-      }
-    ]
-  },
-  {
-    "key": "copy.pomePanelWebsiteShareImage.d7ee22",
-    "zh": "Pome Panel 官网分享封面",
-    "en": "Pome Panel website share image",
-    "locations": [
-      {
-        "file": "website/app/layout.tsx",
-        "line": 21,
-        "type": "StringLiteral"
       }
     ]
   },
@@ -17020,12 +16416,6 @@
     "locations": []
   },
   {
-    "key": "website.mediaPending",
-    "zh": "{arg1}，真实素材待接入",
-    "en": "{arg1} · Product capture coming soon",
-    "locations": []
-  },
-  {
     "key": "mac.NSAppleEventsUsageDescription",
     "zh": "Pome Panel 需要控制「系统事件」来枚举并聚焦当前窗口、发送汽水音乐快捷键。",
     "en": "Pome Panel uses System Events to list and focus windows and send Soda Music shortcuts.",
@@ -17116,12 +16506,6 @@
     "key": "installer.directoryText",
     "zh": "请选择 Pome Panel 的安装目录。程序文件保存在此目录，桌面将创建启动快捷方式。",
     "en": "Choose where to install Pome Panel. Program files will be stored there; a shortcut will be created on your desktop.",
-    "locations": []
-  },
-  {
-    "key": "website.fullCapture",
-    "zh": "{arg1}全桌面真实操作录屏",
-    "en": "{arg1} full desktop recording",
     "locations": []
   },
   {

@@ -142,6 +142,12 @@ async function run(c) {
   for(const [code,wind,family] of [[0,25,'wind'],[0,40,'wind-strong'],[65,30,'rain-wind']]){
     current.weather_code=code;current.wind_speed_10m=wind;await tick();await js('document.dispatchEvent(new CustomEvent("notch:modechange",{detail:{expanded:true}}))');
     await until(`PomeSun.getWeather().effects.family===${JSON.stringify(family)} && PomeSun.getWeather().effects.active`);
+    const painted=await js('document.querySelector("#home-sun .wx-fx").toDataURL()');
+    const time=await js('PomeSun.getWeather().effects.time');
+    await until(`PomeSun.getWeather().effects.time>${time+.25}`);
+    assert.notEqual(await js('document.querySelector("#home-sun .wx-fx").toDataURL()'),painted,'wind bitmap advances, not just its animation clock');
+    assert.equal(await js('PomeSun.getWeather().effects.count'),{'wind':4,'wind-strong':6,'rain-wind':45}[family]);
+    await capture(family);
   }
   await js('PomeSun.render();setActiveTab("settings")');await sleep(250);
   assert.equal(await js('document.getElementById("settings-weather-effects").checked'),true);

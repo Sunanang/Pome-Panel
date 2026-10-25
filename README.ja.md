@@ -52,17 +52,6 @@
 | **クリップボードと認証情報** | 必要なら履歴を有効化し、鍵はシステムの安全な保存領域へ |
 | **NAS 同期** | fnOS NAS と任意でペアリングし、端末間で同期 |
 
-<details>
-<summary><strong>タスクとメモの画面</strong></summary>
-<br />
-<table>
-  <tr>
-    <td width="50%"><img src="website/public/product-captures/en/todo.jpg" alt="" /><p align="center">タスクを整理</p></td>
-    <td width="50%"><img src="website/public/product-captures/en/notes.jpg" alt="" /><p align="center">メモを残す</p></td>
-  </tr>
-</table>
-</details>
-
 ## はじめに
 
 1. [Releases](https://github.com/Sunanang/Pome-Panel/releases) から入手：Mac は `arm64.dmg`、Windows は `windows-x64-setup.exe`。

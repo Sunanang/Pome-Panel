@@ -74,6 +74,18 @@ test('HTTP switch default off; URL change resets; loopback exempt', () => {
   assert.equal(reset.endpoint.allowInsecureHttp, false);
 });
 
+test('IPv6 loopback keeps the local HTTP exemption without exempting other IPv6 hosts', () => {
+  const local = canonicalizeEndpointUrl('http://[::1]:8888/app');
+  assert.equal(local.canonical, 'http://[::1]:8888/app');
+  assert.equal(local.isLoopback, true);
+  const policy = endpointHttpPolicy({ baseUrl: local.canonical });
+  assert.equal(policy.allowed, true);
+  assert.equal(policy.exemptLoopback, true);
+  assert.equal(policy.requiresConfirm, false);
+  assert.equal(endpointHttpPolicy({ baseUrl: 'http://[::2]:8888/app' }).requiresConfirm, true);
+  assert.equal(endpointHttpPolicy({ baseUrl: 'http://[2001:db8::1]:8888/app' }).allowed, false);
+});
+
 test('closing HTTP switch → disabledByPolicy; never rewrite https', () => {
   const ep = {
     endpointId: 'e1',

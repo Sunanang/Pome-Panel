@@ -122,7 +122,9 @@ function createForegroundMediaPermissionCoordinator(defaults = {}) {
             layerOwner = null;
             restoreAlwaysOnTop = false;
             if (shouldRestore && targetToRestore && !targetToRestore.isDestroyed()) {
-              targetToRestore.setAlwaysOnTop(true, 'screen-saver');
+              // Match the main panel's normal layer: permission requests must
+              // not leave it above screenshots or input-method candidates.
+              targetToRestore.setAlwaysOnTop(true, 'floating');
             }
           }
         } finally {
@@ -418,6 +420,74 @@ function normalizeCredentialInput(value, id, createdAt) {
     password,
     createdAt: Number.isFinite(createdAt) ? createdAt : Number.isFinite(value.createdAt) ? value.createdAt : Date.now(),
   };
+}
+
+function createCredentialsVaultStore({ filePath, safeStorage, disk = require('node:fs') } = {}) {
+  const failure = (code) => Object.assign(new Error(code), { code });
+  function available() {
+    if (!safeStorage?.isEncryptionAvailable()) throw failure('secure_storage_unavailable');
+  }
+  function normalizeRows(rows) {
+    if (!Array.isArray(rows)) throw failure('credentials_unreadable');
+    const normalized = rows.map(item => item && typeof item.id === 'string' && item.id
+      ? normalizeCredentialInput(item, item.id, item.createdAt) : null);
+    if (normalized.some(item => !item) || new Set(normalized.map(item => item.id)).size !== normalized.length) {
+      throw failure('credentials_unreadable');
+    }
+    return normalized;
+  }
+  function read() {
+    let bytes;
+    try { bytes = disk.readFileSync(filePath, 'utf8'); }
+    catch (error) { if (error.code === 'ENOENT') return []; throw failure('credentials_unreadable'); }
+    available();
+    try {
+      const envelope = JSON.parse(bytes);
+      if (envelope?.version !== 1 || typeof envelope.payload !== 'string' || !envelope.payload) throw failure('credentials_unreadable');
+      const decoded = safeStorage.decryptString(Buffer.from(envelope.payload, 'base64'));
+      return normalizeRows(JSON.parse(decoded));
+    } catch { throw failure('credentials_unreadable'); }
+  }
+  function write(rows) {
+    // A locked, damaged or unreadable existing vault is never an empty vault.
+    // This guard also protects remote materialization from replacing its bytes.
+    available(); read();
+    const normalized = normalizeRows(rows);
+    let serialized;
+    try {
+      const payload = safeStorage.encryptString(JSON.stringify(normalized)).toString('base64');
+      const envelope = { version: 1, payload };
+      serialized = `${JSON.stringify(envelope)}\n`;
+      require('./atomicStorage').writeJsonAtomic(filePath, envelope, disk);
+      return true;
+    } catch {
+      // Rename can commit before directory fsync fails. If these exact bytes
+      // are already visible, acknowledge that record instead of inviting the
+      // caller to retry a new UUID and create a duplicate credential.
+      try { if (serialized && disk.readFileSync(filePath, 'utf8') === serialized) return true; } catch {}
+      throw failure('credentials_save_failed');
+    }
+  }
+  return { read, write };
+}
+
+function switchPanelShortcut({ currentShortcut, nextShortcut, isRegistered, register, unregister, persist = () => true }) {
+  // Keep the previous global binding until both the new registration and its
+  // settings write succeed. A conflict or disk error must not disable wake-up.
+  const existing = nextShortcut !== 'Space' && nextShortcut === currentShortcut && isRegistered(nextShortcut);
+  let added = false;
+  if (nextShortcut !== 'Space' && !existing) {
+    try { added = register(nextShortcut) === true; } catch { added = false; }
+    if (!added) return { ok: false, error: 'register_failed', shortcut: currentShortcut };
+  }
+  let saved = false;
+  try { saved = persist() !== false; } catch { saved = false; }
+  if (!saved) {
+    if (added) unregister(nextShortcut);
+    return { ok: false, error: 'save_failed', shortcut: currentShortcut };
+  }
+  if (currentShortcut !== 'Space' && currentShortcut !== nextShortcut && isRegistered(currentShortcut)) unregister(currentShortcut);
+  return { ok: true, shortcut: nextShortcut };
 }
 
 function parseSmartLinkMetadata(value) {
@@ -1052,6 +1122,8 @@ module.exports = {
   normalizeTaskNotificationWindow,
   taskAppMatches,
   normalizeCredentialInput,
+  createCredentialsVaultStore,
+  switchPanelShortcut,
   parseSmartLinkMetadata,
   parseSmartMaterialMetadata,
   selectTranscriptionSettings,

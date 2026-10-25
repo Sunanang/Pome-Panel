@@ -406,6 +406,7 @@ async function previewVariants() {
         await evaluate(preview, 'openButton.click()');
         // Preview windows are not the live notificationWindow, so activate IPC is rejected
         // before taskApps.open. The renderer must still attempt open (not silent-dismiss).
+        await until(() => evaluate(preview, 'activationError'), name+' activation IPC rejection reaches the renderer');
         assert.equal(activated.length, count);
         assert.equal(await evaluate(preview, 'activationError'), true);
       }

@@ -52,17 +52,6 @@
 | **剪貼簿與金鑰** | 按需開啟剪貼簿歷史，用系統安全儲存加密帳號與金鑰 |
 | **NAS 多端同步** | 可選配對飛牛 NAS，在多台裝置之間同步工作區內容 |
 
-<details>
-<summary><strong>看看待辦和筆記介面</strong></summary>
-<br />
-<table>
-  <tr>
-    <td width="50%"><img src="website/public/product-captures/todo.webp" alt="" /><p align="center">分類安排待辦</p></td>
-    <td width="50%"><img src="website/public/product-captures/notes.webp" alt="" /><p align="center">記錄和整理筆記</p></td>
-  </tr>
-</table>
-</details>
-
 ## 開始使用
 
 1. 在 [Releases](https://github.com/Sunanang/Pome-Panel/releases) 查看安裝包：Mac 選擇 `arm64.dmg`，Windows 選擇 `windows-x64-setup.exe`。

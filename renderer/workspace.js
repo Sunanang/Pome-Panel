@@ -348,6 +348,27 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     });
   }
 
+  let linkMetadataRenderPending = false;
+  function renderLinkMetadataWhenIdle() {
+    if (!linkGroupsEl) return;
+    const focused = document.activeElement;
+    if ((linkGroupsEl.contains(focused) && focused?.matches('.link-title-edit, .group-name-input, [data-group-link-input]'))
+      || linkGroupsEl.classList.contains('link-dragging')) {
+      linkMetadataRenderPending = true;
+      return;
+    }
+    linkMetadataRenderPending = false;
+    renderLinkGroups();
+  }
+  linkGroupsEl?.addEventListener('focusout', () => {
+    if (linkMetadataRenderPending) queueMicrotask(renderLinkMetadataWhenIdle);
+  });
+  for (const eventName of ['pointerup', 'pointercancel']) {
+    document.addEventListener(eventName, () => {
+      if (linkMetadataRenderPending) queueMicrotask(renderLinkMetadataWhenIdle);
+    });
+  }
+
   function addLink(rawValue, requestedGroupId = '') {
     const normalized = Domain.normalizeHttpUrl(rawValue);
     if (!normalized) {
@@ -368,6 +389,10 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     } else {
       linkGroups = Domain.addLinkToGroups(linkGroups, link, Domain.classifyLink(normalized, ''));
     }
+    const initialTitle = link.title;
+    const initialGroup = linkGroups.find((group) => (group.links || []).some((item) => item.id === link.id));
+    const initialGroupId = initialGroup?.id;
+    const initialGroupName = initialGroup?.name;
     persistLinks();
     renderLinkGroups();
     setLinksStatus(pomeLocaleRendererWorkspace.t("copy.linkSaved.d25676"));
@@ -384,9 +409,17 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         savedLink = found;
         return true;
       });
-      if (!savedLink || !sourceGroup) return;
+      if (!savedLink || !sourceGroup || savedLink.url !== normalized) return;
+      const editingRow = linkGroupsEl?.querySelector(`[data-link-id="${CSS.escape(savedLink.id)}"] .link-title-edit`);
+      const titleUntouched = savedLink.title === initialTitle && !editingRow;
+      const groupNameInput = linkGroupsEl?.querySelector(`[data-group-id="${CSS.escape(sourceGroup.id)}"] .group-name-input`);
+      const groupUntouched = sourceGroup.id === initialGroupId && sourceGroup.name === initialGroupName
+        && (!groupNameInput || groupNameInput.value === initialGroupName)
+        && !linkGroupsEl?.classList.contains('link-dragging');
       savedLink.url = inspected.url || savedLink.url;
-      pomeLocaleRendererWorkspace.bind(savedLink, "title", () => (inspected.title || savedLink.title || pomeLocaleRendererWorkspace.t("copy.untitled.67bee6")));
+      // Metadata is a best-effort completion of the original save. A later
+      // rename, move or in-progress editor belongs to the user and wins.
+      if (titleUntouched) savedLink.title = inspected.title || savedLink.title;
       savedLink.icon = inspected.icon || savedLink.icon || '';
       // 手动定向或同站点复用后锁定分组；自动分类只使用可预测的本地规则，
       // 避免模型自由命名生成多个近义分组。
@@ -398,7 +431,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         savedLink.url
       );
       const nextCategory = Domain.classifyLink(savedLink.url, savedLink.title);
-      if (!lockedGroupId && nextCategory && nextCategory !== sourceGroup.name) {
+      if (titleUntouched && groupUntouched && !lockedGroupId && nextCategory && nextCategory !== sourceGroup.name) {
         const target = linkGroups.find((group) => group.name === nextCategory);
         if (target) {
           linkGroups = Domain.moveLinkToGroup(linkGroups, savedLink.id, target.id);
@@ -408,7 +441,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         }
       }
       persistLinks();
-      renderLinkGroups();
+      renderLinkMetadataWhenIdle();
     }).catch(() => {});
     return true;
   }
@@ -823,6 +856,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   let recordingCaptureIssue = '';
   let recordingDraftId = '';
   let currentAudioUrl = '';
+  let currentAudioElement = null;
+  let recordingAudioGeneration = 0;
   let transcriptionConfig = {
     configured: false,
     asrNeedsReentry: false,
@@ -2886,9 +2921,14 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     const ok = await window.notchAPI.resetPanelPosition().catch(() => false);
     settingsResetPanelPosition.disabled = false;
     if (!ok) {
-      setSettingsNote(pomeLocaleRendererWorkspace.t("copy.couldnTResetThePanelPositionRetry.894379"), true);
+      if (window.NotchUi?.showError) {
+        window.NotchUi.showError({ messageKey: 'copy.couldnTResetThePanelPositionRetry.894379',
+          repairKey: 'ui.error.layoutSaveRepair', diagnostic: 'Panel position: save_failed', scope: 'settings:panel-position', inlineHint: settingsInlineNote,
+          onRepair: () => settingsResetPanelPosition.click() });
+      } else setSettingsNote(pomeLocaleRendererWorkspace.t("copy.couldnTResetThePanelPositionRetry.894379"), true);
       return;
     }
+    window.NotchUi?.clearError?.('settings:panel-position');
     setSettingsNote(pomeLocaleRendererWorkspace.t("copy.panelReturnedToTopCenterDragIt.2fe79c"));
   });
   settingsDefaultTab?.addEventListener('change', async () => {
@@ -2986,24 +3026,54 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   window.notchAPI?.onWorkspaceChanged?.(() => refreshSettingsPanel());
   window.notchAPI?.onMirrorImageChanged?.(applySettingsMirrorCover);
 
+  function pauseRecordingAudio() {
+    currentAudioElement?.pause();
+  }
+
+  function releaseRecordingAudio() {
+    recordingAudioGeneration += 1;
+    pauseRecordingAudio();
+    if (currentAudioElement) {
+      currentAudioElement.removeAttribute('src');
+      currentAudioElement.load();
+      currentAudioElement = null;
+    }
+    if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+    currentAudioUrl = '';
+  }
+
   async function loadRecordingAudio(recording, container) {
-    if (!window.notchAPI || !recording.audioPath) return;
-    const result = await window.notchAPI.readRecording(recording.audioPath);
-    if (!result || selectedRecordingId !== recording.id || !container.isConnected) {
+    const generation = recordingAudioGeneration;
+    let result = null;
+    try {
+      if (recording.audioPath && window.notchAPI?.readRecording) {
+        result = await window.notchAPI.readRecording(recording.audioPath);
+      }
+    } catch { /* A failed read uses the same unavailable state as a missing file. */ }
+    // Re-rendering even the same recording invalidates the old read. Never let
+    // a late IPC completion replace/revoke the current player's Blob URL.
+    if (generation !== recordingAudioGeneration || selectedRecordingId !== recording.id || !container.isConnected) return;
+    if (!result?.bytes?.byteLength) {
       pomeLocaleRendererWorkspace.bind(container, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.audioFileUnavailable.d7ce80")));
       return;
     }
-    if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
     currentAudioUrl = URL.createObjectURL(new Blob([result.bytes], { type: result.mimeType }));
     const audio = document.createElement('audio');
     audio.controls = true;
     audio.preload = 'metadata';
+    audio.addEventListener('error', () => {
+      if (generation !== recordingAudioGeneration || currentAudioElement !== audio || !container.isConnected) return;
+      releaseRecordingAudio();
+      pomeLocaleRendererWorkspace.bind(container, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.audioFileUnavailable.d7ce80")));
+    }, { once: true });
     audio.src = currentAudioUrl;
+    currentAudioElement = audio;
     container.replaceChildren(audio);
   }
 
   function renderRecordingDetail() {
     if (!recordingDetail) return;
+    releaseRecordingAudio();
     const recording = recordings.find((item) => item.id === selectedRecordingId);
     recordingDetail.replaceChildren();
     if (!recording) {
@@ -3486,7 +3556,11 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       }
     };
     document.addEventListener('pointerup', finishWindowDrag);
-    document.addEventListener('pointercancel', finishWindowDrag);
+    // Cancellation (OS gesture, capture loss, etc.) is not a drop. In
+    // particular it must not persist a window hidden in the removal zone.
+    document.addEventListener('pointercancel', (event) => {
+      if (windowDrag && (event.pointerId == null || windowDrag.pointerId === event.pointerId)) clearWindowDragVisuals();
+    });
     windowList.addEventListener('lostpointercapture', () => clearWindowDragVisuals(), true);
     window.addEventListener('blur', clearWindowDragVisuals);
     document.addEventListener('visibilitychange', () => {
@@ -3497,12 +3571,14 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   document.addEventListener('notch:tabchange', (event) => {
     clearWindowDragVisuals();
     workspaceTab = event.detail && event.detail.tab || 'home';
+    if (workspaceTab !== 'recordings') pauseRecordingAudio();
     if (workspaceTab === 'home') refreshWindows();
     if (workspaceTab === 'settings') refreshSettingsPanel();
   });
   document.addEventListener('notch:modechange', (event) => {
     clearWindowDragVisuals();
     workspaceExpanded = !!(event.detail && event.detail.expanded);
+    if (!workspaceExpanded) pauseRecordingAudio();
     if (workspaceExpanded && workspaceTab === 'home') refreshWindows();
   });
   document.addEventListener('notch:home-modules-changed', (event) => {
@@ -3515,6 +3591,11 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     if (restored && workspaceExpanded && workspaceTab === 'home') refreshWindows(true);
   });
   document.addEventListener('notch:recording-state-changed', renderHomeModuleSettings);
+  document.addEventListener('notch:will-collapse', clearWindowDragVisuals);
+  document.addEventListener('notch:will-collapse', pauseRecordingAudio);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseRecordingAudio();
+  });
 
   // ============ 本地汽水音乐 ============
   const homeMusic = document.getElementById('home-music');
@@ -3600,14 +3681,29 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const credentialBulkDelete = document.getElementById('credential-bulk-delete');
   const credentialsNote = document.getElementById('credentials-note');
   let credentials = [];
+  let credentialsReadFailed = false;
   let credentialSelection = new Set();
   let credentialAnchor = null;
   let editingCredentialId = '';
   let editingCredential = null;
+  let credentialEditGeneration = 0;
+  let pendingCredentialEditId = '';
+  let credentialsLoadGeneration = 0;
+  const credentialSavesInFlight = new Set();
+
+  function invalidateCredentialEdit({ clear = false } = {}) {
+    credentialEditGeneration += 1;
+    pendingCredentialEditId = '';
+    if (clear) {
+      editingCredentialId = '';
+      editingCredential = null;
+    }
+  }
 
   function updateCredentialBulkAction() {
     if (!credentialBulkDelete) return;
     credentialBulkDelete.hidden = credentialSelection.size === 0;
+    credentialBulkDelete.disabled = credentialsReadFailed;
     pomeLocaleRendererWorkspace.bind(credentialBulkDelete, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.delete.2f9daa")));
     credentialBulkDelete.setAttribute('aria-label', credentialSelection.size
       ? pomeLocaleRendererWorkspace.t("copy.deleteItems.0bfa6f", { arg1: (credentialSelection.size) })
@@ -3638,10 +3734,21 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       ? pomeLocaleRendererWorkspace.t("copy.items.ab715f", { arg1: (visibleCredentials.length), arg2: (credentials.length) })
       : pomeLocaleRendererWorkspace.t("copy.items.5b6b44", { arg1: (credentials.length) })));
     if (!credentialList) return;
+    const activeInput = credentialList.contains(document.activeElement)
+      && document.activeElement.closest('.credential-item.editing')?.dataset.id === editingCredentialId
+      ? document.activeElement : null;
+    const focusedField = activeInput?.name;
+    const selection = activeInput ? [activeInput.selectionStart, activeInput.selectionEnd] : null;
     credentialList.replaceChildren();
     if (!visibleCredentials.length) {
       const empty = document.createElement('div');
       empty.className = 'credential-empty';
+      if (credentialsReadFailed) {
+        const title = document.createElement('strong'), detail = document.createElement('span');
+        pomeLocaleRendererWorkspace.bind(title, 'textContent', () => pomeLocaleRendererWorkspace.t('credentials.readFailed'));
+        pomeLocaleRendererWorkspace.bind(detail, 'textContent', () => pomeLocaleRendererWorkspace.t('credentials.readRepair'));
+        empty.append(title, detail); credentialList.appendChild(empty); updateCredentialBulkAction(); return;
+      }
       empty.innerHTML = credentials.length
         ? ("<strong><span data-i18n=\"copy.noMatchingCredentials.071998\">" + (pomeLocaleRendererWorkspace.t("copy.noMatchingCredentials.071998")) + "</span></strong><span><span data-i18n=\"copy.searchByNameOrAccount.a5bd89\">" + (pomeLocaleRendererWorkspace.t("copy.searchByNameOrAccount.a5bd89")) + "</span></span>")
         : ("<strong><span data-i18n=\"copy.noSavedCredentialsYet.8bcc78\">" + (pomeLocaleRendererWorkspace.t("copy.noSavedCredentialsYet.8bcc78")) + "</span></strong><span><span data-i18n=\"copy.accountsAndPasswordsAreEncryptedOnThis.60f62e\">" + (pomeLocaleRendererWorkspace.t("copy.accountsAndPasswordsAreEncryptedOnThis.60f62e")) + "</span></span>");
@@ -3658,6 +3765,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         form.elements.service.value = editingCredential.service || '';
         form.elements.account.value = editingCredential.account || '';
         form.elements.password.value = editingCredential.password || '';
+        form.querySelector('button[type="submit"]').disabled = credentialsReadFailed || credentialSavesInFlight.has(credentialEditGeneration);
         credentialList.appendChild(form);
         return;
       }
@@ -3693,26 +3801,62 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       remove.textContent = deleteAction.label;
       remove.setAttribute('aria-label', deleteAction.ariaLabel);
       actions.append(accountCopy, passwordCopy, remove);
+      if (credentialsReadFailed) actions.querySelectorAll('button').forEach(button => { button.disabled = true; });
       row.append(copy, actions);
       credentialList.appendChild(row);
     });
+    if (focusedField) {
+      const nextInput = credentialList.querySelector(`.credential-item.editing input[name="${focusedField}"]`);
+      nextInput?.focus({ preventScroll: true });
+      if (nextInput && selection?.every(Number.isInteger)) nextInput.setSelectionRange(...selection);
+    }
     updateCredentialBulkAction();
   }
 
   async function loadCredentials() {
     if (!window.notchAPI || typeof window.notchAPI.listCredentials !== 'function') return;
+    const generation = ++credentialsLoadGeneration;
     let result;
     try { result = await window.notchAPI.listCredentials(); } catch (error) { result = null; }
-    credentials = result && Array.isArray(result.items) ? result.items : [];
-    if (credentialsNote && result && !result.secureStorage) {
-      pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.systemSecureStorageIsUnavailableCanT.b21216")));
-      credentialsNote.classList.add('error');
+    if (generation !== credentialsLoadGeneration) return;
+    const wasFailed = credentialsReadFailed;
+    credentialsReadFailed = !result || result.ok === false || !Array.isArray(result.items);
+    if (credentialsReadFailed) {
+      invalidateCredentialEdit();
+      if (credentialSave) credentialSave.disabled = true;
+      reportCredentialFailure(result, true);
+    } else {
+      credentials = result.items;
+      if (pendingCredentialEditId && !credentials.some(item => item.id === pendingCredentialEditId)) invalidateCredentialEdit();
+      if (editingCredentialId && !credentials.some(item => item.id === editingCredentialId)) invalidateCredentialEdit({ clear: true });
+      if (wasFailed) {
+        if (credentialSave) credentialSave.disabled = false;
+        window.NotchUi?.clearError?.('credentials');
+        if (credentialsNote) {
+          pomeLocaleRendererWorkspace.bind(credentialsNote, 'textContent', () => '');
+          credentialsNote.classList.remove('error');
+        }
+      }
     }
     renderCredentials();
   }
 
+  function reportCredentialFailure(result, reading = false) {
+    const readFailure = reading || ['credentials_unreadable', 'secure_storage_unavailable'].includes(result?.error);
+    const messageKey = result?.secureStorage === false || result?.error === 'secure_storage_unavailable'
+      ? 'copy.systemSecureStorageIsUnavailableCanT.b21216' : readFailure ? 'credentials.readFailed' : 'ui.error.storage';
+    if (window.NotchUi?.showError) {
+      window.NotchUi.showError({ messageKey, repairKey: 'credentials.readRepair',
+        diagnostic: `Credentials: ${result?.error || 'read_failed'}`, scope: 'credentials',
+        inlineHint: credentialsNote, onRepair: loadCredentials });
+    } else if (credentialsNote) {
+      pomeLocaleRendererWorkspace.bind(credentialsNote, 'textContent', () => pomeLocaleRendererWorkspace.t(messageKey));
+      credentialsNote.classList.add('error');
+    }
+  }
+
   async function saveCredential() {
-    if (!credentialSave || !window.notchAPI) return;
+    if (!credentialSave || !window.notchAPI || credentialsReadFailed || credentialSave.disabled) return;
     const payload = {
       service: credentialService?.value || '',
       account: credentialAccount?.value || '',
@@ -3729,6 +3873,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     const result = await window.notchAPI.saveCredential(payload).catch(() => ({ ok: false }));
     credentialSave.disabled = false;
     if (!result || !result.ok) {
+      if (['credentials_unreadable', 'secure_storage_unavailable'].includes(result?.error)) { await loadCredentials(); return; }
       if (credentialsNote) {
         pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.couldnTEncryptAndSaveCheckThat.deaa02")));
         credentialsNote.classList.add('error');
@@ -3763,8 +3908,24 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     reveal.setAttribute('aria-pressed', String(visible));
   });
   credentialSearch?.addEventListener('input', renderCredentials);
-  document.addEventListener('notch:will-collapse', () => { document.querySelectorAll('.credential-password-field input').forEach((input) => { input.type = 'password'; }); document.querySelectorAll('[data-credential-reveal]').forEach((button) => { pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.show.4e1449"))); button.setAttribute('aria-pressed','false'); }); });
-  document.addEventListener('notch:tabchange', (event) => { if (event.detail?.tab !== 'credentials') document.querySelectorAll('.credential-password-field input').forEach((input) => { input.type = 'password'; }); });
+  function pauseCredentialEditing() {
+    // Keep an established draft, but late reads/saves may no longer open or
+    // clear its editor after the user leaves this page or collapses the panel.
+    invalidateCredentialEdit();
+    document.querySelectorAll('.credential-password-field input').forEach((input) => { input.type = 'password'; });
+    document.querySelectorAll('[data-credential-reveal]').forEach((button) => {
+      pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.show.4e1449")));
+      button.setAttribute('aria-pressed', 'false');
+    });
+  }
+  document.addEventListener('notch:will-collapse', pauseCredentialEditing);
+  document.addEventListener('notch:tabchange', event => { if (event.detail?.tab !== 'credentials') pauseCredentialEditing(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pauseCredentialEditing(); });
+  credentialList?.addEventListener('input', event => {
+    const form = event.target.closest('.credential-item.editing[data-id]');
+    if (form?.dataset.id !== editingCredentialId || !editingCredential) return;
+    if (['service', 'account', 'password'].includes(event.target.name)) editingCredential[event.target.name] = event.target.value;
+  });
   [credentialService, credentialAccount, credentialPassword].forEach((input) => {
     input?.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && !event.isComposing) {
@@ -3777,11 +3938,12 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     const row = event.target.closest('.credential-item[data-id]');
     if (!row) return;
     if (event.target.closest('[data-credential-cancel]')) {
-      editingCredentialId = '';
-      editingCredential = null;
+      invalidateCredentialEdit({ clear: true });
       renderCredentials();
+      void loadCredentials();
       return;
     }
+    if (credentialsReadFailed) return;
     if (row.classList.contains('editing')) return;
     const copyField = event.target.closest('[data-credential-copy]')?.dataset.credentialCopy;
     const action = Domain.credentialRowAction({
@@ -3792,11 +3954,13 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       selected: credentialSelection.has(row.dataset.id),
     });
     if (action.type === 'delete') {
+      if ([pendingCredentialEditId, editingCredentialId].includes(row.dataset.id)) invalidateCredentialEdit();
       const deleteButton = event.target.closest('[data-credential-delete]');
       if (deleteButton) deleteButton.disabled = true;
       const result = await window.notchAPI.deleteCredentials([row.dataset.id]).catch(() => ({ ok: false }));
       if (!result?.ok) {
         if (deleteButton) deleteButton.disabled = false;
+        if (['credentials_unreadable', 'secure_storage_unavailable'].includes(result?.error)) { await loadCredentials(); return; }
         if (credentialsNote) {
           pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.deleteFailedTryAgainLater.782a6b")));
           credentialsNote.classList.add('error');
@@ -3805,8 +3969,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       }
       credentialSelection.delete(row.dataset.id);
       if (editingCredentialId === row.dataset.id) {
-        editingCredentialId = '';
-        editingCredential = null;
+        invalidateCredentialEdit({ clear: true });
       }
       await loadCredentials();
       if (credentialsNote) {
@@ -3821,11 +3984,18 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       return;
     }
     if (action.type === 'edit') {
+      const generation = ++credentialEditGeneration;
+      const requestedId = row.dataset.id;
+      pendingCredentialEditId = requestedId;
       const originRect = row.getBoundingClientRect();
-      const result = await window.notchAPI.getCredential(row.dataset.id).catch(() => ({ ok: false }));
-      if (!result || !result.ok || !result.item) return;
+      const result = await window.notchAPI.getCredential(requestedId).catch(() => ({ ok: false }));
+      if (generation !== credentialEditGeneration || pendingCredentialEditId !== requestedId || credentialsReadFailed) return;
+      pendingCredentialEditId = '';
+      if (!credentials.some(item => item.id === requestedId)) return;
+      if (!result || !result.ok || !result.item) { reportCredentialFailure(result); return; }
+      if (result.item.id !== requestedId) { reportCredentialFailure({ error: 'credential_identity_mismatch' }); return; }
       editingCredentialId = result.item.id;
-      editingCredential = result.item;
+      editingCredential = { ...result.item };
       renderCredentials();
       animateCredentialExpansion(originRect);
       if (credentialsNote) {
@@ -3851,7 +4021,9 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     const form = event.target.closest('.credential-item.editing[data-id]');
     if (!form) return;
     event.preventDefault();
-    if (!editingCredentialId || !window.notchAPI) return;
+    if (!editingCredentialId || form.dataset.id !== editingCredentialId || !window.notchAPI || credentialsReadFailed
+      || pendingCredentialEditId || credentialSavesInFlight.has(credentialEditGeneration)) return;
+    const generation = credentialEditGeneration;
     const payload = {
       id: editingCredentialId,
       service: form.elements.service?.value || '',
@@ -3860,18 +4032,22 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     };
     if (!payload.service.trim() || !payload.account.trim()) return;
     const saveButton = form.querySelector('button[type="submit"]');
+    credentialSavesInFlight.add(generation);
     if (saveButton) saveButton.disabled = true;
     const result = await window.notchAPI.saveCredential(payload).catch(() => ({ ok: false }));
+    credentialSavesInFlight.delete(generation);
     if (saveButton) saveButton.disabled = false;
-    if (!result?.ok) return;
-    editingCredentialId = '';
-    editingCredential = null;
+    if (generation !== credentialEditGeneration || editingCredentialId !== payload.id) return;
+    if (!result?.ok) { reportCredentialFailure(result); return; }
+    const draftChanged = ['service', 'account', 'password'].some(key => editingCredential?.[key] !== payload[key]);
+    if (!draftChanged) invalidateCredentialEdit({ clear: true });
     await loadCredentials();
   });
   credentialBulkDelete?.addEventListener('click', async () => {
-    if (!credentialSelection.size || !window.notchAPI) return;
+    if (!credentialSelection.size || !window.notchAPI || credentialsReadFailed) return;
+    if ([pendingCredentialEditId, editingCredentialId].some(id => credentialSelection.has(id))) invalidateCredentialEdit();
     const result = await window.notchAPI.deleteCredentials([...credentialSelection]).catch(() => ({ ok: false }));
-    if (!result || !result.ok) return;
+    if (!result || !result.ok) { reportCredentialFailure(result); return; }
     credentialSelection.clear();
     credentialAnchor = null;
     await loadCredentials();
@@ -3899,7 +4075,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     stopTranscriptionAudioPipeline();
     if (transcriptionStartPromise && window.notchAPI) window.notchAPI.finishTranscription().catch(() => {});
     stopMediaTracks();
-    if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+    releaseRecordingAudio();
   });
 
   window.getCommandsForSync = () => commands.map((command) => ({

@@ -3001,6 +3001,9 @@ async function requestNoteTitle(note) {
     noteTitleAttempts.delete(note.id);
     return;
   }
+  // A model reply can arrive inside the editor's save debounce. Commit that
+  // draft before comparing content, then update labels without rebuilding it.
+  flushNotesEditorSave();
   const next = window.NotchDomain.applyGeneratedNoteTitle(
     loadNoteArchive(),
     note.id,
@@ -3013,7 +3016,7 @@ async function requestNoteTitle(note) {
     return;
   }
   localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(next));
-  renderNotesLibrary();
+  updateSavedNotePresentation(updated);
 }
 
 function updateSavedNotePresentation(note) {
@@ -3021,8 +3024,8 @@ function updateSavedNotePresentation(note) {
   const title = noteArchiveTitle(note);
   const detailTitle = notesDetail?.querySelector('.notes-detail-title');
   const detailTime = notesDetail?.querySelector('.notes-detail-time');
-  if (detailTitle && document.activeElement !== detailTitle) detailTitle.value = note.title || '';
-  if (detailTime) pomeLocaleRendererApp.bind(detailTime, "textContent", () => (pomeLocaleRendererApp.t("copy.saved.983d08", { arg1: (noteArchiveTime(note.updatedAt)) })));
+  if (detailTitle?.dataset.noteId === note.id && document.activeElement !== detailTitle) detailTitle.value = note.title || '';
+  if (detailTime && selectedNoteId === note.id) pomeLocaleRendererApp.bind(detailTime, "textContent", () => (pomeLocaleRendererApp.t("copy.saved.983d08", { arg1: (noteArchiveTime(note.updatedAt)) })));
   const row = notesList?.querySelector(`[data-note-id="${CSS.escape(note.id)}"]`);
   if (!row) return;
   const rowTitle = row.querySelector('strong');
@@ -4171,6 +4174,7 @@ if (homeBento) {
       };
     }
     if (!next && wasEditing) {
+      cancelHomeDrag();
       if (action === 'cancel' && homeLayoutEditSnapshot) {
         homeOrder = [...homeLayoutEditSnapshot.order];
         homeSizes = { ...homeLayoutEditSnapshot.sizes };
@@ -4212,9 +4216,6 @@ if (homeBento) {
     homeTiles.forEach((tile) => tile.classList.remove('layout-drop-target'));
   };
 
-  const ordersEqual = (a, b) => Array.isArray(a) && Array.isArray(b)
-    && a.length === b.length && a.every((id, index) => id === b[index]);
-
   const swappedOrderFrom = (baseOrder, sourceId, targetId) => {
     const next = [...baseOrder];
     const sourceIndex = next.indexOf(sourceId);
@@ -4222,21 +4223,6 @@ if (homeBento) {
     if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return null;
     [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
     return next;
-  };
-
-  const applyHomeOrder = (nextOrder, reason, { forcePack = false } = {}) => {
-    const previous = [...homeOrder];
-    const previousLayout = cloneHomeLayout(homeWorkingLayout);
-    homeOrder = [...nextOrder];
-    if (forcePack) homeWorkingLayout = null;
-    const layout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, { forcePack });
-    if (!layout) {
-      homeOrder = previous;
-      homeWorkingLayout = previousLayout;
-      return false;
-    }
-    applyHomeLayout(layout, { reason });
-    return true;
   };
 
   // Exchange origins while preserving both footprints; only collisions require packing.
@@ -4421,7 +4407,7 @@ if (homeBento) {
     hideHomeContextMenu();
   }, true);
 
-  window.addEventListener('blur', hideHomeContextMenu);
+  window.addEventListener('blur', () => dismissHomeLayoutChrome());
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       hideHomeContextMenu();
@@ -4429,21 +4415,31 @@ if (homeBento) {
     }
   });
 
-  const dismissHomeLayoutChrome = ({ cancelEdit = false } = {}) => {
-    hideHomeContextMenu();
+  function cancelHomeDrag() {
+    if (pendingLongPress) {
+      clearTimeout(pendingLongPress.timer);
+      pendingLongPress = null;
+    }
     if (dragState) {
       clearDisplacePreview();
       clearDropTarget();
       const { tile, pointerId } = dragState;
+      dragState = null;
       if (tile.hasPointerCapture?.(pointerId)) tile.releasePointerCapture(pointerId);
       tile.classList.remove('is-dragging', 'hit-test-off');
       tile.style.removeProperty('--home-drag-x');
       tile.style.removeProperty('--home-drag-y');
       homeBento.classList.remove('layout-dragging');
-      dragState = null;
+      suppressHomeClickUntil = Date.now() + 280;
     } else {
       clearDisplacePreview();
     }
+    clearDropTarget();
+  }
+
+  const dismissHomeLayoutChrome = ({ cancelEdit = false } = {}) => {
+    hideHomeContextMenu();
+    cancelHomeDrag();
     if (cancelEdit && homeLayoutEditing) {
       setHomeLayoutEditing(false, { action: 'cancel', silent: true });
     }
@@ -4457,6 +4453,12 @@ if (homeBento) {
     if (event.detail?.expanded) return;
     dismissHomeLayoutChrome({ cancelEdit: true });
   });
+  document.addEventListener('notch:tabchange', (event) => {
+    if (event.detail?.tab !== 'home') dismissHomeLayoutChrome();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) dismissHomeLayoutChrome();
+  });
 
   homeBento.addEventListener('contextmenu', (event) => {
     if (homeLayoutReadOnly) return;
@@ -4467,6 +4469,8 @@ if (homeBento) {
   });
 
   const finishHomeDrag = (event, cancelled = false) => {
+    const activePointer = dragState?.pointerId ?? pendingLongPress?.pointerId;
+    if (activePointer !== undefined && event.pointerId !== activePointer) return;
     if (pendingLongPress) clearTimeout(pendingLongPress.timer);
     pendingLongPress = null;
     if (!dragState) return;
@@ -4505,10 +4509,35 @@ if (homeBento) {
     else showStatusToast(pomeLocaleRendererApp.t("copy.notEnoughSpaceToSwap.94e606"));
   };
 
+  const beginHomeDrag = (press) => {
+    // A cancelled press must never wake later, or borrow a newer press's state.
+    if (pendingLongPress !== press) return;
+    if (!homeLayoutEditing || homeLayoutReadOnly || !isExpanded || activeTab !== 'home' || press.tile.hidden) {
+      clearTimeout(press.timer);
+      pendingLongPress = null;
+      return;
+    }
+    clearTimeout(press.timer);
+    const { tile, pointerId, startX, startY } = press;
+    try { tile.setPointerCapture?.(pointerId); } catch (error) {
+      pendingLongPress = null;
+      return;
+    }
+    homeBento.classList.add('layout-dragging');
+    tile.classList.add('is-dragging');
+    dragState = {
+      tile, target: null, pointerId, startX, startY,
+      originOrder: [...homeOrder], originRects: captureOriginRects(),
+      originLayout: cloneHomeLayout(homeWorkingLayout), previewTargetId: null,
+    };
+    pendingLongPress = null;
+  };
+
   homeBento.addEventListener('pointerdown', (event) => {
     if (event.button !== 0 || event.isPrimary === false) return;
     hideHomeContextMenu();
     if (!homeLayoutEditing || homeLayoutReadOnly) return;
+    if (dragState) return;
     const tile = event.target.closest('[data-home-module]');
     if (!tile || tile.hidden || !homeBento.contains(tile)) return;
     // 编辑布局时整卡可拖（含随笔记 textarea、镜子 button、工具条）
@@ -4516,65 +4545,29 @@ if (homeBento) {
       event.preventDefault();
     }
 
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startDrag = () => {
-      if (!pendingLongPress) return;
-      tile.setPointerCapture?.(event.pointerId);
-      homeBento.classList.add('layout-dragging');
-      tile.classList.add('is-dragging');
-      dragState = {
-        tile,
-        target: null,
-        pointerId: event.pointerId,
-        startX,
-        startY,
-        originOrder: [...homeOrder],
-        originRects: captureOriginRects(),
-        originLayout: cloneHomeLayout(homeWorkingLayout),
-        previewTargetId: null,
-      };
-      pendingLongPress = null;
-    };
+    if (pendingLongPress) clearTimeout(pendingLongPress.timer);
     // Short delay so click/press still feels intentional, but whole-tile drag in edit mode
-    pendingLongPress = {
+    const press = {
       tile,
-      startX,
-      startY,
+      startX: event.clientX,
+      startY: event.clientY,
       pointerId: event.pointerId,
-      timer: setTimeout(startDrag, 120),
+      timer: null,
     };
+    pendingLongPress = press;
+    press.timer = setTimeout(() => beginHomeDrag(press), 120);
   });
 
   homeBento.addEventListener('pointermove', (event) => {
     if (pendingLongPress) {
+      if (event.pointerId !== pendingLongPress.pointerId) return;
       const moved = Math.hypot(
         event.clientX - pendingLongPress.startX,
         event.clientY - pendingLongPress.startY
       );
-      if (moved > 6 && pendingLongPress.timer) {
+      if (moved > 6) {
         // start immediately once user clearly drags
-        clearTimeout(pendingLongPress.timer);
-        pendingLongPress.timer = null;
-        const tile = pendingLongPress.tile;
-        tile.setPointerCapture?.(event.pointerId);
-        homeBento.classList.add('layout-dragging');
-        tile.classList.add('is-dragging');
-        dragState = {
-          tile,
-          target: null,
-          pointerId: event.pointerId,
-          startX: pendingLongPress.startX,
-          startY: pendingLongPress.startY,
-          originOrder: [...homeOrder],
-          originRects: captureOriginRects(),
-          originLayout: cloneHomeLayout(homeWorkingLayout),
-          previewTargetId: null,
-        };
-        pendingLongPress = null;
-      } else if (moved > 6) {
-        clearTimeout(pendingLongPress.timer);
-        pendingLongPress = null;
+        beginHomeDrag(pendingLongPress);
       }
       if (!dragState) return;
     }
@@ -4612,6 +4605,8 @@ function bindDockSurface(surface, selector, maxScale = 1.14) {
   if (!surface) return;
   let frame = null;
   const reset = () => {
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
     surface.querySelectorAll(selector).forEach((item) => {
       item.style.removeProperty('--dock-scale');
       item.style.removeProperty('--dock-lift');
@@ -4636,6 +4631,17 @@ function bindDockSurface(surface, selector, maxScale = 1.14) {
     });
   });
   surface.addEventListener('pointerleave', reset);
+  window.addEventListener('blur', reset);
+  document.addEventListener('notch:will-collapse', reset);
+  document.addEventListener('notch:tabchange', (event) => {
+    if (event.detail?.tab !== 'home') reset();
+  });
+  document.addEventListener('notch:home-modules-changed', (event) => {
+    if (Array.isArray(event.detail?.visibleIds) && !event.detail.visibleIds.includes('windows')) reset();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) reset();
+  });
 }
 
 [
@@ -4686,29 +4692,10 @@ if (window.notchAPI && typeof window.notchAPI.onMirrorImageChanged === 'function
   window.notchAPI.onMirrorImageChanged(applyMirrorCover);
 }
 const mirrorVideo = document.getElementById('mirror-video');
-const mirrorPixelReveal = document.getElementById('mirror-pixel-reveal');
 let mirrorStream = null;
 let mirrorStarting = false;
+let mirrorGeneration = 0;
 let mirrorZoom = 1;
-
-function replayMirrorPixelReveal() {
-  if (!mirrorPixelReveal || !homeMirror || activeTab !== 'home') return;
-  if (!mirrorPixelReveal.childElementCount) {
-    const fragment = document.createDocumentFragment();
-    for (let index = 0; index < 80; index++) {
-      const pixel = document.createElement('i');
-      const row = Math.floor(index / 10);
-      const column = index % 10;
-      pixel.style.setProperty('--pixel-delay', `${(row * 24 + column * 13 + ((row + column) % 3) * 17)}ms`);
-      fragment.appendChild(pixel);
-    }
-    mirrorPixelReveal.appendChild(fragment);
-  }
-  mirrorPixelReveal.classList.remove('revealing');
-  void mirrorPixelReveal.offsetWidth;
-  mirrorPixelReveal.classList.add('revealing');
-  setTimeout(() => mirrorPixelReveal.classList.remove('revealing'), 1120);
-}
 
 function setMirrorZoom(value) {
   mirrorZoom = value;
@@ -4716,6 +4703,7 @@ function setMirrorZoom(value) {
 }
 
 function stopMirror() {
+  mirrorGeneration += 1;
   if (mirrorStream) {
     mirrorStream.getTracks().forEach((track) => track.stop());
     mirrorStream = null;
@@ -4734,8 +4722,9 @@ function stopMirror() {
 
 // 被系统挡住时，除了说清楚还要给一条出路：Windows 上没有授权弹窗，
 // 用户必须自己去隐私设置里把「允许应用访问摄像头」打开（P3-2）。
-async function showMediaPermissionToast(kind) {
+async function showMediaPermissionToast(kind, isCurrent = () => true) {
   const prompt = await window.notchAPI?.getMediaAccessStatus?.(kind).catch(() => null);
+  if (!isCurrent()) return;
   if (!prompt) {
     showStatusToast(kind === 'camera' ? pomeLocaleRendererApp.t("copy.cameraPermissionIsNeededToOpenThe.50c6ae") : pomeLocaleRendererApp.t("copy.microphonePermissionRequired.0d9923"));
     return;
@@ -4749,6 +4738,9 @@ async function showMediaPermissionToast(kind) {
 
 async function startMirror() {
   if (mirrorStarting || mirrorStream || !mirrorVideo) return;
+  const generation = ++mirrorGeneration;
+  const isCurrent = () => generation === mirrorGeneration;
+  const canContinue = () => isCurrent() && mirrorStarting && isExpanded && activeTab === 'home' && !homeMirror?.hidden;
   mirrorStarting = true;
   homeMirror?.classList.add('camera-starting');
   mirrorStage?.setAttribute('aria-busy', 'true');
@@ -4756,8 +4748,9 @@ async function startMirror() {
     const permitted = !window.notchAPI || typeof window.notchAPI.ensureCamera !== 'function'
       ? true
       : await window.notchAPI.ensureCamera();
+    if (!isCurrent()) return;
     if (!permitted) throw new Error('camera_permission_denied');
-    if (!mirrorStarting || !isExpanded || activeTab !== 'home') return;
+    if (!canContinue()) return;
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
@@ -4766,28 +4759,38 @@ async function startMirror() {
         height: { ideal: 1280 },
       },
     });
-    if (!isExpanded || activeTab !== 'home' || !mirrorStarting) {
+    if (!canContinue()) {
       stream.getTracks().forEach((track) => track.stop());
       return;
     }
     mirrorStream = stream;
     mirrorVideo.srcObject = stream;
     await mirrorVideo.play();
+    // stop / restart may happen while permission, capture or play is pending.
+    // An older request must not take ownership or clear a newer request's UI.
+    if (!canContinue() || mirrorStream !== stream) {
+      if (isCurrent() && mirrorStream === stream) stopMirror();
+      return;
+    }
     setMirrorZoom(1);
     homeMirror?.classList.add('live');
     mirrorStage?.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.closeLiveMirror.a64be7"));
     mirrorStage?.setAttribute('aria-pressed', 'true');
   } catch (error) {
+    if (!isCurrent()) return;
     stopMirror();
+    const stoppedGeneration = mirrorGeneration;
     const denied = error && (
       error.name === 'NotAllowedError' || error.message === 'camera_permission_denied'
     );
-    if (denied) await showMediaPermissionToast('camera');
+    if (denied) await showMediaPermissionToast('camera', () => mirrorGeneration === stoppedGeneration);
     else showStatusToast(pomeLocaleRendererApp.t("copy.couldnTOpenTheCamera.7e9d5c"));
   } finally {
-    mirrorStarting = false;
-    homeMirror?.classList.remove('camera-starting');
-    mirrorStage?.removeAttribute('aria-busy');
+    if (isCurrent()) {
+      mirrorStarting = false;
+      homeMirror?.classList.remove('camera-starting');
+      mirrorStage?.removeAttribute('aria-busy');
+    }
   }
 }
 

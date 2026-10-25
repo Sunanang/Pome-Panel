@@ -43,17 +43,6 @@
 | **Clipboard and credentials** | Enable clipboard history when needed; encrypt accounts and keys with system secure storage |
 | **NAS sync** | Optionally pair a fnOS NAS to sync workspace content across devices |
 
-<details>
-<summary><strong>See tasks and notes</strong></summary>
-<br />
-<table>
-  <tr>
-    <td width="50%"><img src="website/public/product-captures/en/todo.jpg" alt="Task categories and due dates" /><p align="center">Plan your tasks</p></td>
-    <td width="50%"><img src="website/public/product-captures/en/notes.jpg" alt="Notes library and editor" /><p align="center">Capture your notes</p></td>
-  </tr>
-</table>
-</details>
-
 ## Get started
 
 1. Check [Releases](https://github.com/Sunanang/Pome-Panel/releases) for installers: `arm64.dmg` for Mac or `windows-x64-setup.exe` for Windows.
@@ -74,7 +63,7 @@ npm run setup:hooks
 npm start
 ```
 
-Use Node.js 18+. See [development docs](docs/development.en.md) for tests, the website, NAS companion and builds.
+Use Node.js 18+. See [development docs](docs/development.en.md) for tests, the NAS companion and builds.
 
 ## Learn more
 

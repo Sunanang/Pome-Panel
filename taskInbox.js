@@ -71,7 +71,27 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     if (currentDigest === lastDiskDigest) { lastDiskVersion = version; return; }
     throw Object.assign(new Error('收件箱文件在外部发生变化，原文件已保留，请重新读取。'), { code: 'storage_changed' });
   }
-  function commit(next) { checkDisk(); writeJsonAtomic(filePath, next, disk); state = next; lastDiskVersion = diskVersion(); lastDiskDigest = digest(`${JSON.stringify(next)}\n`); }
+  function commit(next) {
+    checkDisk();
+    const serialized = `${JSON.stringify(next)}\n`;
+    const remember = () => {
+      const version = diskVersion();
+      state = next; lastDiskVersion = version; lastDiskDigest = digest(serialized);
+    };
+    try { writeJsonAtomic(filePath, next, disk); remember(); }
+    catch (error) {
+      // The rename may already be visible when directory fsync reports an
+      // error. Adopt only the exact bytes of our write, then still report the
+      // durability failure. Otherwise all later reads would misclassify our
+      // committed event as an external edit and permanently pause the inbox.
+      try {
+        if (disk.readFileSync(filePath, 'utf8') === serialized) {
+          remember(); error.taskInboxCommitted = true;
+        }
+      } catch { /* Preserve the original write error when the disk cannot be read. */ }
+      throw error;
+    }
+  }
   function prune() {
     checkDisk();
     const records = trimCompletionHistory(state.records);

@@ -52,17 +52,6 @@
 | **Буфер и секреты** | История по необходимости; ключи в системном защищённом хранилище |
 | **Синхронизация NAS** | Опционально свяжите fnOS NAS и синхронизируйте устройства |
 
-<details>
-<summary><strong>Задачи и заметки</strong></summary>
-<br />
-<table>
-  <tr>
-    <td width="50%"><img src="website/public/product-captures/en/todo.jpg" alt="" /><p align="center">Планируйте задачи</p></td>
-    <td width="50%"><img src="website/public/product-captures/en/notes.jpg" alt="" /><p align="center">Пишите заметки</p></td>
-  </tr>
-</table>
-</details>
-
 ## Начать
 
 1. Смотрите [Releases](https://github.com/Sunanang/Pome-Panel/releases): `arm64.dmg` для Mac или `windows-x64-setup.exe` для Windows.

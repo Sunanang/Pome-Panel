@@ -244,3 +244,50 @@ test('batch validation failure after a valid first event leaves all state unchan
   assert.throws(() => store.applyBatch([event({kind:'attention.resolved',reason:'answered',sequence:2}),event({action:'execute'})]),/invalid_attention_event/);
   assert.deepEqual(fs.readFileSync(filePath),before);assert.equal(store.list().length,1);
 });
+
+for (const action of ['display', 'disconnect']) {
+  test(`${action} adopts exactly committed bytes after a rename error and remains usable`, t => {
+    const { filePath } = fixture(t);
+    let failAfterRename = false;
+    const disk = Object.create(fs);
+    disk.renameSync = (from, to) => {
+      fs.renameSync(from, to);
+      if (failAfterRename) throw new Error('after_rename_failure');
+    };
+    const store = createAiAttentionStore({ filePath, disk });
+    const { key } = store.apply(event()).record;
+    failAfterRename = true;
+    assert.throws(() => action === 'display' ? store.display(key, true) : store.disconnect('codex'), /after_rename_failure/);
+    const rows = store.list();
+    assert.equal(action === 'display' ? rows[0].hidden : rows[0].state, action === 'display' ? true : 'unverified');
+    failAfterRename = false;
+    store.apply(event({ sequence: 2 }));
+    store.display(key, false);
+    assert.equal(store.list()[0].state, 'pending');
+    assert.equal(store.list()[0].hidden, false);
+  });
+}
+
+test('display write failure before rename preserves state; concurrent different bytes are never adopted', t => {
+  const { filePath } = fixture(t);
+  let failure = '';
+  const disk = Object.create(fs);
+  disk.renameSync = (from, to) => {
+    if (failure === 'before') throw new Error('before_rename_failure');
+    fs.renameSync(from, to);
+    if (failure === 'external') {
+      fs.writeFileSync(to, '{"external":true}');
+      throw new Error('after_external_write');
+    }
+  };
+  const store = createAiAttentionStore({ filePath, disk }), { key } = store.apply(event()).record;
+  const original = fs.readFileSync(filePath, 'utf8');
+  failure = 'before';
+  assert.throws(() => store.display(key, true), /before_rename_failure/);
+  assert.equal(fs.readFileSync(filePath, 'utf8'), original);
+  assert.equal(store.list()[0].hidden, false);
+  failure = 'external';
+  assert.throws(() => store.display(key, true), /after_external_write/);
+  assert.throws(() => store.list(), /attention_storage_changed/);
+  assert.equal(fs.readFileSync(filePath, 'utf8'), '{"external":true}');
+});

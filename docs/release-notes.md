@@ -6,7 +6,7 @@
 | Windows 10/11 · Intel / AMD 64 位（x64） | [下载 Windows 安装包（.exe）](https://github.com/Sunanang/Pome-Panel/releases/download/v{{VERSION}}/Pome-Panel-{{VERSION}}-windows-x64-setup.exe) | 双击 EXE，按安装向导完成安装 |
 | 飞牛 fnOS · x86 / ARM（通用包） | [下载 NAS 伴侣（.fpk）](https://github.com/Sunanang/Pome-Panel/releases/download/v{{VERSION}}/Pome-Panel-{{VERSION}}-fnos-all.fpk) | 在飞牛应用中心手动安装，需 Node.js 22 运行时 |
 
-`.sha256` 是对应文件的完整性校验码，不是安装包。官网提供 macOS 与 Windows 两个下载入口。
+`.sha256` 是对应文件的完整性校验码，不是安装包。安装包从本 Release 下载。
 
 三端产物由 GitHub Actions 构建，全部任务成功后才发布。NAS 自动检查覆盖服务与打包流程，不包含真实 NAS 的安装、升级及卸载验证。
 

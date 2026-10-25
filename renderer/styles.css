@@ -2870,7 +2870,7 @@ body.panel-dragging #app.collapsed .notch {
 .recording-detail-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--s-3); }
 .recording-title-input { width: 100%; padding: 6px 8px; border-radius: var(--r-input); background: transparent; font-size: var(--fs-heading-2); font-weight: 600; }
 .recording-detail-head span { padding-left: 8px; color: var(--text-3); font: var(--fs-caption) var(--font-mono); }
-.recording-audio { min-height: 48px; display: flex; align-items: center; margin-bottom: var(--s-4); padding: 6px 10px; border-radius: var(--r-input); background: var(--surface-2); color: var(--text-4); font-size: var(--fs-small); }
+.recording-audio { min-height: 48px; display: flex; align-items: center; margin-bottom: var(--s-4); padding: 6px 10px; border-radius: var(--r-input); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-small); }
 .recording-audio audio { width: 100%; height: 32px; }
 .recording-transcript-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-bottom: var(--s-2); }
 .recording-transcript-editor { flex: 1; min-height: 0; width: 100%; resize: none; padding: var(--s-3); border-radius: var(--r-input); font-size: var(--fs-body); line-height: 1.7; user-select: text; -webkit-user-select: text; }
@@ -3619,37 +3619,6 @@ body.panel-dragging #app.collapsed .notch {
 }
 .home-recorder[data-state='recording'] .record-start span {
   box-shadow: 0 0 calc(12px + var(--recording-level, 0) * 24px) rgba(255,95,87,.7);
-}
-
-/* ============ 镜子 PixelReveal ============ */
-.mirror-pixel-reveal {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  grid-template-rows: repeat(8, 1fr);
-  overflow: hidden;
-  opacity: 0;
-}
-.mirror-pixel-reveal i {
-  display: block;
-  background: #090a0d;
-  transform: scale(0);
-  transform-origin: center;
-}
-.mirror-pixel-reveal.revealing { opacity: 1; }
-.mirror-pixel-reveal.revealing i {
-  animation: mirror-pixel-away 620ms var(--ease-out) both;
-  animation-delay: var(--pixel-delay);
-}
-@keyframes mirror-pixel-away {
-  0% { opacity: 1; transform: scale(1.08); }
-  62% { opacity: .88; transform: scale(.72); }
-  100% { opacity: 0; transform: scale(0); }
 }
 
 /* ============ 可编辑待办分类 ============ */

@@ -209,6 +209,19 @@ async function runPlatform(name) {
     assert.equal(await js(`document.querySelector('[data-sun-manual-form]').hidden`), true, 'manual expansion resets on a new explicit open');
     await js(`document.getElementById('sun-city-query').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))`);
     assert.equal(await js(`document.getElementById('sun-location-popover').hidden`), true);
+
+    // Damaged persisted IANA zones must not abort widget startup or prevent
+    // opening its city selector; retain coordinates and recover to host time.
+    await js(`localStorage.setItem('notch-sun-location-v1',JSON.stringify({lat:39.9042,lng:116.4074,name:'保留的地点',source:'manual',tz:'Asia/NotARealZone'}))`);
+    await new Promise(resolve => { win.webContents.once('did-finish-load',resolve);win.webContents.reload(); });
+    await until('!!window.PomeSun && !!window.NotchHome');
+    assert.equal(await js('PomeSun.getLocation().name'),'保留的地点');
+    assert.equal(await js('PomeSun.getLocation().tz'),await js('Intl.DateTimeFormat().resolvedOptions().timeZone'));
+    await js('setMode(true)');
+    await js(`hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>id!=='sun');homeSizes.sun='medium';homeWorkingLayout=null;applyHomeLayout(NotchDomain.resolveHomeWidgetLayout(homeOrder,homeSizes,hiddenHomeModules),{reason:'initial'});PomeSun.render()`);
+    assert.equal(await js('!!document.querySelector("#home-sun .sun-arc")'),true);
+    await capture('invalid-timezone-recovered');
+    await js(`PomeSun.openLocation('')`);await assertBounds('recovered timezone city dialog');await js('PomeSun.closeLocation()');
     assert.deepEqual(errors, []);
     console.log(`${name}: homepage defaults, saved preferences and city popover checks passed`);
   } finally { win.destroy(); }

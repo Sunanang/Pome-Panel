@@ -25,7 +25,7 @@ npm start
 | 命令 | 用途 |
 | --- | --- |
 | `npm test` | 语言资源检查、单元测试、Electron 集成测试与 JavaScript 语法检查 |
-| `npm run i18n:generate` / `npm run i18n:check` | 生成 / 校验桌面、NAS、安装器与官网语言资源 |
+| `npm run i18n:generate` / `npm run i18n:check` | 生成 / 校验桌面、NAS 与安装器语言资源 |
 | `npm start` | 启动 Electron 开发版 |
 | `npm run pack` | 生成本地未打包目录 |
 | `npm run build` | 在 macOS 上构建 Apple Silicon 产物 |
@@ -34,16 +34,6 @@ npm start
 | `node scripts/build-fpk.js` | 使用已安装的官方 fnpack，在临时目录构建 NAS 通用 FPK 与 SHA-256，输出到 `dist.noindex/` |
 
 GitHub Actions 的「Release macOS, Windows and NAS」会在推送 `main` / `feat/**`、提交 PR 或手动运行时测试并构建 DMG、Windows EXE 和 NAS FPK，产物可从该次运行的 Artifacts 下载。只有推送与桌面端及两份 NAS manifest 版本一致的 `v*.*.*` 标签，且三个构建任务都成功，才会把三种安装包及校验文件发布到同一个 Release。NAS 使用固定版本、校验 SHA-256 的[官方 fnpack](https://developer.fnnas.com/docs/cli/fnpack/)，无需连接 NAS 或提供设备凭据；真实 NAS 安装验证仍需另做。`scripts/pack-fpk.sh` 保持仅刷新协议副本和图标，不生成安装包。
-
-官网在 `website/`，要求 Node.js 22.13.0 及以上，技术栈是 React 19 与 Vinext：
-
-```bash
-cd website
-npm install
-npm run dev
-```
-
-检查官网时使用 `npm run lint` 与 `npm run build`。
 
 ## 项目结构
 
@@ -58,8 +48,7 @@ npm run dev
 ├── scripts/                 # Codex / Claude Code 通知转发
 ├── tests/                   # Node 单元测试
 ├── build/                   # 图标与打包资源
-├── docs/                    # 设计说明与 ADR
-└── website/                 # React 19 + Vinext 官网
+└── docs/                    # 设计说明与 ADR
 ```
 
 工作中枢回归可运行 `npm run check:work-hub`：隔离夹具固定为 250 条笔记、200 条待办、100 个链接、20 条录音及 50 条完成记录，测量普通唤出与隔离 NAS 同步负载各 20 次。环境、原始耗时、P95、几何与同步结果留在 `dist.noindex/iteration-validation/<run-id>/`，不提交生成文件；Windows 真机和实体显示器/DPI 检查需要单独执行。

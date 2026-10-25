@@ -40,9 +40,11 @@ const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? req
     'Australia/Sydney': { name: pomeLocaleRendererSun.t("copy.sydney.40a5bd") },
   };
 
-  function civilParts(date, timeZone) {
+  const civilFormatters = new Map();
+  function civilFormatter(timeZone) {
+    if (civilFormatters.has(timeZone)) return civilFormatters.get(timeZone);
     const fmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: timeZone || 'UTC',
+      timeZone,
       hourCycle: 'h23',
       year: 'numeric',
       month: '2-digit',
@@ -51,6 +53,21 @@ const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? req
       minute: '2-digit',
       second: '2-digit',
     });
+    if (civilFormatters.size >= 24) civilFormatters.delete(civilFormatters.keys().next().value);
+    civilFormatters.set(timeZone, fmt);
+    return fmt;
+  }
+
+  function resolveTimeZone(value, fallback = 'UTC') {
+    for (const candidate of [value, fallback, 'UTC']) {
+      if (typeof candidate !== 'string' || !candidate.trim() || candidate.length > 128) continue;
+      try { return civilFormatter(candidate.trim()).resolvedOptions().timeZone; } catch {}
+    }
+    return 'UTC';
+  }
+
+  function civilParts(date, timeZone) {
+    const fmt = civilFormatter(resolveTimeZone(timeZone));
     const bag = {};
     fmt.formatToParts(date).forEach((part) => {
       if (part.type !== 'literal') bag[part.type] = part.value;
@@ -96,8 +113,12 @@ const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? req
 
   function dateAtMinute(noon, timeZone, minute) {
     const parts = civilParts(noon, timeZone);
-    const midnight = zonedTime(parts.year, parts.month, parts.day, 0, 0, 0, timeZone);
-    return new Date(midnight.getTime() + minute * 60000);
+    // Arc x values are local wall-clock minutes. Adding elapsed minutes to
+    // midnight uses the wrong offset after a DST change (and shifts the arc
+    // away from the current sun marker). Normalize cross-day minutes first.
+    const wall = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 0, minute));
+    return zonedTime(wall.getUTCFullYear(), wall.getUTCMonth() + 1, wall.getUTCDate(),
+      wall.getUTCHours(), wall.getUTCMinutes(), 0, timeZone);
   }
 
   function floorMinute(date) {
@@ -266,7 +287,7 @@ const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? req
   function buildSunModel(input) {
     const lat = Number(input && input.lat);
     const lng = Number(input && input.lng);
-    const timeZone = String((input && input.timeZone) || 'UTC');
+    const timeZone = resolveTimeZone(input && input.timeZone);
     const now = input && input.now instanceof Date ? input.now : new Date(input && input.now);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(now.getTime())) return null;
     const noon = civilNoon(now, timeZone);
@@ -496,6 +517,7 @@ const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? req
     estimateMiniFootWidth,
     miniFootFitsCard,
     civilParts,
+    resolveTimeZone,
     civilNoon,
     formatHM,
     formatNowHM,

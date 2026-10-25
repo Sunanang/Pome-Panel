@@ -92,6 +92,51 @@ test('write failure does not claim acceptance or damage previous records', (t) =
   assert.deepEqual(fs.readFileSync(filePath), before);
   assert.equal(createTaskInbox({ filePath }).list().total, 1);
 });
+test('errors after atomic rename retain committed records without pausing later reads or retries', t => {
+  for (const phase of ['rename', ...(process.platform === 'win32' ? [] : ['directory-fsync'])]) {
+    const filePath = fixture(t);
+    let fail = false;
+    const disk = Object.create(fs);
+    disk.renameSync = (from, to) => {
+      fs.renameSync(from, to);
+      if (fail && phase === 'rename') { fail = false; throw new Error('after_rename_failure'); }
+    };
+    disk.fsyncSync = fd => {
+      if (fail && phase === 'directory-fsync' && fs.fstatSync(fd).isDirectory()) {
+        fail = false; throw new Error('directory_fsync_failure');
+      }
+      fs.fsyncSync(fd);
+    };
+    const inbox = createTaskInbox({ filePath, disk });
+    inbox.accept({ source: 'codex', eventId: 'before', title: 'Before' });
+    fail = true;
+    const event = { source: 'codex', eventId: 'during', title: 'During' };
+    assert.throws(() => inbox.accept(event), error => error.taskInboxCommitted === true);
+    assert.equal(JSON.parse(fs.readFileSync(filePath)).records.length, 2);
+    assert.equal(inbox.list().total, 2, phase);
+    const retry = inbox.accept(event);
+    assert.equal(retry.duplicate, true); assert.equal(retry.record.title, 'During');
+    assert.equal(inbox.markRead(retry.record.id).ok, true);
+    assert.equal(inbox.accept({ source: 'codex', eventId: 'after', title: 'After' }).ok, true);
+    assert.equal(inbox.list().total, 3);
+    assert.equal(createTaskInbox({ filePath }).list().total, 3);
+  }
+});
+test('a failure before rename does not adopt uncommitted data and remains retryable in the same instance', t => {
+  const filePath = fixture(t);
+  let fail = false;
+  const disk = Object.create(fs);
+  disk.renameSync = (from, to) => { if (fail) throw new Error('before_rename_failure'); fs.renameSync(from, to); };
+  const inbox = createTaskInbox({ filePath, disk });
+  inbox.accept({ source: 'codex', eventId: 'before', title: 'Before' });
+  const before = fs.readFileSync(filePath);
+  const event = { source: 'codex', eventId: 'during', title: 'During' };
+  fail = true;
+  assert.throws(() => inbox.accept(event), error => !error.taskInboxCommitted && /before_rename/.test(error.message));
+  assert.deepEqual(fs.readFileSync(filePath), before); assert.equal(inbox.list().total, 1);
+  fail = false;
+  assert.equal(inbox.accept(event).duplicate, false); assert.equal(inbox.list().total, 2);
+});
 test('corrupt and unsupported inbox files remain untouched', (t) => {
   const filePath = fixture(t);
   for (const bytes of ['{broken', '{"version":999,"records":[],"dedupe":{}}']) {

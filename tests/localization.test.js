@@ -74,6 +74,7 @@ test('all dictionaries, native resources and generated browser files stay comple
   assert(resources.validate({ 'zh-CN': require('../localization/locales/zh-CN.json'), 'en-US': require('../localization/locales/en-US.json') }) > 1000);
   resources.generate(true);
   const output = resources.generatedResources();
+  assert([...output.keys()].every(file => !file.startsWith('website/')), 'language generation must not recreate the removed marketing site');
   assert(output.get('fnos/i18n/en-US').includes('[wizard]'));
   assert(output.get('build/i18n/messages.nsh').includes('1033 "Install Pome Panel"'));
   assert(output.get('build/i18n/messages.nsh').includes('2052 "安装 Pome Panel"'));
@@ -238,7 +239,7 @@ test('product translation references exist and translated resources contain no H
       else if (/\.(?:js|html|tsx|ts)$/.test(file) && item.name !== 'cities.js') files.push(file);
     }
   }
-  for (const directory of ['renderer', 'platform-adapters', 'fnos/app/ui', 'website/app']) collect(directory);
+  for (const directory of ['renderer', 'platform-adapters', 'fnos/app/ui']) collect(directory);
   let references = 0;
   for (const file of files) {
     const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');

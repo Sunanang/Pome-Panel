@@ -40,7 +40,7 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
         admin: String(parsed.admin || ''),
         lat,
         lng,
-        tz: parsed.tz || null,
+        tz: parsed.tz ? Sun.resolveTimeZone(parsed.tz, Intl.DateTimeFormat().resolvedOptions().timeZone) : null,
       };
     } catch (error) {
       return null;
@@ -89,7 +89,7 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
   }
 
   function timeZoneFor(place) {
-    return (place && place.tz) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    return Sun.resolveTimeZone(place && place.tz, Intl.DateTimeFormat().resolvedOptions().timeZone);
   }
 
   function cities() {

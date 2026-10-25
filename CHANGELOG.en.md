@@ -6,6 +6,19 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Preserve task columns 5–8 during first NAS migration and use a frozen full snapshot instead of duplicate or truncated history. Reject stale account-key replies after unbinding or re-pairing. Serialize backup and NAS recovery confirmations before touching the workspace.
+- Keep manual link names, note drafts and the current credential editor intact when background metadata or older read/save requests return. Discard clipboard work from previous enable cycles and workspaces without changing the new baseline or published image files.
+- Restore the normal panel layer after media permission requests. Report and retry panel-position save failures instead of claiming success. Keep attention storage usable after a display/disconnect write landed but durability reporting failed.
+
+- Handle missing, empty, unreadable and undecodable recordings without leaving loading states. Reject stale player reads, release replaced media and Blob URLs, pause playback on tab changes/collapse, and improve audio-status contrast. Cancelled window drags no longer persist hidden items. Remove unused layout, window-toggle and mirror pixel-animation code.
+
+- Remove the inherited marketing website, assets, dependencies, Pages workflow, dedicated tests and design plans. Remove its README/development entries and prevent localization or screenshot scripts from recreating the site. Keep the desktop app and NAS companion, with downloads through GitHub Releases.
+
+- Preserve unreadable or undecryptable credential vaults instead of treating them as empty, with recoverable UI errors. Retain previous shortcuts after conflicts or failed settings writes, and reconcile inbox state when an atomic write has landed before a later durability error.
+- Fix cancelled homepage drags, stale camera requests and stuck Dock hover effects. Correct solar paths on DST transition days and recover invalid time zones. Validate NAS audio, release replaced media, accept IPv6 loopback and keep narrow-screen navigation usable.
+
+- Replace rigid wind strokes with irregular, feathered sheets and fans of air that sweep, sway, spread and dissolve. Cache their gradient textures and preserve compact-size and reduced-motion behavior, including wind mixed with rain.
+
 - Align weather labels, separators and temperatures to a shared text baseline, preserving all four card sizes and large-card humidity.
 
 - Fix delayed weather refresh after restoring cached readings and redundant card rebuilds after failed requests. Validate persisted weather and wind values, keep compact and localized labels within the sun card, and deliver all ten interface languages through the preload bridge.
@@ -19,7 +32,7 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 - Show approximate solar-term times to the nearest minute in China standard time (UTC+8). List traditional lucky clock intervals in the large almanac, distinguishing early and late Zi on the same day; clarify calendar-day countdowns.
 
-- Expand the desktop app, website and NAS web UI to ten languages, adding Traditional Chinese, Japanese, Korean, Spanish, French, German, Russian and Brazilian Portuguese. Share language metadata, system detection and local preferences. New translations await native-speaker review; screenshots and traditional almanac content retain their original language.
+- Expand the desktop app and NAS web UI to ten languages, adding Traditional Chinese, Japanese, Korean, Spanish, French, German, Russian and Brazilian Portuguese. Share language metadata, system detection and local preferences. New translations await native-speaker review; traditional almanac content retains its original language.
 
 - Fix Codex remaining quota jumping back to an older value on refresh: select the newest telemetry timestamp across sessions, cache unchanged parsed files, and preserve legitimate increases after a reset. Unrelated writes to older sessions no longer override newer quota readings.
 - Preserve visible hover details when the AI quota dashboard refreshes, and clear hover/pinned state when a provider disappears.

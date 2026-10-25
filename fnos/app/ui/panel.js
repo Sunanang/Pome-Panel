@@ -105,15 +105,30 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
     let noteQuery = '';
     let selectedNote = '';
     let selectedRecording = '';
-    const objectUrls = [];
+    const mediaScopes = new Map();
 
-    function revokeUrls() {
+    function releaseMedia(owner) {
+      const scope = mediaScopes.get(owner);
+      if (!scope) return;
+      scope.active = false;
+      for (const request of scope.requests) request.abort();
+      for (const node of scope.nodes) {
+        if (typeof node.pause === 'function') {
+          node.pause();
+          node.removeAttribute('src');
+          node.load?.();
+        }
+      }
       if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
-        for (const url of objectUrls) {
+        for (const url of scope.urls) {
           try { URL.revokeObjectURL(url); } catch (error) { /* already revoked */ }
         }
       }
-      objectUrls.length = 0;
+      mediaScopes.delete(owner);
+    }
+
+    function revokeUrls() {
+      for (const owner of mediaScopes.keys()) releaseMedia(owner);
     }
 
     function el(tag, className, text) {
@@ -252,6 +267,7 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
     function renderClips() {
       const list = byId('clip-list');
       if (!list || !doc) return;
+      releaseMedia(list);
       clearNode(list);
       const items = filteredClips();
       const total = ((view && view.clipboard) || []).length;
@@ -282,7 +298,7 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
             img.alt = pomeLocaleFnosAppUiPanel.t("copy.image.d24c10");
             img.setAttribute('draggable', 'false');
             wrap.appendChild(img);
-            attachMedia(img, `clip:${item.id}`);
+            attachMedia(img, `clip:${item.id}`, list);
           } else {
             wrap.appendChild(el('span', 'clip-thumb-placeholder', pomeLocaleFnosAppUiPanel.t("copy.loadingImage.f304d7")));
           }
@@ -345,6 +361,7 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
         list.appendChild(button);
       }
       if (!detail) return;
+      releaseMedia(detail);
       clearNode(detail);
       const current = items.find((item) => item.id === selectedRecording);
       if (!current) return;
@@ -363,7 +380,7 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
         audio.preload = 'none';
         holder.appendChild(audio);
         detail.appendChild(holder);
-        attachMedia(audio, `recording:${current.id}`);
+        attachMedia(audio, `recording:${current.id}`, detail);
       }
       if (current.transcript) detail.appendChild(el('p', 'recording-transcript', current.transcript));
     }
@@ -495,13 +512,22 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
       }
     }
 
-    async function attachMedia(node, entityId) {
+    async function attachMedia(node, entityId, owner) {
       if (!fetchImpl || !entityId) return;
+      let scope = mediaScopes.get(owner);
+      if (!scope) {
+        scope = { active: true, urls: new Set(), requests: new Set(), nodes: new Set() };
+        mediaScopes.set(owner, scope);
+      }
+      const request = new AbortController();
+      scope.requests.add(request);
+      scope.nodes.add(node);
       try {
         const url = apiUrl(apiPrefix, `/api/v1/workspace/media/${encodeURIComponent(entityId)}`);
-        const res = await fetchImpl(url, { credentials: 'same-origin' });
+        const res = await fetchImpl(url, { credentials: 'same-origin', signal: request.signal });
         if (!res || !res.ok || typeof res.blob !== 'function') return;
         const blob = await res.blob();
+        if (!scope.active || node.isConnected === false) return;
         if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return;
         let local = '';
         try {
@@ -509,10 +535,12 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
         } catch (error) {
           return;
         }
-        objectUrls.push(local);
+        scope.urls.add(local);
         node.src = local;
       } catch (error) {
         /* leave the card without media */
+      } finally {
+        scope.requests.delete(request);
       }
     }
 
@@ -527,6 +555,8 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
     }
 
     win?.addEventListener?.('pome:language-changed', () => renderAll());
+    win?.addEventListener?.('pagehide', revokeUrls);
+    win?.addEventListener?.('pageshow', event => { if (event.persisted) renderAll(); });
 
     function selectTab(id) {
       if (!TABS.some((tab) => tab.id === id)) return Promise.resolve();

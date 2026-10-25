@@ -542,12 +542,7 @@ async function runMigrationAttempt(ctx) {
         if (!applied.ok) throw new Error(applied.reason || 'apply_failed');
       }
       if (local.ok) {
-        applyLocalProjection(JSON.stringify({
-          P0: local.data.P0.map(stripCategory),
-          P1: local.data.P1.map(stripCategory),
-          P2: local.data.P2.map(stripCategory),
-          P3: local.data.P3.map(stripCategory),
-        }));
+        applyLocalProjection(canonicalLocalTodosJson(local.data));
       }
     }
   } catch (error) {
@@ -575,17 +570,6 @@ async function runMigrationAttempt(ctx) {
     serverRev: commit.body && commit.body.serverRev,
     remoteChanges,
     uploadedEntities: entities,
-  };
-}
-
-function stripCategory(item) {
-  return {
-    id: item.id,
-    text: item.text,
-    done: item.done === true,
-    createdAt: item.createdAt,
-    deadline: item.deadline || '',
-    remindedAt: item.remindedAt || 0,
   };
 }
 

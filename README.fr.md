@@ -52,17 +52,6 @@
 | **Presse-papiers et identifiants** | Historique à la demande ; clés dans le stockage sécurisé système |
 | **Sync NAS** | Appariez un NAS fnOS pour synchroniser entre appareils |
 
-<details>
-<summary><strong>Voir tâches et notes</strong></summary>
-<br />
-<table>
-  <tr>
-    <td width="50%"><img src="website/public/product-captures/en/todo.jpg" alt="" /><p align="center">Planifier</p></td>
-    <td width="50%"><img src="website/public/product-captures/en/notes.jpg" alt="" /><p align="center">Prendre des notes</p></td>
-  </tr>
-</table>
-</details>
-
 ## Démarrer
 
 1. Voir [Releases](https://github.com/Sunanang/Pome-Panel/releases) : `arm64.dmg` (Mac) ou `windows-x64-setup.exe` (Windows).

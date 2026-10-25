@@ -18,7 +18,16 @@ function createAiAttentionStore({ filePath, now = Date.now, disk = fs } = {}) {
   if (bytes() !== saved) throw Object.assign(new Error('attention_storage_changed'), { code: 'storage_changed' });
   function commit(next) {
     if (bytes() !== saved) throw Object.assign(new Error('attention_storage_changed'), { code: 'storage_changed' });
-    writeJsonAtomic(filePath, next, disk); state = next; saved = `${JSON.stringify(next)}\n`;
+    const serialized = `${JSON.stringify(next)}\n`;
+    try { writeJsonAtomic(filePath, next, disk); }
+    catch (error) {
+      // Display/disconnect also write outside applyBatch. If rename landed but
+      // durability reporting failed, track only the exact bytes on disk so a
+      // retry does not permanently lock this store as "storage_changed".
+      try { if (bytes() === serialized) { state = next; saved = serialized; } } catch {}
+      throw error;
+    }
+    state = next; saved = serialized;
   }
   // A restarted observer has no evidence that a former request is still waiting.
   if (state.records.some(row => row.state === 'pending')) commit({ ...state, records: state.records.map(row => row.state === 'pending' ? { ...row, state: 'unverified' } : row) });

@@ -83,6 +83,8 @@ const {
   taskNotificationContent,
   normalizeTaskNotificationWindow,
   normalizeCredentialInput,
+  createCredentialsVaultStore,
+  switchPanelShortcut,
   parseSmartLinkMetadata,
   extractFaviconHref,
   parseSmartMaterialMetadata,
@@ -155,6 +157,7 @@ const {
   splitMutationBatches,
   WORKSPACE_COLLECTIONS,
   pullWorkspacePages,
+  pullFullSnapshot,
   commitWorkspacePullPages,
   workspaceProjectionToStorage,
 } = require('./workspace-sync');
@@ -338,7 +341,6 @@ function createNotchTrayIcon() {
   return icon;
 }
 
-const COLLAPSED_WIDTH = 200;
 // 折叠尺寸、展开尺寸与安全边等几何常量的单一来源是 platform.js（M0-1），
 // 主进程不再保留第二份字面量；需要取值时读 platformPolicy.layout.constants。
 //
@@ -1557,20 +1559,6 @@ function createWindow() {
   });
 }
 
-function toggleVisibility() {
-  if (!mainWindow) {
-    createWindow();
-    return;
-  }
-  if (mainWindow.isVisible()) {
-    hideWindowAfterCollapse();
-  } else {
-    repositionWindow(getTargetDisplay()); // 显示前先回到鼠标所在屏顶部
-    activateMainWindow();
-    refreshTrayMenu();
-  }
-}
-
 function isAutoLaunchEnabled() {
   if (!platformCapabilities.features.autoLaunch) return false;
   try {
@@ -1711,8 +1699,9 @@ function normalizePanelPosition(value) {
 function writePanelPosition(pos) {
   const current = readAppSettings();
   current.panelPosition = pos ? normalizePanelPosition(pos) : null;
-  saveAppSettings(current);
+  if (!saveAppSettings(current)) return false;
   syncDockMetrics();
+  return true;
 }
 
 function resolvePositionDisplay(preferredDisplay) {
@@ -1824,7 +1813,7 @@ async function chooseWorkspaceFolder() {
     properties: ['openDirectory', 'createDirectory'],
   });
   const selected = !result.canceled && result.filePaths && result.filePaths[0];
-  if (!selected) return false;
+  if (!selected || workspaceSwitching) return false;
   const previousRoot = workspaceRoot();
   if (path.resolve(selected) === path.resolve(previousRoot)) return true;
   const existingFile = path.join(selected, WORKSPACE_DATA_FILE);
@@ -1842,7 +1831,7 @@ async function chooseWorkspaceFolder() {
       detail: PomeI18n.t("copy.thisWillLoadDataFromTheSelected.6b9577"),
       buttons: [PomeI18n.t("copy.openExistingData.235581"), PomeI18n.t("copy.cancel.2cd0f3")], defaultId: 0, cancelId: 1,
     });
-    if (response !== 0) return false;
+    if (response !== 0 || workspaceSwitching || workspaceRoot() !== previousRoot) return false;
   }
   workspaceSwitching = true;
   try {
@@ -1890,33 +1879,23 @@ function isValidPanelShortcut(shortcut) {
     && /^(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Space|Tab|Escape|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete|Enter)$/.test(key);
 }
 
-function setPanelShortcut(shortcut) {
+function setPanelShortcut(shortcut, persist) {
   if (!isValidPanelShortcut(shortcut)) return false;
-  const previousShortcut = configuredShortcut || 'Space';
-  stopHoverSpaceShortcut();
-  if (configuredShortcut && configuredShortcut !== 'Space' && globalShortcut.isRegistered(configuredShortcut)) {
-    globalShortcut.unregister(configuredShortcut);
-  }
-  if (shortcut === 'Space') {
-    configuredShortcut = shortcut;
-    startHoverSpaceShortcut();
-    return true;
-  }
-  let registered = false;
-  try {
-    registered = globalShortcut.register(shortcut, () => {
+  const result = switchPanelShortcut({
+    currentShortcut: configuredShortcut || 'Space', nextShortcut: shortcut,
+    isRegistered: key => globalShortcut.isRegistered(key),
+    register: key => globalShortcut.register(key, () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       activateMainWindow();
       mainWindow.webContents.send('shortcut:toggle-panel');
-    });
-  } catch (error) {}
-  if (registered) {
-    configuredShortcut = shortcut;
-    return true;
-  }
-  configuredShortcut = previousShortcut;
-  startHoverSpaceShortcut();
-  return false;
+    }),
+    unregister: key => globalShortcut.unregister(key), persist,
+  });
+  if (!result.ok) return false;
+  configuredShortcut = result.shortcut;
+  if (shortcut === 'Space') startHoverSpaceShortcut();
+  else stopHoverSpaceShortcut();
+  return true;
 }
 
 function applyAppSettings() {
@@ -2081,12 +2060,6 @@ ipcMain.handle('window:panel-drag-move', () => {
   if (!mainWindow || mainWindow.isDestroyed() || !panelDragOffset) return null;
   const cursor = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursor);
-  const tentative = {
-    x: cursor.x - panelDragOffset.x,
-    y: cursor.y - panelDragOffset.y,
-    width: mainWindow.getBounds().width,
-    height: mainWindow.getBounds().height,
-  };
   const edge = inferDockEdgeFromPoint(cursor, display);
   const size = getCollapsedSizeForEdge(edge, display);
   // Keep grabbing the same relative point after orientation flips.
@@ -2137,7 +2110,7 @@ ipcMain.handle('window:panel-drag-end', () => {
 
 ipcMain.handle('window:reset-panel-position', () => {
   panelDragOffset = null;
-  writePanelPosition(null);
+  if (!writePanelPosition(null)) return false;
   if (mainWindow && !mainWindow.isDestroyed()) {
     repositionWindow(getTargetDisplay());
   }
@@ -2247,13 +2220,14 @@ ipcMain.handle('sun:weather', (event, location) => {
 });
 ipcMain.handle('settings:set-shortcut', (event, accelerator) => {
   if (!isValidPanelShortcut(accelerator)) return { ok: false, error: 'invalid' };
-  if (!setPanelShortcut(accelerator)) {
+  let saveFailed = false;
+  if (!setPanelShortcut(accelerator, () => {
+    saveFailed = !saveAppSettings({ ...readAppSettings(), shortcut: accelerator });
+    return !saveFailed;
+  })) {
     // 注册失败没有原因码：Win 组合基本都被系统留着，要和"被别的应用占用"分开提示。
-    return { ok: false, error: platformPolicy.shortcutFailureReason(accelerator, platformCapabilities) };
+    return { ok: false, error: saveFailed ? 'save_failed' : platformPolicy.shortcutFailureReason(accelerator, platformCapabilities) };
   }
-  const next = readAppSettings();
-  next.shortcut = accelerator;
-  if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', publicAppSettings());
   refreshTrayMenu();
   return { ok: true, shortcut: accelerator };
@@ -2362,14 +2336,16 @@ ipcMain.handle('backup:preview', async (event) => {
 });
 ipcMain.handle('backup:restore', async (event, id) => {
   requireWorkspaceOwner(event);
+  if (workspaceSwitching) return { ok: false, error: 'workspace_switching' };
   const preview = backupPreviews.get(id);
   if (!preview) return { ok: false, error: 'preview_expired', message: PomeI18n.t("copy.theRestorePreviewHasExpiredSelectThe.99445c") };
-  let locked = false;
+  // Own the workspace before the first asynchronous snapshot/fingerprint read.
+  // A second confirmation must not enter staging or release this owner's lock.
+  workspaceSwitching = true;
   try {
     const storage = await liveBackupStorage();
     if (Date.now() > preview.expiresAt || workspaceRoot() !== preview.root || JSON.stringify(syncCredentialsStore.getStatus()) !== preview.binding
       || await backupFingerprint(storage, preview.root) !== preview.fingerprint) throw Object.assign(new Error(PomeI18n.t("copy.dataOrPairingHasChangedPreviewThe.84ec4b")), { code: 'preview_expired' });
-    workspaceSwitching = true; locked = true;
     await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = true');
     const status = syncCredentialsStore.getStatus();
     if (status.bound) recoveryStore().pause({ uid: status.uid, serverId: status.serverId, root: preview.root, operationId: crypto.randomUUID(), reason: 'workspace_restore' });
@@ -2388,7 +2364,7 @@ ipcMain.handle('backup:restore', async (event, id) => {
     broadcastSyncStatus();
     return { ok: true, snapshotPath, paused: status.bound };
   } catch (error) { return { ok: false, error: error.code || 'restore_failed', message: error.message }; }
-  finally { if (locked) { workspaceSwitching = false; await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = false').catch(() => {}); } }
+  finally { workspaceSwitching = false; await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = false').catch(() => {}); }
 });
 
 ipcMain.handle('workspace:open', () => shell.openPath(workspaceRoot()));
@@ -2833,30 +2809,11 @@ function getCredentialsVaultPath() {
 }
 
 function readCredentialsVault() {
-  if (!safeStorage.isEncryptionAvailable()) return [];
-  try {
-    const envelope = JSON.parse(fs.readFileSync(getCredentialsVaultPath(), 'utf8'));
-    const decoded = safeStorage.decryptString(Buffer.from(String(envelope.payload || ''), 'base64'));
-    const rows = JSON.parse(decoded);
-    return Array.isArray(rows) ? rows.map((item) => normalizeCredentialInput(item, item && item.id, item && item.createdAt)).filter(Boolean) : [];
-  } catch (error) {
-    return [];
-  }
+  return createCredentialsVaultStore({ filePath: getCredentialsVaultPath(), safeStorage }).read();
 }
 
 function writeCredentialsVault(rows) {
-  if (!safeStorage.isEncryptionAvailable()) return false;
-  const payload = safeStorage.encryptString(JSON.stringify(rows)).toString('base64');
-  const vaultPath = getCredentialsVaultPath();
-  const temporaryPath = `${vaultPath}.${process.pid}.tmp`;
-  try {
-    fs.writeFileSync(temporaryPath, JSON.stringify({ version: 1, payload }), { mode: 0o600 });
-    fs.renameSync(temporaryPath, vaultPath);
-    return true;
-  } catch (error) {
-    try { fs.unlinkSync(temporaryPath); } catch (unlinkError) {}
-    return false;
-  }
+  return createCredentialsVaultStore({ filePath: getCredentialsVaultPath(), safeStorage }).write(rows);
 }
 
 function publicCredential(item) {
@@ -2869,49 +2826,59 @@ function publicCredential(item) {
   };
 }
 
-ipcMain.handle('credentials:list', () => ({
-  ok: safeStorage.isEncryptionAvailable(),
-  secureStorage: safeStorage.isEncryptionAvailable(),
-  items: readCredentialsVault().map(publicCredential),
-}));
+function credentialFailure(error) { return { ok: false, error: error?.code || 'credentials_unreadable' }; }
+
+ipcMain.handle('credentials:list', () => {
+  const secureStorage = safeStorage.isEncryptionAvailable();
+  if (!secureStorage) return { ok: false, secureStorage, items: [], error: 'secure_storage_unavailable' };
+  try { return { ok: true, secureStorage, items: readCredentialsVault().map(publicCredential) }; }
+  catch (error) { return { ...credentialFailure(error), secureStorage, items: [] }; }
+});
 
 ipcMain.handle('credentials:get', (event, id) => {
-  const item = readCredentialsVault().find((row) => row.id === String(id || ''));
-  return item ? { ok: true, item: { ...item } } : { ok: false, error: 'not_found' };
+  try {
+    const item = readCredentialsVault().find((row) => row.id === String(id || ''));
+    return item ? { ok: true, item: { ...item } } : { ok: false, error: 'not_found' };
+  } catch (error) { return credentialFailure(error); }
 });
 
 ipcMain.handle('credentials:save', (event, payload) => {
   if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
-  const rows = readCredentialsVault();
-  const existing = payload && payload.id ? rows.find((item) => item.id === payload.id) : null;
-  const normalized = normalizeCredentialInput(
-    existing && !String(payload && payload.password || '') ? { ...payload, password: existing.password } : payload,
-    existing ? existing.id : crypto.randomUUID(),
-    existing ? existing.createdAt : Date.now()
-  );
-  if (!normalized) return { ok: false, error: 'invalid_credential' };
-  const next = existing
-    ? rows.map((item) => item.id === existing.id ? normalized : item)
-    : [normalized, ...rows];
-  return writeCredentialsVault(next)
-    ? { ok: true, item: publicCredential(normalized) }
-    : { ok: false, error: 'save_failed' };
+  try {
+    const rows = readCredentialsVault();
+    const existing = payload && payload.id ? rows.find((item) => item.id === payload.id) : null;
+    const normalized = normalizeCredentialInput(
+      existing && !String(payload && payload.password || '') ? { ...payload, password: existing.password } : payload,
+      existing ? existing.id : crypto.randomUUID(),
+      existing ? existing.createdAt : Date.now()
+    );
+    if (!normalized) return { ok: false, error: 'invalid_credential' };
+    const next = existing
+      ? rows.map((item) => item.id === existing.id ? normalized : item)
+      : [normalized, ...rows];
+    return writeCredentialsVault(next)
+      ? { ok: true, item: publicCredential(normalized) }
+      : { ok: false, error: 'save_failed' };
+  } catch (error) { return credentialFailure(error); }
 });
 
 ipcMain.handle('credentials:delete-many', (event, ids) => {
   const targets = new Set(Array.isArray(ids) ? ids.map(String) : []);
   if (!targets.size) return { ok: true, deleted: 0 };
-  const rows = readCredentialsVault();
-  const next = rows.filter((item) => !targets.has(item.id));
-  if (!writeCredentialsVault(next)) return { ok: false, error: 'save_failed' };
-  return { ok: true, deleted: rows.length - next.length };
+  try {
+    const rows = readCredentialsVault();
+    const next = rows.filter((item) => !targets.has(item.id));
+    if (!writeCredentialsVault(next)) return { ok: false, error: 'save_failed' };
+    return { ok: true, deleted: rows.length - next.length };
+  } catch (error) { return credentialFailure(error); }
 });
 
 ipcMain.handle('credentials:copy', async (event, payload) => {
   const id = String(payload && payload.id || '');
   const field = payload && payload.field === 'password' ? 'password' : payload && payload.field === 'account' ? 'account' : '';
   if (!id || !field) return false;
-  const item = readCredentialsVault().find((row) => row.id === id);
+  let item;
+  try { item = readCredentialsVault().find((row) => row.id === id); } catch { return false; }
   if (!item) return false;
   const value = item[field];
   if (field === 'password') {
@@ -3692,13 +3659,13 @@ ipcMain.handle('recovery:preview', async (event) => {
 });
 ipcMain.handle('recovery:execute', async (event, id) => {
   requireWorkspaceOwner(event);
+  if (workspaceSwitching) return { ok: false, error: 'workspace_switching' };
   const preview = recoveryPreviews.get(id);
   if (!preview) return { ok: false, error: 'preview_expired', message: PomeI18n.t("copy.previewAgainAndConfirmTheAffectedData.7cb948") };
-  let locked = false;
+  workspaceSwitching = true;
   try {
     const paused = recoveryStore().read();
     if (!paused.paused || paused.operationId !== preview.operationId || Date.now()>preview.expiresAt || workspaceRoot() !== preview.root || JSON.stringify(syncCredentialsStore.getStatus()) !== preview.binding) throw new Error('preview_expired');
-    workspaceSwitching = true; locked = true;
     await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = true');
     const storage = await liveBackupStorage();
     if (await backupFingerprint(storage, preview.root) !== preview.fingerprint) throw new Error('preview_expired');
@@ -3735,7 +3702,7 @@ ipcMain.handle('recovery:execute', async (event, id) => {
     const expired = ['preview_expired', 'recovery_expired', 'recovery_not_found'].includes(error.code || error.message);
     if (expired) { recoveryStore().update({ operationId: crypto.randomUUID(), attemptHash: null }); recoveryPreviews.clear(); }
     return { ok: false, error: error.code || error.message, message: expired ? PomeI18n.t("copy.dataTheNasVersionOrTheStaged.ce138f") : PomeI18n.t("copy.operationFailedSyncRemainsPaused.4b3a47", { arg1: (error.message) }) };
-  } finally { if (locked) { workspaceSwitching = false; await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = false').catch(() => {}); } }
+  } finally { workspaceSwitching = false; await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = false').catch(() => {}); }
 });
 ipcMain.handle('recovery:rollback', async (event, operationId) => {
   requireWorkspaceOwner(event);
@@ -4309,6 +4276,12 @@ function writeSyncedAiSettings(plain) {
 }
 
 function materializeWorkspaceSnapshot(projected, previousSnapshot) {
+  if (projected.secretsApplied) {
+    // Verify the existing vault before materializing any ordinary media from
+    // this projection. An unreadable secret store must not cause a partial pull.
+    if (!safeStorage.isEncryptionAvailable()) throw Object.assign(new Error('secure_storage_unavailable'), { code: 'secure_storage_unavailable' });
+    readCredentialsVault();
+  }
   const snapshot = projected.snapshot;
   const previous = previousSnapshot && typeof previousSnapshot === 'object' ? previousSnapshot : {};
   const previousRecordings = Array.isArray(previous.recordings) ? previous.recordings : [];
@@ -4384,13 +4357,32 @@ function broadcastWorkspaceProjection(projection) {
 }
 
 async function ensureAccountSyncKey(record) {
-  if (record && typeof record.accountSyncKey === 'string' && record.accountSyncKey) {
-    return record.accountSyncKey;
+  if (!record) return null;
+  const identityFields = ['serverId', 'uid', 'deviceId', 'deviceToken', 'boundAt'];
+  const identity = identityFields.map(field => record[field] ?? null);
+  const readCurrentRecord = () => {
+    const state = syncCredentialsStore.read();
+    const current = state.ok && state.bound ? state.record : null;
+    return current && identityFields.every((field, index) => (current[field] ?? null) === identity[index]) ? current : null;
+  };
+  const initial = readCurrentRecord();
+  if (!initial) return null;
+  if (typeof initial.accountSyncKey === 'string' && initial.accountSyncKey) {
+    record.accountSyncKey = initial.accountSyncKey;
+    return initial.accountSyncKey;
   }
   const res = await fetchBoundSyncJson('api/v1/account/sync-key');
   const key = res.ok && res.body ? res.body.accountSyncKey : '';
-  if (!key || !record) return null;
-  const saved = syncCredentialsStore.save({ ...record, accountSyncKey: key });
+  if (typeof key !== 'string' || !key) return null;
+  // Unbinding/re-pairing is allowed while this request is in flight. An old
+  // response must never recreate those credentials or replace a newer binding.
+  const current = readCurrentRecord();
+  if (!current) return null;
+  if (typeof current.accountSyncKey === 'string' && current.accountSyncKey) {
+    record.accountSyncKey = current.accountSyncKey;
+    return current.accountSyncKey;
+  }
+  const saved = syncCredentialsStore.save({ ...current, accountSyncKey: key });
   if (!saved.ok) return null;
   record.accountSyncKey = key;
   return key;
@@ -4652,25 +4644,18 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
       return res.body;
     },
     async pullAll() {
-      let cursor = '';
-      const changes = [];
-      let serverRev = 0;
-      for (let guard = 0; guard < 40; guard += 1) {
-        const apiPath = cursor
-          ? `api/v1/sync/pull?cursor=${encodeURIComponent(cursor)}`
-          : 'api/v1/sync/pull?cursor=';
-        const res = await fetchBoundSyncJson(apiPath, { timeoutMs: 60000 });
-        if (!res.ok) throw new Error(res.error || 'pull_failed');
-        const body = res.body || {};
-        if (Array.isArray(body.changes)) changes.push(...body.changes);
-        serverRev = Number(body.serverRev) || serverRev;
-        if (body.hasMore !== true) {
-          return { changes, serverRev, hasMore: false, nextCursor: body.nextCursor == null ? null : body.nextCursor };
-        }
-        cursor = body.nextCursor == null ? '' : String(body.nextCursor);
-        if (!cursor) break;
-      }
-      return { changes, serverRev, hasMore: false };
+      // Migration needs the current state, not the incremental history (which
+      // can repeat an edited entity or have an already-compacted first page).
+      // One unfiltered full snapshot keeps all nine collections at one revision.
+      const snapshot = await pullFullSnapshot({
+        pullPage: ({ cursor }) => {
+          const query = new URLSearchParams({ full: '1' });
+          if (cursor != null && cursor !== '') query.set('cursor', String(cursor));
+          return fetchBoundSyncJson(`api/v1/sync/pull?${query}`, { timeoutMs: 60000 });
+        },
+      });
+      if (!snapshot.ok) throw new Error(snapshot.error || 'pull_failed');
+      return { changes: snapshot.changes, serverRev: snapshot.serverRev, hasMore: false, nextCursor: snapshot.nextCursor };
     },
   };
 
@@ -5681,9 +5666,10 @@ async function readSystemClipboard(includeImage = false) {
 }
 
 async function baselineCurrentClipboard(generation) {
+  const isCurrent = () => clipPollingEnabled && generation === clipPollingGeneration;
   try {
     const observation = await readSystemClipboard(true);
-    if (!clipPollingEnabled || generation !== clipPollingGeneration) return;
+    if (!isCurrent()) return;
     if (observation.concealed) {
       clipObservationState = reduceClipboardObservation(
         {},
@@ -5699,19 +5685,22 @@ async function baselineCurrentClipboard(generation) {
     ).state;
     lastClipImageProbeAt = Date.now();
   } catch (error) {
-    clipObservationState = { textFingerprint: null, imageFingerprint: null };
+    if (isCurrent()) clipObservationState = { textFingerprint: null, imageFingerprint: null };
   }
 }
 
 async function pollClipboard() {
   if (!clipPollingEnabled || !mainWindow) return;
   if (clipPolling) return;
+  const generation = clipPollingGeneration, root = workspaceRoot(), owner = mainWindow;
+  const isCurrent = () => clipPollingEnabled && generation === clipPollingGeneration
+    && root === workspaceRoot() && mainWindow === owner && !owner.isDestroyed();
   clipPolling = true;
   try {
     const now = Date.now();
     const includeImage = now - lastClipImageProbeAt >= CLIP_IMAGE_POLL_INTERVAL_MS;
     const observation = await readSystemClipboard(includeImage);
-    if (!clipPollingEnabled) return;
+    if (!isCurrent()) return;
     // 密码管理器写入的敏感内容：跳过不记录、不更新指纹
     if (observation.concealed) return;
 
@@ -5735,8 +5724,7 @@ async function pollClipboard() {
         text: '',
         imageFingerprint: result?.fingerprint || null,
       });
-      clipObservationState = decision.state;
-      if (result && decision.record && clipPollingEnabled) {
+      if (result && decision.record) {
         const pngBuf = result.pngBuffer
           || nativeImage.createFromBuffer(result.sourceBuffer).toPNG();
         if (!pngBuf.length) return;
@@ -5745,14 +5733,19 @@ async function pollClipboard() {
         const fileName = 'clip-' + id + '.png';
         const imagePath = path.join(getClipImagesDir(), fileName);
         try {
-          await fs.promises.writeFile(imagePath, pngBuf);
+          // Exclusivity proves this unpublished file belongs to this task;
+          // a stale task must never remove a newer cycle's image.
+          await fs.promises.writeFile(imagePath, pngBuf, { flag: 'wx' });
         } catch (e) {
           return; // 写盘失败不记录
         }
-        if (!clipPollingEnabled) {
+        if (!isCurrent()) {
           try { await fs.promises.unlink(imagePath); } catch (error) {}
           return;
         }
+        // Commit the fingerprint only after the file and observation are both
+        // current, so failed/stale writes cannot suppress the next valid poll.
+        clipObservationState = decision.state;
         mainWindow.webContents.send('clipboard:new-entry', {
           type: 'image',
           text: null,
@@ -5763,7 +5756,8 @@ async function pollClipboard() {
   } catch (e) {
     // 轮询任何异常不能崩主进程，静默
   } finally {
-    clipPolling = false;
+    // stop/start may already have started a new task while this one awaited I/O.
+    if (generation === clipPollingGeneration) clipPolling = false;
   }
 }
 
@@ -5788,6 +5782,9 @@ function startClipboardPolling() {
 function stopClipboardPolling() {
   clipPollingEnabled = false;
   clipPollingGeneration += 1;
+  // The old task is invalid now; the next enable owns its own polling lock.
+  // Its predecessor's finally is generation-guarded and cannot unlock it.
+  clipPolling = false;
   if (clipBaselineTimer) {
     clearTimeout(clipBaselineTimer);
     clipBaselineTimer = null;

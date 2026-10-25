@@ -20,8 +20,6 @@
 - 启动开发：`npm start`
 - 安装依赖：`npm install`
 - 打包发布：`npm run build`（已接入 electron-builder；仅在用户明确确认后执行）
-- 官网开发：`cd website && npm install && npm run dev`
-- 官网检查：`cd website && npm run lint && npm run build`
 
 ## 目录结构
 
@@ -38,7 +36,6 @@
     assets/app-logo-128.png    # 提醒窗口小尺寸 Logo
   docs/
     DASHBOARD-DESIGN.md  # 仪表盘设计演进与当前产品规格
-  website/               # React 19 + Vinext 官网源码
 ```
 
 ## 关键设计参数

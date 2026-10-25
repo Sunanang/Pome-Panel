@@ -52,17 +52,6 @@
 | **Portapapeles y credenciales** | Historial bajo demanda; cuentas y claves en el almacenamiento seguro del sistema |
 | **Sincronización NAS** | Empareja opcionalmente un NAS fnOS para sincronizar entre dispositivos |
 
-<details>
-<summary><strong>Ver tareas y notas</strong></summary>
-<br />
-<table>
-  <tr>
-    <td width="50%"><img src="website/public/product-captures/en/todo.jpg" alt="" /><p align="center">Planifica tareas</p></td>
-    <td width="50%"><img src="website/public/product-captures/en/notes.jpg" alt="" /><p align="center">Guarda notas</p></td>
-  </tr>
-</table>
-</details>
-
 ## Empezar
 
 1. Consulta [Releases](https://github.com/Sunanang/Pome-Panel/releases): `arm64.dmg` en Mac o `windows-x64-setup.exe` en Windows.

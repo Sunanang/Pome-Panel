@@ -205,6 +205,19 @@ async function run() {
   await resolve(oldWaiting);
   await previewWindows();
   await verifyClaudeObservations();
+  // A display write may have landed before directory durability reporting
+  // failed. Report the error, but keep pending/list/retry usable afterwards.
+  const retryRequest = event('input', 'codex', { question: '写入异常恢复后仍可打开待处理请求' });
+  await send(retryRequest);
+  const retryRow = (await pending()).items.find(row => row.event.eventId === retryRequest.eventId);
+  attentionWriteFailure = 'after';
+  const failedShow = await mainEval(`notchAPI.showAiAttention(${JSON.stringify(retryRow.key)})`);
+  attentionWriteFailure = null;
+  assert.equal(failedShow.ok, false);
+  assert.equal((await pending()).ok, true, 'a committed display write must not permanently poison the store');
+  assert.equal((await mainEval(`notchAPI.showAiAttention(${JSON.stringify(retryRow.key)})`)).ok, true);
+  await capture(await shown(retryRequest.question), 'display-retry-after-write-error');
+  await resolve(retryRequest); await delay(650);
   const attentionPath = path.join(profile, 'ai-attention.json'); fs.writeFileSync(attentionPath, '{corrupt fixture');
   assert.equal((await pending()).ok, false);
   const { dialog } = require('electron'), originalDialog = dialog.showMessageBox;

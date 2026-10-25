@@ -43,17 +43,6 @@
 | **剪贴板与密钥** | 按需开启剪贴板历史，用系统安全存储加密账号与密钥 |
 | **NAS 多端同步** | 可选配对飞牛 NAS，在多台设备之间同步工作区内容 |
 
-<details>
-<summary><strong>看看待办和笔记界面</strong></summary>
-<br />
-<table>
-  <tr>
-    <td width="50%"><img src="website/public/product-captures/todo.webp" alt="待办分类与截止时间" /><p align="center">分类安排待办</p></td>
-    <td width="50%"><img src="website/public/product-captures/notes.webp" alt="笔记库与编辑器" /><p align="center">记录和整理笔记</p></td>
-  </tr>
-</table>
-</details>
-
 ## 开始使用
 
 1. 在 [Releases](https://github.com/Sunanang/Pome-Panel/releases) 查看安装包：Mac 选择 `arm64.dmg`，Windows 选择 `windows-x64-setup.exe`。
@@ -74,7 +63,7 @@ npm run setup:hooks
 npm start
 ```
 
-使用 Node.js 18+。测试、官网开发、NAS 伴侣与构建说明见[开发文档](docs/development.md)。
+使用 Node.js 18+。测试、NAS 伴侣与构建说明见[开发文档](docs/development.md)。
 
 ## 更多说明
 

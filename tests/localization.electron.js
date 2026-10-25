@@ -96,14 +96,6 @@ async function run(c) {
     pageText[tab] = await js('document.body.innerText');
     assert.doesNotMatch(withoutLanguageNames(pageText[tab]), /[\p{sc=Han}]/u, `untranslated product labels on ${tab}`);
     fs.writeFileSync(path.join(output, `english-${tab}.png`), (await c.capturePage()).toPNG());
-    if (process.env.POME_CAPTURE_ENGLISH_ASSETS === '1') {
-      const directory = path.join(__dirname, '../website/public/product-captures/en'); fs.mkdirSync(directory, { recursive: true });
-      fs.writeFileSync(path.join(directory, `${tab}.jpg`), (await c.capturePage()).toJPEG(92));
-      if (tab === 'home') {
-        await js('window.notchAPI.setFeature("clip",true)'); await sleep(50); await js('setActiveTab("clip")'); await sleep(450);
-        fs.writeFileSync(path.join(directory, 'clipboard.jpg'), (await c.capturePage()).toJPEG(92));
-      }
-    }
   }
   fs.writeFileSync(path.join(output, 'page-text.json'), JSON.stringify(pageText, null, 2));
   assert.equal(await js('document.getElementById("home-note").value'), '用户原文，不要翻译');

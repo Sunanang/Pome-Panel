@@ -11,8 +11,6 @@ const releaseWorkflowPath = path.join(projectRoot, '.github', 'workflows', 'rele
 const entitlementsPath = path.join(projectRoot, 'build', 'entitlements.mac.plist');
 const readmePath = path.join(projectRoot, 'README.md');
 const userGuidePath = path.join(projectRoot, 'docs', 'user-guide.md');
-const websiteDownloadPath = path.join(projectRoot, 'website', 'app', 'landingDownload.mjs');
-const websiteContentPath = path.join(projectRoot, 'website', 'app', 'landingContent.ts');
 const packageVersion = require(path.join(projectRoot, 'package.json')).version;
 const packageConfig = require(path.join(projectRoot, 'package.json'));
 
@@ -198,13 +196,9 @@ test('the README links to Windows hook, SmartScreen and platform-limit guidance'
   assert.doesNotMatch(guide, /Windows 的折叠态是工作区顶部居中的 200×38/);
 });
 
-test('website download entry points stay on the latest release', () => {
+test('README downloads use GitHub Releases without removed marketing-site assets', () => {
   const readme = fs.readFileSync(readmePath, 'utf8');
-  const websiteDownload = fs.readFileSync(websiteDownloadPath, 'utf8');
-  const websiteContent = fs.readFileSync(websiteContentPath, 'utf8');
-
-  // The product README is an introduction. Download, changelog, and release notes stay on the website.
   assert.doesNotMatch(readme, /^##\s*(下载|安装|更新日志|发布|Changelog|Release)\b/im);
-  assert.match(websiteContent, /DOWNLOAD_URL\s*=\s*"https:\/\/github\.com\/Sunanang\/Pome-Panel\/releases\/latest"/);
-  assert.match(websiteDownload, /LATEST_RELEASE_API_URL\s*=\s*"https:\/\/api\.github\.com\/repos\/Sunanang\/Pome-Panel\/releases\/latest"/);
+  assert.match(readme, /https:\/\/github\.com\/Sunanang\/Pome-Panel\/releases/);
+  assert.doesNotMatch(readme, /website\/public\//);
 });

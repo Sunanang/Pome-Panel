@@ -9,6 +9,31 @@ const cities = JSON.parse(fs.readFileSync(path.join(__dirname, '../renderer/citi
 
 const SHANGHAI = { lat: 31.23, lng: 121.47, timeZone: 'Asia/Shanghai' };
 
+test('invalid persisted time zones recover while valid city zones remain independent of the host', () => {
+  assert.equal(sun.resolveTimeZone('Asia/NotARealZone', 'Asia/Shanghai'), 'Asia/Shanghai');
+  for (const value of ['invalid', {}, 99, 'x'.repeat(500)]) {
+    const model=sun.buildSunModel({...SHANGHAI,timeZone:value,now:new Date('2026-10-25T08:00:00Z')});
+    assert.equal(model.timeZone,'UTC');assert(model.arc.samples.length>0);
+  }
+  assert.equal(sun.resolveTimeZone('America/New_York','Asia/Shanghai'),'America/New_York');
+});
+
+test('the sun arc uses local clock samples after spring, autumn and half-hour DST transitions', () => {
+  for(const [timeZone,lat,lng,stamp] of [
+    ['America/New_York',40.7128,-74.006,'2026-03-08T08:00:00-04:00'],
+    ['America/New_York',40.7128,-74.006,'2026-11-01T08:00:00-05:00'],
+    ['Australia/Lord_Howe',-31.55,159.08,'2026-10-04T08:00:00+11:00'],
+    ['Australia/Lord_Howe',-31.55,159.08,'2026-04-05T08:00:00+10:30'],
+    ['America/New_York',40.7128,-74.006,'2026-11-02T08:00:00-05:00'],
+  ]) {
+    const model=sun.buildSunModel({timeZone,lat,lng,now:new Date(stamp)});
+    const next=model.arc.samples.findIndex(([minute])=>minute>=model.nowMin);
+    const [x0,y0]=model.arc.samples[Math.max(0,next-1)],[x1,y1]=model.arc.samples[next];
+    const onArc=x0===x1?y1:y0+(y1-y0)*(model.nowMin-x0)/(x1-x0);
+    assert(Math.abs(onArc-model.altitude)<.02,`${timeZone} ${stamp}: arc ${onArc}, sun ${model.altitude}`);
+  }
+});
+
 function shanghaiAt(hour, minute, second = 0) {
   const guess = Date.UTC(2026, 9, 8, hour, minute, second);
   const offset = 8 * 60;

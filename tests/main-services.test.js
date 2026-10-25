@@ -76,7 +76,7 @@ test('first-run auto-launch only fires for a genuinely fresh install', () => {
   assert.equal(firstRunAutoLaunchPlan().reason, 'unsupported');
 });
 
-test('media permission prompts temporarily leave the screen-saver window layer', async () => {
+test('media permission prompts temporarily lower the panel and restore its normal floating layer', async () => {
   const events = [];
   let alwaysOnTop = true;
   const owner = {
@@ -110,19 +110,20 @@ test('media permission prompts temporarily leave the screen-saver window layer',
     ['activate'],
     ['focus'],
     ['request', false],
-    ['top', true, 'screen-saver'],
+    ['top', true, 'floating'],
     ['track', -1],
   ]);
 });
 
 test('media permission prompts restore the window layer when the system request fails', async () => {
   let alwaysOnTop = true;
+  let restoredLevel;
   const deltas = [];
   const owner = {
     isDestroyed: () => false,
     isVisible: () => true,
     isAlwaysOnTop: () => alwaysOnTop,
-    setAlwaysOnTop(value) { alwaysOnTop = value; },
+    setAlwaysOnTop(value, level) { alwaysOnTop = value; if (value) restoredLevel = level; },
     focus() {},
   };
 
@@ -136,17 +137,19 @@ test('media permission prompts restore the window layer when the system request 
   }), /permission service failed/);
 
   assert.equal(alwaysOnTop, true);
+  assert.equal(restoredLevel, 'floating');
   assert.deepEqual(deltas, [1, -1]);
 });
 
 test('overlapping media prompts stay below system UI until every request settles', async () => {
   let alwaysOnTop = true;
+  const restoredLevels = [];
   const deltas = [];
   const releases = [];
   const owner = {
     isDestroyed: () => false,
     isAlwaysOnTop: () => alwaysOnTop,
-    setAlwaysOnTop(value) { alwaysOnTop = value; },
+    setAlwaysOnTop(value, level) { alwaysOnTop = value; if (value) restoredLevels.push(level); },
     focus() {},
   };
   const coordinator = createForegroundMediaPermissionCoordinator({
@@ -163,11 +166,13 @@ test('overlapping media prompts stay below system UI until every request settles
   releases[0](true);
   assert.equal(await camera, true);
   assert.equal(alwaysOnTop, false, 'the second system prompt is still awaiting a decision');
+  assert.deepEqual(restoredLevels, []);
   assert.deepEqual(deltas, [1, 1, -1]);
 
   releases[1](false);
   assert.equal(await microphone, false);
   assert.equal(alwaysOnTop, true);
+  assert.deepEqual(restoredLevels, ['floating']);
   assert.deepEqual(deltas, [1, 1, -1, -1]);
 });
 

@@ -52,17 +52,6 @@
 | **클립보드와 자격 증명** | 필요할 때 클립보드 기록 사용, 시스템 보안 저장소로 암호화 |
 | **NAS 동기화** | 선택적으로 fnOS NAS와 페어링해 기기 간 동기화 |
 
-<details>
-<summary><strong>할 일과 메모 화면</strong></summary>
-<br />
-<table>
-  <tr>
-    <td width="50%"><img src="website/public/product-captures/en/todo.jpg" alt="" /><p align="center">할 일 정리</p></td>
-    <td width="50%"><img src="website/public/product-captures/en/notes.jpg" alt="" /><p align="center">메모 작성</p></td>
-  </tr>
-</table>
-</details>
-
 ## 시작하기
 
 1. [Releases](https://github.com/Sunanang/Pome-Panel/releases)에서 설치 파일을 받으세요. Mac은 `arm64.dmg`, Windows는 `windows-x64-setup.exe`.

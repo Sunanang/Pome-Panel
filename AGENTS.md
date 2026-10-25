@@ -2,18 +2,17 @@
 
 一个常驻 macOS 与 Windows 桌面的本地工作台。默认折叠成顶部居中的短胶囊，收起后可拖动并吸附到屏幕四边，点击从停靠位置展开。包含 **首页 / 待办 / 笔记 / 链接 / 录制 / 密钥 / 设置** 等页面；剪贴板默认关闭，可从菜单栏或「设置 → 显示功能」启用；还可接收 Codex / Claude Code / GPT 的本机完成事件，并按平台能力关联当前窗口。可选配对飞牛 NAS 伴侣，在多台设备之间同步工作区内容。
 
-桌面端为单一 Electron 架构：折叠态、展开工作区、任务完成提醒与 Hover + Space 唤出都在 Electron 主进程和渲染层内实现，`npm start` 是唯一桌面运行路径。官网与飞牛 NAS 伴侣分别位于 `website/` 和 `fnos/`。
+桌面端为单一 Electron 架构：折叠态、展开工作区、任务完成提醒与 Hover + Space 唤出都在 Electron 主进程和渲染层内实现，`npm start` 是唯一桌面运行路径。飞牛 NAS 伴侣位于 `fnos/`。
 
 > **文档准绳**：产品行为以 [README.md](README.md) 为唯一事实来源。本文与 README 冲突时以 README 为准。
 
 ## 技术栈
 
 - 桌面端：Electron 44 + 原生 HTML/CSS/JavaScript，无渲染层构建步骤
-- 官网：React 19 + Vinext + 原生 CSS，位于 `website/`
 - 本地数据：LocalStorage + 工作区根目录下的 `workspace.json`、`clipboard-images/` 与 `recordings/`；默认根目录为 `userData`，可在设置中更换数据文件夹
 - 可选同步：飞牛 NAS 伴侣 + `packages/sync-protocol/` 共用协议；桌面同步存储使用 `node:sqlite`，`sync.db` 固定放在 `userData`，本机工作区仍是数据落点
 - 包管理器：npm
-- Node：桌面端使用 Node 18+；官网要求 Node 22.13.0+
+- Node：桌面端使用 Node 18+
 
 ## 命令
 
@@ -21,8 +20,6 @@
 - 桌面检查：`npm test`（Node 单元测试、Electron 集成测试与 JavaScript 语法检查）
 - 桌面打包：`npm run build`（只在用户明确确认后执行）
 - Windows 打包：`npm run build:win`（只在用户明确确认后执行）
-- 官网开发：`cd website && npm install && npm run dev`
-- 官网检查：`cd website && npm test && npm run lint && npm run build`
 
 ## 改完必验收（代理硬约束，对齐 Codex）
 
@@ -56,7 +53,6 @@
 ├── scripts/                # Codex 与 Claude Code 的通知转发脚本
 ├── tests/                  # Node 单元测试与 Electron 集成测试
 ├── docs/                   # 设计说明、ADR 与验收图
-├── website/                # 官网 React/Vinext 源码
 └── package.json
 ```
 
@@ -90,13 +86,13 @@
 
 ## GitHub 推送与发布联动
 
+- 当前仓库仅维护桌面端与 NAS 伴侣，不包含官网源码或 Pages 部署。
 - `dev` 是长期开发分支。所有开发、修复、测试和版本准备都在 `dev` 完成；开始工作前先确认当前分支，不得直接在 `main` 开发或提交修改。
 - `main` 是发布分支，只接收 `dev` 的合并。发版前在 `dev` 完成检查，再通过 `dev → main` 的 PR 合并；合并后 GitHub Actions 自动测试并构建 macOS DMG、Windows EXE、NAS FPK。不要从其它分支直接合入 `main`。
 - 合并发布后切回 `dev`，将 `main` 的合并结果同步回 `dev` 再继续开发；保留长期 `dev` 分支。正式 GitHub Release 仍由 `main` 上与版本一致的 `v*.*.*` 标签触发。
 - 本地分支保护：执行 `npm run setup:hooks`，将版本管理中的 `.githooks` 安装到此仓库 Git 公共目录的 `pome-hooks/`，并配置本地 `core.hooksPath`；切换到尚未包含这些文件的 `main` 后仍生效，新克隆也必须执行。`pre-commit` 拒绝在 `main` 提交，`pre-push` 拒绝任何目标为远程 `main` 的推送（含强推和删除）。不得用 `--no-verify` 或覆盖 hook 配置绕过保护；本地 hook 不替代 GitHub 远端分支保护。
-- 任何产品更新推送到 GitHub 前，必须联动检查版本号、`CHANGELOG.md`、README 当前稳定版本与下载入口、GitHub Pages 下载按钮。
-- 正式发布必须保证 `package.json` 与 `package-lock.json` 版本一致，推送匹配的 `v*.*.*` 标签，并在 GitHub Actions 完成后验证同一 Release 的 DMG、Windows EXE 及各自 SHA-256 资产与 Pages 实际下载指向。
-- 官网下载按钮分别从 GitHub `releases/latest` 动态解析当前版本的 `arm64.dmg` 与 `windows-x64-setup.exe`，不得留下过期固定链接或跨平台误下载。验证两个安装包及各自 SHA-256。
+- 任何产品更新推送到 GitHub 前，必须联动检查版本号、`CHANGELOG.md`、README 当前稳定版本与 GitHub Releases 下载入口。
+- 正式发布必须保证 `package.json` 与 `package-lock.json` 版本一致，推送匹配的 `v*.*.*` 标签，并在 GitHub Actions 完成后验证同一 Release 的 DMG、Windows EXE 及各自 SHA-256 资产和 README 的 Releases 下载入口。
 
 ## NEVER
 
