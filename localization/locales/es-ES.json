@@ -1525,5 +1525,7 @@
   "settings.weather.provided": ".",
   "settings.weather.saveFailed": "No se guardaron los efectos. Inténtalo de nuevo.",
   "credentials.readFailed": "No se pudieron leer las credenciales. El archivo original se conserva.",
-  "credentials.readRepair": "Comprueba el almacenamiento seguro del sistema y los permisos del archivo, y vuelve a intentarlo."
+  "credentials.readRepair": "Comprueba el almacenamiento seguro del sistema y los permisos del archivo, y vuelve a intentarlo.",
+  "providers.cursorEncryptedLogin": "No se puede descifrar el inicio de sesión de Cursor. Permite el acceso a las credenciales del sistema y vuelve a obtenerlo, o introduce un token válido manualmente.",
+  "providers.cursorLoginBlockedSummary": "Acceso al inicio de {source} bloqueado · Ajustes"
 }

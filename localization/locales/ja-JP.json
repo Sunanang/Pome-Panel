@@ -1525,5 +1525,7 @@
   "settings.weather.provided": "·",
   "settings.weather.saveFailed": "天気の設定を保存できませんでした。再試行してください。",
   "credentials.readFailed": "認証情報を読み取れません。元のファイルは保持されています。",
-  "credentials.readRepair": "システムの安全なストレージとファイル権限を確認して、再試行してください。"
+  "credentials.readRepair": "システムの安全なストレージとファイル権限を確認して、再試行してください。",
+  "providers.cursorEncryptedLogin": "Cursor のログイン情報を復号できません。システムの認証情報へのアクセスを許可して再取得するか、有効なトークンを手動で入力してください。",
+  "providers.cursorLoginBlockedSummary": "{source} ログイン読取不可 · 設定"
 }

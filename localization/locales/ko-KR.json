@@ -1525,5 +1525,7 @@
   "settings.weather.provided": "·",
   "settings.weather.saveFailed": "날씨 효과 설정을 저장하지 못했습니다. 다시 시도하세요.",
   "credentials.readFailed": "자격 증명을 읽을 수 없습니다. 원본 파일은 유지됩니다.",
-  "credentials.readRepair": "시스템 보안 저장소와 파일 권한을 확인한 후 다시 시도하세요."
+  "credentials.readRepair": "시스템 보안 저장소와 파일 권한을 확인한 후 다시 시도하세요.",
+  "providers.cursorEncryptedLogin": "Cursor 로그인 정보를 복호화할 수 없습니다. 시스템 자격 증명 접근을 허용한 후 다시 가져오거나 유효한 토큰을 직접 입력하세요.",
+  "providers.cursorLoginBlockedSummary": "{source} 로그인 접근 제한 · 설정"
 }

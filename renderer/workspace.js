@@ -2453,6 +2453,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
           cursor_db_missing: 'copy.noLocalCursorDataFoundInstallCursor.f5b341',
           cursor_token_missing: 'copy.cursorIsnTSignedInLocallySign.45a8a8',
           cursor_db_read_failed: 'copy.couldnTReadCursorSignInRetry.6bf381',
+          cursor_token_decrypt_failed: 'providers.cursorEncryptedLogin',
+          cursor_token_encrypted_unsupported: 'providers.cursorEncryptedLogin',
         };
         const code = result?.error || 'cursor_token_missing';
         setCursorTokenHint(messages[code] || 'copy.couldnTGetATokenRetryOr.8c7624', 'error', { code });

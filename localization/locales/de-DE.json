@@ -1525,5 +1525,7 @@
   "settings.weather.provided": ".",
   "settings.weather.saveFailed": "Wettereffekte konnten nicht gespeichert werden. Erneut versuchen.",
   "credentials.readFailed": "Die Zugangsdaten konnten nicht gelesen werden. Die Originaldatei bleibt erhalten.",
-  "credentials.readRepair": "Prüfen Sie den sicheren Systemspeicher und die Dateiberechtigungen und versuchen Sie es erneut."
+  "credentials.readRepair": "Prüfen Sie den sicheren Systemspeicher und die Dateiberechtigungen und versuchen Sie es erneut.",
+  "providers.cursorEncryptedLogin": "Die Cursor-Anmeldedaten können nicht entschlüsselt werden. Erlaube den Zugriff auf Systemanmeldedaten und rufe sie erneut ab, oder gib ein gültiges Token manuell ein.",
+  "providers.cursorLoginBlockedSummary": "{source}-Anmeldezugriff blockiert · Einstellungen"
 }

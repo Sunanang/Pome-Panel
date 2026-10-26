@@ -51,6 +51,7 @@ const { createManusCompletionService } = require('./manusCompletionService');
 const { taskOpenUrl, matchesOfficialTaskUrl } = require('./manusCompletionAdapter');
 let manusCompletionService = null;
 const { fetchCursorUsage, resetCursorUsage, readAuthToken: readCursorAuthToken } = require('./cursor-usage');
+const { isCursorEncryptedToken } = require('./platform-adapters/cursor-secrets');
 const { readCodexUsage } = require('./codex-usage');
 const { readLocalCodexToken } = require('./codex-auth');
 const { createCodexUsageService } = require('./codex-usage-remote');
@@ -4189,7 +4190,7 @@ function assembleWorkspaceSnapshot(rendererSnapshot, { includeAiCompletions = fa
     : parseJsonArray(readWorkspaceBagValue('notch-recordings'));
   const storedAi = readStoredTranscriptionSettings();
   const cursorSettings = readAppSettings();
-  const cursorToken = decryptStoredSecret(cursorSettings.encryptedCursorToken).trim();
+  const cursorToken = readCursorManualToken();
   return {
     ...(includeAiCompletions ? { aiCompletions: getTaskInbox().snapshotForSync() } : {}),
     notes: {
@@ -4249,7 +4250,8 @@ function writeSyncedBytes(directory, fileName, base64) {
 
 function writeSyncedAiSettings(plain) {
   // Older peers omit this field; only an explicit empty string clears it.
-  if (typeof plain.cursorToken === 'string' && !writeCursorManualToken(plain.cursorToken).ok) {
+  if (typeof plain.cursorToken === 'string' && !isCursorEncryptedToken(plain.cursorToken)
+    && !writeCursorManualToken(plain.cursorToken).ok) {
     throw new Error('cursor_token_save_failed');
   }
   const previous = readStoredTranscriptionSettings();
@@ -4792,14 +4794,19 @@ ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
   return { ...result, projectionJson: applied };
 });
 
+function cursorLoginDetected() {
+  const auth = readCursorAuthToken();
+  return auth.ok === true || auth.detected === true;
+}
+
 ipcMain.handle('cursor:usage', async (_event, options = {}) => {
   try {
     let data;
     do { data = await fetchCursorUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
     while (data.superseded);
-    return { ...data, detected: readCursorAuthToken().ok === true, configured: Boolean(readAppSettings().encryptedCursorToken) };
+    return { ...data, detected: cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
   } catch {
-    return { ok: false, error: 'cursor_usage_failed', detected: readCursorAuthToken().ok === true,
+    return { ok: false, error: 'cursor_usage_failed', detected: cursorLoginDetected(),
       configured: Boolean(readAppSettings().encryptedCursorToken) };
   }
 });
@@ -4820,9 +4827,9 @@ ipcMain.handle('grokbot:usage', async (_event, options = {}) => {
     let data;
     do { data = await grokbotUsageService.getUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
     while (data.superseded);
-    return { ...data, detected: readCursorAuthToken().ok === true, configured: Boolean(readAppSettings().encryptedCursorToken) };
+    return { ...data, detected: cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
   } catch {
-    return { ok: false, error: 'grokbot_usage_failed', detected: readCursorAuthToken().ok === true,
+    return { ok: false, error: 'grokbot_usage_failed', detected: cursorLoginDetected(),
       configured: Boolean(readAppSettings().encryptedCursorToken) };
   }
 });
@@ -4923,7 +4930,7 @@ ipcMain.handle('cursor:read-local-token', (event) => {
     || event.senderFrame !== mainWindow.webContents.mainFrame) {
     return { ok: false, error: 'forbidden' };
   }
-  const result = readCursorAuthToken();
+  const result = readCursorAuthToken(undefined, { force: true });
   // Keep database paths, account metadata and raw errors out of this response.
   return result.ok ? { ok: true, token: result.token } : { ok: false, error: result.error };
 });
@@ -5010,7 +5017,11 @@ function encryptStoredSecret(plain) {
 
 function readCursorManualToken() {
   const settings = readAppSettings();
-  return decryptStoredSecret(settings.encryptedCursorToken).trim();
+  const token = decryptStoredSecret(settings.encryptedCursorToken).trim();
+  // A legacy ciphertext copy is neither a bearer token nor a portable secret.
+  // Leave the saved envelope intact until the user replaces/clears it, but do
+  // not send it to Cursor or synchronize it to other devices.
+  return isCursorEncryptedToken(token) ? '' : token;
 }
 
 function cursorTokenStatus() {
@@ -5030,6 +5041,7 @@ function writeCursorManualToken(token) {
   }
   const next = readAppSettings();
   const trimmed = String(token || '').trim();
+  if (isCursorEncryptedToken(trimmed)) return { ok: false, error: 'cursor_token_decrypt_failed' };
   if (readCursorManualToken() === trimmed && (trimmed || !next.encryptedCursorToken)) {
     return cursorTokenStatus();
   }

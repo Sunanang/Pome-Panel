@@ -127,7 +127,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     return t(data?.configured ? 'copy.manualToken.bf90e7' : 'copy.localSignIn.8c966e');
   }
   function errorCopy(data) {
-    return t(D.invalidToken(data) ? 'quota.tokenRequired' : data?.error === 'antigravity_quota_unavailable'
+    return t(D.cursorLoginBlocked(data)
+      ? 'providers.cursorEncryptedLogin' : D.invalidToken(data) ? 'quota.tokenRequired' : data?.error === 'antigravity_quota_unavailable'
       ? 'providers.quotaUnavailable' : data?.error === 'grok_team_required' ? 'providers.grokTeamRequired' : 'copy.usageUnavailableRefreshToRetry.1ceded');
   }
   function rowHelp(id, data, window) {
@@ -223,7 +224,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   function provider(m, layout) {
     const error = m.status === 'error', caption = captionContent(m);
     const invalid = D.invalidToken(m.data), errorLabel = t(invalid ? 'quota.status.invalid' : 'quota.status.error');
-    const settings = invalid || m.data?.error === 'grok_team_required';
+    const settings = invalid || m.data?.error === 'grok_team_required'
+      || D.cursorLoginBlocked(m.data);
     const repair = error ? `<button class="ai-inline-settings" type="button" data-quota-${settings ? 'settings' : 'retry'}="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t(settings ? 'copy.openSettings.93112c' : 'ui.retry')}`)}">${escape(t(settings ? 'quota.repair' : 'ui.retry'))}</button>` : '';
     // No native title tooltip — details live in the progress popover (with updated time).
     return `<section class="ai-usage-provider" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-stale="${m.stale}" data-level="${m.level}" data-unit="${m.selected.kind}" data-quota-window="${escape(m.selected.key)}" data-balance-empty="${m.exhausted}" data-has-bars="${m.inlineRows.length > 0 && !error}" data-depleted="${!error && visualStates.get(`${m.id}/depleted`) === true}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}">
@@ -530,7 +532,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
           const result = api?.[request] ? await api[request]({ force }) : { detected: false };
           const hasReading = D.quotaRows(result, id).some(row => D.percent(row.windowUsage?.percent) != null || Number.isFinite(row.windowUsage?.balance) || row.windowUsage?.unlimited);
           const failed = result?.ok === false || Boolean(result?.remoteError && !hasReading);
-          if (revisions[id] === revision) state[id] = failed && state[id]?.ok && D.available(state[id])
+          const unreadableLogin = D.cursorLoginBlocked(result);
+          if (revisions[id] === revision) state[id] = failed && !unreadableLogin && state[id]?.ok && D.available(state[id])
             ? { ...state[id], stale: true, refreshError: result.error || result.remoteError || 'request_failed', manualTokenInvalid: result.manualTokenInvalid ?? state[id].manualTokenInvalid, status: result.status ?? state[id].status } : result;
         } catch {
           if (revisions[id] === revision) state[id] = state[id]?.ok ? { ...state[id], stale: true, refreshError: 'ipc_failed' }

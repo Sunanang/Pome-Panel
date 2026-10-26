@@ -1492,5 +1492,7 @@
   "settings.weather.provided": "提供。",
   "settings.weather.saveFailed": "無法儲存天氣動態設定，請重試。",
   "credentials.readFailed": "暫時無法讀取密鑰，原始檔案已保留。",
-  "credentials.readRepair": "請檢查系統安全儲存與檔案權限，修復後重試。"
+  "credentials.readRepair": "請檢查系統安全儲存與檔案權限，修復後重試。",
+  "providers.cursorEncryptedLogin": "無法解密 Cursor 登入憑證。請允許存取系統憑證後重新取得登入，或手動填寫有效 Token。",
+  "providers.cursorLoginBlockedSummary": "{source} 登入讀取受限 · 前往設定"
 }

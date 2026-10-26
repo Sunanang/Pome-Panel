@@ -1525,5 +1525,7 @@
   "settings.weather.provided": ".",
   "settings.weather.saveFailed": "Impossible d’enregistrer les effets météo. Réessayez.",
   "credentials.readFailed": "Impossible de lire les identifiants. Le fichier d’origine est conservé.",
-  "credentials.readRepair": "Vérifiez le stockage sécurisé du système et les permissions du fichier, puis réessayez."
+  "credentials.readRepair": "Vérifiez le stockage sécurisé du système et les permissions du fichier, puis réessayez.",
+  "providers.cursorEncryptedLogin": "Impossible de déchiffrer la connexion Cursor. Autorisez l’accès aux identifiants système puis réessayez, ou saisissez manuellement un jeton valide.",
+  "providers.cursorLoginBlockedSummary": "Accès à la connexion {source} bloqué · Réglages"
 }

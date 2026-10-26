@@ -264,6 +264,7 @@ test('synced AI settings stop cursor advancement when encryption or persistence 
   let saved = false;
   let cursorSaved = true;
   const sandbox = {
+    isCursorEncryptedToken: require('../platform-adapters/cursor-secrets').isCursorEncryptedToken,
     writeCursorManualToken: () => ({ ok: cursorSaved }),
     readStoredTranscriptionSettings: () => ({ encryptedApiKey: 'original' }),
     encryptStoredSecret: () => encrypted,
@@ -278,6 +279,8 @@ test('synced AI settings stop cursor advancement when encryption or persistence 
   assert.throws(() => sandbox.writeSyncedAiSettings({ apiKey: 'new' }), /ai_key_encrypt_failed/);
   cursorSaved = false;
   assert.throws(() => sandbox.writeSyncedAiSettings({ cursorToken: 'new' }), /cursor_token_save_failed/);
+  assert.doesNotThrow(() => sandbox.writeSyncedAiSettings({ cursorToken: 'cursor-safe-storage:v1:foreign-device-ciphertext' }),
+    'an old peer must not install its device-bound ciphertext or stop unrelated AI settings synchronization');
   encrypted = 'sealed';
   cursorSaved = true;
   assert.doesNotThrow(() => sandbox.writeSyncedAiSettings({ apiKey: 'new', cursorToken: 'new' }));

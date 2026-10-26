@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const { createHash } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const { decodeCursorToken, isCursorEncryptedToken } = require('./platform-adapters/cursor-secrets');
 
 const API_BASE = 'https://api2.cursor.sh';
 const PERIOD_PATH = '/aiserver.v1.DashboardService/GetCurrentPeriodUsage';
@@ -21,7 +22,7 @@ function cursorStateDbPath() {
   return path.join(os.homedir(), '.config', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
 }
 
-function readAuthToken(dbPath = cursorStateDbPath()) {
+function readAuthToken(dbPath = cursorStateDbPath(), { decryptToken = decodeCursorToken, force = false } = {}) {
   if (!fs.existsSync(dbPath)) {
     return { ok: false, error: 'cursor_db_missing', path: dbPath };
   }
@@ -31,8 +32,16 @@ function readAuthToken(dbPath = cursorStateDbPath()) {
     const row = db.prepare('SELECT value FROM ItemTable WHERE key = ?').get('cursorAuth/accessToken');
     const emailRow = db.prepare('SELECT value FROM ItemTable WHERE key = ?').get('cursorAuth/cachedEmail');
     const planRow = db.prepare('SELECT value FROM ItemTable WHERE key = ?').get('cursorAuth/stripeMembershipType');
-    const token = row && row.value != null ? String(row.value) : '';
-    if (!token) return { ok: false, error: 'cursor_token_missing', path: dbPath };
+    const stored = row && row.value != null ? String(row.value) : '';
+    if (!stored) return { ok: false, error: 'cursor_token_missing', path: dbPath };
+    let token;
+    try {
+      token = decryptToken(stored, { dbPath, force });
+      if (!token || isCursorEncryptedToken(token)) throw new Error();
+    } catch (error) {
+      return { ok: false, detected: true, error: error.code === 'cursor_token_encrypted_unsupported'
+        ? error.code : 'cursor_token_decrypt_failed', path: dbPath };
+    }
     return {
       ok: true,
       token,
@@ -53,6 +62,7 @@ function isAuthFailure(error) {
 }
 
 async function postConnect(pathname, token, body = {}, { fetchImpl = fetch, signal } = {}) {
+  if (isCursorEncryptedToken(token)) throw new Error('cursor_token_decrypt_failed');
   const response = await fetchImpl(`${API_BASE}${pathname}`, {
     method: 'POST', redirect: 'error',
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
@@ -131,7 +141,10 @@ function createCursorUsageService({ fetchImpl = (...args) => fetch(...args), rea
     pending = null; lastAttempt = null; lastSuccess = null; key = ''; manualInvalid = false;
   }
   async function getUsage({ force = false, manualToken = '' } = {}) {
-    const manual = String(manualToken || '').trim();
+    // Older Pome versions accidentally saved Cursor's ciphertext as a manual
+    // token. Ignore that device-bound copy and use the current local sign-in.
+    const savedManual = String(manualToken || '').trim();
+    const manual = isCursorEncryptedToken(savedManual) ? '' : savedManual;
     let auth;
     try { auth = readAuth(); } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
     // Re-read the owner's login before cache lookup: local sign-out/account switch
@@ -158,7 +171,7 @@ function createCursorUsageService({ fetchImpl = (...args) => fetch(...args), rea
         if (auth.ok) {
           try {
             const snapshot = await fetchWithToken(auth.token, auth, 'local');
-            return { ...snapshot, manualTokenConfigured: Boolean(manual), manualTokenInvalid,
+            return { ...snapshot, manualTokenConfigured: Boolean(manual), manualTokenInvalid: false,
               ...(manualFailure ? { warning: manualTokenInvalid ? '手动 Token 已失效，已改用本机登录态' : '手动 Token 请求失败，已改用本机登录态' } : {}) };
           } catch (error) {
             if (isAuthFailure(error)) return { ok: false, error: 'cursor_token_invalid', status: error.status, manualTokenInvalid, authSource: null, manualTokenConfigured: Boolean(manual) };

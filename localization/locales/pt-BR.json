@@ -1525,5 +1525,7 @@
   "settings.weather.provided": ".",
   "settings.weather.saveFailed": "Não foi possível salvar os efeitos do tempo. Tente novamente.",
   "credentials.readFailed": "Não foi possível ler as credenciais. O arquivo original foi preservado.",
-  "credentials.readRepair": "Verifique o armazenamento seguro do sistema e as permissões do arquivo e tente novamente."
+  "credentials.readRepair": "Verifique o armazenamento seguro do sistema e as permissões do arquivo e tente novamente.",
+  "providers.cursorEncryptedLogin": "Não foi possível descriptografar o login do Cursor. Permita o acesso às credenciais do sistema e tente obtê-lo novamente ou insira um token válido manualmente.",
+  "providers.cursorLoginBlockedSummary": "Acesso ao login de {source} bloqueado · Configurações"
 }

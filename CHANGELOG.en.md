@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Support Cursor's encrypted local login for Cursor and Grok Bot quota queries. Ignore device-bound ciphertext saved by older Pome versions, save the decoded token on explicit acquisition, and show actionable credential-access errors. Successful local-login fallback now keeps quota readings visible.
+
 - Preserve task columns 5–8 during first NAS migration and use a frozen full snapshot instead of duplicate or truncated history. Reject stale account-key replies after unbinding or re-pairing. Serialize backup and NAS recovery confirmations before touching the workspace.
 - Keep manual link names, note drafts and the current credential editor intact when background metadata or older read/save requests return. Discard clipboard work from previous enable cycles and workspaces without changing the new baseline or published image files.
 - Restore the normal panel layer after media permission requests. Report and retry panel-position save failures instead of claiming success. Keep attention storage usable after a display/disconnect write landed but durability reporting failed.

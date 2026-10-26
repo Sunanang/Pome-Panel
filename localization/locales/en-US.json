@@ -1525,5 +1525,7 @@
   "settings.weather.provided": ".",
   "settings.weather.saveFailed": "Could not save weather effects. Try again.",
   "credentials.readFailed": "Credentials could not be read. The original file is preserved.",
-  "credentials.readRepair": "Check system secure storage and file permissions, then retry."
+  "credentials.readRepair": "Check system secure storage and file permissions, then retry.",
+  "providers.cursorEncryptedLogin": "Cannot decrypt the Cursor login. Allow system credential access and try Get local login again, or enter a valid token manually.",
+  "providers.cursorLoginBlockedSummary": "{source} login access blocked · Settings"
 }

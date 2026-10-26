@@ -2,6 +2,7 @@
 
 const { createHash } = require('node:crypto');
 const { readAuthToken, isAuthFailure } = require('./cursor-usage');
+const { isCursorEncryptedToken } = require('./platform-adapters/cursor-secrets');
 
 const API_BASE = 'https://api2.cursor.sh';
 const SAND_PATH = '/aiserver.v1.DashboardService/GetSandUsageStatus';
@@ -32,6 +33,7 @@ function msToIso(value) {
 }
 
 async function postSand(token, { fetchImpl = fetch, signal } = {}) {
+  if (isCursorEncryptedToken(token)) throw new Error('cursor_token_decrypt_failed');
   const response = await fetchImpl(`${API_BASE}${SAND_PATH}`, {
     method: 'POST', redirect: 'error',
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
@@ -83,7 +85,8 @@ function createGrokbotUsageService({ fetchImpl = (...args) => fetch(...args), re
     pending = null; lastAttempt = null; lastSuccess = null; key = ''; manualInvalid = false;
   }
   async function getUsage({ force = false, manualToken = '' } = {}) {
-    const manual = String(manualToken || '').trim();
+    const savedManual = String(manualToken || '').trim();
+    const manual = isCursorEncryptedToken(savedManual) ? '' : savedManual;
     let auth;
     try { auth = readAuth(); } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
     const identity = createHash('sha256').update(JSON.stringify([manual, auth.ok ? auth.token : null, auth.email || null])).digest('hex');
@@ -108,7 +111,7 @@ function createGrokbotUsageService({ fetchImpl = (...args) => fetch(...args), re
         if (auth.ok) {
           try {
             const snapshot = await fetchWithToken(auth.token, auth, 'local');
-            return { ...snapshot, manualTokenConfigured: Boolean(manual), manualTokenInvalid,
+            return { ...snapshot, manualTokenConfigured: Boolean(manual), manualTokenInvalid: false,
               ...(manualFailure ? { warning: 'manual_token_fallback' } : {}) };
           } catch (error) {
             if (isAuthFailure(error)) return { ok: false, error: 'grokbot_token_invalid', status: error.status, manualTokenInvalid, authSource: null, manualTokenConfigured: Boolean(manual) };

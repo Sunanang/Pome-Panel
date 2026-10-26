@@ -3,6 +3,14 @@
 // Electron profiles must never borrow credentials from the user's real tools.
 // Individual integration tests can still inject their own auth/fetch fixtures.
 if (process.versions.electron && process.env.TODO_TEST_USER_DATA) {
+  const cursor = require('../cursor-usage');
+  // Generic UI suites must never unlock the real Cursor Keychain. Credential
+  // acceptance tests explicitly inject this reader with a synthetic database.
+  module.exports.readCursorAuthToken = cursor.readAuthToken;
+  cursor.readAuthToken = () => ({ ok: false, error: 'fixture_no_auth' });
+  const cursorService = cursor.createCursorUsageService({ readAuth: cursor.readAuthToken });
+  cursor.fetchCursorUsage = options => cursorService.getUsage(options);
+  cursor.resetCursorUsage = () => cursorService.reset();
   if (process.env.POME_TEST_WELCOME !== '1') {
     require('node:fs').writeFileSync(require('node:path').join(process.env.TODO_TEST_USER_DATA, '.ui-welcome-done'), 'existing test user');
   }

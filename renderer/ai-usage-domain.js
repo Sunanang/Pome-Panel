@@ -53,6 +53,7 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
   }
   function level(value) { const n = percent(value); return n == null ? 'ok' : n <= 10 ? 'critical' : n <= 20 ? 'warn' : 'ok'; }
   function invalidToken(data) { return Boolean(data?.manualTokenInvalid || data?.status === 401 || data?.status === 403); }
+  function cursorLoginBlocked(data) { return ['cursor_token_decrypt_failed', 'cursor_token_encrypted_unsupported'].includes(data?.error); }
   // Numbers: < 1e12 treated as unix seconds (resetsAt / legacy), otherwise milliseconds.
   function toMillis(value) {
     if (value == null || value === '') return null;
@@ -122,6 +123,8 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
   function miniSummary(snapshots, now = Date.now()) {
     const ids = dashboard(snapshots, 'mini', now).ids;
     const errors = ids.filter(id => status(snapshots[id], id, now) === 'error');
+    const blocked = errors.find(id => cursorLoginBlocked(snapshots[id]));
+    if (blocked) return { text: pomeLocaleRendererAiUsageDomain.t('providers.cursorLoginBlockedSummary', { source: registry.get(blocked).label }), severity: 'error', repair: blocked };
     const invalid = errors.find(id => invalidToken(snapshots[id]));
     if (invalid) return { text: pomeLocaleRendererAiUsageDomain.t('quota.invalidSummary', { source: registry.get(invalid).label }), severity: 'error', repair: invalid };
     if (errors.length) return { text: pomeLocaleRendererAiUsageDomain.t('quota.failedSummary', { source: registry.get(errors[0]).label }), severity: 'error', retry: errors[0] };
@@ -309,5 +312,5 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     if (force || visible || data == null) return true;
     return available(data) || Boolean(data.configured || data.manualTokenConfigured || data.ok === false);
   }
-  return { windowShortLabel, bottleneck, bottleneckInfo, miniSummary, recoveryTime, isStale, staleSummary, registry, windowLabel, quotaRows, inlineRows, refreshDelay, FALLBACK, available, providers, title, remaining, displayRow, displayRemaining, urgencyRemaining, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots, invalidToken, timestamp, toMillis, status, dashboard, shouldRefresh };
+  return { windowShortLabel, bottleneck, bottleneckInfo, miniSummary, recoveryTime, isStale, staleSummary, registry, windowLabel, quotaRows, inlineRows, refreshDelay, FALLBACK, available, providers, title, remaining, displayRow, displayRemaining, urgencyRemaining, level, percent, formatPercent, clock, expired, resetText, planLabel, asSnapshots, invalidToken, cursorLoginBlocked, timestamp, toMillis, status, dashboard, shouldRefresh };
 });
