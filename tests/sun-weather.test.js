@@ -163,8 +163,8 @@ test('each wind flight is frame-rate independent with bounded sway and invisible
     const state=make();for(const p of state.particles){p.x=200;p.y=100;}
     for(let i=0;i<hz*8;i++)FX.step(state,1/hz);
     const p=state.particles[0];positions.push(p);
-    assert(Math.abs(p.y-100)<=p.amplitude*2+.000001);
-    assert(p.x>200+p.speed*8*.82&&p.x<200+p.speed*8*1.18);
+    assert(Math.abs(p.y-100)<=Math.abs(p.drift)*8+p.amplitude*1.45+.000001);
+    assert(p.x>200+p.speed*8*(1-p.gustAmount)&&p.x<200+p.speed*8*(1+p.gustAmount));
   }
   for(const p of positions.slice(1)) {
     assert(Math.abs(p.x-positions[0].x)<.000001);assert(Math.abs(p.y-positions[0].y)<.000001);
@@ -172,24 +172,73 @@ test('each wind flight is frame-rate independent with bounded sway and invisible
   const state=make(),p=state.particles[0];p.texture={old:true};p.x=state.width+p.length/2+11;
   FX.step(state,.1);assert.equal(p.x,-p.length/2-12);assert.equal(p.texture,null);
   for(let i=0;i<600;i++)FX.step(state,.05);
-  assert.equal(state.particles.length,6);
-  assert(state.particles.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.y>-12&&p.y<state.height));
+  assert.equal(state.particles.length,16);
+  assert(state.particles.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.y>=-p.breadth&&p.y<=state.height+p.breadth));
 });
 
-test('wind is drawn as feathered patches that spread and dissolve; rain-wind keeps rain trajectories', () => {
+test('wind wisps share a direction with independent, smooth paths instead of synchronized oscillation', () => {
+  let seed=121;
+  const state=FX.scene('wind-strong',4000,1000,()=>((seed=(1664525*seed+1013904223)>>>0)/4294967296));
+  state.particles.forEach(p=>{p.x=200;p.y=500;});
+  assert.equal(new Set(state.particles.map(p=>p.flowSeed)).size,16);
+  for(let frame=0;frame<600;frame++) {
+    const before=state.particles.map(p=>({x:p.x,y:p.y}));
+    FX.step(state,1/60);
+    state.particles.forEach((p,i)=>{
+      const dx=p.x-before[i].x,dy=p.y-before[i].y;
+      assert(dx>0,'all wisps keep the prevailing direction');
+      assert(Math.abs(dy)<dx*.5,'random deviations stay smooth and predominantly downwind');
+    });
+  }
+  assert(new Set(state.particles.map(p=>Math.round(p.y))).size>8,'wisps must not share a repeated track');
+});
+
+test('wind wisps spread and dissolve; rain-wind keeps rain trajectories', () => {
   const state=FX.scene('wind-strong',400,250,()=>.5),p=state.particles[0];state.particles=[p];p.texture={};
   const draws=[];
   const ctx={clearRect(){},beginPath(){},save(){},restore(){},translate(){},rotate(){},
     drawImage(_texture,_x,_y,width,height){draws.push({alpha:this.globalAlpha,width,height});}};
   p.x=-p.length/2;FX.draw(ctx,state);assert.equal(draws.at(-1).alpha,0);
   p.x=200;FX.draw(ctx,state);assert.equal(draws.at(-1).alpha,0,'opening starts softly');
-  state.time=1;FX.draw(ctx,state);const middle=draws.at(-1);assert(middle.alpha>0&&middle.alpha<=.2);
+  state.time=1;FX.draw(ctx,state);const middle=draws.at(-1);assert(middle.alpha>0&&middle.alpha<=.18);
   p.x=400+p.length/2;FX.draw(ctx,state);assert.equal(draws.at(-1).alpha,0);assert(draws.at(-1).height>middle.height);
   const mixed=FX.scene('rain-wind',1000,250,()=>.5);
-  assert.equal(mixed.particles.filter(p=>p.kind==='wind').length,3);
+  assert.equal(mixed.particles.filter(p=>p.kind==='wind').length,6);
   const rain=mixed.particles.find(p=>p.kind==='rain-mid'),x=rain.x,y=rain.y;
   FX.step(mixed,.5);assert.equal(rain.y-y,rain.speed*.5);
   assert(Math.abs((rain.x-x)/(rain.y-y)-Math.tan(-25*Math.PI/180))<.000001);
+});
+
+test('wind textures have dispersed soft alpha and transparent borders, and are cached across frames', () => {
+  const previous=global.OffscreenCanvas;
+  let textures=0;
+  const images=[];
+  class Texture {
+    constructor(){textures++;}
+    getContext(){return {
+      createImageData(width,height){return {width,height,data:new Uint8ClampedArray(width*height*4)};},
+      putImageData(pixels){images.push(pixels);},
+    };}
+  }
+  global.OffscreenCanvas=Texture;
+  try {
+    const state=FX.scene('wind-strong',1000,300,()=>.8);state.time=1;
+    const ctx={clearRect(){},beginPath(){},save(){},restore(){},translate(){},rotate(){},drawImage(){}};
+    FX.draw(ctx,state);
+    assert.equal(textures,16);assert.equal(images.length,16);
+    const {width,height,data}=images[0],alphas=[];
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
+      const alpha=data[(y*width+x)*4+3];alphas.push(alpha);
+      if(x===0||y===0||x===width-1||y===height-1)assert.equal(alpha,0,'no rectangular texture edges');
+    }
+    assert(new Set(alphas).size>50,'feathering uses a smooth range of opacity');
+    assert(Math.max(...alphas)<=179,'the texture never becomes a solid silhouette');
+    assert(alphas.filter(a=>a>100).length<alphas.length*.2,'wisps stay sparse rather than filling a cloud');
+    FX.step(state,.05);FX.draw(ctx,state);
+    assert.equal(textures,16);assert.equal(images.length,16);
+  } finally {
+    if(previous===undefined)delete global.OffscreenCanvas;else global.OffscreenCanvas=previous;
+  }
 });
 
 test('thunder flashes at 4–8 second intervals for 140ms with a maximum alpha of .22', () => {

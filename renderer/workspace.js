@@ -95,7 +95,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       textButton.className = 'command-text';
       textButton.type = 'button';
       textButton.dataset.action = 'edit-command';
-      pomeLocaleRendererWorkspace.bind(textButton, "title", () => (pomeLocaleRendererWorkspace.t("copy.clickToEdit.1f705f")));
+      textButton.title = command.text;
       textButton.textContent = command.text;
 
       const actions = document.createElement('div');

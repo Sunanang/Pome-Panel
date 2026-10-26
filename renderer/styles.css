@@ -3069,6 +3069,36 @@ body.panel-dragging #app.collapsed .notch {
 
 .tile:hover::after { opacity: 1; }
 
+/* A small decorative tilt; layout editing and FLIP motion own their transforms. */
+.home-bento > .tile {
+  --tile-tilt-angle: 2deg;
+  --tile-hover-lift: -1.5px;
+  --tile-hover-perspective: 1000px;
+  --tile-hover-duration: 180ms;
+}
+.home-bento > :is(.home-music, .home-mirror) { --tile-tilt-angle: 2.5deg; }
+.home-bento > :is(.home-note, .home-commands, .home-windows, .home-inbox) {
+  --tile-tilt-angle: 1deg;
+  --tile-hover-lift: -1px;
+}
+.home-bento > :is(.home-almanac, .home-sun, .home-recorder) { --tile-tilt-angle: 1.5deg; }
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  .home-bento:not([data-layout-editing='true']):not(.layout-motion-active) > .tile:not(:focus-within) {
+    transition:
+      transform var(--tile-hover-duration) var(--ease-out),
+      box-shadow var(--tile-hover-duration) var(--ease-out),
+      border-color var(--tile-hover-duration) var(--ease);
+  }
+  .home-bento:not([data-layout-editing='true']):not(.layout-motion-active) > .tile.is-hover-tilted:not(:focus-within) {
+    transform: perspective(var(--tile-hover-perspective)) translateY(var(--tile-hover-lift))
+      rotateX(calc(var(--tile-pointer-y, 0) * var(--tile-tilt-angle) * -1))
+      rotateY(calc(var(--tile-pointer-x, 0) * var(--tile-tilt-angle)));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.14),
+      calc(var(--tile-pointer-x, 0) * -4px) calc(16px + var(--tile-pointer-y, 0) * 2px) 36px rgba(0,0,0,.34);
+  }
+}
+
 .tile-label {
   color: rgba(246,246,248,.9);
   font-weight: 590;
@@ -3272,6 +3302,8 @@ body.panel-dragging #app.collapsed .notch {
 }
 
 .home-bento[data-layout-editing='true'] {
+  --home-drag-scale: 1.025;
+  --home-displace-duration: 220ms;
   cursor: grab;
 }
 .home-swap-placeholder {
@@ -3287,8 +3319,8 @@ body.panel-dragging #app.collapsed .notch {
   outline: 1px dashed rgba(255,255,255,.18);
   outline-offset: -1px;
   transition:
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform var(--home-displace-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
     outline-color 280ms ease;
 }
 .home-bento[data-layout-editing='true'].layout-dragging {
@@ -3302,16 +3334,18 @@ body.panel-dragging #app.collapsed .notch {
 .home-bento > [data-home-module].layout-displacing {
   z-index: 18;
   transform: translate(var(--home-displace-x, 0), var(--home-displace-y, 0));
-  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--home-displace-duration) cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
 .home-bento.layout-dragging > [data-home-module]:not(.is-dragging):not(.layout-displacing) {
-  transition: opacity 180ms var(--ease);
+  transition:
+    transform var(--home-displace-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms var(--ease);
 }
 .home-bento > .tile.is-dragging {
   z-index: 24;
   opacity: 0.92;
-  transform: translate(var(--home-drag-x, 0), var(--home-drag-y, 0)) scale(1.02);
+  transform: translate(var(--home-drag-x, 0), var(--home-drag-y, 0)) scale(var(--home-drag-scale));
   box-shadow: 0 28px 64px rgba(0,0,0,.5);
   outline-color: rgba(151, 178, 255, .55);
   outline-style: solid;
@@ -3367,7 +3401,7 @@ body.panel-dragging #app.collapsed .notch {
 .home-bento.layout-dragging > .tile:not(.is-dragging) { opacity: .9; }
 .home-bento > .tile.is-dragging {
   z-index: 20;
-  transform: translate(var(--home-drag-x, 0), var(--home-drag-y, 0)) scale(1.035);
+  transform: translate(var(--home-drag-x, 0), var(--home-drag-y, 0)) scale(var(--home-drag-scale));
   cursor: grabbing;
   border-color: rgba(151, 178, 255, .46);
   box-shadow: 0 30px 70px rgba(0,0,0,.58), 0 0 0 1px rgba(151,178,255,.15);
@@ -3654,6 +3688,7 @@ body.panel-dragging #app.collapsed .notch {
 
 /* ============ 尊重系统"减弱动态效果" ============ */
 @media (prefers-reduced-motion: reduce) {
+  .home-bento[data-layout-editing='true'] { --home-drag-scale: 1; }
   *,
   *::before,
   *::after {

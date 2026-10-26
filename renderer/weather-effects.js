@@ -8,40 +8,63 @@
   const SPECS = {
     drizzle: [14, 40, 70], 'rain-light': [22, 55, 70], 'rain-mid': [42, 80, 100], 'rain-heavy': [72, 110, 130],
     'snow-light': [16, 25, 35], 'snow-mid': [30, 30, 45], 'snow-heavy': [48, 40, 55],
-    hail: [30, 100, 160], dust: [14, 20, 40], wind: [4, 45, 55], 'wind-strong': [6, 85, 95],
+    hail: [30, 100, 160], dust: [14, 20, 40], wind: [10, 50, 80], 'wind-strong': [16, 80, 125],
   };
   function windParticle(kind, width, height, low, high, random) {
     const strong = kind === 'wind-strong';
     return { kind, speed: low + random() * (high - low), low, high,
-      x: 0, y: height * (.14 + random() * .58),
-      length: Math.min(width * .55, 90 + random() * 100),
-      breadth: (strong ? 28 : 18) + random() * 28,
-      amplitude: 2 + random() * 4, period: 5 + random() * 3,
+      x: 0, y: height * (.20 + random() * .56),
+      length: Math.min(width * .52, 55 + random() * 120),
+      breadth: (strong ? 24 : 18) + random() * 24,
+      amplitude: 6 + random() * 14, period: 3.5 + random() * 4,
       phase: random() * Math.PI * 2, gustPeriod: 4 + random() * 4,
-      gustPhase: random() * Math.PI * 2, tilt: (random() - .5) * .2,
-      opacity: (strong ? .14 : .1) + random() * .06, fan: random() > .4,
-      lobes: Array.from({ length: 3 }, () => ({ y: (random() - .5) * .14,
-        width: .19 + random() * .05, height: .16 + random() * .1 })), texture: null };
+      gustPhase: random() * Math.PI * 2, gustAmount: .12 + random() * .30,
+      drift: (random() - .5) * 5, tilt: (random() - .5) * .08,
+      opacity: (strong ? .12 : .08) + random() * .06,
+      enterAt: random() * .10, exitAt: .76 + random() * .24,
+      flowSeed: random() * 1000, textureSeed: random() * 1000, texture: null };
+  }
+  function hash(i, seed) { const v = Math.sin(i * 127.1 + seed * 311.7) * 43758.5453; return v - Math.floor(v); }
+  function noise(t, seed) {
+    const i = Math.floor(t), f = smooth(t-i);
+    return hash(i,seed)*(1-f)+hash(i+1,seed)*f;
+  }
+  function noiseSlope(t, seed) {
+    const i = Math.floor(t), f = t-i;
+    return (hash(i+1,seed)-hash(i,seed))*6*f*(1-f);
+  }
+  function windOffset(p, time) {
+    return p.amplitude * (noise(time/p.period+p.phase,p.flowSeed)
+      + .45*noise(time/(p.period*1.7)+p.phase,p.flowSeed+7));
   }
   function windTexture(p, ctx) {
-    // Cache each irregular, feather-edged air sheet once. Per-frame drawing is
-    // only a transformed bitmap, with no blur filter or gradient allocation.
-    const canvas = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(256, 128)
+    // Soft, broken filaments, with no outline or fixed curl silhouette. Noise
+    // only builds a cached alpha texture; frames only transform the bitmap.
+    const width = 192, height = 80;
+    const canvas = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(width,height)
       : ctx.canvas.ownerDocument.createElement('canvas');
-    canvas.width = 256; canvas.height = 128;
+    canvas.width = width; canvas.height = height;
     const brush = canvas.getContext('2d');
     if (!brush) return null;
-    p.lobes.forEach((lobe, i) => {
-      const x = .26 + i * .24, y = .5 + lobe.y;
-      const spread = p.fan ? .32 - i * .095 : lobe.height;
-      brush.save(); brush.translate(x * 256, y * 128);
-      brush.scale(lobe.width * 256, spread * 128);
-      const gradient = brush.createRadialGradient(0, 0, 0, 0, 0, 1);
-      gradient.addColorStop(0, 'rgba(200,222,232,.65)');
-      gradient.addColorStop(.4, 'rgba(200,222,232,.32)');
-      gradient.addColorStop(1, 'rgba(200,222,232,0)');
-      brush.fillStyle = gradient; brush.fillRect(-1, -1, 2, 2); brush.restore();
-    });
+    const pixels = brush.createImageData(width,height), seed = p.textureSeed;
+    for (let x=0;x<width;x++) {
+      const u = x/(width-1), taper = Math.pow(Math.sin(Math.PI*u),.9);
+      const center = .46 + .23*(noise(u*3,seed)-.5);
+      const spread = .045 + .065*noise(u*4,seed+3);
+      const secondary = .59 + .16*(noise(u*4,seed+4)-.5);
+      const density = smooth((noise(u*6,seed+5)-.18)/.70);
+      for (let y=0;y<height;y++) {
+        const v = y/(height-1);
+        const main = Math.exp(-.5*Math.pow((v-center)/spread,2));
+        const faint = .28*Math.exp(-.5*Math.pow((v-secondary)/(.04+spread*.45),2));
+        const edge = smooth(v/.18)*smooth((1-v)/.18);
+        const alpha = Math.min(.70,(main+faint)*density*taper*edge);
+        const index = (y*width+x)*4;
+        pixels.data[index] = 205; pixels.data[index+1] = 226; pixels.data[index+2] = 235;
+        pixels.data[index+3] = Math.round(alpha*255);
+      }
+    }
+    brush.putImageData(pixels,0,0);
     return canvas;
   }
   function smooth(value) { const t = Math.max(0, Math.min(1, value)); return t * t * (3 - 2 * t); }
@@ -51,7 +74,7 @@
       for (let i = 0; i < count; i++) {
         if (kind.startsWith('wind')) {
           const p = windParticle(kind, width, height, low, high, random);
-          p.x = (i + random()) / count * (width + p.length) - p.length / 2;
+          p.x = random() * (width + p.length) - p.length / 2;
           particles.push(p); continue;
         }
         const speed = low + random() * (high - low);
@@ -68,7 +91,7 @@
     };
     if (family === 'sleet') { add('rain-light', 22, 55, 70); add('snow-light', 12, 25, 35); }
     else if (family === 'thunder') add('rain-mid', ...SPECS['rain-mid']);
-    else if (family === 'rain-wind') { add('rain-mid', ...SPECS['rain-mid']); add('wind', 3, 50, 60); }
+    else if (family === 'rain-wind') { add('rain-mid', ...SPECS['rain-mid']); add('wind', 6, 50, 80); }
     else if (SPECS[family]) add(family, ...SPECS[family]);
     return { family, width, height, particles, time: 0, nextFlash: 4 + random() * 4, flashAt: -1, flash: 0, random };
   }
@@ -76,15 +99,13 @@
     s.time += dt;
     for (const p of s.particles) {
       if (p.kind.startsWith('wind')) {
-        // Wind is a loose patch / opening fan of air, not a repeating stroke.
-        // Integrate each gust analytically so its flight is frame-rate independent;
-        // the small vertical sway never accumulates into unbounded drift.
+        // One prevailing direction, independently seeded smooth deviations.
+        // Integrate offsets as differences so 30/60/120Hz follow the same path.
         const omega = Math.PI * 2 / p.gustPeriod;
-        p.x += p.speed * (dt + .18 / omega * (Math.sin(s.time * omega + p.gustPhase)
+        p.x += p.speed * (dt + p.gustAmount / omega * (Math.sin(s.time * omega + p.gustPhase)
           - Math.sin((s.time - dt) * omega + p.gustPhase)));
-        const sway = Math.PI * 2 / p.period;
-        p.y += p.amplitude * (Math.sin(s.time * sway + p.phase) - Math.sin((s.time - dt) * sway + p.phase));
-        if (p.x > s.width + p.length / 2 + 12) {
+        p.y += p.drift*dt + windOffset(p,s.time)-windOffset(p,s.time-dt);
+        if (p.x > s.width + p.length / 2 + 12 || p.y < -p.breadth || p.y > s.height+p.breadth) {
           Object.assign(p, windParticle(p.kind, s.width, s.height, p.low, p.high, s.random));
           p.x = -p.length / 2 - 12;
         }
@@ -120,7 +141,7 @@
       ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
     }
     for (const p of s.particles) {
-      ctx.beginPath(); ctx.lineWidth = .9;
+      if (!p.kind.startsWith('wind')) { ctx.beginPath(); ctx.lineWidth = .9; }
       if (p.kind.startsWith('snow')) {
         const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
         g.addColorStop(0, 'rgba(235,245,255,.5)'); g.addColorStop(1, 'rgba(235,245,255,0)');
@@ -131,14 +152,17 @@
         if (!p.texture) p.texture = windTexture(p, ctx);
         if (!p.texture) continue;
         const progress = Math.max(0, Math.min(1, (p.x + p.length / 2) / (w + p.length)));
-        // Separate sheets sweep through the sky, spread slightly, then dissolve.
-        // Feathering is baked into the texture; no solid outlines or fog wash.
-        const fade = smooth(progress / .18) * smooth((1 - progress) / .3);
+        const fade = smooth((progress-p.enterAt)/.16)*smooth((p.exitAt-progress)/.26);
         ctx.save(); ctx.translate(p.x, p.y);
-        ctx.rotate(p.tilt + .025 * Math.sin(s.time * .8 + p.phase));
-        ctx.globalAlpha = p.opacity * fade * smooth(s.time / .8) * (s.family === 'rain-wind' ? .65 : 1);
-        const breadth = p.breadth * (.75 + progress * .5);
-        ctx.drawImage(p.texture, -p.length / 2, -breadth / 2, p.length, breadth);
+        const vx = p.speed*(1+p.gustAmount*Math.cos(s.time*Math.PI*2/p.gustPeriod+p.gustPhase));
+        const vy = p.drift+p.amplitude/p.period*noiseSlope(s.time/p.period+p.phase,p.flowSeed)
+          +p.amplitude*.45/(p.period*1.7)*noiseSlope(s.time/(p.period*1.7)+p.phase,p.flowSeed+7);
+        ctx.rotate(Math.atan2(vy,vx)+p.tilt);
+        ctx.globalAlpha = p.opacity*fade*smooth(s.time/.8)*(s.family==='rain-wind'?.55:1)
+          *(.55+.45*noise(s.time/2.5+p.phase,p.flowSeed+11));
+        const length = p.length*(.92+.14*noise(s.time/3+p.phase,p.flowSeed+13));
+        const breadth = p.breadth*(.85+progress*.4);
+        ctx.drawImage(p.texture,-length/2,-breadth/2,length,breadth);
         ctx.restore();
       } else if (p.kind === 'dust') {
         ctx.strokeStyle = 'rgba(205,175,120,.28)'; ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 5, p.y); ctx.stroke();

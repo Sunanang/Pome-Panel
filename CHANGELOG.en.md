@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Remove the almanac tooltip and show full command content on hover. Improve home layout dragging with frame-coalesced movement, cached displacement previews, smooth returns and drop settling while retaining explicit Save/Cancel. Add subtle pointer-following card tilt, disabled for inputs, controls, layout editing and reduced motion. Replace wind silhouettes with soft, dispersed wisps that follow independent smooth random paths in one prevailing direction.
+
 - Support Cursor's encrypted local login for Cursor and Grok Bot quota queries. Ignore device-bound ciphertext saved by older Pome versions, save the decoded token on explicit acquisition, and show actionable credential-access errors. Successful local-login fallback now keeps quota readings visible.
 
 - Preserve task columns 5–8 during first NAS migration and use a frozen full snapshot instead of duplicate or truncated history. Reject stale account-key replies after unbinding or re-pairing. Serialize backup and NAS recovery confirmations before touching the workspace.

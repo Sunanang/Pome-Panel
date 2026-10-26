@@ -145,8 +145,6 @@
         : size === 'large' ? renderLarge(view)
           : renderMedium(view);
     tile.innerHTML = html;
-    const timing = view.jieQiTiming;
-    tile.title = `公历按电脑本地日期显示。${timing ? `${view.jieQiLabel}交节：${timing.key} 约${timing.hm}，北京时间（UTC+8）。` : ''}节气按日期标记，倒计时按日历天计算。宜忌、吉时为传统黄历参考；早子为当天00:00–00:59，晚子为当天23:00–23:59。`;
     schedule();
   }
 

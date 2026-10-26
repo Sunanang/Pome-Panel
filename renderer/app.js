@@ -3349,19 +3349,82 @@ try {
 } catch {}
 
 function bindHomeTilePointerGlow(bento) {
-  if (!bento || bento.dataset.tileGlowBound === 'true') return;
+  if (!bento || bento.dataset.tileGlowBound === 'true') return () => {};
   bento.dataset.tileGlowBound = 'true';
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const tiles = [...bento.querySelectorAll('.tile')];
+  let frame = null;
+  let pending = null;
+  let active = null;
+  let bounds = null;
+  const clearTile = (tile, immediate = false) => {
+    tile.classList.remove('is-hover-tilted');
+    ['--tile-pointer-x', '--tile-pointer-y', '--tile-x', '--tile-y'].forEach(key => tile.style.removeProperty(key));
+    if (immediate) tile.getAnimations().forEach(animation => {
+      if (animation.transitionProperty === 'transform' || animation.transitionProperty === 'box-shadow') animation.cancel();
+    });
+  };
+  const reset = ({ immediate = false } = {}) => {
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
+    pending = null;
+    tiles.forEach(tile => {
+      if (immediate || tile.classList.contains('is-hover-tilted') || tile.style.getPropertyValue('--tile-pointer-x')) clearTile(tile, immediate);
+    });
+    active = null;
+    bounds = null;
+  };
+  const eligible = (tile, target) => {
+    if (!tile || tile.hidden || !isExpanded || activeTab !== 'home' || modeBusy || reducedMotion.matches
+      || bento.dataset.layoutEditing === 'true' || bento.classList.contains('layout-motion-active')
+      || bento.classList.contains('layout-dragging') || tile.contains(document.activeElement)) return false;
+    const control = target.closest?.('input, textarea, select, button, a, [role="button"], [contenteditable]');
+    // The mirror cover is the whole card. Other controls keep a stationary hit
+    // target, including command tooltips, timer inputs and nested popovers.
+    return !control || control.id === 'mirror-stage';
+  };
+  const paint = () => {
+    frame = null;
+    const point = pending;
+    pending = null;
+    const tile = point?.target.closest?.('.home-bento > .tile');
+    if (!point || !eligible(tile, point.target)) { reset(); return; }
+    if (active !== tile) {
+      if (active) clearTile(active);
+      clearTile(tile, true);
+      // Cache the resting rectangle: reading a rotated rectangle on each move
+      // feeds the transform back into its own input and causes edge jitter.
+      bounds = tile.getBoundingClientRect();
+      active = tile;
+    }
+    const x = Math.max(-1, Math.min(1, (point.x - bounds.left) / Math.max(1, bounds.width) * 2 - 1));
+    const y = Math.max(-1, Math.min(1, (point.y - bounds.top) / Math.max(1, bounds.height) * 2 - 1));
+    tile.style.setProperty('--tile-pointer-x', x.toFixed(4));
+    tile.style.setProperty('--tile-pointer-y', y.toFixed(4));
+    tile.style.setProperty('--tile-x', `${((x + 1) * 50).toFixed(2)}%`);
+    tile.style.setProperty('--tile-y', `${((y + 1) * 50).toFixed(2)}%`);
+    tile.classList.add('is-hover-tilted');
+  };
   bento.addEventListener('pointermove', (event) => {
     const tile = event.target.closest?.('.home-bento > .tile');
-    if (!tile || !bento.contains(tile)) return;
-    const rect = tile.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 100;
-    const y = ((event.clientY - rect.top) / Math.max(1, rect.height)) * 100;
-    tile.style.setProperty('--tile-x', `${x.toFixed(2)}%`);
-    tile.style.setProperty('--tile-y', `${y.toFixed(2)}%`);
+    if (event.pointerType === 'touch' || event.buttons || !eligible(tile, event.target)) { reset(); return; }
+    pending = { target: event.target, x: event.clientX, y: event.clientY };
+    if (frame === null) frame = requestAnimationFrame(paint);
   });
+  bento.addEventListener('pointerleave', () => reset());
+  bento.addEventListener('pointercancel', () => reset({ immediate: true }));
+  bento.addEventListener('pointerdown', () => reset({ immediate: true }), true);
+  bento.addEventListener('focusin', () => reset({ immediate: true }));
+  bento.addEventListener('scroll', () => reset({ immediate: true }), true);
+  window.addEventListener('blur', () => reset({ immediate: true }));
+  window.addEventListener('resize', () => reset({ immediate: true }));
+  reducedMotion.addEventListener('change', () => reset({ immediate: true }));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) reset({ immediate: true }); });
+  document.addEventListener('notch:will-collapse', () => reset({ immediate: true }));
+  document.addEventListener('notch:tabchange', event => { if (event.detail?.tab !== 'home') reset({ immediate: true }); });
+  return reset;
 }
-bindHomeTilePointerGlow(homeBento);
+const resetHomeTilePointerMotion = bindHomeTilePointerGlow(homeBento);
 
 const homeTiles = homeBento
   ? Array.from(homeBento.querySelectorAll('[data-home-module]'))
@@ -3663,18 +3726,19 @@ function captureHomeLayoutVisualState() {
   return { surface: { left: surface.left, top: surface.top }, tiles };
 }
 
-function animateCommittedHomeLayout(reason, beforeState) {
+function animateCommittedHomeLayout(reason, beforeState, { draggedId = null } = {}) {
   if (!homeBento || !beforeState || reason === 'initial' || reason === 'rollback'
     || reason === 'size-preview' || reason === 'drag-commit'
     || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const generation = homeLayoutMotionGeneration;
   const isPreview = reason === 'reorder-preview';
-  const duration = isPreview
+  const isDragRelease = reason === 'drag-release';
+  const duration = isDragRelease ? 260 : isPreview
     ? 560
     : reason === 'reorder'
       ? Math.round(HOME_LAYOUT_MOTION_MS * 1.2)
       : HOME_LAYOUT_MOTION_MS;
-  const easing = isPreview
+  const easing = isDragRelease ? 'cubic-bezier(0.22, 1.12, 0.36, 1)' : isPreview
     ? 'cubic-bezier(0.22, 1, 0.36, 1)'
     : reason === 'reorder'
       ? 'cubic-bezier(0.33, 1, 0.32, 1)'
@@ -3699,13 +3763,16 @@ function animateCommittedHomeLayout(reason, beforeState) {
     if (previous && !moved && !resized) return;
     // Animate placement, not the text's aspect ratio. A size change can have
     // very different width/height ratios and must never stretch the content.
-    const fromTransform = `translate(${dx}px, ${dy}px)`;
-    const toTransform = 'translate(0, 0)';
+    // Only the lifted card settles its uniform drag scale. Never stretch text
+    // when a sibling's footprint changes during packing.
+    const settleScale = isDragRelease && moduleId === draggedId ? scaleX : 1;
+    const fromTransform = `translate(${dx}px, ${dy}px) scale(${settleScale})`;
+    const toTransform = 'translate(0, 0) scale(1)';
     const animation = tile.animate(
       previous
         ? [
-          { transform: fromTransform },
-          { transform: toTransform },
+          { transform: fromTransform, transformOrigin: 'top left' },
+          { transform: toTransform, transformOrigin: 'top left' },
         ]
         : [
           { opacity: 0.72, transform: 'translateY(8px)' },
@@ -3734,6 +3801,7 @@ function animateCommittedHomeLayout(reason, beforeState) {
 
 function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   if (!homeBento || !layout) throw new Error('A validated homepage layout is required.');
+  resetHomeTilePointerMotion({ immediate: true });
   // 先采样当前可见位置（含进行中的 FLIP），再取消旧动画，避免先闪回再起步。
   const beforeState = reason === 'initial' || reason === 'rollback'
     || reason === 'size-preview' || reason === 'drag-commit'
@@ -4080,6 +4148,8 @@ if (homeLayoutReadOnly) document.dispatchEvent(new CustomEvent('notch:home-layou
 if (homeBento) {
   let pendingLongPress = null;
   let dragState = null;
+  let homeDragFrame = null;
+  let pendingHomeDragPoint = null;
   let suppressHomeClickUntil = 0;
   let homeLayoutEditing = false;
   let contextModuleId = '';
@@ -4163,6 +4233,7 @@ if (homeBento) {
   };
 
   const setHomeLayoutEditing = (editing, { silent = false, action = 'enter' } = {}) => {
+    resetHomeTilePointerMotion({ immediate: true });
     const next = Boolean(editing) && !homeLayoutReadOnly;
     const wasEditing = homeLayoutEditing;
     if (next && !wasEditing) {
@@ -4284,39 +4355,42 @@ if (homeBento) {
   // Preview the same placement plan used on drop, using translations without resizing.
   const previewDisplaceTarget = (sourceId, targetId) => {
     if (!dragState?.originRects) return;
-    clearDisplacePreview();
     clearDropTarget();
     dragState.previewTargetId = targetId || null;
     dragState.target = null;
-    if (!targetId) return;
+    if (!targetId) { clearDisplacePreview(); return; }
     const original = dragState.originLayout;
-    const preview = window.NotchDomain.swapHomeWidgetPlacements(original, sourceId, targetId, { order: dragState.originOrder });
-    if (!preview) return;
+    if (!dragState.previewPlans.has(targetId)) {
+      dragState.previewPlans.set(targetId, window.NotchDomain.swapHomeWidgetPlacements(
+        original, sourceId, targetId, { order: dragState.originOrder }
+      ));
+    }
+    const preview = dragState.previewPlans.get(targetId);
+    if (!preview) { clearDisplacePreview(); return; }
     const targetTile = homeBento.querySelector(`[data-home-module="${targetId}"]`);
     if (!targetTile) return;
-    const bounds = homeBento.getBoundingClientRect();
-    const style = getComputedStyle(homeBento);
-    const columnGap = parseFloat(style.columnGap) * bounds.width / homeBento.offsetWidth;
-    const rowGap = parseFloat(style.rowGap) * bounds.height / homeBento.offsetHeight;
-    const pitchX = (bounds.width + columnGap) / 12;
-    const pitchY = (bounds.height + rowGap) / 4;
+    const { pitchX, pitchY } = dragState;
     homeTiles.forEach((item) => {
       const id = item.dataset.homeModule;
       if (id === sourceId || !original.placements[id] || !preview.placements[id]) return;
       const dx = (preview.placements[id].column - original.placements[id].column) * pitchX;
       const dy = (preview.placements[id].row - original.placements[id].row) * pitchY;
-      if (!dx && !dy) return;
-      item.style.setProperty('--home-displace-x', `${dx}px`);
-      item.style.setProperty('--home-displace-y', `${dy}px`);
-      item.classList.add('layout-displacing');
+      item.classList.toggle('layout-displacing', Boolean(dx || dy));
+      if (dx || dy) {
+        item.style.setProperty('--home-displace-x', `${dx}px`);
+        item.style.setProperty('--home-displace-y', `${dy}px`);
+      } else {
+        item.style.removeProperty('--home-displace-x');
+        item.style.removeProperty('--home-displace-y');
+      }
     });
-    const placeholder = document.createElement('div');
+    const placeholder = homeBento.querySelector('.home-swap-placeholder') || document.createElement('div');
     const destination = preview.placements[sourceId];
     placeholder.className = 'home-swap-placeholder';
     placeholder.setAttribute('aria-hidden', 'true');
     placeholder.style.gridColumn = `${destination.column + 1} / span ${destination.width}`;
     placeholder.style.gridRow = `${destination.row + 1} / span ${destination.height}`;
-    homeBento.append(placeholder);
+    if (!placeholder.isConnected) homeBento.append(placeholder);
     dragState.target = targetTile;
   };
 
@@ -4352,6 +4426,30 @@ if (homeBento) {
       }
     });
     return best && !best.hidden ? best : null;
+  };
+
+  const cancelHomeDragFrame = () => {
+    if (homeDragFrame !== null) cancelAnimationFrame(homeDragFrame);
+    homeDragFrame = null;
+    pendingHomeDragPoint = null;
+  };
+
+  const paintHomeDrag = ({ clientX, clientY }) => {
+    if (!dragState) return;
+    const { tile } = dragState;
+    const target = findDropTargetAt(clientX, clientY, tile);
+    const nextTargetId = target?.dataset.homeModule || null;
+    if (nextTargetId !== dragState.previewTargetId) {
+      previewDisplaceTarget(tile.dataset.homeModule, nextTargetId);
+    }
+    tile.style.setProperty('--home-drag-x', `${clientX - dragState.startX}px`);
+    tile.style.setProperty('--home-drag-y', `${clientY - dragState.startY}px`);
+  };
+
+  const flushHomeDragFrame = () => {
+    const point = pendingHomeDragPoint;
+    cancelHomeDragFrame();
+    if (point) paintHomeDrag(point);
   };
 
   const applyContextSize = (moduleId, requested) => {
@@ -4416,6 +4514,8 @@ if (homeBento) {
   });
 
   function cancelHomeDrag() {
+    cancelHomeDragFrame();
+    cancelHomeLayoutMotion();
     if (pendingLongPress) {
       clearTimeout(pendingLongPress.timer);
       pendingLongPress = null;
@@ -4474,6 +4574,14 @@ if (homeBento) {
     if (pendingLongPress) clearTimeout(pendingLongPress.timer);
     pendingLongPress = null;
     if (!dragState) return;
+    // A release can arrive before the queued animation frame, or at a newer
+    // location. Commit the actual release point; cancelled frames never paint.
+    if (cancelled) cancelHomeDragFrame();
+    else {
+      pendingHomeDragPoint = { clientX: event.clientX, clientY: event.clientY };
+      flushHomeDragFrame();
+    }
+    const releaseState = cancelled ? null : captureHomeLayoutVisualState();
     const { tile, pointerId, previewTargetId } = dragState;
     if (tile.hasPointerCapture?.(pointerId)) tile.releasePointerCapture(pointerId);
     const sourceId = tile.dataset.homeModule;
@@ -4497,6 +4605,8 @@ if (homeBento) {
     homeBento.classList.remove('layout-dragging');
     dragState = null;
     suppressHomeClickUntil = Date.now() + 280;
+
+    if (releaseState) animateCommittedHomeLayout('drag-release', releaseState, { draggedId: sourceId });
 
     requestAnimationFrame(() => {
       homeTiles.forEach((item) => {
@@ -4523,13 +4633,20 @@ if (homeBento) {
       pendingLongPress = null;
       return;
     }
-    homeBento.classList.add('layout-dragging');
-    tile.classList.add('is-dragging');
+    cancelHomeLayoutMotion();
+    const originRects = captureOriginRects();
+    const bounds = homeBento.getBoundingClientRect();
+    const style = getComputedStyle(homeBento);
+    const columnGap = parseFloat(style.columnGap) * bounds.width / homeBento.offsetWidth;
+    const rowGap = parseFloat(style.rowGap) * bounds.height / homeBento.offsetHeight;
     dragState = {
       tile, target: null, pointerId, startX, startY,
-      originOrder: [...homeOrder], originRects: captureOriginRects(),
+      originOrder: [...homeOrder], originRects,
       originLayout: cloneHomeLayout(homeWorkingLayout), previewTargetId: null,
+      previewPlans: new Map(), pitchX: (bounds.width + columnGap) / 12, pitchY: (bounds.height + rowGap) / 4,
     };
+    homeBento.classList.add('layout-dragging');
+    tile.classList.add('is-dragging');
     pendingLongPress = null;
   };
 
@@ -4573,15 +4690,12 @@ if (homeBento) {
     }
     if (!dragState || dragState.pointerId !== event.pointerId) return;
     event.preventDefault();
-    const { tile } = dragState;
-    const target = findDropTargetAt(event.clientX, event.clientY, tile);
-    const nextTargetId = target ? target.dataset.homeModule : null;
-    // 指针离开目标原位就取消让位，避免误吸到旁列大模块后一直粘着
-    if (nextTargetId !== dragState.previewTargetId) {
-      previewDisplaceTarget(tile.dataset.homeModule, nextTargetId);
+    pendingHomeDragPoint = { clientX: event.clientX, clientY: event.clientY };
+    // Keep the card attached to the pointer, with at most one paint per frame.
+    // A timeout debounce would delay every movement until the pointer stopped.
+    if (homeDragFrame === null) {
+      homeDragFrame = requestAnimationFrame(flushHomeDragFrame);
     }
-    tile.style.setProperty('--home-drag-x', `${event.clientX - dragState.startX}px`);
-    tile.style.setProperty('--home-drag-y', `${event.clientY - dragState.startY}px`);
   });
 
   homeBento.addEventListener('pointerup', (event) => finishHomeDrag(event, false));

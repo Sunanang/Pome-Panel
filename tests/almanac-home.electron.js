@@ -123,6 +123,7 @@ async function main() {
     assert.equal(overflow.day, '23');
     assert.equal(overflow.overflowX, false, `${size} overflowX`);
     assert.equal(overflow.overflowY, false, `${size} overflowY`);
+    assert.equal(await js(`document.querySelector('#home-almanac').matches('[title]') || !!document.querySelector('#home-almanac [title]')`), false, `${size}: almanac must not show hover tooltips`);
     assert.ok(Math.abs(overflow.scaleX - 1) < .01 && Math.abs(overflow.scaleY - 1) < .01, `${size}: screenshot must capture the settled layout`);
     if (size !== 'mini') {
       const timing = await js(`(() => {
@@ -201,8 +202,7 @@ async function main() {
     for (const text of expected) assert(probe.text.includes(text), `${name}: ${text}`);
     if (name === 'late-zi-only') assert.equal(probe.early, 0);
     assert.equal(probe.fits, true, `${name}: time intervals visible`);
-    assert.match(probe.title, /北京时间（UTC\+8）/);
-    assert.match(probe.title, /倒计时按日历天/);
+    assert.equal(probe.title, '', `${name}: almanac must not show a hover tooltip`);
     fs.writeFileSync(path.join(shots, `${name}.png`), (await win.capturePage(probe.rect)).toPNG());
   }
   assert.deepEqual(errors, []);

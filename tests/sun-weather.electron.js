@@ -146,7 +146,7 @@ async function run(c) {
     const time=await js('PomeSun.getWeather().effects.time');
     await until(`PomeSun.getWeather().effects.time>${time+.25}`);
     assert.notEqual(await js('document.querySelector("#home-sun .wx-fx").toDataURL()'),painted,'wind bitmap advances, not just its animation clock');
-    assert.equal(await js('PomeSun.getWeather().effects.count'),{'wind':4,'wind-strong':6,'rain-wind':45}[family]);
+    assert.equal(await js('PomeSun.getWeather().effects.count'),{'wind':10,'wind-strong':16,'rain-wind':48}[family]);
     await capture(family);
   }
   await js('PomeSun.render();setActiveTab("settings")');await sleep(250);

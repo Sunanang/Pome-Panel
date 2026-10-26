@@ -16,6 +16,94 @@ const fixtures = [
     music: { column: 8, row: 2, width: 2, height: 2 }, windows: { column: 8, row: 0, width: 4, height: 2 }, mirror: { column: 4, row: 0, width: 4, height: 4 } },
 ];
 
+async function auditDragScheduling(win) {
+  const js = code => win.webContents.executeJavaScript(code);
+  const setup = () => js(`(() => {
+    document.getElementById('home-layout-cancel').click();
+    const placements=${JSON.stringify(fixtures[1])};
+    homeSizes={...homeSizes,...Object.fromEntries(Object.entries(placements).map(([id,p])=>[id,NotchDomain.sizeNameFromPlacement(p)]))};
+    homeOrder=[...Object.keys(placements),...HOME_MODULE_REGISTRY.filter(id=>!placements[id])];
+    hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!placements[id]);
+    homeWorkingLayout={allowGaps:false,placements,variants:Object.fromEntries(Object.entries(placements).map(([id,p])=>[id,NotchDomain.layoutVariantForPlacement(p)]))};
+    applyHomeLayout(homeWorkingLayout,{reason:'initial'});
+    document.getElementById('home-layout-edit').click();
+  })()`);
+  await setup();
+  const scheduled = await js(`(async () => {
+    const tile=document.getElementById('home-cursor');
+    tile.setPointerCapture=()=>{};tile.hasPointerCapture=()=>false;
+    const a=tile.getBoundingClientRect(),b=document.getElementById('home-recorder').getBoundingClientRect(),c=document.querySelector('[data-home-module="commands"]').getBoundingClientRect();
+    const center=r=>({clientX:r.left+r.width/2,clientY:r.top+r.height/2});
+    const pointer={bubbles:true,cancelable:true,isPrimary:true,pointerId:811,button:0,buttons:1};
+    const move=r=>homeBento.dispatchEvent(new PointerEvent('pointermove',{...pointer,...center(r)}));
+    const frame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
+    const beforeStored=localStorage.getItem(HOME_PLACEMENTS_KEY);
+    const original=NotchDomain.swapHomeWidgetPlacements;
+    let plans=0;NotchDomain.swapHomeWidgetPlacements=(...args)=>{plans++;return original(...args)};
+    try {
+      tile.dispatchEvent(new PointerEvent('pointerdown',{...pointer,...center(a)}));
+      for(let i=0;i<300;i++)move(i%2?b:c);
+      const beforeFrame=plans;
+      await frame();
+      const afterFrame=plans;
+      const latestPoint=tile.style.getPropertyValue('--home-drag-x')===((center(b).clientX-center(a).clientX)+'px');
+      move(c);await frame();move(b);await frame();
+      const cachedPlans=plans;
+      const placeholder=homeBento.querySelector('.home-swap-placeholder');
+      move(c);await frame();
+      const reusedPlaceholder=placeholder===homeBento.querySelector('.home-swap-placeholder');
+      await new Promise(resolve=>setTimeout(resolve,250));
+      const displacedBefore=targetPosition();
+      move(a);await frame();
+      await new Promise(resolve=>setTimeout(resolve,40));
+      const returning=targetPosition();
+      const smoothReturn=returning>displacedBefore+1 && returning<c.left-1;
+      function targetPosition(){return document.querySelector('[data-home-module="commands"]').getBoundingClientRect().left;}
+      // Release at b without a matching pointermove: use the actual release,
+      // not the last rendered c preview. Pending paints cannot override it.
+      homeBento.dispatchEvent(new PointerEvent('pointerup',{...pointer,...center(b),buttons:0}));
+      const releasedAtB=homeWorkingLayout.placements.cursor.column===4 && homeWorkingLayout.placements.cursor.row===0;
+      const landing=homeLayoutMotionAnimations.some(animation=>animation.effect.getTiming().duration===260);
+      await Promise.allSettled(homeLayoutMotionAnimations.map(animation=>animation.finished));
+      await frame();
+      const stable=!homeBento.classList.contains('layout-motion-active') && !homeBento.querySelector('.home-swap-placeholder') && !tile.style.getPropertyValue('--home-drag-x');
+      return {beforeFrame,afterFrame,latestPoint,cachedPlans,reusedPlaceholder,smoothReturn,releasedAtB,landing,stable,
+        unsaved:beforeStored===localStorage.getItem(HOME_PLACEMENTS_KEY)};
+    } finally { NotchDomain.swapHomeWidgetPlacements=original; }
+  })()`);
+  assert.deepEqual(scheduled, {beforeFrame:0,afterFrame:1,latestPoint:true,cachedPlans:2,reusedPlaceholder:true,smoothReturn:true,releasedAtB:true,landing:true,stable:true,unsaved:true});
+
+  win.webContents.debugger.attach('1.3');
+  for (const reduced of [false, true]) {
+    await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:reduced?'reduce':'no-preference'}]});
+    assert.equal(await js(`matchMedia('(prefers-reduced-motion: reduce)').matches`),reduced);
+    for (const ending of ['pointercancel', 'blur', 'release']) {
+      await setup();
+      const result=await js(`(async () => {
+        const tile=document.getElementById('home-cursor'),target=document.getElementById('home-recorder');
+        tile.setPointerCapture=()=>{};tile.hasPointerCapture=()=>false;
+        const a=tile.getBoundingClientRect(),b=target.getBoundingClientRect();
+        const pointer={bubbles:true,cancelable:true,isPrimary:true,pointerId:812,button:0,buttons:1};
+        const end={clientX:b.left+b.width/2,clientY:b.top+b.height/2};
+        const before=JSON.stringify(homeWorkingLayout),stored=localStorage.getItem(HOME_PLACEMENTS_KEY);
+        tile.dispatchEvent(new PointerEvent('pointerdown',{...pointer,clientX:a.left+8,clientY:a.top+8}));
+        homeBento.dispatchEvent(new PointerEvent('pointermove',{...pointer,...end}));
+        if(${JSON.stringify(ending)}==='blur')window.dispatchEvent(new Event('blur'));
+        else homeBento.dispatchEvent(new PointerEvent(${JSON.stringify(ending === 'release' ? 'pointerup' : 'pointercancel')},{...pointer,...end,buttons:0}));
+        const hasLanding=homeLayoutMotionAnimations.length>0;
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        return {changed:before!==JSON.stringify(homeWorkingLayout),unsaved:stored===localStorage.getItem(HOME_PLACEMENTS_KEY),
+          cleared:!homeBento.querySelector('.home-swap-placeholder')&&!homeBento.classList.contains('layout-dragging')&&!tile.style.getPropertyValue('--home-drag-x'),hasLanding};
+      })()`);
+      assert.deepEqual(result,{changed:ending==='release',unsaved:true,cleared:true,hasLanding:ending==='release'&&!reduced},`${ending}, reduced=${reduced}: queued pointer events must not outlive cancellation`);
+    }
+  }
+  await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[]});
+  win.webContents.debugger.detach();
+  await js(`document.getElementById('home-layout-cancel').click()`);
+  console.log('Homepage drag: frame coalescing, cached previews, actual release target, cancelled queued frames, reduced motion and stable landing passed');
+}
+
 async function auditUiLifecycle(win) {
   const js = code => win.webContents.executeJavaScript(code);
   const shots = process.env.UI_LIFECYCLE_SHOTS || path.join(__dirname, '../dist.noindex/ui-lifecycle');
@@ -145,6 +233,7 @@ async function main() {
         const beforeSizes={...homeSizes};
         tile.dispatchEvent(new PointerEvent('pointerdown',{...pointer,...start}));
         homeBento.dispatchEvent(new PointerEvent('pointermove',{...pointer,...end}));
+        await new Promise(resolve=>requestAnimationFrame(resolve));
         const placeholder=homeBento.querySelector('.home-swap-placeholder');
         const preview={width:placeholder?.offsetWidth,height:placeholder?.offsetHeight,
           expectedWidth:tile.offsetWidth,expectedHeight:tile.offsetHeight,
@@ -197,6 +286,7 @@ async function main() {
     assert.equal(failure.toast,'空间不够，无法交换');
     assert.equal(failure.errorHidden,true,'space constraints use a short toast');
     assert.equal(failure.dragging,false); assert.equal(failure.placeholder,false);
+    await auditDragScheduling(win);
     await auditUiLifecycle(win);
     assert.deepEqual(errors,[]);
     console.log('Homepage swap keeps sizes, previews original footprints, packs without gaps, persists positions and rejects failed drops');
