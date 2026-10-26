@@ -43,6 +43,8 @@
 | **剪贴板与密钥** | 按需开启剪贴板历史，用系统安全存储加密账号与密钥 |
 | **NAS 多端同步** | 可选配对飞牛 NAS，在多台设备之间同步工作区内容 |
 
+常用指令、待办、笔记、链接、录制和密钥在删除前统一弹出确认，显示内容预览与数量；录音、链接分组和待办分类会说明一并删除的内容。取消或按 Esc 保留原内容。
+
 ## 开始使用
 
 1. 在 [Releases](https://github.com/Sunanang/Pome-Panel/releases) 查看安装包：Mac 选择 `arm64.dmg`，Windows 选择 `windows-x64-setup.exe`。
@@ -76,3 +78,7 @@ npm start
 基于 [TO-DO-Panel](https://github.com/xiaopu-ai/TO-DO-Panel) 二次开发，感谢原作者的开源贡献。
 
 [MIT License](LICENSE) · [Sunanang](https://github.com/Sunanang)
+
+## 官网源码
+
+官网位于 [`website/`](website/README.md)，独立安装依赖与构建，支持与桌面端一致的十种语言。运行和验收方法见该目录说明；源码纳入本仓库不代表网站已部署。

@@ -1,0 +1,20 @@
+{
+  "clipboardGap": 5.970001220703125,
+  "deletes": {
+    "recordings": [
+      "recordings/fixture-1.webm",
+      "recordings/fixture-2.webm",
+      "recordings/fixture-3.webm"
+    ],
+    "credentials": [
+      [
+        "credential-1"
+      ],
+      [
+        "credential-2",
+        "credential-3"
+      ]
+    ]
+  },
+  "consoleErrors": []
+}

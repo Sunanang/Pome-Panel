@@ -1527,5 +1527,15 @@
   "credentials.readFailed": "Impossible de lire les identifiants. Le fichier d’origine est conservé.",
   "credentials.readRepair": "Vérifiez le stockage sécurisé du système et les permissions du fichier, puis réessayez.",
   "providers.cursorEncryptedLogin": "Impossible de déchiffrer la connexion Cursor. Autorisez l’accès aux identifiants système puis réessayez, ou saisissez manuellement un jeton valide.",
-  "providers.cursorLoginBlockedSummary": "Accès à la connexion {source} bloqué · Réglages"
+  "providers.cursorLoginBlockedSummary": "Accès à la connexion {source} bloqué · Réglages",
+  "ui.delete.title": "Confirmer la suppression ?",
+  "ui.delete.description": "Les éléments suivants seront supprimés de votre espace de travail.",
+  "ui.delete.count": "{count} sélectionnés",
+  "ui.delete.more": "{count} autres",
+  "ui.delete.recordingHint": "Les fichiers audio et les transcriptions seront également supprimés.",
+  "ui.delete.groupHint": "Ce groupe et ses {count} liens seront supprimés.",
+  "ui.delete.categoryHint": "Cette catégorie et ses {count} tâches seront supprimées.",
+  "ui.delete.todoTitle": "Supprimer la tâche",
+  "ui.delete.credentialTitle": "Supprimer les identifiants",
+  "ui.delete.groupTitle": "Supprimer le groupe de liens"
 }

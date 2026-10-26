@@ -8,15 +8,16 @@ const source = fs.readFileSync(path.join(__dirname, '../renderer/workspace.js'),
 const Domain = require('../renderer/domain');
 function harness() {
   const reads = [], saves = [], reports = [], handlers = new Map(); let loads = 0;
+  const deletions = []; let confirmation = true;
   const context = { Domain, credentialSelection: new Set(), credentialsReadFailed: false,
     credentials: [{ id: 'a' }, { id: 'b' }], editingCredentialId: '', editingCredential: null,
     credentialEditGeneration: 0, pendingCredentialEditId: '', credentialSavesInFlight: new Set(),
     credentialList: { addEventListener: (name, callback) => handlers.set(name, callback), querySelector: () => null },
     credentialsNote: null, renderCredentials() {}, animateCredentialExpansion() {},
     loadCredentials: async () => { loads++; }, reportCredentialFailure: result => reports.push(result),
-    window: { notchAPI: { getCredential: id => new Promise(resolve => reads.push({ id, resolve })),
+    window: { PomeDeleteConfirm: { open: async () => confirmation }, notchAPI: { getCredential: id => new Promise(resolve => reads.push({ id, resolve })),
       saveCredential: payload => new Promise(resolve => saves.push({ payload, resolve })),
-      deleteCredentials: async () => ({ ok: true }) } },
+      deleteCredentials: async ids => { deletions.push(ids); return { ok: true }; } } },
   };
   vm.createContext(context);
   vm.runInContext(source.slice(source.indexOf('  function invalidateCredentialEdit('), source.indexOf('  function updateCredentialBulkAction(')), context);
@@ -34,7 +35,8 @@ function harness() {
     const form = { dataset: { id }, elements: Object.fromEntries(['service', 'account', 'password'].map(key => [key, { value: value[key] }])), querySelector: () => button };
     return { form, button, run: () => handlers.get('submit')({ preventDefault() {}, target: { closest: () => form } }) };
   };
-  return { context, reads, saves, reports, handlers, event, submit, loads: () => loads,
+  return { context, reads, saves, reports, handlers, event, submit, loads: () => loads, deletions,
+    confirm: value => { confirmation = value; },
     click: (id, action) => handlers.get('click')(event(id, action)),
     item: id => ({ id, service: `Service ${id}`, account: `Account ${id}`, password: `fixture-${id}` }) };
 }
@@ -68,6 +70,16 @@ test('current credential read failure still reports through the existing error h
   h.reads[0].resolve({ ok: false, error: 'credentials_unreadable' }); await job;
   assert.equal(h.reports[0].error, 'credentials_unreadable');
   assert.equal(h.context.editingCredentialId, '');
+});
+
+test('cancelled credential deletion preserves pending editor reads and never calls delete IPC', async () => {
+  const h = harness(); h.confirm(false);
+  const job = h.click('a');
+  await h.click('a', 'delete');
+  assert.equal(h.context.pendingCredentialEditId, 'a');
+  h.reads[0].resolve({ ok: true, item: h.item('a') }); await job;
+  assert.equal(h.context.editingCredentialId, 'a');
+  assert.deepEqual(h.deletions, []);
 });
 
 test('old save success or failure cannot close or report over a newly opened credential draft', async () => {

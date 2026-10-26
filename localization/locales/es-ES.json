@@ -1527,5 +1527,15 @@
   "credentials.readFailed": "No se pudieron leer las credenciales. El archivo original se conserva.",
   "credentials.readRepair": "Comprueba el almacenamiento seguro del sistema y los permisos del archivo, y vuelve a intentarlo.",
   "providers.cursorEncryptedLogin": "No se puede descifrar el inicio de sesión de Cursor. Permite el acceso a las credenciales del sistema y vuelve a obtenerlo, o introduce un token válido manualmente.",
-  "providers.cursorLoginBlockedSummary": "Acceso al inicio de {source} bloqueado · Ajustes"
+  "providers.cursorLoginBlockedSummary": "Acceso al inicio de {source} bloqueado · Ajustes",
+  "ui.delete.title": "¿Confirmar eliminación?",
+  "ui.delete.description": "Se eliminarán los siguientes elementos del espacio de trabajo.",
+  "ui.delete.count": "{count} seleccionados",
+  "ui.delete.more": "{count} más",
+  "ui.delete.recordingHint": "También se eliminarán los archivos de audio y las transcripciones.",
+  "ui.delete.groupHint": "Se eliminarán este grupo y sus {count} enlaces.",
+  "ui.delete.categoryHint": "Se eliminarán esta categoría y sus {count} tareas.",
+  "ui.delete.todoTitle": "Eliminar tarea",
+  "ui.delete.credentialTitle": "Eliminar credencial",
+  "ui.delete.groupTitle": "Eliminar grupo de enlaces"
 }

@@ -1494,5 +1494,15 @@
   "credentials.readFailed": "暫時無法讀取密鑰，原始檔案已保留。",
   "credentials.readRepair": "請檢查系統安全儲存與檔案權限，修復後重試。",
   "providers.cursorEncryptedLogin": "無法解密 Cursor 登入憑證。請允許存取系統憑證後重新取得登入，或手動填寫有效 Token。",
-  "providers.cursorLoginBlockedSummary": "{source} 登入讀取受限 · 前往設定"
+  "providers.cursorLoginBlockedSummary": "{source} 登入讀取受限 · 前往設定",
+  "ui.delete.title": "確認刪除？",
+  "ui.delete.description": "確認後將從工作區移除以下內容。",
+  "ui.delete.count": "已選取 {count} 項",
+  "ui.delete.more": "另有 {count} 項",
+  "ui.delete.recordingHint": "將同時刪除錄音檔案和轉寫內容。",
+  "ui.delete.groupHint": "將刪除此群組及其中的 {count} 個連結。",
+  "ui.delete.categoryHint": "將刪除此分類及其中的 {count} 項待辦。",
+  "ui.delete.todoTitle": "刪除待辦",
+  "ui.delete.credentialTitle": "刪除金鑰",
+  "ui.delete.groupTitle": "刪除連結群組"
 }

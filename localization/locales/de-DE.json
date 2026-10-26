@@ -1527,5 +1527,15 @@
   "credentials.readFailed": "Die Zugangsdaten konnten nicht gelesen werden. Die Originaldatei bleibt erhalten.",
   "credentials.readRepair": "Prüfen Sie den sicheren Systemspeicher und die Dateiberechtigungen und versuchen Sie es erneut.",
   "providers.cursorEncryptedLogin": "Die Cursor-Anmeldedaten können nicht entschlüsselt werden. Erlaube den Zugriff auf Systemanmeldedaten und rufe sie erneut ab, oder gib ein gültiges Token manuell ein.",
-  "providers.cursorLoginBlockedSummary": "{source}-Anmeldezugriff blockiert · Einstellungen"
+  "providers.cursorLoginBlockedSummary": "{source}-Anmeldezugriff blockiert · Einstellungen",
+  "ui.delete.title": "Löschen bestätigen?",
+  "ui.delete.description": "Die folgenden Einträge werden aus deinem Arbeitsbereich entfernt.",
+  "ui.delete.count": "{count} ausgewählt",
+  "ui.delete.more": "{count} weitere",
+  "ui.delete.recordingHint": "Die Audiodateien und Transkripte werden ebenfalls gelöscht.",
+  "ui.delete.groupHint": "Diese Gruppe und ihre {count} Links werden gelöscht.",
+  "ui.delete.categoryHint": "Diese Kategorie und ihre {count} Aufgaben werden gelöscht.",
+  "ui.delete.todoTitle": "Aufgabe löschen",
+  "ui.delete.credentialTitle": "Zugangsdaten löschen",
+  "ui.delete.groupTitle": "Linkgruppe löschen"
 }

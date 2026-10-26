@@ -1527,5 +1527,15 @@
   "credentials.readFailed": "자격 증명을 읽을 수 없습니다. 원본 파일은 유지됩니다.",
   "credentials.readRepair": "시스템 보안 저장소와 파일 권한을 확인한 후 다시 시도하세요.",
   "providers.cursorEncryptedLogin": "Cursor 로그인 정보를 복호화할 수 없습니다. 시스템 자격 증명 접근을 허용한 후 다시 가져오거나 유효한 토큰을 직접 입력하세요.",
-  "providers.cursorLoginBlockedSummary": "{source} 로그인 접근 제한 · 설정"
+  "providers.cursorLoginBlockedSummary": "{source} 로그인 접근 제한 · 설정",
+  "ui.delete.title": "삭제할까요?",
+  "ui.delete.description": "다음 항목이 작업 공간에서 삭제됩니다.",
+  "ui.delete.count": "{count}개 선택됨",
+  "ui.delete.more": "외 {count}개",
+  "ui.delete.recordingHint": "오디오 파일과 전사 내용도 삭제됩니다.",
+  "ui.delete.groupHint": "이 그룹과 그룹 안의 링크 {count}개가 삭제됩니다.",
+  "ui.delete.categoryHint": "이 카테고리와 카테고리 안의 할 일 {count}개가 삭제됩니다.",
+  "ui.delete.todoTitle": "할 일 삭제",
+  "ui.delete.credentialTitle": "자격 증명 삭제",
+  "ui.delete.groupTitle": "링크 그룹 삭제"
 }

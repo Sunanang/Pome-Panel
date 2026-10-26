@@ -49,6 +49,7 @@
 ├── sync-tls-trust.js        # 按主机和端口限定的 HTTPS 证书信任
 ├── packages/sync-protocol/ # 桌面端与 NAS 伴侣共用的同步协议
 ├── fnos/                   # 飞牛 NAS 伴侣：服务、网页、安装向导与 FPK 配置
+├── website/                # 独立官网：React / Vite、十语言文案与产品演示
 ├── build/                  # DMG 打包钩子、entitlements 与应用图标
 ├── scripts/                # Codex 与 Claude Code 的通知转发脚本
 ├── tests/                  # Node 单元测试与 Electron 集成测试
@@ -86,7 +87,7 @@
 
 ## GitHub 推送与发布联动
 
-- 当前仓库仅维护桌面端与 NAS 伴侣，不包含官网源码或 Pages 部署。
+- 当前仓库维护桌面端、NAS 伴侣及 `website/` 官网源码；官网独立安装依赖与构建，不随桌面打包，不自动部署 Pages。
 - `dev` 是长期开发分支。所有开发、修复、测试和版本准备都在 `dev` 完成；开始工作前先确认当前分支，不得直接在 `main` 开发或提交修改。
 - `main` 是发布分支，只接收 `dev` 的合并。发版前在 `dev` 完成检查，再通过 `dev → main` 的 PR 合并；合并后 GitHub Actions 自动测试并构建 macOS DMG、Windows EXE、NAS FPK。不要从其它分支直接合入 `main`。
 - 合并发布后切回 `dev`，将 `main` 的合并结果同步回 `dev` 再继续开发；保留长期 `dev` 分支。正式 GitHub Release 仍由 `main` 上与版本一致的 `v*.*.*` 标签触发。

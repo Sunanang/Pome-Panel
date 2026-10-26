@@ -1527,5 +1527,15 @@
   "credentials.readFailed": "認証情報を読み取れません。元のファイルは保持されています。",
   "credentials.readRepair": "システムの安全なストレージとファイル権限を確認して、再試行してください。",
   "providers.cursorEncryptedLogin": "Cursor のログイン情報を復号できません。システムの認証情報へのアクセスを許可して再取得するか、有効なトークンを手動で入力してください。",
-  "providers.cursorLoginBlockedSummary": "{source} ログイン読取不可 · 設定"
+  "providers.cursorLoginBlockedSummary": "{source} ログイン読取不可 · 設定",
+  "ui.delete.title": "削除しますか？",
+  "ui.delete.description": "以下の項目をワークスペースから削除します。",
+  "ui.delete.count": "{count} 件を選択中",
+  "ui.delete.more": "ほか {count} 件",
+  "ui.delete.recordingHint": "音声ファイルと文字起こしも削除します。",
+  "ui.delete.groupHint": "このグループと、その中の {count} 件のリンクを削除します。",
+  "ui.delete.categoryHint": "このカテゴリと、その中の {count} 件のタスクを削除します。",
+  "ui.delete.todoTitle": "タスクを削除",
+  "ui.delete.credentialTitle": "認証情報を削除",
+  "ui.delete.groupTitle": "リンクグループを削除"
 }

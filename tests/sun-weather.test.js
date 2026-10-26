@@ -194,14 +194,26 @@ test('wind wisps share a direction with independent, smooth paths instead of syn
 });
 
 test('wind wisps spread and dissolve; rain-wind keeps rain trajectories', () => {
-  const state=FX.scene('wind-strong',400,250,()=>.5),p=state.particles[0];state.particles=[p];p.texture={};
+  const state=FX.scene('wind-strong',400,250,()=>.5),p=state.particles[0];state.particles=[p];p.texture={width:192,height:80};
   const draws=[];
   const ctx={clearRect(){},beginPath(){},save(){},restore(){},translate(){},rotate(){},
-    drawImage(_texture,_x,_y,width,height){draws.push({alpha:this.globalAlpha,width,height});}};
-  p.x=-p.length/2;FX.draw(ctx,state);assert.equal(draws.at(-1).alpha,0);
-  p.x=200;FX.draw(ctx,state);assert.equal(draws.at(-1).alpha,0,'opening starts softly');
-  state.time=1;FX.draw(ctx,state);const middle=draws.at(-1);assert(middle.alpha>0&&middle.alpha<=.18);
-  p.x=400+p.length/2;FX.draw(ctx,state);assert.equal(draws.at(-1).alpha,0);assert(draws.at(-1).height>middle.height);
+    transform(_a,slope,_c,_d,x,y){this.warp={x,y,slope};},
+    drawImage(_texture,_sx,_sy,_sw,_sh,_x,_y,width,height){draws.push({alpha:this.globalAlpha,...this.warp,width,height});}};
+  const frame=()=>{draws.length=0;FX.draw(ctx,state);return draws.map(d=>({...d}));};
+  p.x=-p.length/2;assert(frame().every(d=>d.alpha===0));
+  p.x=200;assert(frame().every(d=>d.alpha===0),'opening starts softly');
+  state.time=1;const middle=frame();assert(middle.some(d=>d.alpha>0));assert(middle.every(d=>d.alpha<=.075),'wind stays low contrast');
+  state.time=2.5;const evolved=frame();
+  assert(evolved.some((d,i)=>Math.abs(d.y-middle[i].y)>.05),'subtle internal bends evolve with the particle held stationary');
+  assert(evolved.some((d,i)=>Math.abs(d.height-middle[i].height)>1),'local thickness evolves');
+  const ratios=evolved.flatMap((d,i)=>d.alpha>0&&middle[i].alpha>0 ? [d.alpha/middle[i].alpha] : []);
+  assert(Math.max(...ratios)-Math.min(...ratios)>.5,'different sections dissipate independently of the global fade');
+  for(let i=1;i<evolved.length;i++) {
+    const previous=evolved[i-1];
+    assert(Math.abs(evolved[i].x-previous.x-previous.width)<1e-9,'sheared sections remain joined');
+    assert(Math.abs(evolved[i].y-previous.y-previous.width*previous.slope)<1e-9,'curves join without stair steps');
+  }
+  p.x=400+p.length/2;assert(frame().every(d=>d.alpha===0));
   const mixed=FX.scene('rain-wind',1000,250,()=>.5);
   assert.equal(mixed.particles.filter(p=>p.kind==='wind').length,6);
   const rain=mixed.particles.find(p=>p.kind==='rain-mid'),x=rain.x,y=rain.y;
@@ -223,7 +235,7 @@ test('wind textures have dispersed soft alpha and transparent borders, and are c
   global.OffscreenCanvas=Texture;
   try {
     const state=FX.scene('wind-strong',1000,300,()=>.8);state.time=1;
-    const ctx={clearRect(){},beginPath(){},save(){},restore(){},translate(){},rotate(){},drawImage(){}};
+    const ctx={clearRect(){},beginPath(){},save(){},restore(){},translate(){},rotate(){},transform(){},drawImage(){}};
     FX.draw(ctx,state);
     assert.equal(textures,16);assert.equal(images.length,16);
     const {width,height,data}=images[0],alphas=[];

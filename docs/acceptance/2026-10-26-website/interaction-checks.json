@@ -1,0 +1,30 @@
+{
+  "checks": [
+    "Hero and local assets rendered",
+    "Download dialog opens",
+    "Escape closes dialog and restores focus",
+    "Manual unfold",
+    "top docking selectable",
+    "right docking selectable",
+    "bottom docking selectable",
+    "left docking selectable",
+    "Scroll progress opens product",
+    "Task tab changes actual screenshot",
+    "Notes tab shows actual screenshot",
+    "Arrow key navigates tabs",
+    "Optional NAS illustrative state toggles",
+    "FAQ expands",
+    "No horizontal overflow desktop",
+    "No horizontal overflow mobile",
+    "Reduced motion disables pinned long scene"
+  ],
+  "errors": [],
+  "desktop": {
+    "outerWidth": 1440,
+    "outerHeight": 1000
+  },
+  "mobile": {
+    "outerWidth": 390,
+    "outerHeight": 900
+  }
+}

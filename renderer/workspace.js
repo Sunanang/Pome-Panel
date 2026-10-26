@@ -183,6 +183,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       if (!action) return;
       if (action.dataset.action === 'edit-command') editCommand(row);
       if (action.dataset.action === 'delete-command') {
+        if (!await window.PomeDeleteConfirm.open({titleKey:'copy.deleteCommand.ebd35b',items:[command.text]})) return;
         commands = commands.filter((item) => item.id !== command.id);
         commandSelection.delete(command.id);
         persistCommands();
@@ -197,9 +198,12 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       }
     });
   }
-  commandBulkDelete?.addEventListener('click', () => {
+  commandBulkDelete?.addEventListener('click', async () => {
     if (!commandSelection.size) return;
-    commands = commands.filter((command) => !commandSelection.has(command.id));
+    const targets = commands.filter(command => commandSelection.has(command.id));
+    if (!await window.PomeDeleteConfirm.open({items:targets.map(command => command.text)})) return;
+    const ids = new Set(targets.map(command => command.id));
+    commands = commands.filter((command) => !ids.has(command.id));
     commandSelection.clear();
     commandSelectionAnchor = null;
     persistCommands();
@@ -506,7 +510,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       }
     });
 
-    linkGroupsEl.addEventListener('click', (event) => {
+    linkGroupsEl.addEventListener('click', async (event) => {
       const action = event.target.closest('[data-action]');
       const groupSection = event.target.closest('[data-group-id]');
       if (!groupSection) return;
@@ -549,7 +553,11 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         renderLinkGroups();
       }
       if (action.dataset.action === 'delete-group') {
-        (group.links || []).forEach((item) => linkSelection.delete(item.id));
+        const ids = new Set((group.links || []).map(item => item.id));
+        if (!await window.PomeDeleteConfirm.open({titleKey:'ui.delete.groupTitle',items:[group.name],messageKey:'ui.delete.groupHint',args:{count:ids.size}})) return;
+        const current = linkGroups.find(item => item.id === groupId);
+        if (!current || (current.links || []).some(item => !ids.has(item.id))) return;
+        ids.forEach(id => linkSelection.delete(id));
         linkGroups = linkGroups.filter((item) => item.id !== groupId);
         persistLinks();
         renderLinkGroups();
@@ -558,7 +566,10 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         window.notchAPI.openExternal(link.url);
       }
       if (action.dataset.action === 'delete-link' && link) {
-        group.links = group.links.filter((item) => item.id !== link.id);
+        if (!await window.PomeDeleteConfirm.open({titleKey:'copy.deleteLink.e8feb9',items:[link.title || link.url]})) return;
+        const current = linkGroups.find(item => item.id === groupId);
+        if (!current) return;
+        current.links = current.links.filter((item) => item.id !== link.id);
         linkSelection.delete(link.id);
         persistLinks();
         renderLinkGroups();
@@ -713,11 +724,14 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }, true);
   }
 
-  linkBulkDelete?.addEventListener('click', () => {
+  linkBulkDelete?.addEventListener('click', async () => {
     if (!linkSelection.size) return;
+    const targets = allLinks().filter(link => linkSelection.has(link.id));
+    if (!await window.PomeDeleteConfirm.open({items:targets.map(link => link.title || link.url)})) return;
+    const ids = new Set(targets.map(link => link.id));
     linkGroups = linkGroups.map((group) => ({
       ...group,
-      links: (group.links || []).filter((link) => !linkSelection.has(link.id)),
+      links: (group.links || []).filter((link) => !ids.has(link.id)),
     }));
     linkSelection.clear();
     linkSelectionAnchor = null;
@@ -3213,8 +3227,12 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   }
 
   async function deleteSingleRecording(recordingId) {
-    const recording = recordings.find((item) => item.id === recordingId);
-    if (!recording) return;
+    let recording = recordings.find((item) => item.id === recordingId);
+    if (!recording || recording.isDraft) return;
+    const expectedPath = recording.audioPath;
+    if (!await window.PomeDeleteConfirm.open({titleKey:'copy.deleteRecording.56133d',items:[recording.title],messageKey:'ui.delete.recordingHint'})) return;
+    recording = recordings.find(item => item.id === recordingId);
+    if (!recording || recording.isDraft || recording.audioPath !== expectedPath) return;
     if (window.notchAPI && recording.audioPath) {
       await window.notchAPI.deleteRecording(recording.audioPath).catch(() => false);
     }
@@ -3321,6 +3339,11 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     if (!recordingSelection.size) return;
     const targets = recordings.filter((recording) => !recording.isDraft && recordingSelection.has(recording.id));
     if (!targets.length) return;
+    if (!await window.PomeDeleteConfirm.open({items:targets.map(recording => recording.title),messageKey:'ui.delete.recordingHint'})) return;
+    if (targets.some(target => {
+      const current = recordings.find(item => item.id === target.id);
+      return current && (current.isDraft || current.audioPath !== target.audioPath);
+    })) return;
     if (window.notchAPI) {
       await Promise.all(targets.map((recording) => recording.audioPath
         ? window.notchAPI.deleteRecording(recording.audioPath).catch(() => false)
@@ -3956,6 +3979,9 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       selected: credentialSelection.has(row.dataset.id),
     });
     if (action.type === 'delete') {
+      const credential = credentials.find(item => item.id === row.dataset.id);
+      if (!credential || !await window.PomeDeleteConfirm.open({titleKey:'ui.delete.credentialTitle',items:[`${credential.service} · ${credential.account}`]})) return;
+      if (credentialsReadFailed || !credentials.some(item => item.id === credential.id)) return;
       if ([pendingCredentialEditId, editingCredentialId].includes(row.dataset.id)) invalidateCredentialEdit();
       const deleteButton = event.target.closest('[data-credential-delete]');
       if (deleteButton) deleteButton.disabled = true;
@@ -4047,8 +4073,12 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   });
   credentialBulkDelete?.addEventListener('click', async () => {
     if (!credentialSelection.size || !window.notchAPI || credentialsReadFailed) return;
-    if ([pendingCredentialEditId, editingCredentialId].some(id => credentialSelection.has(id))) invalidateCredentialEdit();
-    const result = await window.notchAPI.deleteCredentials([...credentialSelection]).catch(() => ({ ok: false }));
+    const targets = credentials.filter(item => credentialSelection.has(item.id));
+    if (!await window.PomeDeleteConfirm.open({items:targets.map(item => `${item.service} · ${item.account}`)})) return;
+    if (credentialsReadFailed) return;
+    const ids = targets.map(item => item.id);
+    if ([pendingCredentialEditId, editingCredentialId].some(id => ids.includes(id))) invalidateCredentialEdit();
+    const result = await window.notchAPI.deleteCredentials(ids).catch(() => ({ ok: false }));
     if (!result || !result.ok) { reportCredentialFailure(result); return; }
     credentialSelection.clear();
     credentialAnchor = null;

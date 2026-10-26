@@ -1527,5 +1527,21 @@
   "credentials.readFailed": "Credentials could not be read. The original file is preserved.",
   "credentials.readRepair": "Check system secure storage and file permissions, then retry.",
   "providers.cursorEncryptedLogin": "Cannot decrypt the Cursor login. Allow system credential access and try Get local login again, or enter a valid token manually.",
-  "providers.cursorLoginBlockedSummary": "{source} login access blocked · Settings"
+  "providers.cursorLoginBlockedSummary": "{source} login access blocked · Settings",
+  "ui.delete.title": "Confirm deletion?",
+  "ui.delete.description": "The following items will be removed from your workspace.",
+  "ui.delete.count": "{count} selected",
+  "ui.delete.more": "{count} more",
+  "ui.delete.recordingHint": "The audio files and transcripts will also be deleted.",
+  "ui.delete.groupHint": {
+    "one": "This group and its {count} link will be deleted.",
+    "other": "This group and its {count} links will be deleted."
+  },
+  "ui.delete.categoryHint": {
+    "one": "This category and its {count} task will be deleted.",
+    "other": "This category and its {count} tasks will be deleted."
+  },
+  "ui.delete.todoTitle": "Delete task",
+  "ui.delete.credentialTitle": "Delete credential",
+  "ui.delete.groupTitle": "Delete link group"
 }

@@ -1494,5 +1494,15 @@
   "credentials.readFailed": "暂时无法读取密钥，原文件已保留。",
   "credentials.readRepair": "请检查系统安全存储和文件权限，修复后重试。",
   "providers.cursorEncryptedLogin": "无法解密 Cursor 登录凭据。请允许系统凭据访问后重新获取登录，或手动填写有效 Token。",
-  "providers.cursorLoginBlockedSummary": "{source} 登录读取受限 · 去设置"
+  "providers.cursorLoginBlockedSummary": "{source} 登录读取受限 · 去设置",
+  "ui.delete.title": "确认删除？",
+  "ui.delete.description": "确认后将从工作区移除以下内容。",
+  "ui.delete.count": "已选择 {count} 项",
+  "ui.delete.more": "另有 {count} 项",
+  "ui.delete.recordingHint": "将同时删除录音文件和转写内容。",
+  "ui.delete.groupHint": "将删除此分组及其中的 {count} 个链接。",
+  "ui.delete.categoryHint": "将删除此分类及其中的 {count} 条待办。",
+  "ui.delete.todoTitle": "删除待办",
+  "ui.delete.credentialTitle": "删除密钥",
+  "ui.delete.groupTitle": "删除链接分组"
 }

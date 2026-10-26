@@ -304,11 +304,9 @@ async function main() {
   assert.equal(await js(`!!document.getElementById('todo-date-popover')`), true, 'popover survives board rebuild');
 
   await js(`document.getElementById('todo-date-popover').hidden = true`);
-  // Headless Electron has no native confirm UI — stub before remove.
-  await js(`(() => {
-    window.confirm = () => true;
-    removeTodoCategory('P4');
-  })()`);
+  await js(`removeTodoCategory('P4');void 0`);
+  await until(`document.getElementById('content-delete-confirm').open`);
+  await js(`document.getElementById('content-delete-apply').click()`);
   await until(`!document.querySelector('.quadrant[data-priority="P4"]')`);
   await capture('05-todo-removed-p4');
 
@@ -518,8 +516,10 @@ async function main() {
   assert.equal(await js(`document.querySelector('.todo-category-name').value`),'尚未提交的分类名','language changes preserve unsubmitted user names');
   assert.equal(await js(`document.querySelector('.todo-deadline-trigger[data-deadline-priority="P2"] span').textContent`),'Date');
   assert.equal(await js(`document.querySelector('.todo-bulk-delete').textContent`),'Delete');
-  await js(`window.confirm=message=>{window.lastCategoryConfirmation=message;return false;};removeTodoCategory('P6');void 0`);
-  assert.match(await js(`window.lastCategoryConfirmation`),/^Delete .* and its 1 task\?$/);
+  await js(`removeTodoCategory('P6');void 0`);
+  await until(`document.getElementById('content-delete-confirm').open`);
+  assert.equal(await js(`document.getElementById('content-delete-message').textContent`),'This category and its 1 task will be deleted.');
+  await js(`document.getElementById('content-delete-cancel').click()`);
   await capture('11-english-todo-controls');
   await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));void 0`);
   assert.equal(await js(`document.querySelector('.add-row input').placeholder`),'添加待办，回车保存…');

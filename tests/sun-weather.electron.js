@@ -53,6 +53,16 @@ async function run(c) {
     const rect = tileOnly ? await js(`(()=>{const r=document.getElementById('home-sun').getBoundingClientRect();return {x:Math.floor(r.x),y:Math.floor(r.y),width:Math.ceil(r.width),height:Math.ceil(r.height)}})()`) : undefined;
     fs.writeFileSync(path.join(shots, name + '.png'), (await c.capturePage(rect)).toPNG());
   }
+  async function captureWindMotion(name) {
+    if (!process.env.POME_WEATHER_MOTION) return;
+    await sleep(1000);
+    const rect = await js(`(()=>{const r=document.getElementById('home-sun').getBoundingClientRect();return {x:Math.floor(r.x),y:Math.floor(r.y),width:Math.ceil(r.width),height:Math.ceil(r.height)}})()`);
+    const directory=path.join(shots,name);fs.mkdirSync(directory,{recursive:true});
+    for(let i=0;i<48;i++) {
+      fs.writeFileSync(path.join(directory,`${String(i).padStart(3,'0')}.png`),(await c.capturePage(rect)).toPNG());
+      await sleep(80);
+    }
+  }
   async function size(value) {
     await js(`homeSizes.sun=${JSON.stringify(value)};homeWorkingLayout=null;applyHomeLayout(NotchDomain.resolveHomeWidgetLayout(homeOrder,homeSizes,hiddenHomeModules),{reason:'initial'});PomeSun.render()`);
     await js('Promise.allSettled(homeLayoutMotionAnimations.map(animation=>animation.finished))');
@@ -148,6 +158,20 @@ async function run(c) {
     assert.notEqual(await js('document.querySelector("#home-sun .wx-fx").toDataURL()'),painted,'wind bitmap advances, not just its animation clock');
     assert.equal(await js('PomeSun.getWeather().effects.count'),{'wind':10,'wind-strong':16,'rain-wind':48}[family]);
     await capture(family);
+    await captureWindMotion(family);
+    if(family==='wind-strong' && process.env.POME_WEATHER_MOTION) {
+      await size('large');await captureWindMotion('wind-large');await capture('wind-large');await size('medium');
+      console.log('Wind draw timing (ms):',await js(`(()=>{
+        const canvas=document.createElement('canvas');canvas.width=800;canvas.height=540;
+        const ctx=canvas.getContext('2d'),state=PomeWeatherEffects.scene('wind-strong',400,270),samples=[];
+        ctx.scale(2,2);
+        for(let i=0;i<140;i++) {
+          PomeWeatherEffects.step(state,1/60);const start=performance.now();PomeWeatherEffects.draw(ctx,state);
+          if(i>=20)samples.push(performance.now()-start);
+        }
+        samples.sort((a,b)=>a-b);return {median:samples[60],p95:samples[114]};
+      })()`));
+    }
   }
   await js('PomeSun.render();setActiveTab("settings")');await sleep(250);
   assert.equal(await js('document.getElementById("settings-weather-effects").checked'),true);

@@ -567,14 +567,13 @@ function addTodoCategory() {
   renderTodoBoard();
 }
 
-function removeTodoCategory(priority) {
+async function removeTodoCategory(priority) {
   if (window.__nasTodoReadonly === true) return;
   if (!todoCategoryOrder.includes(priority) || todoCategoryOrder.length <= 1) return;
-  const count = (data[priority] || []).length;
-  if (count > 0) {
-    const ok = window.confirm(pomeLocaleRendererApp.t('todo.removeCategoryConfirm', { name: todoCategoryNames[priority] || priority, count }));
-    if (!ok) return;
-  }
+  const ids = new Set((data[priority] || []).map(item => item.id));
+  if (!await window.PomeDeleteConfirm.open({titleKey:'todo.removeCategory',items:[todoCategoryNames[priority] || priority],messageKey:'ui.delete.categoryHint',args:{count:ids.size}})) return;
+  if (window.__nasTodoReadonly === true || !todoCategoryOrder.includes(priority) || todoCategoryOrder.length <= 1
+    || (data[priority] || []).some(item => !ids.has(item.id))) return;
   const removedItems = [...(data[priority] || [])];
   data[priority] = [];
   todoCategoryOrder = todoCategoryOrder.filter((id) => id !== priority);
@@ -825,7 +824,11 @@ function toggleTodo(priority, id) {
   if (nowDone) requestAnimationFrame(() => flashCheckboxPop(priority, id)); // 勾选弹一下
 }
 
-function deleteTodo(priority, id) {
+async function deleteTodo(priority, id) {
+  if (window.__nasTodoReadonly === true) return;
+  const target = (data[priority] || []).find(item => item.id === id);
+  if (!target || !await window.PomeDeleteConfirm.open({titleKey:'ui.delete.todoTitle',items:[target.text]})) return;
+  if (window.__nasTodoReadonly === true) return;
   const list = data[priority];
   const index = list.findIndex((t) => t.id === id);
   if (index === -1) return;
@@ -1118,6 +1121,7 @@ notch.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keydown', (event) => {
+  if (document.querySelector('dialog[open]')) return;
   const target = event.target instanceof Element ? event.target : null;
   const editable = Boolean(target && target.closest(
     'input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video'
@@ -1183,6 +1187,7 @@ document.addEventListener('compositionend', () => {
 
 if (window.notchAPI && typeof window.notchAPI.onEscape === 'function') {
   window.notchAPI.onEscape(() => {
+    if (window.PomeDeleteConfirm?.closeOnEscape()) return;
     if (window.closeWorkHubOverlay?.()) return;
     const el = document.activeElement;
     if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
@@ -1949,7 +1954,7 @@ function bindTodoBoardOnce() {
     );
   });
 
-  root.addEventListener('click', (event) => {
+  root.addEventListener('click', async (event) => {
     const remove = event.target.closest('[data-remove-priority]');
     if (remove) {
       removeTodoCategory(remove.dataset.removePriority);
@@ -1961,7 +1966,10 @@ function bindTodoBoardOnce() {
       const selected = todoSelections[priority];
       if (!selected || !selected.size) return;
       const removed = (data[priority] || []).filter((item) => selected.has(item.id));
-      data[priority] = (data[priority] || []).filter((item) => !selected.has(item.id));
+      if (!await window.PomeDeleteConfirm.open({items:removed.map(item => item.text)})) return;
+      if (window.__nasTodoReadonly === true) return;
+      const ids = new Set(removed.map(item => item.id));
+      data[priority] = (data[priority] || []).filter((item) => !ids.has(item.id));
       selected.clear();
       todoSelectionAnchors[priority] = null;
       saveData(data);
@@ -3206,7 +3214,7 @@ notesDetail?.addEventListener('focusout', (event) => {
   if (event.target.closest('#notes-editor')) flushNotesEditorSave();
 });
 
-notesDetail?.addEventListener('click', (event) => {
+notesDetail?.addEventListener('click', async (event) => {
   const modeButton = event.target.closest('[data-notes-mode]');
   if (modeButton) {
     setNotesDetailMode(modeButton.dataset.notesMode);
@@ -3231,7 +3239,8 @@ notesDetail?.addEventListener('click', (event) => {
   const note = notes.find((item) => item.id === selectedNoteId);
   if (!note) return;
   if (action === 'delete-note') {
-    const next = notes.filter((item) => item.id !== note.id);
+    if (!await window.PomeDeleteConfirm.open({titleKey:'copy.deleteNote.07a619',items:[noteArchiveTitle(note)]})) return;
+    const next = loadNoteArchive().filter((item) => item.id !== note.id);
     localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(next));
     if (localStorage.getItem(NOTE_ACTIVE_ARCHIVE_KEY) === note.id) {
       localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);

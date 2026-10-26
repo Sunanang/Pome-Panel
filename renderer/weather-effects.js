@@ -15,12 +15,12 @@
     return { kind, speed: low + random() * (high - low), low, high,
       x: 0, y: height * (.20 + random() * .56),
       length: Math.min(width * .52, 55 + random() * 120),
-      breadth: (strong ? 24 : 18) + random() * 24,
-      amplitude: 6 + random() * 14, period: 3.5 + random() * 4,
+      breadth: (strong ? 14 : 10) + random() * 8,
+      amplitude: 2 + random() * 4, period: 3.5 + random() * 4,
       phase: random() * Math.PI * 2, gustPeriod: 4 + random() * 4,
       gustPhase: random() * Math.PI * 2, gustAmount: .12 + random() * .30,
-      drift: (random() - .5) * 5, tilt: (random() - .5) * .08,
-      opacity: (strong ? .12 : .08) + random() * .06,
+      drift: (random() - .5) * 1.2, tilt: (random() - .5) * .025,
+      opacity: ((strong ? .045 : .030) + random() * .020) * 1.15,
       enterAt: random() * .10, exitAt: .76 + random() * .24,
       flowSeed: random() * 1000, textureSeed: random() * 1000, texture: null };
   }
@@ -38,8 +38,8 @@
       + .45*noise(time/(p.period*1.7)+p.phase,p.flowSeed+7));
   }
   function windTexture(p, ctx) {
-    // Soft, broken filaments, with no outline or fixed curl silhouette. Noise
-    // only builds a cached alpha texture; frames only transform the bitmap.
+    // Low-contrast flat sheets, without the bright spine or branching curls
+    // that read as smoke. Cache soft density and deform it locally at draw time.
     const width = 192, height = 80;
     const canvas = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(width,height)
       : ctx.canvas.ownerDocument.createElement('canvas');
@@ -48,24 +48,51 @@
     if (!brush) return null;
     const pixels = brush.createImageData(width,height), seed = p.textureSeed;
     for (let x=0;x<width;x++) {
-      const u = x/(width-1), taper = Math.pow(Math.sin(Math.PI*u),.9);
-      const center = .46 + .23*(noise(u*3,seed)-.5);
-      const spread = .045 + .065*noise(u*4,seed+3);
-      const secondary = .59 + .16*(noise(u*4,seed+4)-.5);
-      const density = smooth((noise(u*6,seed+5)-.18)/.70);
+      const u = x/(width-1), taper = smooth(u/.24)*smooth((1-u)/.38);
+      const center = .5 + .055*(noise(u*3,seed)-.5);
+      const above = .045 + .085*noise(u*5,seed+3);
+      const below = .035 + .065*noise(u*4,seed+4);
+      const density = smooth((noise(u*6,seed+5)-.14)/.65);
       for (let y=0;y<height;y++) {
         const v = y/(height-1);
-        const main = Math.exp(-.5*Math.pow((v-center)/spread,2));
-        const faint = .28*Math.exp(-.5*Math.pow((v-secondary)/(.04+spread*.45),2));
-        const edge = smooth(v/.18)*smooth((1-v)/.18);
-        const alpha = Math.min(.70,(main+faint)*density*taper*edge);
+        const sheet = smooth((v-center+above)/above)*smooth((center+below-v)/below);
+        const alpha = .55*sheet*density*taper;
         const index = (y*width+x)*4;
-        pixels.data[index] = 205; pixels.data[index+1] = 226; pixels.data[index+2] = 235;
+        pixels.data[index] = 180; pixels.data[index+1] = 204; pixels.data[index+2] = 216;
         pixels.data[index+3] = Math.round(alpha*255);
       }
     }
     brush.putImageData(pixels,0,0);
     return canvas;
+  }
+  function drawWindSheet(ctx, p, time, progress, length, breadth, alpha) {
+    // Adjacent sections sample continuous fields, so bends and gaps travel
+    // through the sheet without a new texture, per-frame pixels, or random jumps.
+    const sections = 48, sourceWidth = p.texture.width / sections;
+    const age = time / p.period, seed = p.flowSeed;
+    const spread = 1 + progress*.25;
+    const edgeX = u => length*(u-.5+(noise(u*3+age*.6,seed+25)-.5)*.18);
+    const edgeY = u => breadth*spread*((noise(u*2.4-age*.85+p.phase,seed+21)-.5)*.12
+      +(noise(u*5+age*.65,seed+22)-.5)*.04);
+    let start = edgeX(0), center = edgeY(0);
+    for (let i = 0; i < sections; i++) {
+      const u = (i + .5) / sections;
+      const thinning = .5 + .65*noise(u*5-age*.7,seed+23);
+      // Dissipation progresses unevenly along the sheet: local holes open
+      // before its neighbours fade, leaving stretched, separated remnants.
+      const erosion = noise(u*6-age*.9,seed+24);
+      const dissolve = smooth((erosion-(.12+progress*.38))/.38);
+      const height = breadth*thinning*spread;
+      const right = (i+1)/sections, end = edgeX(right), nextCenter = edgeY(right);
+      // Tilt each section between its boundary samples to avoid stair steps.
+      ctx.save();
+      ctx.globalAlpha = alpha*dissolve;
+      ctx.transform(1,(nextCenter-center)/(end-start),0,1,start,center);
+      ctx.drawImage(p.texture, i*sourceWidth, 0, sourceWidth, p.texture.height,
+        0, -height/2, end-start, height);
+      ctx.restore();
+      start = end; center = nextCenter;
+    }
   }
   function smooth(value) { const t = Math.max(0, Math.min(1, value)); return t * t * (3 - 2 * t); }
   function scene(family, width, height, random = Math.random) {
@@ -158,11 +185,10 @@
         const vy = p.drift+p.amplitude/p.period*noiseSlope(s.time/p.period+p.phase,p.flowSeed)
           +p.amplitude*.45/(p.period*1.7)*noiseSlope(s.time/(p.period*1.7)+p.phase,p.flowSeed+7);
         ctx.rotate(Math.atan2(vy,vx)+p.tilt);
-        ctx.globalAlpha = p.opacity*fade*smooth(s.time/.8)*(s.family==='rain-wind'?.55:1)
-          *(.55+.45*noise(s.time/2.5+p.phase,p.flowSeed+11));
+        const alpha = p.opacity*fade*smooth(s.time/.8)*(s.family==='rain-wind'?.55:1);
         const length = p.length*(.92+.14*noise(s.time/3+p.phase,p.flowSeed+13));
         const breadth = p.breadth*(.85+progress*.4);
-        ctx.drawImage(p.texture,-length/2,-breadth/2,length,breadth);
+        drawWindSheet(ctx,p,s.time,progress,length,breadth,alpha);
         ctx.restore();
       } else if (p.kind === 'dust') {
         ctx.strokeStyle = 'rgba(205,175,120,.28)'; ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 5, p.y); ctx.stroke();

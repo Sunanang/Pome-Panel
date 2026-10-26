@@ -1527,5 +1527,15 @@
   "credentials.readFailed": "Não foi possível ler as credenciais. O arquivo original foi preservado.",
   "credentials.readRepair": "Verifique o armazenamento seguro do sistema e as permissões do arquivo e tente novamente.",
   "providers.cursorEncryptedLogin": "Não foi possível descriptografar o login do Cursor. Permita o acesso às credenciais do sistema e tente obtê-lo novamente ou insira um token válido manualmente.",
-  "providers.cursorLoginBlockedSummary": "Acesso ao login de {source} bloqueado · Configurações"
+  "providers.cursorLoginBlockedSummary": "Acesso ao login de {source} bloqueado · Configurações",
+  "ui.delete.title": "Confirmar exclusão?",
+  "ui.delete.description": "Os itens a seguir serão removidos do seu espaço de trabalho.",
+  "ui.delete.count": "{count} selecionados",
+  "ui.delete.more": "Mais {count}",
+  "ui.delete.recordingHint": "Os arquivos de áudio e as transcrições também serão excluídos.",
+  "ui.delete.groupHint": "Este grupo e seus {count} links serão excluídos.",
+  "ui.delete.categoryHint": "Esta categoria e suas {count} tarefas serão excluídas.",
+  "ui.delete.todoTitle": "Excluir tarefa",
+  "ui.delete.credentialTitle": "Excluir credencial",
+  "ui.delete.groupTitle": "Excluir grupo de links"
 }
