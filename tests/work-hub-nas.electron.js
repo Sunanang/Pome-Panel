@@ -17,7 +17,7 @@ fs.writeFileSync(path.join(profile,'workspace.json'),JSON.stringify({version:1,l
 let phase='startup';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));const watchdog=setTimeout(()=>{console.error('NAS Electron tests timed out during '+phase);app.exit(1);},60000);
 async function until(c,expr){for(let i=0;i<300;i++){try{if(await c.executeJavaScript(expr))return;}catch{}await sleep(30);}throw new Error('timeout: '+expr);}
-let started=false;app.on('web-contents-created',(_event,c)=>c.once('did-finish-load',()=>{if(started||!c.getURL().endsWith('/renderer/index.html'))return;started=true;run(c).then(()=>{clearTimeout(watchdog);nas.server.close();console.log('Paired restore pause, invalidated preview, verified NAS overwrite and rollback checks passed');app.exit(0);}).catch(e=>{console.error(e);app.exit(1);});}));
+let started=false;app.on('web-contents-created',(_event,c)=>c.once('did-finish-load',()=>{if(started||!c.getURL().endsWith('/renderer/index.html'))return;started=true;run(c).then(()=>{clearTimeout(watchdog);nas.server.close();console.log('Paired restore pause, invalidated preview, verified NAS overwrite and rollback checks passed');app.exit(0);}).catch(e=>{console.error('NAS recovery phase:',phase,e);app.exit(1);});}));
 async function run(c){
  const ready=`!!window.NotchWorkspace && !workspaceReloadPending && sessionStorage.getItem('notch-workspace-hydrated')==='1' && document.getElementById('home-note').value==='# 本机备份首页'`;
  await until(c,ready);await c.executeJavaScript('setMode(true)');
@@ -40,9 +40,11 @@ async function run(c){
  phase='restore preview';
  const preview=await c.executeJavaScript('window.notchAPI.backupPreview()');assert.equal(preview.ok,true,JSON.stringify(preview));
  phase='restore';
+ const restoredPage=new Promise(resolve=>c.once('did-finish-load',resolve));
  const duplicateRestore=await c.executeJavaScript(`(()=>{window.firstRestore=window.notchAPI.backupRestore(${JSON.stringify(preview.previewId)});return window.notchAPI.backupRestore(${JSON.stringify(preview.previewId)})})()`);
  assert.equal(duplicateRestore.error,'workspace_switching','concurrent restores must not share the staging area');
  await c.executeJavaScript('window.firstRestore').catch(()=>{});
+ await restoredPage;
  await until(c,ready);
  phase='paused sync';
  let status=await c.executeJavaScript('window.notchAPI.syncGetStatus()');assert.equal(status.recovery.paused,true);
