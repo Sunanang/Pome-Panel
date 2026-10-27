@@ -246,9 +246,9 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
       const nameWidth = tile.dataset.widgetSize === 'small' && /^zh(?:-|$)/i.test(document.documentElement.lang)
         ? name.scrollWidth : Math.min(name.scrollWidth, number(nameStyle.fontSize));
       const decoration = icon && getComputedStyle(icon).display !== 'none'
-        ? icon.getBoundingClientRect().width + number(style.columnGap) : 0;
-      const minimum = Math.ceil((reading?.getBoundingClientRect().width || 0)
-        + (separator?.getBoundingClientRect().width || 0) + nameWidth + decoration
+        ? icon.offsetWidth + number(style.columnGap) : 0;
+      const minimum = Math.ceil((reading?.offsetWidth || 0)
+        + (separator?.offsetWidth || 0) + nameWidth + decoration
         + number(style.paddingLeft) + number(style.paddingRight)
         + number(style.borderLeftWidth) + number(style.borderRightWidth) + 1);
       wx.style.minWidth = `${minimum}px`;

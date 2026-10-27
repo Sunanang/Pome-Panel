@@ -6,7 +6,7 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
-- Reserve measured temperature and Chinese weather-name widths in weather cards, shortening long headings when needed to prevent Windows negative-reading clipping. Cover wide negative readings and long German headings at medium/large sizes, and set an explicit Chinese locale for cold-start inbox recovery acceptance.
+- Reserve measured temperature and Chinese weather-name widths in weather cards, shorten long headings, and omit the small location button's decorative chevron to prevent Windows clipping or overflow. Cover wide negative readings and long German headings at medium/large sizes, and set an explicit Chinese locale for cold-start inbox recovery acceptance.
 - Show and focus animation acceptance windows, set motion preferences explicitly, and sample layout-return interpolation on its actual CSS animation timeline to avoid software-rendering and background-window timing failures.
 - Enable native window visibility before loading the weather acceptance page and cover both motion preferences, keeping the hidden-window effects suspension check reliable.
 - Align installed Windows acceptance with the current nine default home widgets, including sun and almanac, and verify the corresponding settings choices.

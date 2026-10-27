@@ -87,7 +87,8 @@ async function run(c) {
         pinOnly:getComputedStyle(p.querySelector('span')).display==='none',label:t.querySelector('.wx').textContent,
         geometry:{size:t.dataset.widgetSize,weather:a.width,text:text.clientWidth,textScroll:text.scrollWidth,
           reading:w.querySelector('.wx-reading')?.getBoundingClientRect().width,name:w.querySelector('.wx-state')?.clientWidth,
-          right:t.querySelector('.sun-right')?.clientWidth,icon:w.querySelector('.ic')&&getComputedStyle(w.querySelector('.ic')).display}};})()`);
+          right:t.querySelector('.sun-right')?.clientWidth,icon:w.querySelector('.ic')&&getComputedStyle(w.querySelector('.ic')).display,
+          tile:{left:r.left,right:r.right,width:r.width},weatherBounds:{left:a.left,right:a.right},placeBounds:{left:b.left,right:b.right},headWidth:head.clientWidth}};})()`);
     assert.equal(result.overlap, false, JSON.stringify(result)); assert.equal(result.inside, true, JSON.stringify(result));
     assert.equal(result.textFits, true, JSON.stringify(result)); assert(result.caption && result.arc);
     assert.equal(result.readingFits,true,JSON.stringify(result));
