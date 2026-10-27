@@ -8,6 +8,7 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 - Show and focus animation acceptance windows, set motion preferences explicitly, and sample layout-return interpolation on its actual CSS animation timeline to avoid software-rendering and background-window timing failures.
 - Enable native window visibility before loading the weather acceptance page and cover both motion preferences, keeping the hidden-window effects suspension check reliable.
+- Align installed Windows acceptance with the current nine default home widgets, including sun and almanac, and verify the corresponding settings choices.
 - Measure quota digits and percent signs with their actual font weights to keep progress-row margins balanced across system fonts. Show quota acceptance windows so Windows software rendering can continue producing frames.
 - Size quota progress rows to their painted text height, preventing one pixel of overflow from adding a 15px classic scrollbar; more than three pools still scroll. Use software rendering for macOS CI captures to avoid hosted-VM GPU failures.
 

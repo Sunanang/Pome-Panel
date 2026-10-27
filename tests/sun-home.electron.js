@@ -71,6 +71,7 @@ async function runPlatform(name) {
     await js('setMode(true)');
     const initial = await readLayout();
     if (name === 'win32') {
+      assert.deepEqual(await js('NotchHome.getVisibility().visibleIds'), ['pomodoro', 'cursor', 'recorder', 'inbox', 'mirror', 'note', 'commands', 'sun', 'almanac']);
       assert(!initial.hidden.includes('sun'), 'fresh Windows enables sun: ' + JSON.stringify(await js(`({freshWindowsHome,caps:readPlatformCapabilities(),initial:${JSON.stringify(initial)}})`)));
       assert(initial.hidden.includes('music') && initial.hidden.includes('windows'));
       assert(!initial.storedHidden.includes('music') && !initial.storedHidden.includes('windows'), 'platform restrictions must not overwrite saved preferences');
