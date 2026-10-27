@@ -237,13 +237,13 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
     if ((nameClipped() && name.clientWidth < 16) || text.scrollWidth > text.clientWidth + 1) {
       if (humidity) humidity.hidden = true;
     }
-    if (tile.dataset.widgetSize === 'small') {
+    {
       const reading = wx.querySelector('.wx-reading'), separator = wx.querySelector('.wx-separator');
       const style = getComputedStyle(wx), nameStyle = getComputedStyle(name);
       const number = value => parseFloat(value) || 0;
       // Reserve the actual temperature width before ellipsizing the location
       // or heading. Windows fallback fonts can make negative readings wider.
-      const nameWidth = /^zh(?:-|$)/i.test(document.documentElement.lang)
+      const nameWidth = tile.dataset.widgetSize === 'small' && /^zh(?:-|$)/i.test(document.documentElement.lang)
         ? name.scrollWidth : Math.min(name.scrollWidth, number(nameStyle.fontSize));
       const decoration = icon && getComputedStyle(icon).display !== 'none'
         ? icon.getBoundingClientRect().width + number(style.columnGap) : 0;

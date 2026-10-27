@@ -138,6 +138,11 @@ async function run(c) {
       await size(value);await capture(`${value}-${id}`);await assertGeometry(value);
       if(value==='small' && id==='zh-CN') assert.equal(await js('(()=>{const n=document.querySelector("#home-sun .wx-state");return n.scrollWidth<=n.clientWidth+1})()'),true,'Chinese compact weather stays complete beside the ellipsized location');
     }
+    if (id === 'de-DE') {
+      const wideHeading = await c.insertCSS('.home-sun .sun-head > .tile-label { font-family:monospace!important;font-size:17px!important; } .home-sun .wx-reading { font-family:monospace!important;font-size:13px!important; }');
+      for (const value of ['medium','large']) { await size(value);await assertGeometry(value);await capture(`${value}-wide-german-heading`); }
+      await c.removeInsertedCSS(wideHeading);
+    }
   }
   const wideReading = await c.insertCSS('.home-sun[data-widget-size="small"] .wx-reading { font-family:monospace!important;font-size:13px!important; }');
   await size('small');await assertGeometry('small');
