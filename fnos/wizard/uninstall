@@ -1,30 +1,33 @@
 [
   {
-    "stepTitle": "保留或删除应用设置",
+    "stepTitle": "${wizard.keepOrDeleteAppData_e141d3}",
     "items": [
       {
         "type": "tips",
-        "helpText": "保留或删除应用设置。仅卸载可保留现有文件以便重装。"
+        "helpText": "${wizard.chooseWhetherToKeepAppDataKeeping_6bccf1}"
       },
       {
         "type": "radio",
         "field": "wizard_data_action",
-        "label": "数据处理方式",
+        "label": "${wizard.appData_dcf6f0}",
         "initValue": "keep",
         "options": [
           {
-            "label": "保留现有文件",
+            "label": "${wizard.keepAppData_b04690}",
             "value": "keep",
-            "helpText": "保留现有文件，重新安装后可以继续使用"
+            "helpText": "${wizard.keepExistingFilesForUseAfterReinstalling_fd77b2}"
           },
           {
-            "label": "清除所有应用数据文件（不可恢复）!!!",
+            "label": "${wizard.deleteAllAppDataCannotBeUndone_a440ed}",
             "value": "delete",
-            "helpText": "清除所有应用数据文件，此操作不可恢复"
+            "helpText": "${wizard.allAppDataFilesWillBePermanently_c0cd34}"
           }
         ],
         "rules": [
-          { "required": true, "message": "请选择是否保留应用数据" }
+          {
+            "required": true,
+            "message": "${wizard.chooseWhetherToKeepAppData_5596de}"
+          }
         ]
       }
     ]

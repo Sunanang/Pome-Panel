@@ -1,201 +1,84 @@
 <div align="center">
-  <img src="build/pome-panel-icon.png" width="112" alt="Pome Panel 图标" />
+  <img src="build/pome-panel-icon.png" width="88" alt="Pome Panel" />
   <h1>Pome Panel</h1>
-  <p><strong>Mac 与 Windows 上的桌面工作台。</strong></p>
-  <p>一块半透明玻璃面板。首页是 Bento，同一处切换待办、笔记、链接、录制与密钥。macOS 上收起后可以拖到屏幕四边，展开时从你停下的位置长出来。</p>
-  <p>基于 Todo Panel 二次开发。</p>
+  <p><strong>随手展开的桌面工作台。</strong></p>
+  <p>待办、笔记、链接、录音与 AI 提醒，放在屏幕边缘，随时取用。</p>
   <p>
-    <a href="#和-todo-panel-的差别">和 Todo Panel 的差别</a>
-    ·
-    <a href="#从源码运行">从源码运行</a>
-    ·
+    <a href="https://github.com/Sunanang/Pome-Panel/releases">获取安装包</a> ·
+    <a href="#开始使用">快速开始</a> ·
+    <a href="docs/user-guide.md">使用指南</a> ·
     <a href="https://github.com/Sunanang/Pome-Panel/issues">反馈问题</a>
   </p>
   <p>
-    <img alt="macOS 13+ Apple Silicon" src="https://img.shields.io/badge/macOS-13%2B%20Apple%20Silicon-111318?style=flat-square&logo=apple" />
-    <img alt="Windows 10/11 x64" src="https://img.shields.io/badge/Windows-10%2F11%20x64-0078D4?style=flat-square" />
-    <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-35c58b?style=flat-square" />
-    <img alt="Electron 44" src="https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron" />
+    <img src="https://img.shields.io/badge/macOS-13%2B%20Apple%20Silicon-111318?logo=apple" alt="macOS 13+ Apple Silicon" />
+    <img src="https://img.shields.io/badge/Windows-10%2F11%20x64-0078D4" alt="Windows 10/11 x64" />
+    <img src="https://img.shields.io/badge/License-MIT-35c58b" alt="MIT" />
+  </p>
+  <p>
+    <strong>简体中文</strong> ·
+    <a href="README.zh-TW.md">繁體中文</a> ·
+    <a href="README.en.md">English</a> ·
+    <a href="README.ja.md">日本語</a> ·
+    <a href="README.ko.md">한국어</a> ·
+    <a href="README.es.md">Español</a> ·
+    <a href="README.fr.md">Français</a> ·
+    <a href="README.de.md">Deutsch</a> ·
+    <a href="README.ru.md">Русский</a> ·
+    <a href="README.pt-BR.md">Português (Brasil)</a>
   </p>
 </div>
 
-![Pome Panel 首页浮在 macOS 桌面上](docs/screenshots/home.png)
+![Pome Panel 工作台预览](docs/screenshots/workspace-overview.png)
 
-首页展开后是一块玻璃面板，可以停在桌面一侧。里面是快速录音、番茄钟、AI 剩余额度、照片、常用指令、当前窗口和 Markdown 速记。
+<p align="center"><sub>点击胶囊展开，收起后拖到屏幕四边；首页组件可以自由调整。</sub></p>
 
-![Pome Panel 展开后面板的近景](docs/screenshots/todo.png)
+## 一个面板，处理日常小事
 
-同一块面板的近景。系统菜单栏留在它上方。待办、剪贴、笔记都在顶栏里切换，窗口大小不变。
-
-## 和 Todo Panel 的差别
-
-Pome Panel 基于 Todo Panel 二次开发。仓库没有登记可核对的上游地址，下面只列这个仓库里的能力。
-
-| | Pome Panel |
+| 功能 | 能做什么 |
 | --- | --- |
-| **它是什么** | 桌面控制台：Bento 首页，加上待办、笔记、链接、录制、密钥。待办是其中一页 |
-| **放在哪里** | **两端都可以改位置。** 收起成一颗短胶囊，拖动后吸附到屏幕的上、下、左、右。靠近某一端时，展开面板靠向那个角（例如右下角）；否则沿这条边居中。位置会记住。设置里可以「重置到顶部」 |
-| **首页** | 快速录音、番茄钟、AI 剩余额度、常用指令、Markdown 速记、镜子。Mac 上还有汽水音乐和当前窗口。组件可以隐藏，也可以改布局。首页布局只留在本机 |
-| **多设备** | 飞牛 NAS 伴侣（`fnos/` 里的 Pome Panel）。配对后，在多台设备之间同步待办、笔记、链接、常用指令、剪贴板、录音、AI 配置和密钥。密钥以加密盒传输 |
-| **名字** | Pome Panel（石榴）。开发者 Lando |
+| **首页工作台** | 自定义组件与布局，集中查看专注计时、速记、黄历、日出日落与当前天气 |
+| **待办与笔记** | 1–8 个待办分类、到期提醒，配合 Markdown 速记与笔记库 |
+| **链接与录音** | 分类收藏网址，录制音频，可选实时转写与智能命名 |
+| **AI 助手** | 查看多家 AI 剩余额度，接收已接入来源的任务完成提醒 |
+| **剪贴板与密钥** | 按需开启剪贴板历史，用系统安全存储加密账号与密钥 |
+| **NAS 多端同步** | 可选配对飞牛 NAS，在多台设备之间同步工作区内容 |
 
-## 面板怎么摆
+常用指令、待办、笔记、链接、录制和密钥在删除前统一弹出确认，显示内容预览与数量；录音、链接分组和待办分类会说明一并删除的内容。取消或按 Esc 保留原内容。
 
-折叠态是一颗短胶囊：贴在上下边时大约 85×9，贴在左右边时竖过来。点一下展开；按住拖动则搬家。松手时按指针离四边的远近吸附，坐标写进本机设置。沿这条边，离屏幕一端大约 120 逻辑像素以内时，展开面板会靠向那个角。没有自定义位置时，胶囊在顶部居中：macOS 上是菜单栏正下方，Windows 上是工作区顶部，都不会压住任务栏或菜单栏。
+## 开始使用
 
-展开后各页内容区都是 `1240 × 540`。切换页面只换内容，不改窗口大小。窄屏和矮屏会留出边距。
+1. 在 [Releases](https://github.com/Sunanang/Pome-Panel/releases) 查看安装包：Mac 选择 `arm64.dmg`，Windows 选择 `windows-x64-setup.exe`。
+2. 打开应用，点击屏幕边缘的胶囊展开；收起后可以拖动，调整停靠位置。
+3. 在「设置」里选择需要的功能。AI 接入、录音转写和 NAS 同步均按需配置。
 
-菜单栏托盘可以重新显示面板、设置唤出快捷键、开机启动。默认唤出是悬停后按空格，也可以改成别的组合键。
+安装包以 Releases 实际发布为准；尚无安装包时可从源码运行。开发中的功能与修复见[更新日志](CHANGELOG.md)。
 
-## 里面有什么
-
-| 页面 | 做什么 |
-| --- | --- |
-| **首页** | 上面的 Bento。至少保留一个组件；隐藏后其余格子重新铺满 |
-| **待办** | 四个可改名的工作流（内部键仍是 P0–P3，默认「课程 / 自媒体&写作 / Vibe coding / 日常」）。新建默认当天 23:30，按截止时间排序，到期前一小时提醒 |
-| **笔记** | 首页速记保存后进入笔记库，可搜索、重命名、编辑和删除 |
-| **链接** | 只保存公开的 http/https。抓取标题时拒绝本机、内网和不安全重定向 |
-| **录制** | 音频写在本机 `recordings/`。可选百炼 Qwen3-ASR 实时转写，API Key 经系统安全存储或环境变量读取 |
-| **密钥** | 账号、密码和 API Key 使用系统安全存储，页面不能直接读出明文 |
-| **设置** | 转写与智能命名、AI 剩余额度（Cursor / Codex 状态与 Token）、NAS 同步、功能显隐、首页组件、镜子封面、默认展开页、唤出快捷键、面板位置、数据目录、开机启动 |
-
-首页 Bento 的「AI 完成」模块可回看 Codex / Claude Code / Cursor 的本机完成事件（旧 GPT 历史保留，显示为“其他”）。模块支持四档尺寸：迷你显示未读数与最新来源，小号显示最近 3 条，中号显示最近 5 条，大号显示 10 条及项目摘要。记录按模块尺寸分页（迷你 1、小号 3、中号 5、大号 10 条），不再提供“查看全部”模式。第 1 页只显示“下一页”；后续页显示“上一页”和当前页码，仅在确实有下一页数据时显示“下一页”，总数不超过一页时隐藏分页区。新完成记录到达时保留当前页，翻页后列表回到顶部，卡片尺寸保持不变；「全部已读」通过逐条保存标记已有记录。首页 tab 未选中时在文字右上方显示未读角标（超过 9 为 9+），损坏时显示 !；选中首页时隐藏。模块关闭时角标显示小点，点击转到首页模块设置；模块开启时点击返回首页并高亮。关闭 AI 完成后在原空位显示淡色“添加模块”入口；再开启会保留其他组件的尺寸和位置，重新开启时优先恢复原位置，空间不足只缩小 AI 完成本身。记录先落盘再提醒，点击记录时标已读，已读保留 30 天，未读不自动清理。去重使用来源的完成事件 ID，或来源、任务与完成时间/回合序号生成的稳定身份，延迟重试和重启重投不会再提醒；同一会话的新回合仍正常接收。去重信息随记录保留，已读首次标记后 30 天一起清理，未读继续保留。缺少明确身份的旧钩子事件仍接收，以补充的完成/接收时间和内容生成身份；没有原始 ID 的旧事件无法保证跨时间重投仍被识别为同一事件。收件箱损坏时显示“备份损坏文件并重建”，确认弹窗展示完整备份路径和可能无法恢复历史的影响；取消继续暂停，确认后先保存并校验原始字节，再原子建立空收件箱。收件箱固定保存在本机 userData，不参与 NAS 同步或普通资料备份。点击记录直接打开来源软件，不定位聊天或会话：Codex 打开桌面版，Cursor 打开 Cursor，Claude Code 打开终端。macOS 优先复用 cwd 对应的 Terminal 标签页，找不到时新开终端并进入该目录；Windows 优先 Windows Terminal，回退 PowerShell。没有 cwd 时只打开终端；目录须为存在的绝对目录。未安装或打开失败时显示轻提示。
-
-「设置 → NAS 同步」提供 `.pome-backup.zip` 本机资料备份，即使未配对也能导出实际待办、分类、笔记、链接、指令、剪贴板和录音媒体。v1 清单记录应用版本、集合条数及 SHA-256；恢复先校验并保存当前资料快照，替换失败会回滚。密钥、AI Key、配对、同步控制状态、首页布局和系统设置不进入普通备份，恢复保留当前凭据与设置。
-
-已配对设备恢复后暂停同步，重启继续暂停。需要重新预览并确认本机覆盖 NAS 的新增、修改和删除影响；本机或 NAS 变化使预览过期。NAS 必须先保存并读回验证快照，覆盖按服务器版本原子提交，核验成功后恢复同步；不支持快照的旧伴侣禁止覆盖。本轮没有“先拉取再合并”的执行入口。最近覆盖可在 NAS 没有后续变更时回退快照，回退产生新版本并保持同步暂停。
-
-同步结果按内容类型显示，录音元数据与音频分开；超过 6 MiB 或缺失的音频不会显示为已传输。本机备份仍保存完整超限音频；本机音频不完整且 NAS 已有完整音频时禁止破坏性覆盖。笔记冲突以新的笔记 ID 保留版本，按来源及版本去重，标题不会递归生成“副本的副本”；待办维持服务器实际接受的版本顺序，不做字段级自动合并。密钥新增与编辑默认使用密码掩码。
-
-剪贴板历史默认关闭，可从菜单栏或「设置 → 显示功能」打开。它只在本机轮询，不占用全局快捷键。Windows 上没打开原生能力时，点击条目是复制，再用 Ctrl+V 粘贴。
-
-Windows 上「汽水音乐」永久隐藏；「当前窗口」与剪贴板自动粘贴需要在「设置 → Windows 原生能力 · 实验功能」里手动打开（见 [Windows 上的几件事](#windows-上的几件事)）。关闭状态下不会改写已经保存的显隐偏好，换回 macOS 时组件还在。
-
-飞牛同步在设置页右侧的「NAS 同步」卡里填写地址和一次性配对码，卡片位于封面图片与本机设置之间。「高级」可配置一个备用外网地址；状态行显示整体同步时间，「详情」逐项显示各类内容的结果和各自同步时间。同步暂停时，恢复预览与快照回退入口直接显示在卡内。设备令牌放在系统安全存储，不写入 LocalStorage。本机工作区仍是数据落点；明文 HTTP 默认关闭，回环地址除外。
-
-飞牛伴侣将同步数据、设备配对、账号同步密钥和请求去重记录保存在数据目录的 `sync-state.bin` 检查点及 `sync-state.bin.transactions/` 增量事务目录，服务重启后继续使用原状态。每次写入只持久化变动，累计 256 个事务再安全合并检查点，旧录音不会随普通修改反复写入；校验、顺序或存储损坏时停止启动并保留原文件。NAS 内部检查点 v3 自动读取并升级旧 v1/v2 数据，旧伴侣不能读取 v3，不可直接降级。备份伴侣数据时必须一并保留检查点、事务目录与 `server-id`；普通桌面 ZIP 备份仍为 v1。清理按原子检查点完成：所有未撤销配对设备已确认的日志前缀可截断；未确认日志默认保留 90 天，超期游标明确要求全量重同步。幂等结果默认保留 90 天，清理后拒绝旧基线请求，客户端拉取并重建待发送请求；远端删除不能被旧队列复活。快照保护最近一次已提交覆盖、30 天回退窗口内的覆盖，以及 24 小时有效期内正在暂存的操作；其他快照默认达到 90 天后清理。准备操作超出 24 小时需要重新预览；回退仍需校验 NAS 没有后续变更。可通过 `FNOS_SYNC_RETENTION_DAYS` 与 `FNOS_ROLLBACK_WINDOW_DAYS` 设置正数天数；处理请求时每小时或累计 256 个事务触发检查。实际内容、未读收件箱及删除标记不按这些缓存规则清空。
-
-更换本机数据文件夹时，空目录用于迁移当前工作区；已有 `workspace.json` 的目录会提示打开其中的数据，当前工作区先保存到原目录。复制密钥密码时会标记为敏感内容，并从本应用剪贴板历史采集中排除。
-
-Cursor 用量默认自动读取本机 Cursor 登录态。「设置 → AI 剩余额度 → Cursor」中的「获取本机 Token」可一键读取已登录的本机 Cursor（macOS 与 Windows 均支持），填入密码输入框后再点击「保存」。无需安装 sqlite3 或 Python。保存的 Token 优先用于查询用量，本机以系统安全存储加密，并随 NAS 的 AI 配置以加密盒同步到其他已配对设备；失效时回退本机登录态。点击「清除」会恢复本机登录模式，并同步清除其他设备保存的 Token。未保存的输入不会同步。
-
-首页「AI 剩余额度」只显示已检测到或配置 Token 的来源。Cursor 与 Codex 都存在时，迷你和小尺寸可切换来源并记住本机选择；首次默认选剩余额度最少的来源，中尺寸左右并排，大尺寸上下分区。两个来源共用额度行：中、大尺寸依次展示名称与剩余比例、通栏进度条、账期或重置说明；迷你尺寸使用 12px 文字与 4px 条高，均分剩余高度。来源标签承载来源和套餐，单行脚注只显示刷新或更新时间；都未检测到时显示连接说明与设置入口。首页布局沿用原 `cursor` 模块 ID，不迁移已保存布局。Cursor / Codex 的额度统一显示「59%」，额度条越满表示剩余越多；以原始已用比例换算剩余后四舍五入，剩余 ≤20% 为橙色、≤5% 为红色，隐藏来源的提示点也遵循此规则。缺失数据保持 `--%`，本地数据仍保存原始已用比例。
-
-Codex 配置手动 access token 后，由主进程向 `https://chatgpt.com/backend-api/wham/usage` 查询实时额度，超时 10 秒；沿用首页的定期刷新与刷新按钮。未配置 Token 或联网失败时，回退读取本机 `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` 的最近 `token_count` 记录，默认目录为 `~/.codex`；Windows 还会检查 `%USERPROFILE%\.codex`。两种来源统一显示 5 小时和每周窗口、套餐、Credits 与更新时间，标签分别为「手动 Token」和「本机 Codex」。重置时间按本地日期显示为「HH:MM 重置」「明天 HH:MM 重置」或「M/D HH:MM 重置」。过期记录的额度条变灰并提示「实际应更低」。网络故障且没有可用本机记录时保留上次成功的远程数据与原更新时间。
-
-「设置 → AI 剩余额度」将 Cursor 与 Codex 放在同一卡片内。Codex「获取本机 Token」仅在主动点击时只读本机 `auth.json`，只提取 access token 并填入密码框，再点击保存。Token 由 `safeStorage` 加密保存在本机，不写入工作区、不参与 NAS 同步，也不进入日志；不提取或使用其他登录凭证，不自动续期。返回 401/403 时标记「Token 失效」，有本机记录则显示「Token 失效 · 已改用本机」，并提供设置入口。用户可重新获取本机 Token，或先在 Codex 重新登录后获取；没有安装 Codex 的设备可从另一台电脑获取后粘贴保存。重新保存立即清除失效状态并刷新，网络故障和 5xx 不会把有效 Token 标记为失效。
-
-首页编辑模式下拖动卡片只交换位置，各自保留尺寸；靠近网格边界时向左或向上收，有冲突则按原尺寸顺序重排。补洞锁定交换双方，只允许其他卡片扩展；无法按原尺寸放下时提示「空间不够，无法交换」并保留原布局。
-
-## 设计原则
-
-- **停在边上，展开才占一块桌面**：macOS 收起只留一颗胶囊，展开从你选的边长出来。窗口边界变更不使用系统动画，视觉动效留在渲染层，并尊重「减少动态效果」。
-- **设备按需启用**：镜子只有主动点击才开摄像头，离开首页或收起时立刻释放。麦克风只在开始录音后使用，结束录音或退出应用时释放。
-- **数据留在这台电脑**：待办、笔记、链接、录音元数据和工作区设置写在本地。可以更换数据文件夹，把工作区拷到另一台电脑。系统加密过的密钥不保证跨电脑迁移。
-- **同步是附加项**：飞牛伴侣同步待办、笔记、链接、常用指令、剪贴板、录音、AI 配置和密钥。它不替换本机存储。首页布局不同步。
-- **权限边界清晰**：链接抓取拒绝本机、内网和不安全重定向。窗口聚焦只接受最近一次扫描缓存里的窗口 ID。剪贴板跳过密码管理器标记为敏感的内容。
-
-## 本机 AI 完成提醒
-
-Pome Panel 只在 `127.0.0.1:43821` 监听通知，来源限 `codex`、`claude` 与 `cursor`，其余一律 404。提醒是一块不抢焦点的小窗。子代理结束和云端会话不会弹出。Windows 上点击提醒即关闭。
-
-```bash
-curl -X POST http://127.0.0.1:43821/notify/codex \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"任务已完成","project":"my-project","task_id":"demo","event_id":"demo-completion-1"}'
-```
-
-在「设置 → AI 完成来源」检测并接入 Codex、Claude Code、Cursor。确认浮层列出修改文件、Pome 钩子内容和同目录的 `.pome-backup-时间戳` 备份；确认后先校验备份再原子写入。配置损坏时拒绝修改，预览过期或文件被外部编辑后需要重新确认。仅增删 Pome 标记项，其他配置、钩子和缩进保留；Codex 的原 `notify` 被继续转发，断开后还原。Codex 接入后需重启工具。
-
-优先用 Pome 自带 Electron 的 Node 运行时，脚本采用当前应用安装路径。每次启动检查接入路径，应用搬家后可点「修复」。Claude Code 使用 `hooks.Stop`，Cursor 使用官方 `hooks.json` v1 的 `hooks.stop`，以 conversation_id 与 generation_id 组合去重。首次检测到未接入工具会提示；「以后再说」仅存本机并停止重复提示。
-
-「发送测试」经过同一转发脚本和本机接收服务，送达后显示“测试通知已送达”；测试不会产生历史、未读或真实完成提醒。首页未接入、等待第一条、接入失效三个空状态分别引导接入、测试/管理、修复。损坏收件箱仍使用独立的确认重建流程。
-
-仓库提供 [Codex](scripts/codex-notify.js)、[Claude Code](scripts/claude-notify.js)、[Cursor](scripts/cursor-notify.js) 转发脚本。Claude 云端会话（`CLAUDE_CODE_REMOTE=true`）不会转发。
-
-## Windows 上的几件事
-
-### 通知钩子怎么配
-
-优先使用设置页的一键接入，不依赖 PATH 中的 Node。默认应用目录为 `%LOCALAPPDATA%\Programs\Pome Panel`，接入器使用实际安装路径。本机配置分别位于 `%USERPROFILE%\.codex\config.toml`、`%USERPROFILE%\.claude\settings.json` 和 `%USERPROFILE%\.cursor\hooks.json`。Windows 通过随应用分发的 PowerShell 文件桥接设置 `ELECTRON_RUN_AS_NODE=1`，把通知 JSON 当数据传给脚本；不会把 JSON 拼进命令表达式。只有用户确认后才写工具配置。仍需 Windows 真机验证，不以 Mac 回归代替。
-
-### 原生能力（实验功能，默认关闭）
-
-「当前窗口」、剪贴板自动粘贴和「点击完成通知聚焦对应窗口」在 Windows 上依赖进程内的 Win32 调用。这三项默认关闭，在「设置 → Windows 原生能力 · 实验功能」里打开后立即生效，不需要重启。
-
-打开后：首页出现「当前窗口」，列出当前虚拟桌面上的窗口（按前后顺序，排除工具窗口），点击即切换并还原最小化的窗口；点击剪贴条目会自动粘贴回刚才的窗口，只发送一次 Ctrl+V，不安装全局键盘钩子。目标窗口以管理员身份运行时，系统会静默拦掉模拟按键，所以面板会提前识别并提示手动粘贴；目标已关闭或中途被切走，则退化为「已复制」。
-
-之所以默认关闭：安装包不签名，而「模拟按键」「枚举并切换其他进程的窗口」是安全软件的常见启发式特征。Windows Defender、火绒与 360 的首轮测试都无告警后，才会改成默认开启。排障时可以用环境变量 `POME_DISABLE_WIN_NATIVE=1` 启动，强制不加载原生模块。
-
-### 第一次打开时的 SmartScreen
-
-安装包没有代码签名，Windows 会弹出「Windows 已保护你的电脑」。点**更多信息 → 仍要运行**即可。安装包每次发新版都会重新触发这一步。安全软件报「未知发布者」或「新增开机启动项」时，同样是未签名导致的，可以在各自的信任列表里放行。
-
-### 已知限制
-
-- **不签名**：见上面的 SmartScreen 流程。
-- **不跟随虚拟桌面**：切到别的虚拟桌面后面板不会跟过去，切回来即可。
-- **没有汽水音乐**：控制汽水音乐依赖 macOS 的脚本接口，Windows 上这个组件永久隐藏。
-- **原生能力默认关闭**：「当前窗口」、自动粘贴与通知点击聚焦要手动打开，见上面一节。
-- **Windows arm64 未测试**：只发 x64 安装包。arm64 设备会在仿真下运行，随包的原生模块也是 x64 的，没有验证过。
-- **胶囊只有 9px 高**：贴在工作区顶部，会盖住最大化浏览器标签栏最上面的一小条。任务栏放在屏幕顶部时胶囊落在任务栏下方；Win11 把窗口拖到屏幕顶部中央弹出的 Snap 布局条也会和它重叠。
-- **剪贴板只复制**：没开原生能力时，点击条目是写回系统剪贴板，需要自己按 Ctrl+V 粘贴。
+> 数据默认保存在本机 `Pome Panel` 文件夹，可自行更换；NAS 同步是可选功能。Windows 的部分原生能力默认关闭，详见[使用指南](docs/user-guide.md#windows-上的几件事)。
 
 ## 从源码运行
 
-桌面端要求 Node.js 18 及以上：
-
 ```bash
-git clone https://github.com/Sunanang/Pome-Panel.git
+git clone --branch dev https://github.com/Sunanang/Pome-Panel.git
 cd Pome-Panel
 npm install
-npm test
+npm run setup:hooks
 npm start
 ```
 
-没有渲染层构建步骤。`npm start` 就是完整的桌面运行路径。
+使用 Node.js 18+。测试、NAS 伴侣与构建说明见[开发文档](docs/development.md)。
 
-| 命令 | 用途 |
-| --- | --- |
-| `npm test` | 单元测试与 JavaScript 语法检查 |
-| `npm start` | 启动 Electron 开发版 |
-| `npm run pack` | 生成本地未打包目录 |
-| `npm run build` | 在 macOS 上构建 Apple Silicon 产物 |
-| `npm run build:win` | 在 Windows 上构建 x64 产物 |
-| `npm run build:zip` | 构建 ZIP 产物 |
-| `node scripts/build-fpk.js` | 使用已安装的官方 fnpack，在临时目录构建 NAS 通用 FPK 与 SHA-256，输出到 `dist.noindex/` |
+## 更多说明
 
-GitHub Actions 的「Release macOS, Windows and NAS」会在推送 `main` / `feat/**`、提交 PR 或手动运行时测试并构建 DMG、Windows EXE 和 NAS FPK，产物可从该次运行的 Artifacts 下载。只有推送与桌面端及两份 NAS manifest 版本一致的 `v*.*.*` 标签，且三个构建任务都成功，才会把三种安装包及校验文件发布到同一个 Release。NAS 使用固定版本、校验 SHA-256 的[官方 fnpack](https://developer.fnnas.com/docs/cli/fnpack/)，无需连接 NAS 或提供设备凭据；真实 NAS 安装验证仍需另做。`scripts/pack-fpk.sh` 保持仅刷新协议副本和图标，不生成安装包。
+[使用指南](docs/user-guide.md) · [开发文档](docs/development.md) · [更新日志](CHANGELOG.md) · [NAS 伴侣](fnos/)
 
-官网在 `website/`，要求 Node.js 22.13.0 及以上，技术栈是 React 19 与 Vinext：
+界面支持简体中文、繁體中文、English、日本語、한국어、Español、Français、Deutsch、Русский、Português (Brasil)。新增翻译仍在校对，截图与黄历传统内容保留原语言。
 
-```bash
-cd website
-npm install
-npm run dev
-```
+---
 
-检查官网时使用 `npm run lint` 与 `npm run build`。
+基于 [TO-DO-Panel](https://github.com/xiaopu-ai/TO-DO-Panel) 二次开发，感谢原作者的开源贡献。
 
-## 项目结构
+[MIT License](LICENSE) · [Sunanang](https://github.com/Sunanang)
 
-```text
-.
-├── main.js                  # Electron 主进程：窗口、定位、菜单栏、剪贴板、媒体与通知
-├── main-services.js         # 可单测的纯领域服务
-├── preload.js               # contextBridge 安全桥
-├── renderer/                # 桌面界面与交互
-├── packages/sync-protocol/  # 桌面端与飞牛伴侣共用的同步协议
-├── fnos/                    # 飞牛 NAS 伴侣 Pome Panel
-├── scripts/                 # Codex / Claude Code 通知转发
-├── tests/                   # Node 单元测试
-├── build/                   # 图标与打包资源
-├── docs/                    # 设计说明与 ADR
-└── website/                 # React 19 + Vinext 官网
-```
+## 官网源码
 
-## License
-
-[MIT](LICENSE) © 2026 [Sunanang](https://github.com/Sunanang)
-
-工作中枢回归可运行 `npm run check:work-hub`：隔离夹具固定为 250 条笔记、200 条待办、100 个链接、20 条录音及 50 条完成记录，测量普通唤出与隔离 NAS 同步负载各 20 次。环境、原始耗时、P95、几何与同步结果留在 `dist.noindex/iteration-validation/<run-id>/`，不提交生成文件；Windows 真机和实体显示器/DPI 检查需要单独执行。
+官网位于 [`website/`](website/README.md)，独立安装依赖与构建，支持与桌面端一致的十种语言。运行和验收方法见该目录说明；源码纳入本仓库不代表网站已部署。

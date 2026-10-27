@@ -1043,7 +1043,8 @@ body {
 .recording-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recording-item strong { color: var(--text-1); font-size: var(--fs-small); }
 .recording-item span { color: var(--text-3); font-size: var(--fs-caption); }
-.recording-detail-head strong { font-size: var(--fs-heading-2); }
+.recording-detail-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s-2); }
+.recording-detail-head strong { min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-heading-2); }
 .recording-detail-head span { color: var(--text-3); font: var(--fs-caption) var(--font-mono); }
 .recording-audio { margin: var(--s-3) 0; }
 .recording-audio audio { width: 100%; }
@@ -1113,6 +1114,11 @@ body {
 .credential-item code { color: var(--text-4); font: 10px var(--font-mono); letter-spacing: 1px; }
 
 @media (max-width: 860px) {
+  .topbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .tabs { grid-column: 1 / -1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; border-radius: var(--r-input); }
+  .tab { flex: none; min-height: 32px; white-space: nowrap; }
+  .topbar [data-language-preference] { width: 100%; min-width: 0; margin-left: 0; }
+  .nas-web-status-pill { display: block; max-width: 100%; justify-self: end; overflow: hidden; text-overflow: ellipsis; line-height: 22px; }
   .devices-page,
   .credentials-page,
   .notes-page,
@@ -1147,3 +1153,6 @@ body {
   .clip-fav-btn:active,
   .clip-del-btn:active { transform: none; }
 }
+
+[data-language-preference] { max-width: 150px; margin-left: auto; padding: 5px 9px; border: 1px solid var(--hairline); border-radius: 9px; background: var(--surface-1); color: var(--text-1); font: inherit; color-scheme: dark; }
+html[lang="en-US"] .settings-card p { overflow-wrap: anywhere; }

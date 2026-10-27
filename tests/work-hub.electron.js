@@ -26,7 +26,7 @@ require('../codex-usage').readCodexUsage=async()=>({ok:true,detected:false});
 require('../codex-auth').readLocalCodexToken=async()=>({ok:false,error:'fixture_missing'});
 process.env.POME_TEST_NOTIFICATIONS='1';
 const archived=Array.from({length:250},(_,i)=>({id:`note-${i}`,title:`笔记 ${i}`,content:`正文 ${i}`,createdAt:1,updatedAt:2}));
-fs.writeFileSync(path.join(profile,'workspace.json'),JSON.stringify({version:1,localStorage:{'notch-home-note':'# 原始备份内容\n\n预览不能叠字','notch-note-archive-v1':JSON.stringify(archived),'notch-todo-data':JSON.stringify({P0:[{id:'t1',text:'真实待办',done:false,createdAt:1,deadline:'',remindedAt:0}],P1:[],P2:[],P3:[]}),'notch-test-preference':'keep'}}));
+fs.writeFileSync(path.join(profile,'workspace.json'),JSON.stringify({version:1,localStorage:{'notch-home-note':'# 原始备份内容\n\n预览不能叠字','notch-note-archive-v1':JSON.stringify(archived),'notch-todo-data':JSON.stringify({P0:[{id:'t1',text:'真实待办',done:false,createdAt:1,deadline:'',remindedAt:0}],P1:[],P2:[],P3:[],P4:[],P5:[],P6:[],P7:[]}),'notch-test-preference':'keep'}}));
 const destination=path.join(profile,'export.pome-backup.zip');
 dialog.showSaveDialog=async()=>({canceled:false,filePath:destination});
 dialog.showOpenDialog=async()=>({canceled:false,filePaths:[destination]});

@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "request_id": "req_task_detail_fixture",
+  "task": {
+    "id": "task_fixture_done",
+    "status": "stopped",
+    "created_at": 1760922000,
+    "updated_at": 1760922300,
+    "task_type": "standard",
+    "share_visibility": "private",
+    "title": "Completed fixture task",
+    "task_url": "https://manus.im/app/task_fixture_done",
+    "has_running_background_jobs": false
+  }
+}

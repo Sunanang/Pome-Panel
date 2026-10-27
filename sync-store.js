@@ -6,7 +6,7 @@
  * - SQLite via node:sqlite (see sqliteProbe.js); path must live under fixed userData.
  * - No Electron dependency — pass an absolute dbPath from the main process.
  * - Protocol validation uses packages/sync-protocol only.
- * - LocalStorage notch-todo-data remains a projection (outer P0–P3 keys intact).
+ * - LocalStorage notch-todo-data remains a projection (outer P0–P7 keys intact).
  *
  * Startup (bound): hydratePortableWorkspace → rebuild LS projection from this DB.
  * Pull cursor advances only after a full page is applied in one transaction.
@@ -28,7 +28,7 @@ const {
 const SYNC_DB_FILENAME = 'sync.db';
 const TODO_STORAGE_KEY = 'notch-todo-data';
 const TODO_CATEGORY_KEY = 'notch-todo-category-names-v1';
-const TODO_PRIORITIES = Object.freeze(['P0', 'P1', 'P2', 'P3']);
+const TODO_PRIORITIES = Object.freeze(['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7']);
 const CATEGORY_ENTITY_PREFIX = 'category:';
 const OUTBOX_STATUS_PENDING = 'pending';
 const OUTBOX_STATUS_ACKED = 'acked';
@@ -746,8 +746,17 @@ function createSyncStore(db, meta = {}) {
    */
   function buildTodosLocalStorageProjection(accountId) {
     const rows = statements.listLiveEntities.all(accountId, COLLECTIONS.TODOS);
-    const todos = { P0: [], P1: [], P2: [], P3: [] };
-    const categoryNames = { P0: '课程', P1: '自媒体&写作', P2: 'Vibe coding', P3: '日常' };
+    const todos = Object.fromEntries(TODO_PRIORITIES.map((priority) => [priority, []]));
+    const categoryNames = {
+      P0: '课程',
+      P1: '自媒体&写作',
+      P2: 'Vibe coding',
+      P3: '日常',
+      P4: '分类 5',
+      P5: '分类 6',
+      P6: '分类 7',
+      P7: '分类 8',
+    };
 
     for (const row of rows) {
       const entityId = row.entity_id;

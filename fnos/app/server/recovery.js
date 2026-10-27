@@ -1,7 +1,7 @@
 'use strict';
 const crypto = require('node:crypto');
 const SCOPE = Object.freeze(['todos', 'notes', 'links', 'commands', 'clipboardHistory', 'recordings']);
-const owner = (id) => id.startsWith('note:') ? 'notes' : id.startsWith('link:') ? 'links' : id.startsWith('command:') ? 'commands' : id.startsWith('clip:') ? 'clipboardHistory' : id.startsWith('recording:') || id.startsWith('recording-blob:') ? 'recordings' : id.startsWith('secret:') ? 'secrets' : id.startsWith('ai:') ? 'aiSettings' : 'todos';
+const owner = (id) => id.startsWith('note:') ? 'notes' : id.startsWith('link:') ? 'links' : id.startsWith('command:') ? 'commands' : id.startsWith('clip:') ? 'clipboardHistory' : id.startsWith('completion:') ? 'aiCompletions' : id.startsWith('recording:') || id.startsWith('recording-blob:') ? 'recordings' : id.startsWith('secret:') ? 'secrets' : id.startsWith('ai:') ? 'aiSettings' : 'todos';
 const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function createRecovery(store) {
   const bucket = (uid) => { const b = store.bucket(uid); b.recoveries ||= new Map(); return b; };

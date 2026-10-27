@@ -1,3 +1,4 @@
+const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 (function mountSunWidget() {
   const tile = document.getElementById('home-sun');
   const Sun = window.NotchSun;
@@ -13,6 +14,12 @@
   let manualOpen = false;
   let arcSeq = 0;
   let timer = 0;
+  const Weather = window.PomeWeather;
+  let weatherData = null;
+  let weatherEffectsEnabled = true;
+  let weatherIntersecting = true;
+  const weatherReadings = new Map(), weatherPending = new Map();
+  const weatherEffects = window.PomeWeatherEffects.create(tile, () => canShowPanel() && weatherIntersecting);
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
@@ -23,22 +30,44 @@
   function loadLocation() {
     try {
       const parsed = JSON.parse(localStorage.getItem(LOCATION_KEY) || 'null');
-      if (!parsed || !Number.isFinite(Number(parsed.lat)) || !Number.isFinite(Number(parsed.lng))) return null;
+      const lat = Sun.parseCoordinate(parsed?.lat, 90), lng = Sun.parseCoordinate(parsed?.lng, 180);
+      if (lat === null || lng === null) return null;
       return {
         source: parsed.source === 'manual' ? 'manual' : 'city',
         id: parsed.id || '',
-        name: String(parsed.name || '自定义位置'),
+        en: parsed.source !== 'manual' ? (window.POME_CITIES || []).find?.(city => city.id === parsed.id)?.en : undefined,
+        name: String(parsed.name || pomeLocaleRendererSunWidget.t("copy.customLocation.915d7b")),
         admin: String(parsed.admin || ''),
-        lat: Number(parsed.lat),
-        lng: Number(parsed.lng),
-        tz: parsed.tz || null,
+        lat,
+        lng,
+        tz: parsed.tz ? Sun.resolveTimeZone(parsed.tz, Intl.DateTimeFormat().resolvedOptions().timeZone) : null,
       };
     } catch (error) {
       return null;
     }
   }
 
-  let location = loadLocation();
+  function defaultCity() {
+    return Sun.suggestCity(cities(), Intl.DateTimeFormat().resolvedOptions().timeZone)
+      || cities().find((city) => city.name === '上海' || city.en === 'Shanghai')
+      || null;
+  }
+
+  function seedDefaultLocation() {
+    const city = defaultCity();
+    const next = city ? Sun.locationFromCity(city) : null;
+    if (!next) return null;
+    try {
+      localStorage.setItem(LOCATION_KEY, JSON.stringify(next));
+    } catch (error) {
+      // Keep the in-memory default even if LocalStorage is unavailable.
+    }
+    return next;
+  }
+
+  // First launch should show Shanghai (or the timezone suggestion) immediately —
+  // never the empty “set location” card. Clearing location in tests still works.
+  let location = loadLocation() || seedDefaultLocation();
 
   function saveLocation(next, persist) {
     location = next;
@@ -50,7 +79,9 @@
         // 位置只活在当前会话里也可以继续显示。
       }
     }
+    weatherData = weatherReadings.get(weatherKey()) || null;
     render();
+    requestWeatherOnWake();
   }
 
   function nowDate() {
@@ -58,7 +89,7 @@
   }
 
   function timeZoneFor(place) {
-    return (place && place.tz) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    return Sun.resolveTimeZone(place && place.tz, Intl.DateTimeFormat().resolvedOptions().timeZone);
   }
 
   function cities() {
@@ -139,9 +170,9 @@
     if (spec.labels && model.solarNoon && model.events.sunrise && model.events.sunset) {
       const noonX = xOf(model.solarNoon.minute);
       const noonY = yOf(model.solarNoon.altitude);
-      labels += `<text x="${noonX.toFixed(1)}" y="${(noonY - 11).toFixed(1)}" text-anchor="middle" font-size="10.5" font-weight="500" fill="#A1A1A1">正午 ${escapeHtml(model.solarNoon.hm)} · ${Math.round(model.solarNoon.altitude)}°</text>`;
-      labels += `<text x="${(xOf(model.events.sunrise.minute) + 6).toFixed(1)}" y="${hy + 16}" font-size="10.5" font-weight="500" fill="#A1A1A1">日出 ${escapeHtml(model.events.sunrise.hm)}</text>`;
-      labels += `<text x="${(xOf(model.events.sunset.minute) - 6).toFixed(1)}" y="${hy + 16}" text-anchor="end" font-size="10.5" font-weight="500" fill="#A1A1A1">日落 ${escapeHtml(model.events.sunset.hm)}</text>`;
+      labels += ("<text x=\"" + (noonX.toFixed(1)) + "\" y=\"" + ((noonY - 11).toFixed(1)) + "\" text-anchor=\"middle\" font-size=\"10.5\" font-weight=\"500\" fill=\"#A1A1A1\">" + (pomeLocaleRendererSunWidget.t("copy.noon.c5818b", { arg3: (escapeHtml(model.solarNoon.hm)), arg4: (Math.round(model.solarNoon.altitude)) })) + "</text>");
+      labels += ("<text x=\"" + ((xOf(model.events.sunrise.minute) + 6).toFixed(1)) + "\" y=\"" + (hy + 16) + "\" font-size=\"10.5\" font-weight=\"500\" fill=\"#A1A1A1\">" + (pomeLocaleRendererSunWidget.t("copy.sunrise.b02283", { arg3: (escapeHtml(model.events.sunrise.hm)) })) + "</text>");
+      labels += ("<text x=\"" + ((xOf(model.events.sunset.minute) - 6).toFixed(1)) + "\" y=\"" + (hy + 16) + "\" text-anchor=\"end\" font-size=\"10.5\" font-weight=\"500\" fill=\"#A1A1A1\">" + (pomeLocaleRendererSunWidget.t("copy.sunset.e8f4ac", { arg3: (escapeHtml(model.events.sunset.hm)) })) + "</text>");
     }
     // Design B：small/medium/large 把 HH:MM 挂在太阳旁；mini 太矮改走底部一行
     if (size !== 'mini') {
@@ -163,35 +194,107 @@
     const marker = up
       ? `<circle class="sun-marker" cx="${nx.toFixed(2)}" cy="${ny.toFixed(2)}" r="${(r * 3.4).toFixed(2)}" fill="url(#${id}h)"/><circle cx="${nx.toFixed(2)}" cy="${ny.toFixed(2)}" r="${r}" fill="${COLORS.core}" stroke="rgba(20,20,24,.6)" stroke-width="1"/>`
       : `<circle class="sun-marker is-night" cx="${nx.toFixed(2)}" cy="${ny.toFixed(2)}" r="${r}" fill="#16161A" stroke="#A1A1A1" stroke-width="1.4"/>`;
-    return `<svg class="sun-arc" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="太阳轨迹">
-      <defs>
-        <linearGradient id="${id}g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="0">${stops.join('')}</linearGradient>
-        <linearGradient id="${id}v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity=".02"/></linearGradient>
-        <mask id="${id}m" maskUnits="userSpaceOnUse" x="0" y="0" width="${w}" height="${hy}"><rect x="0" y="${hy - 54 * kUp}" width="${w}" height="${54 * kUp}" fill="url(#${id}v)"/></mask>
-        <clipPath id="${id}up"><rect x="-2" y="-40" width="${w + 4}" height="${hy + 40}"/></clipPath>
-        <clipPath id="${id}past"><rect x="-4" y="-40" width="${nx + 4}" height="${h + 80}"/></clipPath>
-        <radialGradient id="${id}h"><stop offset="0" stop-color="${COLORS.core}" stop-opacity=".55"/><stop offset=".45" stop-color="${COLORS.gold}" stop-opacity=".18"/><stop offset="1" stop-color="${COLORS.gold}" stop-opacity="0"/></radialGradient>
-      </defs>
-      <g clip-path="url(#${id}up)"><path d="${area}" fill="url(#${id}g)" mask="url(#${id}m)" opacity=".9"/></g>
-      <line x1="0" y1="${hy}" x2="${w}" y2="${hy}" stroke="rgba(255,255,255,.16)" stroke-width="1"/>
-      <path d="${line}" fill="none" stroke="url(#${id}g)" stroke-width="${spec.sw}" stroke-linecap="round" stroke-linejoin="round" opacity=".38"/>
-      <path d="${line}" fill="none" stroke="url(#${id}g)" stroke-width="${spec.sw}" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#${id}past)"/>
-      ${dots}${drop}${marker}${labels}
-    </svg>`;
+    return ("<svg class=\"sun-arc\" width=\"" + (w) + "\" height=\"" + (h) + "\" viewBox=\"0 0 " + (w) + " " + (h) + "\" role=\"img\" aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.sunPath.21e265")) + "\" data-i18n-aria-label=\"copy.sunPath.21e265\">\n      <defs>\n        <linearGradient id=\"" + (id) + "g\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"0\" x2=\"" + (w) + "\" y2=\"0\">" + (stops.join('')) + "</linearGradient>\n        <linearGradient id=\"" + (id) + "v\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fff\" stop-opacity=\".16\"/><stop offset=\"1\" stop-color=\"#fff\" stop-opacity=\".02\"/></linearGradient>\n        <mask id=\"" + (id) + "m\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"" + (w) + "\" height=\"" + (hy) + "\"><rect x=\"0\" y=\"" + (hy - 54 * kUp) + "\" width=\"" + (w) + "\" height=\"" + (54 * kUp) + "\" fill=\"url(#" + (id) + "v)\"/></mask>\n        <clipPath id=\"" + (id) + "up\"><rect x=\"-2\" y=\"-40\" width=\"" + (w + 4) + "\" height=\"" + (hy + 40) + "\"/></clipPath>\n        <clipPath id=\"" + (id) + "past\"><rect x=\"-4\" y=\"-40\" width=\"" + (nx + 4) + "\" height=\"" + (h + 80) + "\"/></clipPath>\n        <radialGradient id=\"" + (id) + "h\"><stop offset=\"0\" stop-color=\"" + (COLORS.core) + "\" stop-opacity=\".55\"/><stop offset=\".45\" stop-color=\"" + (COLORS.gold) + "\" stop-opacity=\".18\"/><stop offset=\"1\" stop-color=\"" + (COLORS.gold) + "\" stop-opacity=\"0\"/></radialGradient>\n      </defs>\n      <g clip-path=\"url(#" + (id) + "up)\"><path d=\"" + (area) + "\" fill=\"url(#" + (id) + "g)\" mask=\"url(#" + (id) + "m)\" opacity=\".9\"/></g>\n      <line x1=\"0\" y1=\"" + (hy) + "\" x2=\"" + (w) + "\" y2=\"" + (hy) + "\" stroke=\"rgba(255,255,255,.16)\" stroke-width=\"1\"/>\n      <path d=\"" + (line) + "\" fill=\"none\" stroke=\"url(#" + (id) + "g)\" stroke-width=\"" + (spec.sw) + "\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\".38\"/>\n      <path d=\"" + (line) + "\" fill=\"none\" stroke=\"url(#" + (id) + "g)\" stroke-width=\"" + (spec.sw) + "\" stroke-linecap=\"round\" stroke-linejoin=\"round\" clip-path=\"url(#" + (id) + "past)\"/>\n      " + (dots) + (drop) + (marker) + (labels) + "\n    </svg>");
   }
 
   function placeButton(name, compact) {
     const label = escapeHtml(name);
-    if (compact) return `<button class="sun-place sun-place-mini" type="button" data-sun-place aria-label="更改位置：${label}">${PIN}<span>${label}</span></button>`;
-    return `<button class="sun-place" type="button" data-sun-place aria-label="更改位置：${label}">${PIN}<span>${label}</span>${CHEV}</button>`;
+    if (compact) return ("<button class=\"sun-place sun-place-mini\" type=\"button\" data-sun-place aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.changeLocation.f4de01", { arg1: (label) })) + "\">" + (PIN) + "<span>" + (label) + "</span></button>");
+    return ("<button class=\"sun-place\" type=\"button\" data-sun-place aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.changeLocation.f4de01", { arg1: (label) })) + "\">" + (PIN) + "<span>" + (label) + "</span>" + (CHEV) + "</button>");
   }
 
+  function weatherKey() {
+    return location ? `${Number(location.lat).toFixed(6)},${Number(location.lng).toFixed(6)}` : '';
+  }
+  function weatherHtml(size) {
+    if (!location || !Weather) return '';
+    const v = Weather.view(weatherData, size, (key, params) => pomeLocaleRendererSunWidget.t(key, params));
+    const icon = v.showIcon ? `<span class="ic" aria-hidden="true">${window.PomeWeatherIcons[v.icon] || window.PomeWeatherIcons.empty}</span>` : '';
+    const text = size === 'mini' ? escapeHtml(v.text)
+      : `<span class="wx-state">${escapeHtml(v.label)}</span><span class="wx-separator">${size === 'small' ? '·' : ' · '}</span><span class="wx-reading">${escapeHtml(v.temperature)}<span class="wx-humidity">${escapeHtml(v.humidity)}</span></span>`;
+    return `<span class="wx t-${v.icon}${size === 'mini' ? ' mini' : size === 'small' ? ' sm' : ''}" title="${escapeHtml(v.title)}" aria-label="${escapeHtml(v.title)}">${icon}<span class="txt">${text}</span></span>`;
+  }
+  function syncWeatherEffects() {
+    weatherEffects.sync({ family: Weather.classify(weatherData).family,
+      enabled: weatherEffectsEnabled, size: tile.dataset.widgetSize || 'medium' });
+  }
+  function fitWeatherHeader() {
+    if (tile.dataset.widgetSize === 'mini') return;
+    const right = tile.querySelector('.sun-right'), wx = right?.querySelector('.wx');
+    const icon = wx?.querySelector('.ic'), name = wx?.querySelector('.wx-state'), text = wx?.querySelector('.txt');
+    if (!text || !name) return;
+    wx.style.minWidth = '';
+    right.style.minWidth = '';
+    if (icon) icon.style.display = '';
+    const humidity = wx.querySelector('.wx-humidity');
+    if (humidity) humidity.hidden = false;
+    // Constrain the capsule before measuring: localized names can be much
+    // longer than Chinese. Shrink the name with ellipsis, never the temperature.
+    // Drop decoration (and optional large humidity) before crowding that name.
+    const nameClipped = () => name.scrollWidth > name.clientWidth + 1;
+    if (icon && ((nameClipped() && (tile.dataset.widgetSize === 'small' || name.clientWidth < 24))
+      || text.scrollWidth > text.clientWidth + 1)) icon.style.display = 'none';
+    if ((nameClipped() && name.clientWidth < 16) || text.scrollWidth > text.clientWidth + 1) {
+      if (humidity) humidity.hidden = true;
+    }
+    {
+      const reading = wx.querySelector('.wx-reading'), separator = wx.querySelector('.wx-separator');
+      const style = getComputedStyle(wx), nameStyle = getComputedStyle(name);
+      const number = value => parseFloat(value) || 0;
+      // Reserve the actual temperature width before ellipsizing the location
+      // or heading. Windows fallback fonts can make negative readings wider.
+      const nameWidth = tile.dataset.widgetSize === 'small' && /^zh(?:-|$)/i.test(document.documentElement.lang)
+        ? name.scrollWidth : Math.min(name.scrollWidth, number(nameStyle.fontSize));
+      const decoration = icon && getComputedStyle(icon).display !== 'none'
+        ? icon.offsetWidth + number(style.columnGap) : 0;
+      const minimum = Math.ceil((reading?.offsetWidth || 0)
+        + (separator?.offsetWidth || 0) + nameWidth + decoration
+        + number(style.paddingLeft) + number(style.paddingRight)
+        + number(style.borderLeftWidth) + number(style.borderRightWidth) + 1);
+      wx.style.minWidth = `${minimum}px`;
+      const place = right.querySelector('.sun-place');
+      right.style.minWidth = `${minimum + number(getComputedStyle(right).columnGap)
+        + number(getComputedStyle(place).minWidth)}px`;
+    }
+  }
+  async function requestWeatherOnWake() {
+    if (!location || !canShowPanel() || document.hidden || !weatherIntersecting || !window.notchAPI?.getSunWeather) return;
+    const key = weatherKey();
+    if (weatherPending.has(key)) return;
+    // Only the main process owns the persistent 30-minute attempt clock.
+    // Starting another renderer clock after a disk-cache hit would postpone
+    // the next refresh by up to another half hour after restart.
+    const coordinates = { lat: location.lat, lng: location.lng };
+    const job = Promise.resolve().then(() => window.notchAPI.getSunWeather(coordinates));
+    weatherPending.set(key, job);
+    try {
+      const data = await job;
+      if (data && Number.isFinite(data.temperature)) {
+        weatherReadings.delete(key); weatherReadings.set(key, data);
+        while (weatherReadings.size > 16) weatherReadings.delete(weatherReadings.keys().next().value);
+        // An old city's slow response must never overwrite the selected city.
+        const unchanged = weatherData && ['temperature', 'humidity', 'code', 'condition', 'windSpeed', 'updatedAt']
+          .every(field => weatherData[field] === data[field]);
+        // Cache hits / failures return the same successful reading. Preserve
+        // the DOM and running particle scene instead of rebuilding them.
+        if (weatherKey() === key && !unchanged) { weatherData = data; render(); }
+      }
+    } catch { /* Silent failure: keep the last successful reading for this city. */ }
+    finally { weatherPending.delete(key); }
+  }
+  window.notchAPI?.getAppSettings?.().then(settings => {
+    weatherEffectsEnabled = settings?.weatherEffects !== false; syncWeatherEffects();
+  }).catch(() => {});
+  window.notchAPI?.onAppSettingsChanged?.(settings => {
+    weatherEffectsEnabled = settings?.weatherEffects !== false; syncWeatherEffects();
+  });
+
   function countdownBits(model) {
-    if (model.polar === 'up') return { lead: '极昼', num: '<b>全天</b>' };
-    if (model.polar === 'down') return { lead: '极夜', num: '<b>全天</b>' };
-    if (!model.next) return { lead: '今天没有更多日照节点', num: '' };
+    if (model.polar === 'up') return { lead: pomeLocaleRendererSunWidget.t("copy.polarDay.389f33"), num: ("<b><span data-i18n=\"copy.allDay.0b97c8\">" + (pomeLocaleRendererSunWidget.t("copy.allDay.0b97c8")) + "</span></b>") };
+    if (model.polar === 'down') return { lead: pomeLocaleRendererSunWidget.t("copy.polarNight.896aca"), num: ("<b><span data-i18n=\"copy.allDay.0b97c8\">" + (pomeLocaleRendererSunWidget.t("copy.allDay.0b97c8")) + "</span></b>") };
+    if (!model.next) return { lead: pomeLocaleRendererSunWidget.t("copy.noMoreDaylightEventsToday.f1817d"), num: '' };
     return {
-      lead: `距${escapeHtml(model.next.lead)}`,
+      lead: pomeLocaleRendererSunWidget.t("copy.until.bca998", { arg1: (escapeHtml(model.next.lead)) }),
       num: durationHtml(Sun.durationParts(model.next.delta)),
     };
   }
@@ -206,41 +309,36 @@
   }
 
   function renderBody(model, size) {
-    const place = placeButton(location.name, size === 'mini');
+    const place = placeButton(location.source === 'manual' ? location.name : Sun.cityLabel({ ...location, admin: '' }), size === 'mini');
+    const right = `<div class="sun-right">${weatherHtml(size)}${place}</div>`;
     if (size === 'mini') {
       const miniLead = {
-        dawn: '天亮',
-        sunrise: '日出',
-        goldenHourEnd: '黄金时刻',
-        goldenHour: '黄金时刻',
-        sunset: '日落',
-        dusk: '天黑',
-        tomorrowDawn: '明早天亮',
+        dawn: pomeLocaleRendererSunWidget.t("copy.dawn.436dc0"),
+        sunrise: pomeLocaleRendererSunWidget.t("copy.sunrise.3ca0d8"),
+        goldenHourEnd: pomeLocaleRendererSunWidget.t("copy.goldenHour.020aea"),
+        goldenHour: pomeLocaleRendererSunWidget.t("copy.goldenHour.020aea"),
+        sunset: pomeLocaleRendererSunWidget.t("copy.sunset.67995f"),
+        dusk: pomeLocaleRendererSunWidget.t("copy.dusk.451eb6"),
+        tomorrowDawn: pomeLocaleRendererSunWidget.t("copy.dawnTomorrow.0a3920"),
       };
       const lead = model.polar === 'up'
-        ? '极昼'
+        ? pomeLocaleRendererSunWidget.t("copy.polarDay.389f33")
         : model.polar === 'down'
-          ? '极夜'
+          ? pomeLocaleRendererSunWidget.t("copy.polarNight.896aca")
           : model.next
-            ? `距${escapeHtml(miniLead[model.next.key] || model.next.lead)}`
-            : '日出日落';
-      const num = model.polar ? '<b>全天</b>' : model.next ? durationHtml(Sun.durationParts(model.next.delta)) : '';
+            ? pomeLocaleRendererSunWidget.t("copy.until.bca998", { arg1: (escapeHtml(miniLead[model.next.key] || model.next.lead)) })
+            : pomeLocaleRendererSunWidget.t("copy.sunriseSunset.224064");
+      const num = model.polar ? ("<b><span data-i18n=\"copy.allDay.0b97c8\">" + (pomeLocaleRendererSunWidget.t("copy.allDay.0b97c8")) + "</span></b>") : model.next ? durationHtml(Sun.durationParts(model.next.delta)) : '';
       const rise = model.events.sunrise ? model.events.sunrise.hm : '--:--';
       const set = model.events.sunset ? model.events.sunset.hm : '--:--';
       const nowHM = model.nowHM || '--:--';
-      return `<div class="sun-mini-top"><span class="lead">${lead}</span>${place}</div>
-        <div class="sun-count"><div class="num">${num}</div></div>
-        <div class="sun-arc-wrap">${arcSvg(model, size)}</div>
-        <div class="sun-mini-foot"><span class="edge edge-rise"><span class="lbl">日出</span><b>${escapeHtml(rise)}</b></span><span class="now"><b>${escapeHtml(nowHM)}</b></span><span class="edge edge-set"><span class="lbl">日落</span><b>${escapeHtml(set)}</b></span></div>`;
+      return ("<div class=\"sun-mini-top\"><span class=\"lead\">" + (lead) + "</span><div class=\"mini-right\">" + weatherHtml(size) + place + "</div></div>\n        <div class=\"sun-count\"><div class=\"num\">" + (num) + "</div></div>\n        <div class=\"sun-arc-wrap\">" + (arcSvg(model, size)) + "</div>\n        <div class=\"sun-mini-foot\"><span class=\"edge edge-rise\"><span class=\"lbl\"><span data-i18n=\"copy.sunrise.3ca0d8\">" + (pomeLocaleRendererSunWidget.t("copy.sunrise.3ca0d8")) + "</span></span><b>" + (escapeHtml(rise)) + "</b></span><span class=\"now\"><b>" + (escapeHtml(nowHM)) + "</b></span><span class=\"edge edge-set\"><span class=\"lbl\"><span data-i18n=\"copy.sunset.67995f\">" + (pomeLocaleRendererSunWidget.t("copy.sunset.67995f")) + "</span></span><b>" + (escapeHtml(set)) + "</b></span></div>");
     }
     if (size === 'small') {
       const rows = model.upcoming.map((item, index) => (
         `<li class="${index === 0 ? 'next' : ''}"><span>${escapeHtml(item.name)}</span><b>${escapeHtml(item.hm)}</b></li>`
       )).join('');
-      return `<div class="sun-head"><span class="tile-label">日出日落</span>${place}</div>
-        ${countdownBlock(model)}
-        <div class="sun-arc-wrap">${arcSvg(model, size)}</div>
-        <ul class="sun-next-list">${rows}</ul>`;
+      return ("<div class=\"sun-head\"><span class=\"tile-label\"><span data-i18n=\"copy.sunriseSunset.224064\">" + (pomeLocaleRendererSunWidget.t("copy.sunriseSunset.224064")) + "</span></span>" + right + "</div>\n        " + (countdownBlock(model)) + "\n        <div class=\"sun-arc-wrap\">" + (arcSvg(model, size)) + "</div>\n        <ul class=\"sun-next-list\">" + (rows) + "</ul>");
     }
     if (size === 'medium') {
       const nextKey = model.next && model.next.key;
@@ -251,17 +349,14 @@
         return `<div class="sun-time ${state}${index === 5 ? ' end' : ''}"><span>${escapeHtml(event.name)}</span><b>${escapeHtml(event.hm)}</b></div>`;
       }).join('');
       const length = model.dayLengthParts ? durationInline(model.dayLengthParts) : '--';
-      return `<div class="sun-head"><span class="tile-label">日出日落</span>${place}</div>
-        <div class="sun-hero">${countdownBlock(model)}<div class="sun-daylen"><span>白天时长</span><b>${length}</b></div></div>
-        <div class="sun-arc-wrap">${arcSvg(model, size)}</div>
-        <div class="sun-times">${times}</div>`;
+      return ("<div class=\"sun-head\"><span class=\"tile-label\"><span data-i18n=\"copy.sunriseSunset.224064\">" + (pomeLocaleRendererSunWidget.t("copy.sunriseSunset.224064")) + "</span></span>" + right + "</div>\n        <div class=\"sun-hero\">" + (countdownBlock(model)) + "<div class=\"sun-daylen\"><span><span data-i18n=\"copy.daylightDuration.261de2\">" + (pomeLocaleRendererSunWidget.t("copy.daylightDuration.261de2")) + "</span></span><b>" + (length) + "</b></div></div>\n        <div class=\"sun-arc-wrap\">" + (arcSvg(model, size)) + "</div>\n        <div class=\"sun-times\">" + (times) + "</div>");
     }
     const nextKey = model.next && model.next.key;
     const row = (key) => {
       const event = model.events[key];
       if (!event) return '';
       const state = key === nextKey ? 'next' : event.delta <= 0 ? 'past' : '';
-      const rel = event.delta <= 0 ? '已过' : `${Sun.durationText(event.delta)}后`;
+      const rel = event.delta <= 0 ? pomeLocaleRendererSunWidget.t("copy.passed.d1c296") : pomeLocaleRendererSunWidget.t("copy.in.228a09", { arg1: (Sun.durationText(event.delta)) });
       const gradient = {
         dawn: `${COLORS.night}, ${COLORS.blue}`,
         sunrise: `${COLORS.blue}, ${COLORS.gold}`,
@@ -274,42 +369,25 @@
     };
     let sub = '';
     if (model.sub && model.sub.kind === 'sunset') {
-      sub = `<span class="sub">日落 <b>${escapeHtml(model.sub.hm)}</b> · 还有 ${durationInline(model.sub.parts)}</span>`;
+      sub = ("<span class=\"sub\"><span data-i18n=\"copy.sunset.67995f\">" + (pomeLocaleRendererSunWidget.t("copy.sunset.67995f")) + " </span><b>" + (escapeHtml(model.sub.hm)) + "</b> " + (pomeLocaleRendererSunWidget.t("copy.remaining.6ae7c6", { arg2: (durationInline(model.sub.parts)) })) + "</span>");
     } else if (model.sub && model.sub.kind === 'tomorrow') {
-      sub = `<span class="sub">明天日出 <b>${escapeHtml(model.sub.hm)}</b></span>`;
+      sub = ("<span class=\"sub\"><span data-i18n=\"copy.sunriseTomorrow.f333d2\">" + (pomeLocaleRendererSunWidget.t("copy.sunriseTomorrow.f333d2")) + " </span><b>" + (escapeHtml(model.sub.hm)) + "</b></span>");
     }
     const bits = countdownBits(model);
     const delta = model.deltaVsYesterday;
     const deltaHtml = !delta
       ? '<b>--</b>'
-      : `<b>${delta.sign}${delta.minutes}<i>分</i>${delta.seconds ? `${delta.seconds}<i>秒</i>` : ''}</b>`;
+      : ("<b>" + (delta.sign) + (delta.minutes) + "<i><span data-i18n=\"copy.min.b6a993\">" + (pomeLocaleRendererSunWidget.t("copy.min.b6a993")) + "</span></i>" + (delta.seconds ? ((delta.seconds) + "<i><span data-i18n=\"copy.sec.9dcdc2\">" + (pomeLocaleRendererSunWidget.t("copy.sec.9dcdc2")) + "</span></i>") : '') + "</b>");
     const length = model.dayLengthParts ? `<b>${durationInline(model.dayLengthParts)}</b>` : '<b>--</b>';
-    return `<div class="sun-head"><span class="tile-label">日出日落<span class="date">${escapeHtml(model.dateLabel)}</span></span>${place}</div>
-      <div class="sun-hero"><div class="sun-count"><span class="lead">${bits.lead}</span>${bits.num ? `<div class="num">${bits.num}</div>` : ''}${sub}</div></div>
-      <div class="sun-arc-wrap">${arcSvg(model, size)}</div>
-      <div class="sun-groups">
-        <div class="sun-group"><h4>早晨</h4><ol>${['dawn', 'sunrise', 'goldenHourEnd'].map(row).join('')}</ol></div>
-        <div class="sun-group"><h4>傍晚</h4><ol>${['goldenHour', 'sunset', 'dusk'].map(row).join('')}</ol></div>
-      </div>
-      <div class="sun-stats">
-        <div><span>白天时长</span>${length}</div>
-        <div><span>较昨天</span>${deltaHtml}</div>
-        <div><span>明天日出</span><b>${escapeHtml(model.tomorrow.sunrise || '--:--')}</b></div>
-      </div>`;
+    return ("<div class=\"sun-head\"><span class=\"tile-label\"><span data-i18n=\"copy.sunriseSunset.224064\">" + (pomeLocaleRendererSunWidget.t("copy.sunriseSunset.224064")) + "</span><span class=\"date\">" + (escapeHtml(model.dateLabel)) + "</span></span>" + right + "</div>\n      <div class=\"sun-hero\"><div class=\"sun-count\"><span class=\"lead\">" + (bits.lead) + "</span>" + (bits.num ? `<div class="num">${bits.num}</div>` : '') + (sub) + "</div></div>\n      <div class=\"sun-arc-wrap\">" + (arcSvg(model, size)) + "</div>\n      <div class=\"sun-groups\">\n        <div class=\"sun-group\"><h4><span data-i18n=\"copy.morning.119af5\">" + (pomeLocaleRendererSunWidget.t("copy.morning.119af5")) + "</span></h4><ol>" + (['dawn', 'sunrise', 'goldenHourEnd'].map(row).join('')) + "</ol></div>\n        <div class=\"sun-group\"><h4><span data-i18n=\"copy.evening.1bd701\">" + (pomeLocaleRendererSunWidget.t("copy.evening.1bd701")) + "</span></h4><ol>" + (['goldenHour', 'sunset', 'dusk'].map(row).join('')) + "</ol></div>\n      </div>\n      <div class=\"sun-stats\">\n        <div><span><span data-i18n=\"copy.daylightDuration.261de2\">" + (pomeLocaleRendererSunWidget.t("copy.daylightDuration.261de2")) + "</span></span>" + (length) + "</div>\n        <div><span><span data-i18n=\"copy.comparedWithYesterday.4a18fa\">" + (pomeLocaleRendererSunWidget.t("copy.comparedWithYesterday.4a18fa")) + "</span></span>" + (deltaHtml) + "</div>\n        <div><span><span data-i18n=\"copy.sunriseTomorrow.f333d2\">" + (pomeLocaleRendererSunWidget.t("copy.sunriseTomorrow.f333d2")) + "</span></span><b>" + (escapeHtml(model.tomorrow.sunrise || '--:--')) + "</b></div>\n      </div>");
   }
 
   function emptyHtml(size) {
     const suggestion = Sun.suggestCity(cities(), Intl.DateTimeFormat().resolvedOptions().timeZone);
     const suggest = suggestion
-      ? `<button class="sun-suggest" type="button" data-sun-suggest="${escapeHtml(suggestion.id)}">建议：${escapeHtml(Sun.cityLabel(suggestion))}</button>`
+      ? ("<button class=\"sun-suggest\" type=\"button\" data-sun-suggest=\"" + (escapeHtml(suggestion.id)) + "\">" + (pomeLocaleRendererSunWidget.t("copy.suggested.329c8b", { arg2: (escapeHtml(Sun.cityLabel(suggestion))) })) + "</button>")
       : '';
-    return `<div class="sun-empty">
-      <p>日出日落需要知道你在哪座城市</p>
-      <div class="sun-empty-actions">
-        ${suggest}
-        <button class="sun-set" type="button" data-sun-place>${PIN}设置位置</button>
-      </div>
-    </div>`;
+    return ("<div class=\"sun-empty\">\n      <p><span data-i18n=\"copy.chooseACityForSunriseAndSunset.e180c5\">" + (pomeLocaleRendererSunWidget.t("copy.chooseACityForSunriseAndSunset.e180c5")) + "</span></p>\n      <div class=\"sun-empty-actions\">\n        " + (suggest) + "\n        <button class=\"sun-set\" type=\"button\" data-sun-place>" + (pomeLocaleRendererSunWidget.t("copy.setLocation.52980e", { arg2: (PIN) })) + "</button>\n      </div>\n    </div>");
   }
 
   function syncGlow() {
@@ -324,9 +402,10 @@
     tile.style.setProperty('--glow-y', `${y.toFixed(1)}%`);
   }
 
+  window.addEventListener('pome:language-changed', () => { render(); });
+
   function render() {
     const size = tile.dataset.widgetSize || 'medium';
-    const query = panelOpen ? (document.getElementById('sun-city-query')?.value || '') : '';
     if (!location) {
       tile.dataset.phase = 'night';
       tile.dataset.skySide = 'west';
@@ -343,7 +422,15 @@
       tile.innerHTML = `<div class="sun-sky" aria-hidden="true"><img src="${Sun.skyAsset(size, model.phase)}" alt="" draggable="false"></div>${renderBody(model, size)}`;
       requestAnimationFrame(syncGlow);
     }
-    if (panelOpen) openPanel(query);
+    syncWeatherEffects();
+    fitWeatherHeader();
+    // Narrow translated table labels may ellipsize; keep the complete
+    // existing astronomical text available without overlapping its time.
+    tile.querySelectorAll('.sun-count .lead, .sun-time > span, .sun-group .nm > *, .sun-group .tm > small').forEach(node => {
+      node.title = node.textContent;
+    });
+    // Refresh the card without rebuilding/refocusing the user's open form.
+    if (panelOpen) positionPanel();
     schedule();
   }
 
@@ -353,17 +440,53 @@
     const suggestion = Sun.suggestCity(list, Intl.DateTimeFormat().resolvedOptions().timeZone);
     const rows = [];
     if (!query && suggestion && (!location || location.id !== suggestion.id)) {
-      rows.push({ city: suggestion, hint: '建议' });
+      rows.push({ city: suggestion, hint: pomeLocaleRendererSunWidget.t("copy.suggested.abee49") });
     }
     matches.forEach((city) => rows.push({ city, hint: '' }));
-    if (!rows.length) return '<li class="sun-loc-empty">没有匹配的城市</li>';
+    if (!rows.length) return ("<li class=\"sun-loc-empty\"><span data-i18n=\"copy.noMatchingCities.8f4f9c\">" + (pomeLocaleRendererSunWidget.t("copy.noMatchingCities.8f4f9c")) + "</span></li>");
     return rows.map(({ city, hint }) => {
       const selected = location && location.id === city.id;
       return `<li><button type="button" data-sun-city="${escapeHtml(city.id)}" class="${selected ? 'on' : ''}"><span>${escapeHtml(Sun.cityLabel(city))}${hint ? `<small>${hint}</small>` : ''}</span><small>${city.lat.toFixed(2)}°, ${city.lng.toFixed(2)}°</small></button></li>`;
     }).join('');
   }
 
+  function canShowPanel() {
+    const surface = document.getElementById('app');
+    return surface?.classList.contains('expanded') && !surface.classList.contains('closing')
+      && !tile.hidden && document.getElementById('tab-home')?.classList.contains('active');
+  }
+
+  function positionPanel() {
+    if (!panelOpen) return;
+    if (!canShowPanel()) { closePanel(); return; }
+    const pop = document.getElementById('sun-location-popover');
+    if (!pop) return;
+    const style = getComputedStyle(pop);
+    const gap = parseFloat(style.getPropertyValue('--sun-popover-gap'));
+    const maxHeight = parseFloat(style.getPropertyValue('--sun-popover-height'));
+    const panel = document.getElementById('panel').getBoundingClientRect();
+    const bounds = {
+      left: Math.max(gap, panel.left + gap),
+      right: Math.min(window.innerWidth - gap, panel.right - gap),
+      top: Math.max(gap, panel.top + gap),
+      bottom: Math.min(window.innerHeight - gap, panel.bottom - gap),
+    };
+    const availableWidth = bounds.right - bounds.left;
+    const availableHeight = bounds.bottom - bounds.top;
+    if (availableWidth <= 0 || availableHeight <= 0) { closePanel(); return; }
+    pop.style.maxWidth = `${availableWidth}px`;
+    pop.style.maxHeight = `${Math.min(maxHeight, availableHeight)}px`;
+    const rect = (tile.querySelector('[data-sun-place]') || tile).getBoundingClientRect();
+    const { width, height } = pop.getBoundingClientRect();
+    const below = bounds.bottom - rect.bottom - gap;
+    const above = rect.top - gap - bounds.top;
+    const top = below >= height || below >= above ? rect.bottom + gap : rect.top - gap - height;
+    pop.style.left = `${Math.max(bounds.left, Math.min(bounds.right - width, rect.right - width))}px`;
+    pop.style.top = `${Math.max(bounds.top, Math.min(bounds.bottom - height, top))}px`;
+  }
+
   function openPanel(preset) {
+    if (!canShowPanel()) return;
     panelOpen = true;
     let pop = document.getElementById('sun-location-popover');
     if (!pop) {
@@ -371,40 +494,30 @@
       pop.id = 'sun-location-popover';
       pop.className = 'sun-popover';
       pop.setAttribute('role', 'dialog');
-      pop.setAttribute('aria-label', '设置日出日落位置');
+      pop.setAttribute('aria-label', pomeLocaleRendererSunWidget.t("copy.setSunriseAndSunsetLocation.bee9a1"));
       document.body.appendChild(pop);
     }
     const value = preset == null ? '' : preset;
-    pop.innerHTML = `<label class="sun-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg><input id="sun-city-query" type="text" placeholder="搜索城市" autocomplete="off" spellcheck="false" aria-label="搜索城市" value="${escapeHtml(value)}"></label>
-      <ul id="sun-city-results">${resultRows(value)}</ul>
-      <div class="sep"></div>
-      <button class="sun-manual-toggle" type="button" data-sun-manual aria-expanded="${manualOpen ? 'true' : 'false'}">找不到我的城市</button>
-      <form class="sun-manual" data-sun-manual-form ${manualOpen ? '' : 'hidden'}>
-        <label>纬度<input name="lat" inputmode="decimal" placeholder="31.23" aria-label="纬度"></label>
-        <label>经度<input name="lng" inputmode="decimal" placeholder="121.47" aria-label="经度"></label>
-        <label>名称<input name="name" maxlength="24" placeholder="可选" aria-label="位置名称"></label>
-        <button type="submit">使用这个位置</button>
-        <p class="sun-manual-error" data-sun-manual-error hidden></p>
-      </form>
-      <p class="foot">位置只保存在本机</p>`;
-    const anchor = tile.querySelector('[data-sun-place]') || tile;
-    const rect = anchor.getBoundingClientRect();
-    const width = 264;
-    const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.right - width));
-    const top = Math.min(window.innerHeight - 16, rect.bottom + 6);
-    pop.style.left = `${left}px`;
-    pop.style.top = `${top}px`;
+    pop.innerHTML = ("<label class=\"sun-search\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"6\"/><path d=\"m20 20-4.2-4.2\"/></svg><input id=\"sun-city-query\" type=\"text\" placeholder=\"" + (pomeLocaleRendererSunWidget.attribute("copy.searchCities.a40a92")) + "\" data-i18n-placeholder=\"copy.searchCities.a40a92\" autocomplete=\"off\" spellcheck=\"false\" aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.searchCities.a40a92")) + "\" data-i18n-aria-label=\"copy.searchCities.a40a92\" value=\"" + (escapeHtml(value)) + "\"></label>\n      <ul id=\"sun-city-results\">" + (resultRows(value)) + "</ul>\n      <div class=\"sep\"></div>\n      <button class=\"sun-manual-toggle\" type=\"button\" data-sun-manual aria-expanded=\"" + (manualOpen ? 'true' : 'false') + "\"><span data-i18n=\"copy.canTFindMyCity.ba0eac\">" + (pomeLocaleRendererSunWidget.t("copy.canTFindMyCity.ba0eac")) + "</span></button>\n      <form class=\"sun-manual\" data-sun-manual-form " + (manualOpen ? '' : 'hidden') + ">\n        <label><span data-i18n=\"copy.latitude.9c11bd\">" + (pomeLocaleRendererSunWidget.t("copy.latitude.9c11bd")) + "</span><input name=\"lat\" inputmode=\"decimal\" placeholder=\"31.23\" aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.latitude.9c11bd")) + "\" data-i18n-aria-label=\"copy.latitude.9c11bd\"></label>\n        <label><span data-i18n=\"copy.longitude.69f788\">" + (pomeLocaleRendererSunWidget.t("copy.longitude.69f788")) + "</span><input name=\"lng\" inputmode=\"decimal\" placeholder=\"121.47\" aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.longitude.69f788")) + "\" data-i18n-aria-label=\"copy.longitude.69f788\"></label>\n        <label><span data-i18n=\"copy.name.d44e9b\">" + (pomeLocaleRendererSunWidget.t("copy.name.d44e9b")) + "</span><input name=\"name\" maxlength=\"24\" placeholder=\"" + (pomeLocaleRendererSunWidget.attribute("copy.optional.537352")) + "\" data-i18n-placeholder=\"copy.optional.537352\" aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.locationName.1e1d6f")) + "\" data-i18n-aria-label=\"copy.locationName.1e1d6f\"></label>\n        <button type=\"submit\"><span data-i18n=\"copy.useThisLocation.2887bb\">" + (pomeLocaleRendererSunWidget.t("copy.useThisLocation.2887bb")) + "</span></button>\n        <p class=\"sun-manual-error\" data-sun-manual-error hidden></p>\n      </form>\n      <p class=\"foot\"><span data-i18n=\"copy.locationIsStoredOnThisDeviceOnly.3bc25b\">" + (pomeLocaleRendererSunWidget.t("copy.locationIsStoredOnThisDeviceOnly.3bc25b")) + "</span></p>");
     pop.hidden = false;
+    pop.scrollTop = 0;
+    positionPanel();
+    if (!panelOpen) return;
     const input = document.getElementById('sun-city-query');
     const caret = input.value.length;
-    input.focus();
+    input.focus({ preventScroll: true });
     input.setSelectionRange(caret, caret);
   }
 
   function closePanel() {
     panelOpen = false;
+    manualOpen = false;
     const pop = document.getElementById('sun-location-popover');
-    if (pop) pop.hidden = true;
+    if (pop) {
+      if (pop.contains(document.activeElement)) document.activeElement.blur();
+      pop.hidden = true;
+      pop.replaceChildren();
+    }
   }
 
   function applyCity(city, persist) {
@@ -442,6 +555,7 @@
     if (event.target.id !== 'sun-city-query') return;
     const results = document.getElementById('sun-city-results');
     if (results) results.innerHTML = resultRows(event.target.value);
+    positionPanel();
   });
 
   document.addEventListener('click', (event) => {
@@ -459,6 +573,7 @@
     const form = document.querySelector('[data-sun-manual-form]');
     if (form) form.hidden = !manualOpen;
     manual.setAttribute('aria-expanded', String(manualOpen));
+    positionPanel();
   });
 
   document.addEventListener('submit', (event) => {
@@ -473,6 +588,7 @@
         error.hidden = false;
         error.textContent = parsed.error;
       }
+      positionPanel();
       return;
     }
     parsed.location.tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
@@ -497,14 +613,51 @@
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) render();
+    if (document.hidden) { closePanel(); weatherEffects.stop(); }
+    else { render(); requestWeatherOnWake(); }
   });
-  window.addEventListener('focus', () => render());
+  document.addEventListener('notch:will-collapse', () => { closePanel(); weatherEffects.stop(); });
+  document.addEventListener('notch:modechange', (event) => {
+    if (!event.detail?.expanded) closePanel();
+    syncWeatherEffects();
+    if (event.detail?.expanded) requestWeatherOnWake();
+  });
+  document.addEventListener('notch:tabchange', (event) => {
+    if (event.detail?.tab !== 'home') closePanel();
+    syncWeatherEffects();
+    if (event.detail?.tab === 'home') requestWeatherOnWake();
+  });
+  document.addEventListener('notch:home-layout-applied', positionPanel);
+  window.addEventListener('blur', closePanel);
+  window.addEventListener('resize', () => { fitWeatherHeader(); positionPanel(); });
+  document.addEventListener('scroll', (event) => {
+    if (!document.getElementById('sun-location-popover')?.contains(event.target)) positionPanel();
+  }, true);
+  window.addEventListener('focus', () => { render(); requestWeatherOnWake(); });
 
-  const sizeObserver = new MutationObserver(() => render());
-  sizeObserver.observe(tile, { attributes: true, attributeFilter: ['data-widget-size'] });
+  const sizeObserver = new MutationObserver(() => {
+    if (tile.hidden) closePanel();
+    render();
+  });
+  sizeObserver.observe(tile, { attributes: true, attributeFilter: ['data-widget-size', 'hidden'] });
+  const surfaceObserver = new MutationObserver(() => {
+    if (panelOpen && !canShowPanel()) closePanel();
+    syncWeatherEffects();
+  });
+  surfaceObserver.observe(document.getElementById('app'), { attributes: true, attributeFilter: ['class'] });
+
+  const weatherVisibility = new IntersectionObserver(entries => {
+    weatherIntersecting = entries[0]?.isIntersecting === true;
+    syncWeatherEffects();
+    if (weatherIntersecting) requestWeatherOnWake();
+  });
+  weatherVisibility.observe(tile);
+  window.addEventListener('pagehide', () => {
+    weatherEffects.destroy(); weatherVisibility.disconnect(); window.clearTimeout(timer);
+  });
 
   window.PomeSun = Object.freeze({
+    getWeather: () => ({ data: weatherData, effects: weatherEffects.inspect() }),
     render,
     setPreviewNow(value) {
       previewNow = value ? new Date(value) : null;

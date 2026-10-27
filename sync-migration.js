@@ -18,7 +18,7 @@ const {
   assertMigrationState,
 } = require('./packages/sync-protocol/migration');
 
-const TODO_PRIORITIES = Object.freeze(['P0', 'P1', 'P2', 'P3']);
+const TODO_PRIORITIES = Object.freeze(['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7']);
 const SYNC_BACKUPS_DIR = 'sync-backups';
 const BACKUP_KEEP_COUNT = 5;
 const BACKUP_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
@@ -28,12 +28,16 @@ const MIGRATION_BANNER_TEXT = '迁移中，稍候';
  * Strict parse of notch-todo-data. Corrupt / illegal structure ≠ empty.
  * @param {string|null|undefined} raw
  */
+function emptyTodosProjection() {
+  return Object.fromEntries(TODO_PRIORITIES.map((key) => [key, []]));
+}
+
 function parseLocalTodosStrict(raw) {
   if (raw == null || raw === '') {
     return {
       ok: true,
       corrupt: false,
-      data: { P0: [], P1: [], P2: [], P3: [] },
+      data: emptyTodosProjection(),
       live: 0,
       latestUpdatedAt: null,
     };
@@ -50,19 +54,22 @@ function parseLocalTodosStrict(raw) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return { ok: false, corrupt: true, reason: 'not_object' };
   }
-  for (const key of TODO_PRIORITIES) {
-    if (!(key in parsed)) {
-      return { ok: false, corrupt: true, reason: `missing_${key}` };
+  // Require the original P0–P3 core; pad P4–P7 for older LocalStorage snapshots.
+  for (const key of ['P0', 'P1', 'P2', 'P3']) {
+    if (!(key in parsed) || !Array.isArray(parsed[key])) {
+      return { ok: false, corrupt: true, reason: key in parsed ? `invalid_${key}` : `missing_${key}` };
     }
-    if (!Array.isArray(parsed[key])) {
+  }
+  for (const key of TODO_PRIORITIES) {
+    if (key in parsed && !Array.isArray(parsed[key])) {
       return { ok: false, corrupt: true, reason: `invalid_${key}` };
     }
   }
-  const data = { P0: [], P1: [], P2: [], P3: [] };
+  const data = emptyTodosProjection();
   let live = 0;
   let latestUpdatedAt = null;
   for (const key of TODO_PRIORITIES) {
-    for (const item of parsed[key]) {
+    for (const item of parsed[key] || []) {
       const coerced = coerceLocalTodoItem(item, key, data[key].length);
       if (!coerced.ok) return coerced;
       live += 1;
@@ -119,7 +126,7 @@ function coerceLocalTodoItem(item, categoryId, index) {
 }
 
 function canonicalLocalTodosJson(data) {
-  const todos = { P0: [], P1: [], P2: [], P3: [] };
+  const todos = emptyTodosProjection();
   for (const key of TODO_PRIORITIES) {
     todos[key] = (data[key] || []).map((item) => ({
       id: item.id,
@@ -309,7 +316,7 @@ function localTodosToEntities(data) {
  * Build LocalStorage projection JSON from NAS entity list (or pull changes).
  */
 function entitiesToTodosProjection(entities) {
-  const todos = { P0: [], P1: [], P2: [], P3: [] };
+  const todos = emptyTodosProjection();
   for (const ent of entities || []) {
     if (!ent || ent.op === 'delete') continue;
     const payload = ent.payload || {};
@@ -453,7 +460,7 @@ async function runMigrationAttempt(ctx) {
   });
 
   writeMigrationBackupAtomic(userDataPath, migrationId, localRaw == null || localRaw === ''
-    ? JSON.stringify({ P0: [], P1: [], P2: [], P3: [] })
+    ? JSON.stringify(emptyTodosProjection())
     : localRaw, {
     fsModule,
   });
@@ -525,7 +532,7 @@ async function runMigrationAttempt(ctx) {
           if (!applied.ok) throw new Error(applied.reason || 'apply_failed');
         }
       } else {
-        projectionJson = JSON.stringify({ P0: [], P1: [], P2: [], P3: [] });
+        projectionJson = JSON.stringify(emptyTodosProjection());
       }
       applyLocalProjection(projectionJson);
     } else if (resolvedAuthority === AUTHORITY.LOCAL) {
@@ -535,12 +542,7 @@ async function runMigrationAttempt(ctx) {
         if (!applied.ok) throw new Error(applied.reason || 'apply_failed');
       }
       if (local.ok) {
-        applyLocalProjection(JSON.stringify({
-          P0: local.data.P0.map(stripCategory),
-          P1: local.data.P1.map(stripCategory),
-          P2: local.data.P2.map(stripCategory),
-          P3: local.data.P3.map(stripCategory),
-        }));
+        applyLocalProjection(canonicalLocalTodosJson(local.data));
       }
     }
   } catch (error) {
@@ -568,17 +570,6 @@ async function runMigrationAttempt(ctx) {
     serverRev: commit.body && commit.body.serverRev,
     remoteChanges,
     uploadedEntities: entities,
-  };
-}
-
-function stripCategory(item) {
-  return {
-    id: item.id,
-    text: item.text,
-    done: item.done === true,
-    createdAt: item.createdAt,
-    deadline: item.deadline || '',
-    remindedAt: item.remindedAt || 0,
   };
 }
 

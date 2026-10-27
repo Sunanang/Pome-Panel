@@ -1,0 +1,22 @@
+[nas]
+packageDescription="View your Pome Panel workspace on the NAS and pair with the desktop app. The interface uses the unified gateway /app/pome-panel. The gateway starts even without a configured port. Device sync defaults to 127.0.0.1, with optional LAN listening on 0.0.0.0."
+packageChangelog="0.9.14: Device sync supports optional LAN listening (0.0.0.0), with localhost (127.0.0.1) as the default. App Settings adds Listen scope. The startup entry remains TRIM_APPDEST/server and the sync protocol remains in target/packages/sync-protocol. Uninstall can keep or delete app data."
+
+[wizard]
+allAppDataFilesWillBePermanently_c0cd34="All app data files will be permanently deleted. This action cannot be undone"
+appData_dcf6f0="App data"
+chooseWhetherToKeepAppDataKeeping_6bccf1="Choose whether to keep app data. Keeping it lets you continue after reinstalling."
+chooseWhetherToKeepAppData_5596de="Choose whether to keep app data"
+deleteAllAppDataCannotBeUndone_a440ed="Delete all app data (cannot be undone)"
+deviceSyncPort_cbb969="Device sync port"
+enterADeviceSyncPort165535_8ca6b1="Enter a device sync port (1–65535) and choose a listening scope. The app can start even if this setting is not saved; configure it later in App Settings and restart. Choose LAN for local IP access at http://NAS-LAN-IP:PORT. For remote access, forward a public IP or DDNS port to this NAS port, or use localhost with FRP, a reverse proxy or VPN forwarding to 127.0.0.1:PORT. HTTP is unencrypted by default; public exposure risks scanning and unauthorized access. Use HTTPS, a VPN or source restrictions and protect pairing codes. Restart this app from App Center after saving."
+enterADeviceSyncPort165535_dbf8f6="Enter a device sync port (1–65535) and choose a listening scope. Choose LAN to use http://NAS-LAN-IP:PORT locally, with router port forwarding or DDNS for remote access. Alternatively choose localhost and forward to 127.0.0.1:PORT using FRP, a reverse proxy or VPN. HTTP is unencrypted by default; public exposure risks scanning and unauthorized access. Prefer HTTPS, a VPN or source restrictions and protect pairing codes. Do not expose unnecessary ports. Restart this app from App Center after saving."
+enterADeviceSyncPort_68b26e="Enter a device sync port"
+enterAPortFrom1To65535_6d7fb2="Enter a port from 1 to 65535"
+keepAppData_b04690="Keep app data"
+keepExistingFilesForUseAfterReinstalling_fd77b2="Keep existing files for use after reinstalling"
+keepOrDeleteAppData_e141d3="Keep or delete app data"
+lan0000UseThe_26b760="LAN (0.0.0.0): use the NAS LAN IP from the same network, or combine with remote access."
+listeningScope_2351e0="Listening scope"
+localhost127001AccessibleOnly_c5a67d="Localhost (127.0.0.1): accessible only on the NAS. Use a reverse proxy or tunneling tool to forward to this local port."
+theAppCanStartWithoutAPort_739ea2="The app can start without a port, but desktop sync will not work yet. Enter a device sync port (1–65535) and choose a listening scope. Choose LAN to use http://NAS-LAN-IP:PORT locally, with port forwarding or DDNS for remote access. Alternatively choose localhost and forward to 127.0.0.1:PORT using FRP, a reverse proxy or VPN. HTTP is unencrypted by default; public exposure risks scanning and unauthorized access. Prefer HTTPS, a VPN or source restrictions and protect pairing codes. Do not expose unnecessary ports. Restart the app after saving."

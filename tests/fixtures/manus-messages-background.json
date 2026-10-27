@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "request_id": "req_messages_background",
+  "task_id": "task_fixture_bg",
+  "messages": [
+    {
+      "id": "evt_user_b1",
+      "type": "user_message",
+      "timestamp": 1760926005000,
+      "user_message": { "content": "Start background work", "message_type": "text" }
+    },
+    {
+      "id": "evt_result_b1",
+      "type": "assistant_message",
+      "timestamp": 1760926200000,
+      "assistant_message": { "content": "Partial answer while workers continue.", "delivery_kind": "result" }
+    },
+    {
+      "id": "evt_stop_b1",
+      "type": "status_update",
+      "timestamp": 1760926201000,
+      "status_update": { "agent_status": "stopped", "brief": "Main agent stopped" }
+    }
+  ],
+  "has_more": false
+}

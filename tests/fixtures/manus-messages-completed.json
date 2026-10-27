@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "request_id": "req_messages_completed",
+  "task_id": "task_fixture_done",
+  "messages": [
+    {
+      "id": "evt_user_1",
+      "type": "user_message",
+      "timestamp": 1760922005000,
+      "user_message": { "content": "Summarize the release notes", "message_type": "text" }
+    },
+    {
+      "id": "evt_progress_1",
+      "type": "assistant_message",
+      "timestamp": 1760922010000,
+      "assistant_message": { "content": "Working on it…", "delivery_kind": "progress" }
+    },
+    {
+      "id": "evt_result_1",
+      "type": "assistant_message",
+      "timestamp": 1760922290000,
+      "assistant_message": { "content": "Release notes summarized into three bullets.", "delivery_kind": "result" }
+    },
+    {
+      "id": "evt_stop_1",
+      "type": "status_update",
+      "timestamp": 1760922300000,
+      "status_update": { "agent_status": "stopped", "brief": "Done" }
+    }
+  ],
+  "has_more": false
+}

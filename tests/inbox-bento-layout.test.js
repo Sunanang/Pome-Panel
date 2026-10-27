@@ -3,6 +3,18 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const domain=require('../renderer/domain');
 const registry=['music','pomodoro','cursor','recorder','inbox','windows','mirror','note','commands','sun'];
 const defaults={music:'small',pomodoro:'mini',cursor:'small',recorder:'small',inbox:'medium',windows:'medium',mirror:'medium',note:'medium',commands:'mini',sun:'medium'};
+test('only an untouched old Windows default qualifies for automatic homepage repair',()=>{
+ const order=['music','pomodoro','cursor','recorder','inbox','commands','mirror','note','windows','sun'];
+ const unavailableIds=['music','windows'];
+ const placements=domain.normalizeHomeInboxLayout({order,sizes:defaults,hiddenIds:[...unavailableIds,'sun'],registry}).placements;
+ const baseline={order,defaultOrder:order,sizes:defaults,defaults,placements,hiddenIds:['sun'],unavailableIds,registry};
+ assert.equal(domain.isLegacyWindowsDefaultHomeLayout(baseline),true);
+ assert.equal(domain.isLegacyWindowsDefaultHomeLayout({...baseline,sizes:{...defaults,cursor:'medium'}}),false);
+ assert.equal(domain.isLegacyWindowsDefaultHomeLayout({...baseline,order:[...order].reverse()}),false);
+ assert.equal(domain.isLegacyWindowsDefaultHomeLayout({...baseline,hiddenIds:['sun','note']}),false);
+ assert.equal(domain.isLegacyWindowsDefaultHomeLayout({...baseline,unavailableIds:[]}),false);
+ assert.equal(domain.isLegacyWindowsDefaultHomeLayout({...baseline,placements:{...placements,pomodoro:{...placements.pomodoro,column:0}}}),false);
+});
 test('new default Bento positions inbox above the medium window module without overlapping',()=>{
  const result=domain.normalizeHomeInboxLayout({registry,order:['music','pomodoro','cursor','recorder','inbox','commands','mirror','note','windows','sun'],sizes:defaults,hiddenIds:['sun']});
  assert.equal(domain.validateHomeWidgetLayout({placements:result.placements,allowGaps:true},registry.filter(id=>id!=='sun')),true);

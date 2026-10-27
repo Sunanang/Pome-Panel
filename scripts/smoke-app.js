@@ -109,10 +109,10 @@ async function main() {
   assert.equal(await evaluate('window.notchAPI.capabilities.platform'), 'win32');
   assert.equal(await evaluate('document.documentElement.dataset.platform'), 'win32');
   assert.equal(await evaluate('window.notchAPI.capabilities.features.musicControl'), false);
-  assert.deepEqual(await evaluate('window.notchAPI.capabilities.unavailableHomeModules'), ['music', 'windows']);
+  assert.deepEqual(await evaluate('window.notchAPI.capabilities.unavailableHomeModules'), ['music']);
   assert.equal(await evaluate('window.notchAPI.getAppSettings().then(s => s.features.clip)'), false);
   assert.equal(await evaluate('document.getElementById("mirror-video").srcObject === null'), true);
-  assert.deepEqual(await evaluate('window.NotchHome.getVisibility().visibleIds'), ['pomodoro', 'cursor', 'recorder', 'inbox', 'mirror', 'note', 'commands']);
+  assert.deepEqual(await evaluate('window.NotchHome.getVisibility().visibleIds'), ['pomodoro', 'cursor', 'recorder', 'inbox', 'mirror', 'note', 'commands', 'sun', 'almanac']);
   assert.equal(await evaluate('window.NotchHome.setModuleVisible("music", true).ok'), false);
   // P4（D16）：WIN_NATIVE_DEFAULT=false，启动时原生能力是关的——「当前窗口」不可用，
   // 错误码取决于是被能力层挡住（unsupported）还是适配层报告原生不可用（native_unavailable）。
@@ -210,7 +210,7 @@ async function main() {
   await until(() => evaluate('window.notchAPI.listTaskCompletions().then(r => r.some(i => i.title === "Windows smoke complete"))'), 'notification recorded');
   await evaluate('document.getElementById("tab-button-settings").click()');
   await delay(300);
-  assert.deepEqual(await evaluate('Array.from(document.querySelectorAll("[data-settings-home-module]")).filter(i => !i.closest("label").hidden).map(i => i.dataset.settingsHomeModule)'), ['pomodoro', 'cursor', 'recorder', 'inbox', 'mirror', 'note', 'commands', 'sun']);
+  assert.deepEqual(await evaluate('Array.from(document.querySelectorAll("[data-settings-home-module]")).filter(i => !i.closest("label").hidden).map(i => i.dataset.settingsHomeModule)'), ['pomodoro', 'cursor', 'recorder', 'inbox', 'windows', 'mirror', 'note', 'commands', 'sun', 'almanac']);
   // 「实验功能」这一行只在 Windows 上出现，是用户唯一的原生能力入口（D16）。
   assert.equal(await evaluate('document.getElementById("settings-win-native-row").hidden'), false);
   assert.equal(await evaluate('document.getElementById("settings-win-native").checked'), false);
@@ -227,7 +227,7 @@ async function main() {
   await until(() => child.exitCode !== null, 'normal application exit');
   shutdown.close();
   assert.equal(child.exitCode, 0, 'Application exits cleanly before reinstall/uninstall');
-  fs.writeFileSync(path.join(evidence, retained ? 'retained.json' : 'smoke.json'), JSON.stringify({ ok: true, platform: process.platform, retained, profile, checks: ['real startup', 'seven default Windows home modules', 'IPC', 'native koffi load and window list', 'clipboard copy', 'first-run auto-launch', 'auto-launch', 'shortcuts', 'encrypted credentials', 'fake camera release', 'fake recording release and persistence', 'notifications', 'settings'] }, null, 2));
+  fs.writeFileSync(path.join(evidence, retained ? 'retained.json' : 'smoke.json'), JSON.stringify({ ok: true, platform: process.platform, retained, profile, checks: ['real startup', 'nine default Windows home modules', 'IPC', 'native koffi load and window list', 'clipboard copy', 'first-run auto-launch', 'auto-launch', 'shortcuts', 'encrypted credentials', 'fake camera release', 'fake recording release and persistence', 'notifications', 'settings'] }, null, 2));
   console.log(`Windows application smoke passed (${retained ? 'retained profile' : 'fresh profile'})`);
 }
 main().catch(async (error) => {

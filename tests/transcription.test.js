@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 
 // Exercise the actual main-process IPC handlers without a microphone or cloud key.
-function harness() {
+function harness(language = 'zh') {
   const sockets = [], events = [], timers = new Map(), handlers = new Map();
   let now = 0, timerId = 0;
   class Socket extends EventEmitter {
@@ -20,10 +20,11 @@ function harness() {
   }
   const sender = { id: 1, isDestroyed: () => false, send: (_, data) => events.push(data) };
   const context = vm.createContext({
+    PomeI18n: require('../localization/runtime'), pomeLocaleRendererWorkspace: require('../localization/runtime'), activeRecognitionLanguage: 'zh-CN',
     WebSocket: Socket, Buffer, crypto: require('node:crypto'),
     TRANSCRIPTION_MODEL: 'qwen3-asr-flash-realtime', TRANSCRIPTION_SAMPLE_RATE: 16000,
     TRANSCRIPTION_FINISH_TIMEOUT_MS: 7000, transcriptionSessions: new Map(),
-    resolveTranscriptionConfig: () => ({ apiKey: 'test', region: 'beijing' }),
+    resolveTranscriptionConfig: () => ({ apiKey: 'test', region: 'beijing', language }),
     publicTranscriptionConfig: () => ({}),
     ipcMain: { handle: (name, fn) => handlers.set(name, fn), on: (name, fn) => handlers.set(name, fn) },
     setTimeout: (fn, ms) => { timers.set(++timerId, { fn, at: now + ms }); return timerId; },
@@ -132,6 +133,7 @@ function rendererHarness() {
   const source = fs.readFileSync(require.resolve('../renderer/workspace.js'), 'utf8');
   let listener, finishCalls = 0;
   const context = vm.createContext({
+    PomeI18n: require('../localization/runtime'), pomeLocaleRendererWorkspace: require('../localization/runtime'), activeRecognitionLanguage: 'zh-CN',
     window: { notchAPI: {
       onTranscriptionEvent: (fn) => { listener = fn; },
       finishTranscription: async () => { finishCalls++; return { ok: false, error: 'connection_closed', transcript: '已有文字 末尾' }; },
@@ -202,4 +204,21 @@ test('late start reply cannot hide an already reported reconnect', async () => {
   vm.runInContext(source.slice(source.indexOf('  async function startCloudTranscription()'), source.indexOf('  async function finishCloudTranscription()')), h.context);
   await h.context.startCloudTranscription();
   assert.equal(h.context.transcriptionStatus, 'reconnecting');
+});
+
+
+test('English recognition is frozen for a session and reconnect independently of interface language', async () => {
+  const L = require('../localization/runtime');
+  const h = harness('zh');
+  const start = h.call('start', { language: 'en' });
+  const first = h.connect(); await start;
+  const configuration = socket => socket.sent.find(message => message.type === 'session.update').session.input_audio_transcription.language;
+  assert.equal(configuration(first), 'en');
+  L.setState(L.snapshot('zh-CN'));
+  first.close(); h.tick(1000);
+  const second = h.connect(); assert.equal(configuration(second), 'en');
+  h.context.closeAllTranscriptionSessions();
+  const invalid = await h.call('start', { language: 'auto' });
+  assert.equal(invalid.ok, false);
+  assert.equal(h.sockets.length, 2, 'invalid recognition language must not contact the cloud');
 });

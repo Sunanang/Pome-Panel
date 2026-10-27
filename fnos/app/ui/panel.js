@@ -1,4 +1,6 @@
 'use strict';
+const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? require("../../../localization/runtime") : globalThis.PomeI18n;
+
 
 /**
  * Feiniu web Panel. Tab order follows the desktop bar, with 设备 in the 首页 slot.
@@ -25,17 +27,17 @@
   const DEFAULT_GATEWAY_PREFIX = '/app/pome-panel';
 
   const TABS = Object.freeze([
-    { id: 'devices', label: '设备' },
-    { id: 'todo', label: '待办' },
-    { id: 'clip', label: '剪贴' },
-    { id: 'notes', label: '笔记' },
-    { id: 'commands', label: '常用命令' },
-    { id: 'links', label: '链接' },
-    { id: 'recordings', label: '录制' },
-    { id: 'credentials', label: '密钥' },
+    { id: 'devices', label: pomeLocaleFnosAppUiPanel.t("copy.devices.e15064") },
+    { id: 'todo', label: pomeLocaleFnosAppUiPanel.t("copy.tasks.52fdbb") },
+    { id: 'clip', label: pomeLocaleFnosAppUiPanel.t("copy.clipboard.658c84") },
+    { id: 'notes', label: pomeLocaleFnosAppUiPanel.t("copy.notes.b778e3") },
+    { id: 'commands', label: pomeLocaleFnosAppUiPanel.t("copy.commands.1cbb8f") },
+    { id: 'links', label: pomeLocaleFnosAppUiPanel.t("copy.links.305378") },
+    { id: 'recordings', label: pomeLocaleFnosAppUiPanel.t("copy.recordings.4b6ef7") },
+    { id: 'credentials', label: pomeLocaleFnosAppUiPanel.t("copy.credentials.f67bca") },
   ]);
 
-  const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
+  const PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
 
   function resolveApiPrefix(pathname, metaPrefix) {
     if (metaPrefix != null && String(metaPrefix).trim() !== '') {
@@ -103,15 +105,30 @@
     let noteQuery = '';
     let selectedNote = '';
     let selectedRecording = '';
-    const objectUrls = [];
+    const mediaScopes = new Map();
 
-    function revokeUrls() {
+    function releaseMedia(owner) {
+      const scope = mediaScopes.get(owner);
+      if (!scope) return;
+      scope.active = false;
+      for (const request of scope.requests) request.abort();
+      for (const node of scope.nodes) {
+        if (typeof node.pause === 'function') {
+          node.pause();
+          node.removeAttribute('src');
+          node.load?.();
+        }
+      }
       if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
-        for (const url of objectUrls) {
+        for (const url of scope.urls) {
           try { URL.revokeObjectURL(url); } catch (error) { /* already revoked */ }
         }
       }
-      objectUrls.length = 0;
+      mediaScopes.delete(owner);
+    }
+
+    function revokeUrls() {
+      for (const owner of mediaScopes.keys()) releaseMedia(owner);
     }
 
     function el(tag, className, text) {
@@ -149,9 +166,9 @@
       const value = Number(ts);
       if (!Number.isFinite(value) || value <= 0) return '';
       const diff = Date.now() - value;
-      if (diff < 60 * 1000) return '刚刚';
-      if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`;
-      if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)} 小时前`;
+      if (diff < 60 * 1000) return pomeLocaleFnosAppUiPanel.t("copy.justNow.de6785");
+      if (diff < 60 * 60 * 1000) return pomeLocaleFnosAppUiPanel.t("copy.minutesAgo.5c5fd5", { arg1: (Math.floor(diff / 60000)) });
+      if (diff < 24 * 60 * 60 * 1000) return pomeLocaleFnosAppUiPanel.t("copy.hoursAgo.9112fb", { arg1: (Math.floor(diff / 3600000)) });
       const date = new Date(value);
       return `${date.getMonth() + 1}/${date.getDate()}`;
     }
@@ -190,12 +207,12 @@
       const notes = (view && view.notes) || {};
       const items = [];
       if (notes.home && String(notes.home).trim()) {
-        items.push({ id: 'home', title: '首页速记', content: notes.home });
+        items.push({ id: 'home', title: pomeLocaleFnosAppUiPanel.t("copy.homeNote.737388"), content: notes.home });
       }
       for (const note of notes.archive || []) {
         items.push({
           id: note.id || '',
-          title: note.title || '未命名',
+          title: pomeLocaleFnosAppUiPanel.noteTitle(note) || pomeLocaleFnosAppUiPanel.t("copy.untitled.67bee6"),
           content: note.content || '',
           active: note.id && note.id === notes.activeId,
         });
@@ -210,7 +227,7 @@
       const detail = byId('notes-detail');
       const count = byId('notes-count');
       const items = noteItems();
-      if (count) count.textContent = `${(view && view.counts && view.counts.notes) || items.length} 篇`;
+      if (count) pomeLocaleFnosAppUiPanel.bind(count, "textContent", () => (pomeLocaleFnosAppUiPanel.t("copy.notes.0b8a21", { arg1: ((view && view.counts && view.counts.notes) || items.length) })));
       if (!list || !doc) return;
       clearNode(list);
       if (!selectedNote || !items.some((item) => item.id === selectedNote)) {
@@ -221,7 +238,7 @@
         button.type = 'button';
         button.appendChild(el('strong', '', item.title));
         if (item.content) button.appendChild(el('span', '', item.content.replace(/\s+/g, ' ').slice(0, 80)));
-        if (item.active) button.appendChild(el('span', '', '当前笔记'));
+        if (item.active) button.appendChild(el('span', '', pomeLocaleFnosAppUiPanel.t("copy.currentNote.936875")));
         button.addEventListener('click', () => {
           selectedNote = item.id;
           renderNotes();
@@ -233,7 +250,7 @@
       const current = items.find((item) => item.id === selectedNote);
       if (!current) return;
       const head = el('div', 'notes-detail-head');
-      head.appendChild(el('span', 'tile-label', '笔记'));
+      head.appendChild(el('span', 'tile-label', pomeLocaleFnosAppUiPanel.t("copy.notes.b778e3")));
       head.appendChild(el('strong', '', current.title));
       detail.appendChild(head);
       detail.appendChild(el('p', 'notes-body', current.content || ''));
@@ -250,6 +267,7 @@
     function renderClips() {
       const list = byId('clip-list');
       if (!list || !doc) return;
+      releaseMedia(list);
       clearNode(list);
       const items = filteredClips();
       const total = ((view && view.clipboard) || []).length;
@@ -257,7 +275,7 @@
         list.appendChild(el(
           'div',
           'clip-empty',
-          total ? '没有符合条件的记录' : '复制点什么，历史会出现在这里',
+          total ? pomeLocaleFnosAppUiPanel.t("copy.noMatchingItems.4659ba") : pomeLocaleFnosAppUiPanel.t("copy.copySomethingToSeeItsHistoryHere.f0571f"),
         ));
         return;
       }
@@ -273,21 +291,21 @@
         const copy = el('button', 'clip-copy-target');
         copy.type = 'button';
         if (type === 'image') {
-          copy.setAttribute('aria-label', '复制图片');
+          copy.setAttribute('aria-label', pomeLocaleFnosAppUiPanel.t("copy.copyImage.4c2b82"));
           const wrap = el('span', 'clip-thumb-wrap');
           if (item.hasImage && item.id) {
             const img = el('img', 'clip-thumb');
-            img.alt = '图片';
+            img.alt = pomeLocaleFnosAppUiPanel.t("copy.image.d24c10");
             img.setAttribute('draggable', 'false');
             wrap.appendChild(img);
-            attachMedia(img, `clip:${item.id}`);
+            attachMedia(img, `clip:${item.id}`, list);
           } else {
-            wrap.appendChild(el('span', 'clip-thumb-placeholder', '图片加载中…'));
+            wrap.appendChild(el('span', 'clip-thumb-placeholder', pomeLocaleFnosAppUiPanel.t("copy.loadingImage.f304d7")));
           }
           copy.appendChild(wrap);
         } else {
-          const preview = String(item.text || '').replace(/\s+/g, ' ').trim().slice(0, 80) || '空白内容';
-          copy.setAttribute('aria-label', `复制：${preview}`);
+          const preview = String(item.text || '').replace(/\s+/g, ' ').trim().slice(0, 80) || pomeLocaleFnosAppUiPanel.t("copy.blankContent.09d2d3");
+          copy.setAttribute('aria-label', pomeLocaleFnosAppUiPanel.t("copy.copy.5aa6ae", { arg1: (preview) }));
           copy.appendChild(el('span', 'clip-text', item.text || ''));
           copy.addEventListener('click', () => {
             void copyClipText(item.text).then((ok) => {
@@ -302,14 +320,14 @@
 
         const fav = el('button', item.favorite ? 'clip-fav-btn faved' : 'clip-fav-btn');
         fav.type = 'button';
-        fav.setAttribute('aria-label', item.favorite ? '取消收藏' : '收藏');
+        fav.setAttribute('aria-label', item.favorite ? pomeLocaleFnosAppUiPanel.t("copy.unstar.dca608") : pomeLocaleFnosAppUiPanel.t("copy.star.60a535"));
         fav.appendChild(starIcon(!!item.favorite));
         card.appendChild(fav);
 
         const del = el('button', 'clip-del-btn');
         del.type = 'button';
-        del.setAttribute('aria-label', '删除');
-        del.title = '随桌面同步，这里不能删除';
+        del.setAttribute('aria-label', pomeLocaleFnosAppUiPanel.t("copy.delete.2f9daa"));
+        pomeLocaleFnosAppUiPanel.bind(del, "title", () => (pomeLocaleFnosAppUiPanel.t("copy.syncedFromDesktopCanTDeleteHere.ffaf02")));
         del.textContent = '×';
         card.appendChild(del);
         list.appendChild(card);
@@ -321,7 +339,7 @@
       const detail = byId('recording-detail');
       const count = byId('recording-count');
       const items = (view && view.recordings) || [];
-      if (count) count.textContent = `${items.length} 条`;
+      if (count) pomeLocaleFnosAppUiPanel.bind(count, "textContent", () => (pomeLocaleFnosAppUiPanel.t("copy.items.1d26a0", { arg1: (items.length) })));
       if (!list || !doc) return;
       if (!selectedRecording || !items.some((item) => item.id === selectedRecording)) {
         selectedRecording = items[0] ? items[0].id : '';
@@ -330,7 +348,7 @@
       for (const item of items) {
         const button = el('button', item.id === selectedRecording ? 'recording-item active' : 'recording-item');
         button.type = 'button';
-        button.appendChild(el('strong', '', item.title || '录音'));
+        button.appendChild(el('strong', '', item.title || pomeLocaleFnosAppUiPanel.t("copy.recording.ef2821")));
         const bits = [];
         if (item.durationMs) bits.push(formatDuration(item.durationMs));
         if (item.category) bits.push(item.category);
@@ -343,15 +361,16 @@
         list.appendChild(button);
       }
       if (!detail) return;
+      releaseMedia(detail);
       clearNode(detail);
       const current = items.find((item) => item.id === selectedRecording);
       if (!current) return;
       const head = el('div', 'recording-detail-head');
-      head.appendChild(el('strong', '', current.title || '录音'));
+      head.appendChild(el('strong', '', current.title || pomeLocaleFnosAppUiPanel.t("copy.recording.ef2821")));
       const meta = [];
       if (current.durationMs) meta.push(formatDuration(current.durationMs));
       if (current.category) meta.push(current.category);
-      if (current.audioOmitted) meta.push('音频过大，未随同步上传');
+      if (current.audioOmitted) meta.push(pomeLocaleFnosAppUiPanel.t("copy.audioTooLargeToUploadDuringSync.88480a"));
       if (meta.length) head.appendChild(el('span', '', meta.join(' · ')));
       detail.appendChild(head);
       if (current.hasAudio && !current.audioOmitted && current.id) {
@@ -361,7 +380,7 @@
         audio.preload = 'none';
         holder.appendChild(audio);
         detail.appendChild(holder);
-        attachMedia(audio, `recording:${current.id}`);
+        attachMedia(audio, `recording:${current.id}`, detail);
       }
       if (current.transcript) detail.appendChild(el('p', 'recording-transcript', current.transcript));
     }
@@ -390,7 +409,7 @@
       for (const group of visible) {
         const card = el('section', 'link-group tile');
         const head = el('div', 'link-group-head');
-        head.appendChild(el('strong', '', group.name || '未分组'));
+        head.appendChild(el('strong', '', group.name || pomeLocaleFnosAppUiPanel.t("copy.ungrouped.e86ea3")));
         head.appendChild(el('span', 'group-count', String(group.links.length)));
         card.appendChild(head);
         const body = el('div', 'link-group-body');
@@ -461,7 +480,7 @@
       const node = byId(id);
       if (!node) return;
       const on = value === '已配置';
-      node.textContent = on ? '已配置' : '未配置';
+      pomeLocaleFnosAppUiPanel.bind(node, "textContent", () => (on ? pomeLocaleFnosAppUiPanel.t("copy.configured.de8184") : pomeLocaleFnosAppUiPanel.t("copy.notConfigured.80a57e")));
       node.setAttribute('data-state', on ? 'saved' : 'empty');
     }
 
@@ -475,31 +494,40 @@
       setConfigState('nas-llm-status', ai.llm);
       if (meta) {
         const bits = [];
-        if (ai.model) bits.push(`模型 ${ai.model}`);
-        if (ai.region) bits.push(`区域 ${ai.region}`);
-        if (ai.workspaceId) bits.push(`工作区 ${ai.workspaceId}`);
+        if (ai.model) bits.push(pomeLocaleFnosAppUiPanel.t("copy.model.2083cd", { arg1: (ai.model) }));
+        if (ai.region) bits.push(pomeLocaleFnosAppUiPanel.t("copy.region.73f42c", { arg1: (ai.region) }));
+        if (ai.workspaceId) bits.push(pomeLocaleFnosAppUiPanel.t("copy.workspace.8387b8", { arg1: (ai.workspaceId) }));
         meta.textContent = bits.join(' · ');
       }
-      if (count) count.textContent = `${secrets.length} 项`;
+      if (count) pomeLocaleFnosAppUiPanel.bind(count, "textContent", () => (pomeLocaleFnosAppUiPanel.t("copy.items.5b6b44", { arg1: (secrets.length) })));
       if (!list || !doc) return;
       clearNode(list);
       if (!secrets.length) return;
       for (const secret of secrets) {
         const card = el('article', 'credential-item');
-        card.appendChild(el('strong', '', secret.service || '已配置'));
-        card.appendChild(el('span', '', secret.account ? `账号 ${secret.account}` : '已配置'));
-        card.appendChild(el('code', '', '已加密'));
+        card.appendChild(el('strong', '', secret.service || pomeLocaleFnosAppUiPanel.t("copy.configured.de8184")));
+        card.appendChild(el('span', '', secret.account ? pomeLocaleFnosAppUiPanel.t("copy.account.db9cd7", { arg1: (secret.account) }) : pomeLocaleFnosAppUiPanel.t("copy.configured.de8184")));
+        card.appendChild(el('code', '', pomeLocaleFnosAppUiPanel.t("copy.encrypted.b66975")));
         list.appendChild(card);
       }
     }
 
-    async function attachMedia(node, entityId) {
+    async function attachMedia(node, entityId, owner) {
       if (!fetchImpl || !entityId) return;
+      let scope = mediaScopes.get(owner);
+      if (!scope) {
+        scope = { active: true, urls: new Set(), requests: new Set(), nodes: new Set() };
+        mediaScopes.set(owner, scope);
+      }
+      const request = new AbortController();
+      scope.requests.add(request);
+      scope.nodes.add(node);
       try {
         const url = apiUrl(apiPrefix, `/api/v1/workspace/media/${encodeURIComponent(entityId)}`);
-        const res = await fetchImpl(url, { credentials: 'same-origin' });
+        const res = await fetchImpl(url, { credentials: 'same-origin', signal: request.signal });
         if (!res || !res.ok || typeof res.blob !== 'function') return;
         const blob = await res.blob();
+        if (!scope.active || node.isConnected === false) return;
         if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return;
         let local = '';
         try {
@@ -507,10 +535,12 @@
         } catch (error) {
           return;
         }
-        objectUrls.push(local);
+        scope.urls.add(local);
         node.src = local;
       } catch (error) {
         /* leave the card without media */
+      } finally {
+        scope.requests.delete(request);
       }
     }
 
@@ -523,6 +553,10 @@
       renderTodos();
       renderCredentials();
     }
+
+    win?.addEventListener?.('pome:language-changed', () => renderAll());
+    win?.addEventListener?.('pagehide', revokeUrls);
+    win?.addEventListener?.('pageshow', event => { if (event.persisted) renderAll(); });
 
     function selectTab(id) {
       if (!TABS.some((tab) => tab.id === id)) return Promise.resolve();

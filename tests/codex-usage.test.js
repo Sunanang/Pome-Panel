@@ -84,7 +84,7 @@ test('scan falls back through files and homes without reading auth.json', async 
   assert.equal(result.secondary.expired, false);
   assert.equal(result.updatedAt, timestamp.replace('Z', '.000Z'));
 });
-test('newest modified rollout wins; missing local data retains manual configuration', async (t) => {
+test('equal telemetry timestamps use the newest modified rollout; missing data retains configuration', async (t) => {
   const { home, dir } = await fixture(t);
   await fs.writeFile(path.join(dir, 'rollout-a.jsonl'), line(limits));
   await fs.utimes(path.join(dir, 'rollout-a.jsonl'), 1, 1);
@@ -95,6 +95,44 @@ test('newest modified rollout wins; missing local data retains manual configurat
   assert.equal(missing.detected, false);
   assert.equal(missing.ok, true);
 });
+test('touching an older session cannot replace newer quotas; cache tracks real updates and resets', async (t) => {
+  const { home, dir } = await fixture(t);
+  const current = path.join(dir, 'rollout-current.jsonl');
+  const old = path.join(dir, 'rollout-resumed-old.jsonl');
+  await fs.writeFile(old, line({ ...limits, primary: { used_percent: 20 } }, '2026-10-09T03:00:00Z'));
+  await fs.writeFile(current, line({ ...limits, primary: { used_percent: 50 } }, '2026-10-09T04:00:00Z'));
+  await fs.utimes(old, 1, 1);
+  await fs.utimes(current, 2, 2);
+  const read = () => readCodexUsage({ homes: [home] });
+  assert.equal((await read()).primary.percent, 50);
+  // This used to show 80% remaining because the old 20%-used file wins by mtime.
+  await fs.appendFile(old, '\n{"type":"event_msg","payload":{"type":"agent_message","message":"fixture"}}\n');
+  const stillCurrent = await read();
+  assert.equal(stillCurrent.primary.percent, 50);
+  assert.equal(stillCurrent.updatedAt, '2026-10-09T04:00:00.000Z');
+  await fs.appendFile(current, '\n' + line({ ...limits, primary: { used_percent: 60 } }, '2026-10-09T04:05:00Z') + '\n');
+  assert.equal((await read()).primary.percent, 60, 'a fresh reading can legitimately reduce remaining quota to 40%');
+  await fs.appendFile(old, line({ ...limits, primary: { used_percent: 5 } }, '2026-10-09T05:00:00Z') + '\n');
+  assert.equal((await read()).primary.percent, 5, 'a real reset may increase the remaining quota');
+  await fs.rm(old);
+  assert.equal((await read()).primary.percent, 60, 'removed files release their cached snapshot');
+});
+
+test('unchanged telemetry files reuse parsed snapshots without caching expiry or configuration', async (t) => {
+  const { home, dir } = await fixture(t);
+  const file = path.join(dir, 'rollout-cache.jsonl');
+  await fs.writeFile(file, line(limits));
+  const fresh = await readCodexUsage({ homes: [home], now: seconds * 1000 });
+  assert.equal(fresh.primary.expired, false);
+  let opens = 0;
+  const open = fs.open;
+  t.mock.method(fs, 'open', (...args) => { opens++; return open(...args); });
+  const cached = await readCodexUsage({ homes: [home], now: (seconds + 3601) * 1000, configured: true });
+  assert.equal(opens, 0, 'unchanged files do not reread session content');
+  assert.equal(cached.configured, true);
+  assert.equal(cached.primary.expired, true, 'expiry is evaluated at read time');
+});
+
 test('Windows searches CODEX_HOME and desktop default, macOS follows CODEX_HOME', () => {
   const env = { CODEX_HOME: '/fixture/custom', USERPROFILE: '/fixture/user' };
   assert.deepEqual(codexHomes({ env, home: '/fixture/home', platform: 'win32' }), [path.resolve('/fixture/custom'), path.resolve('/fixture/user/.codex')]);

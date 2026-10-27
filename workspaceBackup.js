@@ -1,4 +1,6 @@
 'use strict';
+const pomeLocaleWorkspaceBackup = typeof module === 'object' && module.exports ? require("./localization/runtime") : globalThis.PomeI18n;
+
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -28,17 +30,17 @@ function safeRelative(value) {
   if (typeof value !== 'string' || !value || value.includes('\\') || value.includes('\0')
     || value.startsWith('/') || /^[A-Za-z]:/.test(value)
     || value.split('/').some((s) => !s || s === '.' || s === '..' || s.includes(':'))) {
-    throw fail('invalid_path', `备份路径不安全：${String(value).slice(0, 120)}`);
+    throw fail('invalid_path', pomeLocaleWorkspaceBackup.t("copy.unsafeBackupPath.e70a2e", { arg1: (String(value).slice(0, 120)) }));
   }
   return value;
 }
 
 function normalizeStorage(input) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) throw fail('invalid_storage', '工作区资料格式不正确。');
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.invalidWorkspaceDataFormat.cdc691"));
   const storage = { ...DEFAULTS };
   for (const key of BACKUP_KEYS) {
     if (input[key] !== undefined) {
-      if (typeof input[key] !== 'string') throw fail('invalid_storage', `资料格式不正确：${key}`);
+      if (typeof input[key] !== 'string') throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.invalidDataFormat.256790", { arg1: (key) }));
       storage[key] = input[key];
     }
   }
@@ -46,13 +48,13 @@ function normalizeStorage(input) {
     && k !== 'notch-home-note' && k !== 'notch-note-active-archive-v1');
   for (const key of arrays) {
     let rows;
-    try { rows = JSON.parse(storage[key]); } catch { throw fail('invalid_storage', `资料无法读取：${key}`); }
-    if (!Array.isArray(rows)) throw fail('invalid_storage', `资料不是列表：${key}`);
+    try { rows = JSON.parse(storage[key]); } catch { throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.couldnTReadData.7f97e8", { arg1: (key) })); }
+    if (!Array.isArray(rows)) throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.dataMustBeAList.7d323b", { arg1: (key) }));
     if (key !== 'notch-clip-favorites') {
       const ids = new Set();
       for (const row of rows) {
         if (!row || typeof row !== 'object' || typeof row.id !== 'string' || !row.id || ids.has(row.id)) {
-          throw fail('invalid_storage', `资料包含无效或重复 ID：${key}`);
+          throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.dataContainsInvalidOrDuplicateIds.cb42dd", { arg1: (key) }));
         }
         ids.add(row.id);
       }
@@ -65,17 +67,25 @@ function normalizeStorage(input) {
   }
   let todos, categories;
   try { todos = JSON.parse(storage['notch-todo-data']); categories = JSON.parse(storage['notch-todo-category-names-v1']); }
-  catch { throw fail('invalid_storage', '待办或分类无法读取。'); }
+  catch { throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.couldnTReadTasksOrCategories.8c8e65")); }
+  const todoPriorities = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
+  // Legacy backups may only carry P0–P3; newer ones include P4–P7.
   if (!todos || typeof todos !== 'object' || ['P0', 'P1', 'P2', 'P3'].some((k) => !Array.isArray(todos[k]))) {
-    throw fail('invalid_storage', '待办 P0–P3 结构不正确。');
+    throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.invalidTaskStructureForP0P3.428b7d"));
+  }
+  for (const priority of todoPriorities) {
+    if (todos[priority] == null) todos[priority] = [];
+    else if (!Array.isArray(todos[priority])) {
+      throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.invalidTaskStructureForP0P3.428b7d"));
+    }
   }
   const todoIds = new Set();
-  for (const priority of ['P0', 'P1', 'P2', 'P3']) for (const row of todos[priority]) {
-    if (!row || typeof row.id !== 'string' || !row.id || todoIds.has(row.id) || typeof row.text !== 'string') throw fail('invalid_storage', '待办包含无效内容或重复 ID。');
+  for (const priority of todoPriorities) for (const row of todos[priority]) {
+    if (!row || typeof row.id !== 'string' || !row.id || todoIds.has(row.id) || typeof row.text !== 'string') throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.tasksContainInvalidContentOrDuplicateIds.beb910"));
     todoIds.add(row.id);
   }
-  if (!categories || typeof categories !== 'object' || Array.isArray(categories)) throw fail('invalid_storage', '分类名称结构不正确。');
-  if (Object.values(categories).some((name) => typeof name !== 'string')) throw fail('invalid_storage', '分类名称必须是文本。');
+  if (!categories || typeof categories !== 'object' || Array.isArray(categories)) throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.invalidCategoryNameStructure.2f3233"));
+  if (Object.values(categories).some((name) => typeof name !== 'string')) throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.categoryNamesMustBeText.5b6387"));
   return storage;
 }
 
@@ -83,7 +93,9 @@ function collectionCounts(storage) {
   const todos = JSON.parse(storage['notch-todo-data']);
   const groups = JSON.parse(storage['notch-link-groups']);
   return {
-    todos: Object.fromEntries(['P0', 'P1', 'P2', 'P3'].map((k) => [k, todos[k].length])),
+    todos: Object.fromEntries(['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7']
+      .filter((k) => Array.isArray(todos[k]))
+      .map((k) => [k, todos[k].length])),
     categoryNames: Object.keys(JSON.parse(storage['notch-todo-category-names-v1'])).length,
     notes: { archive: JSON.parse(storage['notch-note-archive-v1']).length, homeIncluded: true },
     links: { groups: groups.length, items: groups.reduce((n, g) => n + (Array.isArray(g.links) ? g.links.length : 0), 0) },
@@ -99,7 +111,7 @@ function mediaReferences(storage) {
     for (const row of JSON.parse(storage[key])) {
       if (!row[field]) continue;
       const relative = safeRelative(row[field]);
-      if (!relative.startsWith(`${dir}/`)) throw fail('invalid_path', '媒体路径与集合不匹配。');
+      if (!relative.startsWith(`${dir}/`)) throw fail('invalid_path', pomeLocaleWorkspaceBackup.t("copy.theMediaPathDoesNotMatchIts.e5538c"));
       paths.add(relative);
     }
   }
@@ -112,7 +124,7 @@ async function copyHashed(source, destination, maxBytes = Infinity) {
   fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
   await pipeline(source, new Transform({ transform(chunk, _encoding, callback) {
     bytes += chunk.length;
-    if (bytes > maxBytes) return callback(fail('file_too_large', '备份文件超过支持的大小。'));
+    if (bytes > maxBytes) return callback(fail('file_too_large', pomeLocaleWorkspaceBackup.t("copy.theBackupExceedsTheSupportedSize.80c450")));
     hash.update(chunk); callback(null, chunk);
   } }), fs.createWriteStream(destination, { flags: 'wx', mode: 0o600 }));
   return { bytes, sha256: hash.digest('hex') };
@@ -124,10 +136,10 @@ function assertLocalMedia(root, relative) {
   for (const segment of safeRelative(relative).split('/')) {
     target = path.join(target, segment);
     let stat;
-    try { stat = fs.lstatSync(target); } catch { throw fail('media_missing', `媒体文件缺失：${relative}`); }
-    if (stat.isSymbolicLink()) throw fail('invalid_path', `媒体路径不能是链接：${relative}`);
+    try { stat = fs.lstatSync(target); } catch { throw fail('media_missing', pomeLocaleWorkspaceBackup.t("copy.mediaFileMissing.3e4bcd", { arg1: (relative) })); }
+    if (stat.isSymbolicLink()) throw fail('invalid_path', pomeLocaleWorkspaceBackup.t("copy.mediaPathsCannotBeLinks.b59e4c", { arg1: (relative) }));
   }
-  if (!fs.statSync(target).isFile()) throw fail('media_missing', `媒体不是文件：${relative}`);
+  if (!fs.statSync(target).isFile()) throw fail('media_missing', pomeLocaleWorkspaceBackup.t("copy.mediaPathIsNotAFile.a64b2d", { arg1: (relative) }));
   return target;
 }
 
@@ -137,7 +149,7 @@ async function exportWorkspaceBackup({ root, storage, destination, appVersion })
   const temporary = `${destination}.${crypto.randomUUID()}.tmp`;
   try {
     const data = Buffer.from(`${JSON.stringify({ version: 1, localStorage: storage })}\n`);
-    if (data.length > MAX_DATA_BYTES) throw fail('data_too_large', '工作区索引超过备份支持的大小。');
+    if (data.length > MAX_DATA_BYTES) throw fail('data_too_large', pomeLocaleWorkspaceBackup.t("copy.theWorkspaceIndexExceedsTheSupportedBackup.2f6619"));
     fs.mkdirSync(path.join(stage, 'data'));
     fs.writeFileSync(path.join(stage, 'data/workspace.json'), data, { mode: 0o600 });
     const files = [{ path: 'data/workspace.json', bytes: data.length, sha256: sha(data) }];
@@ -147,7 +159,7 @@ async function exportWorkspaceBackup({ root, storage, destination, appVersion })
       const digest = await copyHashed(fs.createReadStream(source), path.join(stage, 'media', relative));
       const after = fs.statSync(source);
       if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) {
-        throw fail('media_changed', `导出期间媒体发生变化：${relative}`);
+        throw fail('media_changed', pomeLocaleWorkspaceBackup.t("copy.mediaChangedDuringExport.bc5948", { arg1: (relative) }));
       }
       files.push({ path: `media/${relative}`, ...digest });
     }
@@ -188,10 +200,10 @@ async function extractArchive(filePath, stage) {
       (async () => {
         const relative = safeRelative(entry.fileName);
         const mode = (entry.externalFileAttributes >>> 16) & 0o170000;
-        if (mode && mode !== 0o100000) throw fail('invalid_path', '备份只能包含普通文件。');
-        if (files.has(relative.toLocaleLowerCase()) || files.size >= 100000) throw fail('invalid_path', '备份包含重复路径或文件过多。');
+        if (mode && mode !== 0o100000) throw fail('invalid_path', pomeLocaleWorkspaceBackup.t("copy.backupsCanContainRegularFilesOnly.246329"));
+        if (files.has(relative.toLocaleLowerCase()) || files.size >= 100000) throw fail('invalid_path', pomeLocaleWorkspaceBackup.t("copy.theBackupContainsDuplicatePathsOrToo.2d4872"));
         if (!['manifest.json', 'manifest.sha256', 'data/workspace.json'].includes(relative)
-          && !/^media\/(recordings|clipboard-images)\//.test(relative)) throw fail('invalid_path', `未知备份文件：${relative}`);
+          && !/^media\/(recordings|clipboard-images)\//.test(relative)) throw fail('invalid_path', pomeLocaleWorkspaceBackup.t("copy.unknownBackupFile.d08e68", { arg1: (relative) }));
         const stream = await new Promise((r, j) => zip.openReadStream(entry, (e, s) => e ? j(e) : r(s)));
         const digest = await copyHashed(stream, path.join(stage, relative), relative.startsWith('media/') ? Infinity : MAX_DATA_BYTES);
         files.set(relative.toLocaleLowerCase(), { path: relative, ...digest });
@@ -208,25 +220,25 @@ async function inspectWorkspaceBackup(filePath) {
   try {
     const files = await extractArchive(filePath, stage);
     const manifestBytes = fs.readFileSync(path.join(stage, 'manifest.json'));
-    if (fs.readFileSync(path.join(stage, 'manifest.sha256'), 'utf8').trim() !== sha(manifestBytes)) throw fail('checksum_mismatch', '备份清单校验失败。');
+    if (fs.readFileSync(path.join(stage, 'manifest.sha256'), 'utf8').trim() !== sha(manifestBytes)) throw fail('checksum_mismatch', pomeLocaleWorkspaceBackup.t("copy.backupManifestVerificationFailed.c44067"));
     const manifest = JSON.parse(manifestBytes);
-    if (manifest.format !== 'pome-workspace-backup' || manifest.formatVersion !== 1) throw fail('unsupported_version', '不支持此备份格式版本。');
-    if (!Array.isArray(manifest.files) || manifest.files.length + 2 !== files.size) throw fail('checksum_mismatch', '备份文件清单数量不一致。');
+    if (manifest.format !== 'pome-workspace-backup' || manifest.formatVersion !== 1) throw fail('unsupported_version', pomeLocaleWorkspaceBackup.t("copy.unsupportedBackupFormatVersion.462e51"));
+    if (!Array.isArray(manifest.files) || manifest.files.length + 2 !== files.size) throw fail('checksum_mismatch', pomeLocaleWorkspaceBackup.t("copy.backupFileCountDoesNotMatchThe.6a02fd"));
     const seen = new Set();
     for (const entry of manifest.files) {
       const relative = safeRelative(entry.path);
-      if (seen.has(relative.toLocaleLowerCase()) || relative === 'manifest.json' || relative === 'manifest.sha256') throw fail('invalid_path', '备份清单包含重复路径。');
+      if (seen.has(relative.toLocaleLowerCase()) || relative === 'manifest.json' || relative === 'manifest.sha256') throw fail('invalid_path', pomeLocaleWorkspaceBackup.t("copy.theBackupManifestContainsDuplicatePaths.43742e"));
       seen.add(relative.toLocaleLowerCase());
       const actual = files.get(relative.toLocaleLowerCase());
-      if (!actual || actual.path !== relative || actual.sha256 !== entry.sha256 || actual.bytes !== entry.bytes) throw fail('checksum_mismatch', `文件校验失败：${relative}`);
+      if (!actual || actual.path !== relative || actual.sha256 !== entry.sha256 || actual.bytes !== entry.bytes) throw fail('checksum_mismatch', pomeLocaleWorkspaceBackup.t("copy.fileVerificationFailed.5bbc4f", { arg1: (relative) }));
     }
     const payload = JSON.parse(fs.readFileSync(path.join(stage, 'data/workspace.json'), 'utf8'));
-    if (payload.version !== 1) throw fail('unsupported_version', '不支持此资料版本。');
-    if (!payload.localStorage || BACKUP_KEYS.some((key) => typeof payload.localStorage[key] !== 'string') || Object.keys(payload.localStorage).some((key) => !BACKUP_KEYS.includes(key))) throw fail('invalid_storage', '备份资料集合不完整或包含未知集合。');
+    if (payload.version !== 1) throw fail('unsupported_version', pomeLocaleWorkspaceBackup.t("copy.unsupportedDataVersion.f31a2a"));
+    if (!payload.localStorage || BACKUP_KEYS.some((key) => typeof payload.localStorage[key] !== 'string') || Object.keys(payload.localStorage).some((key) => !BACKUP_KEYS.includes(key))) throw fail('invalid_storage', pomeLocaleWorkspaceBackup.t("copy.backupCollectionsAreIncompleteOrContainAn.5e8799"));
     const storage = normalizeStorage(payload.localStorage);
-    if (JSON.stringify(collectionCounts(storage)) !== JSON.stringify(manifest.collections)) throw fail('count_mismatch', '备份集合条数校验失败。');
+    if (JSON.stringify(collectionCounts(storage)) !== JSON.stringify(manifest.collections)) throw fail('count_mismatch', pomeLocaleWorkspaceBackup.t("copy.backupCollectionCountsDoNotMatchThe.ef85ef"));
     const refs = mediaReferences(storage);
-    if (manifest.files.length !== refs.length + 1 || refs.some((r) => !seen.has(`media/${r}`.toLocaleLowerCase()))) throw fail('media_missing', '媒体引用与备份文件不一致。');
+    if (manifest.files.length !== refs.length + 1 || refs.some((r) => !seen.has(`media/${r}`.toLocaleLowerCase()))) throw fail('media_missing', pomeLocaleWorkspaceBackup.t("copy.mediaReferencesDoNotMatchTheBackup.3a00e0"));
     return { manifest, storage, stage, dispose };
   } catch (error) { dispose(); throw error; }
 }
@@ -237,7 +249,7 @@ function recoverWorkspaceRestore(root, forceRollback = false) {
   const journalPath = path.join(area, 'journal.json');
   if (!fs.existsSync(journalPath)) { fs.rmSync(area, { recursive: true, force: true }); return false; }
   const journal = readJsonStrict(journalPath);
-  if (journal.version !== 1 || !Array.isArray(journal.existed) || journal.existed.length !== 3) throw fail('restore_journal_invalid', '恢复日志损坏，禁止继续写入。');
+  if (journal.version !== 1 || !Array.isArray(journal.existed) || journal.existed.length !== 3) throw fail('restore_journal_invalid', pomeLocaleWorkspaceBackup.t("copy.theRestoreJournalIsDamagedFurtherWrites.6fa79a"));
   if (forceRollback || journal.phase !== 'committed') {
     RESTORE_PARTS.forEach((part, index) => {
       const target = path.join(root, part), previous = path.join(area, 'previous', part);

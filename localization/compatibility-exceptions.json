@@ -1,0 +1,26 @@
+[
+  {
+    "file": "main.js",
+    "line": 2952,
+    "reason": "stable identity or comparison",
+    "value": "部分资料未传输："
+  },
+  {
+    "file": "main.js",
+    "line": 2949,
+    "reason": "stable identity or comparison",
+    "value": "待同步："
+  },
+  {
+    "file": "main.js",
+    "line": 2926,
+    "reason": "stable identity or comparison",
+    "value": "待同步："
+  },
+  {
+    "file": "fnos/app/ui/panel.js",
+    "line": 463,
+    "reason": "stable identity or comparison",
+    "value": "已配置"
+  }
+]

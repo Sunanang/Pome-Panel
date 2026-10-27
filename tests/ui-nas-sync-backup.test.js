@@ -1,3 +1,4 @@
+const { assertCopy, keyFor } = require('./helpers/localized-copy.cjs');
 'use strict';
 
 const test = require('node:test');
@@ -15,7 +16,7 @@ test('A.1 export/restore backup controls (S3)', () => {
   assert.match(html, /class="[^"]*workspace-button[^"]*"[^>]*id="settings-nas-export-backup"|id="settings-nas-export-backup"[^>]*workspace-button/);
   assert.match(html, /class="[^"]*workspace-button[^"]*"[^>]*id="settings-nas-restore-backup"|id="settings-nas-restore-backup"[^>]*workspace-button/);
   assert.match(workspaceJs, /syncExportTodosBackup/);
-  assert.match(workspaceJs, /确认恢复资料/);
+  assertCopy(workspaceJs, '确认恢复资料');
   assert.match(workspaceJs, /backupRestore/);
 });
 

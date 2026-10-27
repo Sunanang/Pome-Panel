@@ -1,3 +1,378 @@
+# 移除官网 · 2026-10-25
+
+官网源码、素材、依赖、部署工作流、专属测试与计划已按用户要求删除。语言生成器不再生成官网文件，README 使用 GitHub Releases 下载入口。桌面、NAS 与上一轮修复保留。验收结果见 `docs/website-removal.md`。
+
+---
+
+# 风的片状与扇形运动 · 2026-10-25
+
+final result: passed
+
+- 根据用户对实际效果的反馈，将相同短弧的机械平移改为不规则柔边气流。每片随机长宽、倾角及片状/扇形轮廓；低频阵风控制横向速度，2–6px 小幅起伏，掠过时略微展开并消散，开启时在 0.8 秒内渐入。平均速度仍为有风约 50、大风约 90 CSS px/s。
+- 有风 4 片、大风 6 片、雨风 3 片；雨风的风团进一步降低透明度，原有 42 根雨滴与 -25° 轨迹保留。每片软边渐变绘到 256 × 128 离屏纹理并缓存，帧循环只变换和绘制纹理；重生发生在完全淡出和越界之后，旧纹理可随引用释放。
+- 实际 Electron 证据：`docs/screenshots/sun-wind/comparison.png` 为前后同尺寸卡片；`strong-wind.gif` 为约 8 秒的真实窗口连续截图片段循环；同目录的 `after-medium.png`、`after-large.png`、`after-rain-wind.png` 覆盖中号、大号和雨风叠加。截图固定北京、10.7°C、45km/h 与 2026-10-25 16:30，来自隔离接口夹具，不代表实时天气。中号卡片为 392 × 264 CSS px，PNG 保留 2 倍密度，动图按实际 CSS 尺寸输出。
+- 视觉复查：气流无实线边缘、密度克制，保留天空中的空白；原有字体、图标、胶囊、倒计时、太阳弧线与时刻表布局不变。风在内容下方，不盖住文字与太阳点。
+- 验证：31 项天气与布局单测通过，覆盖单次飞行的 30/60/120Hz 一致性、有界起伏、淡入淡出、越界重生、绘制形态及雨风轨迹。天气 Electron 回归通过四尺寸、十语言、实际 canvas 连续变化、全部天气族、开关、reduced motion、切页/收起/隐藏暂停；首页日出日落回归通过。多次随机重生后不要求不同帧率下的随机风团身份和位置完全相同。
+- 本轮只在 `dev` 修改，未提交或推送；未做 Windows 真机和安装包验证。
+
+---
+
+# 天气文字与温度基线 · 2026-10-24
+
+final result: passed
+
+- 修复用户截图指出的文字偏移：天气名、分隔符和温度虽同属胶囊，拆分后的 flex 子项按默认拉伸布局，中文回退字形与数字的正常行框基线不同。仅在 `.home-sun .wx .txt` 设置 `align-items: baseline`，不使用位置补丁或压缩行高。
+- 同一真实 Electron 视口的测量：small 原基线 109.5 / 108.5，修复后 109.5 / 109.5；medium 原 111 / 110，修复后 111 / 111；large 为 118.5 / 118.5，保留湿度；mini 只有图标与温度，原布局保持。
+- 证据：`docs/screenshots/sun-weather-alignment/comparison.png` 为同一画布上的前后对照；同目录保留四尺寸头部原图。工作区 1240 × 638 CSS px；固定北京、晴、10.7°C、78% 湿度、2026-10-24 16:30，天气来自隔离接口夹具。
+- 五项视觉复查：沿用原字体、字号及文字层级；胶囊尺寸、间距与位置不变；色彩和图标/天空资产不变；中文/数字共用基线，未裁切字形；现有天气和湿度文案保留。
+- 验证：29 项相关单测通过；天气 Electron 回归覆盖四尺寸、十语言、长文案、负温度与基线差 ≤0.25 CSS px，日出日落首页回归通过。基线用临时零高行内标记实测后移除；原有无重叠、温度不裁切与湿度可见性断言继续通过。
+- 未做 Windows 真机或安装包验证。
+
+---
+
+# 天气边界与长文案复查 · 2026-10-24
+
+final result: passed
+
+本轮基于原方向 A r2 的布局约束，复查真实 Electron 在十语言、四尺寸、负温度与长地名下的表现。修复了德语 small 胶囊挤出卡片的 P2 问题；温度与状态分开，给地点保留空间，长状态省略并保留完整 title / aria-label。原有天文表的长译文不再重叠时刻，计算与数值不变。
+
+- Source visual truth：原 r2 定稿与本轮修复前截图 `docs/screenshots/sun-weather-audit/before-small-de.png`。
+- Implementation screenshots：同目录的 `after-small-de.png`、`after-small-zh.png`、`after-medium-fr.png`、`after-large-ru.png`；完整四尺寸与雨雪雷拼图均在同目录。
+- Viewport / density：工作区 1240 × 638 CSS px；修复前小号 PNG 190 × 264，修复后 380 × 528，统一为 190 CSS px 宽比较。最终 mini/small/medium/large 原始截图为 380 × 252 / 380 × 528 / 784 × 528 / 784 × 1080。
+- Combined full-view comparison：`boundary-comparison.png`；左侧为德语修复前，随后为修复后、中文负温度和法语时刻表。状态固定为冻毛毛雨、-27.7°C、长城市名与 16:30，避免把不同内容当作布局差异。
+- Focused evidence：small 的完整紧凑中文天气与负温度均可见；medium 法语表格各时刻保持独立；large 俄语长标签省略后不覆盖时刻。空坐标和设置保存失败另有全窗口截图。
+- Fonts / typography：沿用系统字体与原有数值层级，省略只用于长标签，完整文字可悬停查看。Spacing / layout：胶囊仍位于地点左侧，mini pin-only、small 地点省略，温度不裁切。Colors / tokens：维持 r2 胶囊色及天气状态色。Assets：仍复用原天空图、r2 SVG 与原天文路径。Copy：只保留当前天气与既有天文信息，无预报或建议。
+- 交互：十语言 × 四尺寸、缓存到期、静默失败保留 DOM、全部动画族、开关保存失败回滚与重试、reduced motion、切页/收起/隐藏暂停均通过；表单空坐标不保存、不请求天气。
+- 验证：完整桌面 901 通过 / 0 失败 / 1 平台跳过，Electron 与语法检查通过；54 项相关单测通过；官网 23 项、lint 与生产构建通过。详细文件清单、边界场景与残余平台限制见 [本轮验收记录](docs/weather-audit-2026-10-24.md)。
+- 未做：Windows 真机、安装包与真实 NAS 安装；没有打包发布。无剩余可操作的 P0/P1/P2 视觉发现。
+
+---
+
+# 当前天气 · 方向 A r2 设计验收
+
+日期：2026-10-24。范围：已有 Electron 首页日出日落模块与「本机与唤出」设置。
+
+## 比较对象与证据
+
+- Source visual truth：[r2 定稿目录](https://drive.google.com/drive/folders/111wrYHIJ81wVwwLcSg17aSBQYLezXZSy)、其中的 NOTES、r2.html、mini/small 压力总览、设置、thunder/haze/dust 参考。
+- 本次实际读取的原图与 HTML：`/private/tmp/pome-weather-design/`。天气图标直接复用 r2 HTML 的 SVG 定义，没有重画替代资产。
+- Implementation screenshot path：`docs/screenshots/sun-weather/`；原始截图另存 `/Users/lando/.codex/visualizations/2026/10/23/01a166b0-1f8d-7ab2-bc78-c58cf7052805/weather-implementation/`。
+- Viewport：工作区 1240 × 638 CSS px，macOS Electron，深色主题；最终应用截图 density 2。mini 190 × 126 / small 190 × 264 / medium 392 × 264 / large 392 × 540 CSS px，原始 PNG 为 380 × 252 / 380 × 528 / 784 × 528 / 784 × 1080；设置页 PNG 为 2480 × 1276。展示拼图另以 density 1 输出，宽 1320 CSS/PNG px。
+- State：固定当前时间 2026-10-24 16:30，固定 current 数据 10.7°C、78%，多天气族与长地名；源图的日期、城市和数值不同，因此不以天文数值差异判定设计误差。
+- Full-view evidence：四尺寸 `four-sizes.png`、雨雪雷 `rain-snow-thunder.png`、设置 `settings.png`。
+- Combined comparison input：`design-comparison.png` 将源图与实际 thunder/haze/dust 并排，统一到 392 CSS px 宽后检查。源 thunder 图 778 × 530，实际 medium 图 784 × 528；两者约两倍密度，按同一 CSS 宽缩放，保留完整卡片，不逐像素声称相同。
+- Focused evidence：原始 `small-stress-82.png` 直接检查标题、天气和长地点；`mini.png` 检查 pin-only；`settings.png` 检查同卡开关与归属链接。无需额外浏览器框架截图。
+
+## Findings 与迭代历史
+
+1. **[P2，已修复] small 的长天气状态挤占地点，省略后可见面积不足。** 最初长文案截图发现地点可能只剩残缺字符；给地点保留 48px，缩小 small 标题，必要时移除天气装饰图标。最终 `small-stress-82.png` 能显示完整「呼…」，天气「强阵雨 · 11°」完整，胶囊与地点不重叠。
+2. **[P2，已修复] 布局变换期间测量宽度可能误判图标是否能保留。** 改为 `offsetWidth`；回归等待已有布局动画结束，再检查几何。最终四尺寸和四组长文案均通过，最终截图重新捕获，未使用旧截图覆盖失败。
+3. 后续复查并排源图与实现：无剩余 P0/P1/P2。保留现有卡片玻璃边缘、真实天文计算、弧线上的当前时刻标签；这些属于既有产品约束。雷使用规定的短闪，简化闪电路径为可选项，未额外添加。
+
+## 五项视觉检查
+
+| 表面 | 结论 |
+| --- | --- |
+| 字体与排版 | 沿用现有系统/PingFang 字体；胶囊按 r2 的 10/11px 层级；数值可读，small 无半字裁切，mini 只保留温度与图标 |
+| 间距与布局节奏 | 胶囊始终在地点左侧；四尺寸保持原卡片大小，small 省略、mini pin-only；large 日期纵排为湿度让出空间 |
+| 色彩与视觉值 | 半透明深底胶囊、各天气图标色来自 r2；fog 白、haze 黄褐、dust 暖色独立；文字/太阳点处于粒子上方 |
+| 图像与资产 | 原天空图片和天文 SVG 保留；天气图标使用原设计 SVG，retina 截图无拉伸；动态采用用户指定 canvas 管线 |
+| 产品文案 | 仅当前天气、温度与 large 湿度；开关说明与提供方链接齐全，无预报/建议或额外设置 |
+
+## 交互、错误与残余覆盖
+
+- 使用真实应用 BrowserWindow 及隔离 userData，测试四尺寸、长文案、静默失败、切地点并发、开关持久化、全部特效族和 reduced motion。模块隐藏、切页、面板收起和实际窗口隐藏均停止动画。
+- 天气 Electron 验收没有捕获到 console error。测试窗口后台配置与正式版不同的部分，在隐藏检查时恢复正式版的 background throttling 语义，避免把测试配置误认为产品缺陷。
+- 完整桌面回归、官网回归与十语言资源检查通过；最后几何与隐藏检查单独复跑通过。
+- 当前 API 不直接提供 haze/dust/sleet；其独立视觉用明确兜底输入验收，不从湿度猜测。Windows 真机、安装包和其他系统缩放尚未验收。
+
+## Implementation Checklist
+
+- [x] 四尺寸与小尺寸压力布局
+- [x] r2 图标、胶囊位置和现有天文内容
+- [x] 雨雪雷等运动、生命周期与减少动态效果
+- [x] 设置卡位置、默认值、持久化和来源链接
+- [x] 隔离 Electron 截图、并排对照与自动回归
+
+final result: passed
+
+
+---
+
+## 历史验收记录
+
+# 额度池名、长名与单行时间修复 · 2026-10-22
+
+final result: passed
+
+按最新要求保留英文池名，完整名称为 Cursor / Other，紧凑条用 Cur / Oth；auto / other 接口和缓存键不变。窄格使用 Claude / Antigrav，真实字形检查确保不因可变字体光学缩放出现意外省略，悬停和无障碍保留完整名称，宽度恢复后恢复全名。
+
+- 修复窄卡片底部只露出“置”：时间说明固定单行，超长从末尾省略；small 中文去空格并收紧 0.1px 字距（如「周日11:27重置」），标题保留完整格式，中大号和英文空格保留。核对 `dist.noindex/quota-polish/after/small-narrow-brand-aliases.png`，字体、颜色、环位置、轨道及底部说明均符合本轮反馈。
+- 四尺寸×3–6 家及各状态、中英文、166px 窄格/放宽恢复、详情池名、完整无障碍身份、同格轨道等长和 0%/8%/100% 动画采样通过。窄格说明不再被多行高度从上方裁切。
+- 独立清理 114 行已被覆盖的旧 CSS、14 张无引用 PNG（8,238,156 字节），保留实际 WebP、图标与许可证。删除未消费的旧文案计算、角标分支、模型字段和两个旧语言 key。CSS 对照及删除依据见 `docs/quota-cleanup-acceptance.md`；原有 dirty CSS 变更已校对保留。
+- 完整 npm test：856 pass / 0 fail / 1 Windows-only skip，31 次 Electron 运行、语言和语法检查通过。最新去空格调整后，额度矩阵、交互、刷新动画三组再次通过；43 项相关单测通过。全量与专项日志在 `dist.noindex/quota-polish/`。
+- 原动画模块文件未改；唤出/手动刷新录像及四张解码帧在 `animation/`，仍验证无缓存、同值、失败、中途更新、reduced-motion 与 30 秒防抖。
+
+清理与功能修复分别提交到 dev，原 UI-simplify、凭据文案与 Grok Bot 图标等未提交栈保留。文件清单和验证边界见 [验收记录](docs/quota-polish-acceptance.md)。使用隔离 userData 与接口夹具，未做 Windows 真机、真实账号联网或安装包验证；未推送、未改 main。
+
+---
+
+# 中号长条居中与进度行可见内容居中 · 2026-10-22
+
+final result: passed
+
+按用户最新反馈覆盖下文 medium 3–4 家单排长条格的居中规则：圆环在整格垂直居中，条跟随圆环下方 10px，时间说明继续底部对齐。small 原有圆环区域像素保持一致，其他常规布局仍按剩余空间居中；mini 保留定稿。
+
+- 全部非 mini 窗口行以「标题＋条＋实际数字」居中，排除未用数字预留带来的视觉偏左。标题/条/数字间距为 3px/2px；数值列按实际字体（含 tabular-nums、letter-spacing）的 100% 固定宽度预留，轨道不随位数变化。内层整组位置复用原动画 store 的 transform 过渡。
+- 核对 `dist.noindex/quota-tall-center/four-source-review.png`（左 small、右 medium），对照字体、环位置、条长度、两端留白与时间说明，四家行左右可见留白差 <0.7px。三家、四家失效、全部状态及中英文原图在同目录。small 圆环像素比较记录为 `small-ring-check.json`。
+- 初轮发现中号绝对定位仍被旧 grid-area 限制在伸缩行，已解除该约束并重新截图；旧数字右对齐断言随当前紧凑排版更新，轨道断言按 provider key 比较以兼容紧急度重排，并采用 0.001px 容差排除 transform 浮点坐标差。最终矩阵全部通过。
+- 完整 npm test：855 pass / 0 fail / 1 Windows-only skip；31 次 Electron 运行、语言与语法检查通过。环条不重叠，失效修复按钮命中正常；0%/8%/100% 及动画帧轨道宽度稳定，同格多条左右对齐。
+- 原动画模块未改；唤出/手动刷新录像与解码帧在 `animation/`。本机 rAF 222 帧，中位间隔 16.7ms、P95 17.6ms。全量日志 `dist.noindex/quota-tall-center/full-test.log`。
+
+修改文件与验证范围见 [验收记录最新段](docs/quota-v9-acceptance.md)。只提交本次额度布局、相关回归与文档，保留原有未提交栈。未做 Windows 真机、真实账号联网及安装包验证；不推送、不改 main。
+
+---
+
+# 额度卡片按剩余空间居中 · 2026-10-22
+
+final result: passed
+
+按用户已确认的定义覆盖此前 small 绝对居中补充：有条时，圆环在「名称下沿 → 进度条上沿」的剩余区域居中；无条时，区域延伸到脚注上沿。small/medium/large 共用伸缩网格行，先给名称、条与脚注留位，移除 small 的绝对偏移及 small/medium 的固定环条间距补偿。
+
+- 同状态合成对照 `dist.noindex/quota-remaining-space/before-after.png`（small/medium，左改前右改后）。检查字体、颜色、边距、圆环/多池条/底部说明的空间关系；各状态原截图在同目录。时间为本次夹具字段，与改前不同，不作为布局差异。
+- 自动检查每格圆环到剩余区域上下边界的距离，偏差 <0.6px；覆盖设计/实机尺寸、四尺寸状态矩阵、四家增删进度条、多池、长英文、失效与过期。条长度及数字动画稳定，未与环或脚注重叠。
+- large 原已符合该结构，合并共用规则后圆环区域像素保持一致；mini 内容区像素一致，定稿样式保留。比较记录在 `unchanged-regions.json`。动画模块 SHA-256 未变，唤出/手动刷新录像及抽帧在 `animation/`。
+- 40 项领域/动画单测通过；完整 npm test：855 pass / 0 fail / 1 Windows-only skip，31 次 Electron 运行、语言与语法检查通过，日志 `dist.noindex/quota-remaining-space/full-test.log`。
+
+只提交额度对应样式、布局适配、几何回归和文档。原有未提交栈保留，main 不动。未做 Windows 真机、真实账号联网及安装包验证。文件与边界见 [验收记录最新段](docs/quota-v9-acceptance.md)。
+
+---
+
+# small 四家圆环独立居中 · 2026-10-22
+
+final result: passed
+
+本次按用户最新「有进度条时圆环也上下居中」反馈，覆盖旧 small 的整组居中与固定 8px 间距。仅 small 改为圆环本身对齐名称和时间之间的中线，条独立排在下方，间距在 1–8px 按空间收紧；多窗口空间不足时仅最小避让，保留全部条和时间。
+
+- 目视合图：`dist.noindex/quota-small-center/before-after.png`，左改前、右改后。有条与无条环中心对齐，名称/时间不挤压；目标 38px 环径、字体、颜色与品牌资源沿用现状。
+- 几何检查：四家增删周窗口后每家环中心变化 <0.6px；多池行不遮挡时间；同格轨道等长且动画时不变。四尺寸状态矩阵、原额度交互与刷新回归通过，领域/动画单测 40 项通过；本次未重跑全量 npm test。
+- 刷新回归首轮在 large 帧间数字差断言一次失败，录屏和原无录屏配置复测均通过；原因未确认。原动画模块 SHA-256 未变。录像在 `dist.noindex/quota-small-center/animation/`，完整日志在同级目录。
+
+未做 Windows 真机、真实账号联网和安装包验证。修改文件与边界说明见 [v9 验收补充](docs/quota-v9-acceptance.md)。原有未提交栈保留，顶部导航和其他尺寸样式不改。
+
+---
+
+# AI 额度 v9 排布验收 · 2026-10-22
+
+final result: passed
+
+本节覆盖下方旧额度布局结论。对照 [v9 总览与标注](https://drive.google.com/drive/folders/1O2GTtBCbpFxsZLCu8-BZPVOz-v440q0d)，未重出的状态用 v8，颜色与基础间距用 v5；mini 不改样式。原图 29 张与来源清单在 `dist.noindex/quota-v9/references/`。
+
+- 以相同外框裁切并归一原图与 Electron 截图，左右合成对照全部 24 个非 mini 状态组合，另验现有实机尺寸、英文、失败与缺失时间。合图在 `dist.noindex/quota-v9/comparisons/`，四尺寸实机图在 `four-sizes.png`。设计示例时间不照抄，使用夹具真实字段；实际外框沿用现有 Bento，空间不足时同卡环统一缩小。
+- 修正迭代：small 粗体名称测量与内部头部高度；large 进度条偏高、隐式网格列导致条未拉满、环线宽偏细；过期读数转灰而非仅降低饱和色透明度。复核字体/行高、留白、对齐、圆角、颜色、状态与键盘/重试/详情交互，未余留阻断布局问题。
+- 非 mini 去掉气泡及预留行；small 最多四家、刷新左侧 +N；无条格独立居中。每家独立标题列、固定 100% 数字列与 3/4px 列间距，同格轨道等长；在 0/8/100% 和逐帧过渡时不变。small/medium 不重复主窗口；large Grok Bot 保留真实周条与首条对齐；底部只显示真实时间。失效居中、脚注对齐，灰环与单条贯穿划线均通过。
+- 最短窗口显示与跨窗口瓶颈等级/排序/过期规则分离，旧阈值不变。mini 改前/改后内容区像素一致，保留此前百分比简写。Grok Bot 核实为 Cursor Sand 会话池，说明包含实际凭据方式。品牌资源直接复用；工作区已有头像修正单独保留，未混入提交。
+- 原动画模块 SHA-256 未变；复用 720ms rAF 与颜色过渡、60ms 逐行、缓存显示刷新、30 秒防抖、首次从 0、失败/同值不重播、当前帧续接与 reduced-motion。改前/后录像与四帧解码自查在 `before/`、`animation-after/`；mini 像素对照为 `mini-before-after.png`。
+- 相关领域/动画单测 40 项通过。工作区完整 `npm test`：855 pass / 0 fail / 1 Windows-only skip；仅含本次拟提交内容的副本完整 `npm test`：852 pass / 0 fail / 1 Windows-only skip。两者均完成 31 次 Electron 运行、语言和语法检查。副本证据在 `delivery-after/`、`delivery-animation/`，全量日志在本次证据目录。
+
+未做 Windows 真机、安装包安装、真实账号联网刷新。无打包/推送/main 合并。改动文件、尺寸差异、逐状态结果、录像和来源说明见 [v9 验收记录](docs/quota-v9-acceptance.md)。
+
+---
+
+# 额度残留修正与文案统一 · 2026-10-21
+
+final result: passed
+
+本节覆盖下方历史文案：百分比统一为「周 0%」「周 18%」「Other 0%」，额度 UI 的数值说明、摘要、来源与刷新提示不再使用「剩」或「已用完」；金额、积分保留真实单位。布局与此前 final 相同，small 有两行空间时同时显示瓶颈及恢复时间。
+
+- 网络/通用失败与认证失效分开；卡片和 mini 摘要一致，前者提供实际重试动作，后者提供设置入口；认证失效摘要优先。
+- 不足一小时的过期年龄显示「不足 1 小时」，未知年龄不编造，不改过期阈值。
+- 清理已不生成的 q-summary、q-main-scope、q-horizontal、q-caption 样式；保留有效的明细、基础布局与动画。重连通过可控帧验证 0% 起点与 50% 终点，消除测试 rAF 竞态；原动画实现未重写。
+- 38 项额度/动画单测通过；完整 `npm test`：853 pass / 0 fail / 1 platform skip，31 次 Electron、i18n 与语法检查通过。最终 quota-only 副本另验语言资源、领域/动画单测及布局/刷新 Electron，防止混入其他工作区修改。
+- 目视与交互：四尺寸中英文矩阵、失败按钮/mini 摘要重试不跳设置、小号 3–4 家双行与 5–6 家单行、近期过期、0% 简写、金额单位、固定轨道及居中图标均通过。证据：`dist.noindex/quota-residual/`，合图 `residual-summary.png`；详见 [验收说明](docs/quota-final-acceptance.md)。
+
+未做 Windows 真机、真实账号在线刷新。原有 UI 简化与 Cursor/NAS messageKey 等未提交改动独立保留。
+
+---
+
+# Final 额度卡片验收 · 2026-10-21
+
+final result: passed
+
+本节覆盖下方历史布局结论；产品行为以 README 为准。对照 [final 总览](https://drive.google.com/file/d/1Fo8qYllnPckfS0vYs5zpv9YRkvBrZnul/view) 与 [开发标注](https://drive.google.com/file/d/19PMfK9-qEOW3kr_VLunr26gRmTdwViMT/view)，逐项验收 mini/small/medium/large 的 3–6 家、正常/偏低/告急/用完/多家用完/全部用完/失效/过期。
+
+## 对照方法与结论
+
+- 同画面对照在 `dist.noindex/quota-final/comparisons/compare-{size}-{count}ai-{state}.png`，左为原设计卡片裁切，右为同密度、同状态实现；统一到原图 @2x 比较，没有拉伸局部部件。
+- 标注外框 mini 189×126、small 189×264、medium 389×264、large 782×480；另拍实机 196×118、196×248、404×248、404×510。参考图本地副本在 `dist.noindex/quota-final/references/`，实现 64 张状态截图与 16 张英文实机图在 `after/`。
+- 结构：名字/图标在上，角标居中且按行留位；同卡等格、等环径，未标角标行把空白分到环上下。small 两列；中/大号 3–4 家单排、5–6 家 3×2；空格保持空白。
+- 视觉：字号/环径/间距按开发标注设 token，实机空间不足统一适配。金额与 100% 均位于内圈；用完只一条横线、灰环淡红轨。标题单行缩字或省略，窗口标题左对齐、数值等宽右对齐，短标题 Other/Week 不裁切，轨道在 0/8/100% 与动画中宽度不变。
+- 状态：失效优先且叹号居中，非 mini 底部与同行说明对齐；mini 只留环下失效及一条可打开设置的摘要。过期为灰色时钟/真实年龄及 45% 透明度，保留原阈值和紧急优先级。瓶颈恢复时间来自窗口真实数据；缺失时不虚构。
+- 素材与文案：复用现有品牌素材及液态玻璃背景；Grok Bot 使用现有头像，未复用源图旧 Grok 字形。时钟取 Lucide 官方素材。时间、家数、部分来源与设计示意不同，按测试夹具与真实接口元数据渲染；失效排序按本次用户文字要求。
+
+## 发现与复验
+
+P2：英文 Other/Week 列宽不足 → 按实际字体测量标题并适配窄大卡数值列；mini 失效脚注重复 → 修正局部选择器；mini 紧急摘要被灰色覆盖 → 补充等级色；+N 垂直偏移 → 与品牌环顶部对齐；large 说明向右及英文长日期折行裁切 → 居中成组，窄实机用真实星期时间并移除重复窗口名。逐条复拍及几何/完整行高断言通过。
+
+另修复来源全部断开后的 ResizeObserver 空态保护，旧节点不再读取空环几何。现有动画模块未重写；布局适配复用同一 value store，尺寸/来源顺序变更时取消位置补间，避免缩放期间环飞出卡片；同布局角标变化继续平滑移动。
+
+## 测试与动态验收
+
+- 35 项额度领域与既有动画单测通过；完整工作区 `npm test`：850 pass / 0 fail / 1 platform skip，31 次 Electron 检查和 i18n/语法检查通过。
+- 最终矩阵检查角标间距、等环等格、失效无占位百分比、同行底部对齐、mini 设置入口及图标中心、英文完整说明和固定轨道；既有额度与刷新 Electron 通过。
+- 改前 `before/panel-refresh.webm` 与改后 `animation-after/panel-refresh.webm` 均保留；录屏解码并查看抽帧，验证展开先缓存、后台结果后环/数字/条同步过渡，中途刷新续接、用完样式延后切换。帧时间采样中位数约 16.7ms；该指标只代表本机隔离场景。
+- 待提交文件在 `/private/tmp/pome-final-commit-check` 独立副本再次完整运行 `npm test`：847 pass / 0 fail / 1 platform skip，31 次 Electron、i18n 与语法检查通过；排除了对工作区其它未提交设置/NAS/全局报错修改的依赖。最终结果见 [本轮验收说明](docs/quota-final-acceptance.md)。
+
+实机四尺寸合图：`dist.noindex/quota-final/four-sizes-real.png`。超过 6 家沿用中/大号内滚动；实机窄 large 的字与列适配、small 短格压缩留白属于记录过的空间适配。无未解决的 P0/P1/P2。未做 Windows 真机、真实账号在线刷新或 MINI 安装；未打包、发布或改动 main。
+
+---
+
+# 最新补充验收 · 2026-10-21 · 长周期瓶颈与刷新动画
+
+当前规则更新为：最短窗口决定环长与大数字；所有窗口的最小剩余决定颜色、紧急排序和过期判断。旧的“主窗口同时决定颜色”说明属于历史。small 用两行说明，medium/large 显示窗口条；medium 超过 6 家时内部滚动。用完状态灰环、淡红轨与划线延后至过渡结束。唤出先用缓存并后台刷新，30 秒防抖，手动刷新即时；720ms ease-out，条目错开 60ms，中途从当前帧继续，减少动态效果时直接应用。
+
+本轮设计链接、回归与图像记录见 [额度瓶颈与刷新动画验收](docs/quota-bottleneck-acceptance.md)。以下记录保留为历史验收证据。
+
+---
+
+# 最新补充验收 · 2026-10-21
+
+当前行为以 README 为准；下面 2026-10-20 的章节为历史验收，保留当时的数据与结论。
+
+- 每家额度主值选统计周期最短的窗口，例如 Codex 优先 5 小时；同周期保留来源顺序，未知周期使用主统计。其他窗口留在详情，主值缺失时保持未知，不替换成周额度。
+- 环长和大数字使用最短窗口；等级颜色、mini/small 紧急排序与过期判断使用所有窗口的最小剩余瓶颈，medium/large 保留设置顺序。长周期瓶颈显示窗口名、剩余及真实重置时间；迷你脚注汇总用完/告急状态。所有重置时间统一到分钟。
+- 小号双列来源名允许两行，Claude Code 与 GitHub Copilot 完整显示。保留三来源折叠及既有格子大小。
+- Cursor 空 Token 为行内校验，额度刷新后仍保留；本机缺失/未登录/读失败/保存失败/清除失败使用显式文案 key 与稳定诊断码，覆盖中英文。NAS 配对、迁移、清除绑定与恢复失败也使用明确问题文案和 NAS 修复提示，不按译后字符串猜成 AI 登录过期。
+- 清理无运行时引用的最低剩余旧文案及其 catalog/生成资源。
+- 报错条缩放专项：1240×638、1000×560、900×500，诊断收起/展开共 10 组，另重复触发 resize；内容最小高度与无报错时基准一致（540/462/402），没有累积撑高。本项保留现有实现。
+- 证据：`dist.noindex/residual-fixes/quota/small-long-source-names.png`；`dist.noindex/ui-simplify/flows/cursor-token-required.png`、`cursor-local-read-{zh-CN,en-US}.png`、`nas-pair-domain-{zh-CN,en-US}.png`。全量检查结果另见本轮验收记录。
+- 验证为 macOS Electron 与隔离数据；未做 Windows 真机、真实账号或实体 NAS 验收；未打包、提交、推送。
+
+---
+
+# UI 简化全套 · 2026-10-20
+
+final result: passed
+
+源图：`dist.noindex/ui-simplify/references/`（设置 v2，其余 v1），尺寸在 `image-manifest.json`；实现为 macOS 实际 Electron 的 `settings/`、`flows/`、`quota/` 截图。主窗口 1240×638 CSS、2480×1276 像素（2x），额度额外按现有四档组件及设计尺寸捕获；整页独立滚动拼接，不拉长生产窗口。
+
+对照输入：`comparisons/` 同时展示源图与实现，涵盖整页 A、Token E、欢迎 D、确认 H、额度 I。原图是含标注与样本状态的复合画布，未强行拉伸匹配；当前保留八家来源，不使用四家样例或占位地址代替真实能力。用户硬约束覆盖图中蓝色主按钮、三列网格和旧标题：实现磨砂白/深字主按钮、两列网格及新命名。
+
+迭代记录：
+
+1. [P2，已修复] 紧凑速记新增入口挤压预览/编辑：工具栏允许换行，增加实际按钮几何回归。证据 `flows/home-dual-entry.png`。
+2. [P2，已修复] 小号双来源纵排：按 I 改双列，保留三家折叠、币值和积分单位。证据 `quota/small-2ai.png` 与完整明细截图。
+3. [P2，已修复] Windows 入口开放会改变旧布局：区分可添加能力与主动选择，保留原隐式隐藏和保存偏好；Windows/Mac 默认与用户布局回归通过。
+4. 采集纠正：等待展开/切页动效结束，强制刷新帧；滚动采用 instant，避免残影和重复拼接；详情截图不再重复切回首页而关闭浮层。这些未改生产导航与窗口几何。
+
+字体、间距、颜色、按钮与开关沿用系统字体和当前 liquid-glass 样式。多窗口额度明细使用浮层，保持窄卡可读且不撑开其他格；源图格内条的查看行为由此实现。全浮层在 `*-details-full.png`，不以裁切组件图假装完整明细。
+
+最终封板：828 项 Node 检查中 827 通过、1 项平台专属跳过，29 次 Electron 场景/重启及语法/语言资源检查通过。导航 DOM、54 元素标准计算样式和几何相同，像素差异为空。真实工具配置前后哈希一致。无待修 P0/P1/P2。窄卡来源名采用既有省略行为，完整名称保留在 title/aria；不为匹配复合样图改动首页格子几何。未做真实 Windows/DPI、多屏、实账号和实体 NAS；Windows 图为明确标注的能力分支模拟。
+
+---
+
+以下是此前任务验收历史。
+
+# 首页 AI 剩余额度 · B 仪表盘 · 2026-10-20
+
+final result: passed
+
+2026-10-20 审查修复：紧凑排序恢复为 critical → warn → error → ok（最低剩余优先）→ stale → 未检测到。mini 四来源完整展示，五来源起为三环 +N；small 最多三来源；large 仅五来源放第六格摘要，六来源恢复 2×3。Grok/Manus 零余额或积分耗尽以红色虚线环、告急图标和红色金额展示，双语提示明确耗尽，不伪造百分比；五来源摘要的需处理数量也包含耗尽来源。
+
+macOS Electron 专项已覆盖以上边界、恢复正余额、双语和四尺寸无溢出。新截图位于 `dist.noindex/review-fixes/quota/`，包括 `mini-4ai.png`、`mini-5ai.png`、`large-6ai.png`、`depleted-{mini,small,medium,large}.png` 和 `depleted-large-5ai.png`。本轮仍使用隔离数据，不把样本截图当作真实账号联网或 Windows 真机验收。
+
+修复后的完整 `npm test` 通过：824 项 Node 测试中 823 通过、1 项平台专属跳过；27 次 Electron 场景/重启运行及全部语法、语言资源检查通过。日志 `dist.noindex/review-fixes/npm-test.log`。
+
+## 视觉准绳与证据
+
+- 定稿：[Drive 文件夹](https://drive.google.com/drive/folders/1tjUIGrq6q2FyRJ0fSDCSej36KLXE46lv)。只实现 B 仪表盘，未使用 A 列表方向。源码与品牌 SVG 取自用户指定的 ai-quota-final-src.zip。
+- 原图：`dist.noindex/ai-quota-dashboard/original/`，包含用户指定的十张独立尺寸/来源截图。源文件保存在 `/private/tmp/pome-ai-quota-reference/`，不作为产品运行依赖。
+- 实现：生产 `renderer/index.html`、CSS、JS 在 macOS Electron 中运行；使用隔离 userData 和明确的额度样本，无真实账号凭据。`tests/ai-usage.electron.js` 触发刷新、切尺寸、异常、设置跳转和语言切换。
+- 截图：`dist.noindex/ai-quota-dashboard/`。`acceptance-overview.png` 展示四尺寸 × 2/3 来源和 large × 5；`comparisons/` 为十组左参考/右实现的逐张对照。每组比较过完整卡片及圆环/图标/细条/文字的局部区域。
+- 像素和密度：原图为 520×436（mini）、520×712（small）、874×712（medium）、874×1264（large）；按源 HTML 的 24px 留白裁切。对应卡片 378×252、378×528、778×528、778×1080，均为 2x，CSS 尺寸分别为 189×126、189×264、389×264、389×540；实现以同尺寸同密度采集，不拉伸。额外验证现有首页 196×118、196×248、404×248、404×510，保留现有首页格子和窗口布局。
+- 采集最终从完整页面裁切，避免隐藏窗口局部 capturePage 的绘制残影；`*-full.png` 与同名 JSON 留存完整页面/裁切坐标。普通外观与定稿对照；玻璃外观另存 `medium-3ai-glass.png`，保留用户原有外观选项。
+
+## 逐张检查
+
+| 尺寸 | 已检查实现与对照图 | 结果 |
+| --- | --- | --- |
+| mini | mini-2ai.png、mini-3ai.png；另验 mini-4ai / mini-5ai | 32px 环、中心品牌图标、最低剩余；5 家为 3 环 +2 |
+| small | small-2ai.png、small-3ai.png；另验 small-5ai | 46/36px 环；3 家折叠窗口细节；超过 3 家为 +N 个来源 |
+| medium | medium-2ai.png、medium-3ai.png、medium-5ai.png | 64/52/40px 环，2/3 列，五家折行且在现有首页尺寸也同屏可见 |
+| large | large-2ai.png、large-3ai.png、large-5ai.png | 84/66/50px 环；五家 2×3，第六格最低剩余摘要 |
+
+大尺寸按设置中的 catalog 顺序，所以五来源样本中 Claude Code 在 Grok Bot 前；来源名保留现有 catalog 的 Claude Code / GitHub Copilot，不为匹配静态样图缩写。额度、来源标签、账期及重置时间使用实际样本；不会把样图中的固定时间当成真实数据。mini/small 按产品明确的紧急度顺序排序，底部写“按紧急度排序”。
+
+## 五项视觉检查与迭代
+
+1. 字体：与面板共用系统字体栈（不再单独挂载 Inter VF，约 875KB）；中文沿用系统回退。标题 11/500，来源 11.5–12.5/620，百分比 650/等宽数字，窗口文字 9.5–10.5；百分号为 0.62em。
+2. 间距：格间 8px，格圆角 12px；保持原模块 18px 外壳、ECG 背景和尺寸。中号五来源减少格内间距，保证现有较矮首页也完整展示；超过六家时中号采用更紧凑的横向格，大号三列，不使用 Tab。
+3. 色彩：轨道、格底、渐变均按定稿；≤20% 偏低、≤10% 告急，按原始未取整值判断。过期环/细条半透明并直接标“数据过期”；Token 错误红色虚线，网络错误不会要求替换有效凭据。零剩余不画圆头小点。
+4. 图标：Cursor/Codex/Claude 复用仓库 SVG；Grok/Grok Bot 使用源包真标，Grok Bot 增强方底并按要求写注释；Manus 使用源包官方白色字形。图标为本地静态资源，无运行时请求。
+5. 文案：标题固定 AI 剩余额度；源标签、更新时间、账期/重置时间、Credits/套餐仍可查。余额、积分、无限额度不换算百分比。长文单行截断，可通过整格/窗口 tooltip 和 aria-description 查看完整信息。中英文即时切换，包括来源数量单复数。
+
+首轮 P2：五来源中号过密、长归属标签挤压来源名、过期状态只变淡而缺少可见提示；分别压紧格内间距、使用短来源标签并限制 chip、增加可见过期说明，复拍通过。第二轮恢复启动凭据流程依赖的更新时间，并修复没有本机用量样本时错误声称“已改用本机”的标签。设置跳转后的截图显式切回首页，避免将设置页当成组件截图。最终十组对照无待修 P0/P1/P2。
+
+## 交互与验证
+
+- 自动覆盖无 Tab、来源同屏、4/5/8 来源边界、+N、状态排序和新阈值、多窗口最低值、未知值、单 Cursor/单 Codex、空态、Token 设置入口、网络回退与失效清理、真实更新时间、无限/金额/积分、超多窗口格内滚动、HTML 转义、语言切换、手动刷新。
+- 本轮 Node 相关测试：39 项通过。额度专项 Electron 与启动凭据专项通过，渲染控制台无错误。
+- 完整 npm test：823 项 Node 测试中 822 通过、1 项平台专属跳过、0 失败；26 次 Electron 场景/重启运行及全部 JS 语法、本地化检查通过。日志 `/private/tmp/pome-quota-full.log`；额度专项日志 `/private/tmp/pome-quota-ui.log`。
+- 未做：真实 AI 账号联网验收、Windows 真机/DPI；本轮为 macOS 实际 Electron + 隔离 API 样本，不将样本当成真实接入凭据或 Windows 实机证据。没有运行打包、发布或 main 合并。
+
+## 本轮文件范围
+
+- 界面与规则：renderer/ai-usage.js、renderer/ai-usage-domain.js、renderer/styles.css、renderer/index.html。
+- 资产：renderer/assets/inbox/{grok,grokbot,manus}.svg、图标 README。
+- 回归：tests/ai-usage.test.js、tests/ai-usage.electron.js、tests/provider-credentials.electron.js、tests/startup.electron.js。
+- 说明与中英文：README、CHANGELOG、localization/locales、桌面/NAS 自动生成资源、本报告。
+
+---
+
+# 屏幕顶部任务通知 · 2026-10-16
+
+final result: passed
+
+## 参考与渲染证据
+
+- 视觉准绳：`/Users/lando/Design/pome-notify-bubble-2026-10-16/notify-bubble-design/{overview,spec,motion}.png`，及同目录 14 张独立变体。设计令牌与通用图标直接取自旁边 `pome-notif-design/src-design/bubble.css` 和各变体 HTML。
+- 实现截图：`/Users/lando/coding/Pome-Panel/dist.noindex/notification-design/`。`comparison-all.png` 为全部同状态并排对照，`comparison-1.png` 至 `comparison-4.png` 为可读的局部对照；每行左侧参考、右侧实现。已逐页打开检查。
+- 原图为 1920×324，长标题 1920×360，Windows 1920×288，均为 2x。裁取通知原生窗口区域：Mac `(560,0)-(1360,184/220)`，Windows `(560,20)-(1360,212)`。实现分别为 800×184、800×220、800×192，均为 2x，对应 CSS/原生窗口 400×92、400×110、400×96；对照不拉伸、不将背景/菜单栏/注释区计为产品偏差。
+- Codex、Claude、Cursor、失败、等待确认、长标题、标题回退、真实排队事件时间、悬停暂停、待办，均通过生产 main.js、真实 preload、临时用户目录和随机回环端口实际触发。历史 GPT/通用任务及 Windows 外观使用相同生产 HTML/CSS/JS/preload 的隔离 Electron 窗口，避免增加已移除的 hook endpoint。
+
+## 五项视觉检查
+
+1. 字体：使用设计的系统字体回退链，标题 13.5/18/600/-0.08，副标题 11/16/500，时间 11/500，数量 10/16/600。Mac 用系统 SF/PingFang，设计机用 Inter/Noto 的近似字体；属于预期平台差异。长标题实际两行并省略，窗口增加 18px，时间与首行对齐。
+2. 布局：Mac 顶部 32px 全黑；384px 岛体位于 400px 窗口中，左右 8px 肩；内容内边距 10/16/14，图标 32、间距 12，底部圆角 18。Windows 无刘海区，384×64 浮动卡，内边距 12/16/16，距工作区顶部 10；窗口底部留阴影区。没有裁掉标题、时间、数量或关闭按钮。
+3. 色彩：背景、发丝边框、文字、数量胶囊及进度条均使用 bubble.css 的中性令牌；只有 14px 状态角标用 #30D978 / #FF9352 / #FF5F57 / #438CFF，2px 同底色环。已去掉旧的彩色光晕、描边与来源标签底色。
+4. 资产：按用户要求使用仓库原有 Codex/Claude/Cursor SVG 替换设计的占位品牌标，18px 单色 mask。其他、任务、待办、状态与关闭 glyph 直接复用提供的设计源，不用手绘占位重建。
+5. 文案：任务具体摘要为标题，副标题只保留来源及项目；缺项目时无分隔点，缺摘要时为来源兜底。due 显示“将在 1 小时内截止”。待办右上角依用户的真实相对时间要求显示“刚刚/分钟”，与设计示例“18:30 截止”的差异为明确需求覆盖。倒计时截帧进度随真实剩余时长变化，并非固定成样图中的比例。
+
+## 动效、交互与修复记录
+
+- Mac 入场 300ms，内容延迟 110ms 淡入/下落/去模糊，角标延迟 200ms 弹出；退场内容 120ms、岛体延迟 40ms 回缩，最终透明，420ms 兜底。队列切换保持岛体展开，仅内容 120ms 淡出、180ms 淡入。Windows 使用 220ms 入场及 160ms 退场。
+- 首轮发现 [P2]：Windows 的 is-visible transform 比 reduced-motion 选择器更具体，导致计算样式仍有 transform。修复 reduced-motion 选择器优先级并在媒体切换后实际读取 transform=none，复验通过。当前只保留 120ms 透明度渐变。
+- 主进程在入场确认后开始 6000ms 计时，广播同一时钟给细进度条。悬停真实等待超过 6 秒仍不消失，进度值保持；离开后恢复并自动关闭；右上角时间换成 ×。× 关闭不启动来源软件，卡片主体保留能力开关控制的激活行为。
+- awaiting 超过 6000ms 仍显示、无进度条，Escape 不会关闭；点击主体或 × 可关闭。排队后显示事件原始相对时间，+3 与悬停截图均已对照。
+- IPC 验证发件窗口与 eventId，只接受当前通知两种合法高度；主面板伪造关闭/调整高度被拒绝。渲染控制台无错误。
+
+## 截图索引
+
+`codex-completed.png`、`claude-completed.png`、`cursor-completed.png`、`gpt-completed-no-project.png`、`task-completed.png`、`todo-due-soon.png`、`codex-failed.png`、`claude-awaiting-confirmation.png`、`claude-completed-long-title.png`、`codex-completed-fallback.png`、`codex-completed-queue.png`、`codex-completed-hover.png`、`windows-codex-completed.png`、`windows-codex-completed-hover.png`。
+
+额外生命周期证据：`queued-event-relative-time.png`、`production-hover-paused.png`。
+
+## 验证与范围
+
+- `npm test`：643 项 Node 测试，642 通过、1 项既有跳过、0 失败；全部 Electron 集成、重启回归及 JS 语法检查通过。日志：`/tmp/pome-notification-full-tests.log`。
+- 本机 `~/.codex/config.toml`、`~/.claude/settings.json`、`~/.cursor/hooks.json` 前后 SHA-256 一致，真实收件箱和账号未使用。测试启动应用/窗口的系统动作均替换为 fixture，未激活用户的工具窗口。
+- Windows 外观和能力开关兼容性在 Mac 上验证；未声称完成 Windows 真机/DPI 验证。原生窗口阴影超出捕获边缘的部分不计作卡片内容差异。
+- 无待修复 P0/P1/P2，无额外 P3 设计迭代项。所有源码修改仅在 dev；本次提交只含通知相关内容，工作区已有 Windows 安装器/日出日落修改保留，不打包、不推送、不合并 main。
+
+---
+
+# 先前设置页验收记录（保留）
+
 # AI 完成来源 · 视觉与交互验收
 
 final result: passed

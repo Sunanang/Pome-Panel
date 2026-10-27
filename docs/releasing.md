@@ -7,7 +7,7 @@
 ## 发布前
 
 1. `package.json`、`package-lock.json` 版本一致；CHANGELOG、README 稳定版本、`docs/release-notes.md` 对齐。发布说明里的下载链接写 `{{VERSION}}`，由工作流按 package.json 版本替换，不要写死版本号。
-2. 桌面端 `npm test`；官网 `npm test && npm run lint && npm run build`。
+2. 运行桌面端 `npm test`，覆盖桌面与 NAS 共用协议、服务和界面回归。
 3. `Release macOS and Windows` 工作流的手动运行只验证并上传 Actions artifacts；不创建 Release。`main`、`feat/**` 分支推送与 Pull Request 也执行同样验证。
 4. Windows runner 运行 `npm run build:win`，随后 `scripts/verify-windows.ps1` 安装实际 EXE、启动真实程序、验证核心 IPC/数据/系统加密/快捷键/模拟相机与录音释放，并打开一次「Windows 原生能力」开关确认 koffi 可加载、窗口列表可用，重新安装检查数据，再卸载。
 5. Mac runner 运行 `npm run build`、codesign 与 hdiutil 校验。两者全部通过才允许发布。
@@ -15,14 +15,14 @@
 
 ## 正式发布
 
-用户确认发布后，提交并推送 main，再推送与 package.json 匹配的 `v*.*.*` 标签。工作流重新构建验证两个平台，汇总资产校验 SHA-256，再创建一个 Release。任何平台失败均不会创建 Release；修复后在发布前重新验证，不覆盖已发布版本。
+用户确认发布后，通过 `dev → main` PR 合并，再推送与 package.json 匹配的 `v*.*.*` 标签。工作流重新构建验证两个平台，汇总资产校验 SHA-256，再创建一个 Release。任何平台失败均不会创建 Release；修复后在发布前重新验证，不覆盖已发布版本。
 
-官网通过 main 推送自动部署 GitHub Pages。两个下载按钮分别读取 `releases/latest` 的 macOS arm64 DMG 和 Windows x64 setup EXE；资产缺失时退回 Release 页面，绝不下载另一个平台安装包。不能硬编码过期版本的下载链接。
+下载入口统一使用 GitHub Releases。
 
 发布后检查：
-- Actions 两个平台及发布步骤成功；Pages 部署成功。
+- Actions 两个平台及发布步骤成功。
 - Release 有两个安装包与两个校验文件，版本及 SHA-256 相符。
-- 打开线上 Pages，两个按钮都存在，分别指向当前版本的对应安装包。
+- README 的 GitHub Releases 下载入口有效。
 - 发布说明区分系统要求、首次系统拦截提示、Windows 首版功能限制及自动测试边界。
 
 ## 本地构建

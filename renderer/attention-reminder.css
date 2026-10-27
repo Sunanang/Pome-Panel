@@ -1,0 +1,78 @@
+/* Final B, blue. Geometry and timing transcribed from final/src/attn.css. */
+:root {
+  --at-blue: #438CFF; --at-blue-hi: #8DB8FF; --at-blue-rgb: 67,140,255;
+  --at-btn: #2F6FE0; --at-btn-hover: #2A66D6; --at-btn-ink: #fff;
+  --at-content-h: 114px; --at-body-pad: 12px 16px 14px; --at-chip-h: 20px;
+  --at-title-size: 15px; --at-title-line: 21px; --at-button-h: 28px;
+  --at-breath-period: 2800ms; --at-breath-ease: cubic-bezier(.45,0,.55,1);
+}
+html[data-attention="true"] { --nb-window-h: 146px; --at-window-height: 146; --nb-enter-ms: 320ms; }
+.is-attention .notification-content { display: none; }
+.is-attention .notification-shape {
+  background: linear-gradient(180deg,#000 0,#000 var(--nb-cap-h),#0C0C0D calc(var(--nb-cap-h) + 18px),#151517 100%);
+  transition: height 280ms var(--nb-ease-soft),background 140ms;
+}
+.is-attention.is-hover .notification-shape { background: linear-gradient(180deg,#000 0,#000 var(--nb-cap-h),#121214 calc(var(--nb-cap-h) + 18px),#1C1C1F 100%); }
+.attention-seam { position: absolute; top: var(--nb-cap-h); left: 0; right: 0; height: 2px; pointer-events: none;
+  background: radial-gradient(50% 100% at 50% 0,rgba(var(--at-blue-rgb),.95),rgba(var(--at-blue-rgb),.25) 70%,transparent);
+  transform: scaleX(0); opacity: 0; transition: transform 300ms var(--nb-ease-out) 140ms,opacity 300ms var(--nb-ease-out) 140ms;
+}
+.attention-seam::after { content: ''; position: absolute; left: 15%; right: 15%; top: 0; height: 22px;
+  background: radial-gradient(50% 100% at 50% 0,rgba(var(--at-blue-rgb),.7),transparent); opacity: .26;
+}
+.is-visible .attention-seam { transform: scaleX(1); opacity: 1; }
+.is-visible .attention-seam::after { animation: attention-breath var(--at-breath-period) var(--at-breath-ease) 440ms infinite; }
+.attention-content { position: relative; padding: var(--at-body-pad); height: var(--at-content-h); min-width: 0;
+  opacity: 0; transform: translateY(-6px); filter: blur(4px);
+  transition: opacity 180ms var(--nb-ease-out) 120ms,transform 180ms var(--nb-ease-out) 120ms,filter 180ms var(--nb-ease-out) 120ms;
+}
+.is-visible .attention-content { opacity: 1; transform: none; filter: none; }
+.attention-header { display: flex; align-items: center; gap: 8px; height: var(--at-chip-h); }
+.attention-chip { display: inline-flex; flex: none; align-items: center; gap: 6px; height: var(--at-chip-h); padding: 0 8px 0 7px; border-radius: 6px;
+  background: rgba(var(--at-blue-rgb),.13); box-shadow: inset 0 0 0 1px rgba(var(--at-blue-rgb),.22);
+  color: var(--at-blue-hi); font-size: 11px; font-weight: 600; letter-spacing: .2px; white-space: nowrap;
+}
+.attention-dot { position: relative; width: 6px; height: 6px; border-radius: 50%; background: var(--at-blue); }
+.attention-dot::after { content: ''; position: absolute; inset: -2.5px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(var(--at-blue-rgb),.28); }
+.is-visible .attention-dot::after { animation: attention-ring var(--at-breath-period) var(--at-breath-ease) 440ms infinite; }
+.attention-source { min-width: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--nb-text-2); white-space: nowrap; }
+.attention-brand { flex: none; width: 13px; height: 13px; object-fit: contain; filter: brightness(0) invert(1); }
+.attention-project { overflow: hidden; text-overflow: ellipsis; color: var(--nb-text-3); }
+.attention-project::before { content: '·'; margin-right: 6px; color: var(--nb-text-4); }
+.attention-trailing { margin-left: auto; flex: none; display: flex; gap: 6px; align-items: center; font-size: 11px; font-weight: 500; color: var(--nb-text-3); white-space: nowrap; }
+.attention-trailing .notification-queue { display: inline-flex; align-items: center; gap: 3px; }
+.attention-pause { display: none; width: 7px; height: 7px; }
+.is-hover .attention-pause { display: block; }
+.is-attention.has-activation-error:not(.is-hover):not(:focus-within) .notification-close { display: none; }
+.attention-title { margin-top: 9px; height: var(--at-title-line); font-size: var(--at-title-size); line-height: var(--at-title-line); font-weight: 600; letter-spacing: -.15px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attention-footer { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
+.attention-command { font-family: 'SF Mono',ui-monospace,Consolas,monospace; font-size: 12.5px; font-weight: 500; padding: 1px 6px; border-radius: 5px; background: rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); color: #EDEDED; letter-spacing: 0; }
+.attention-command-mask { color: var(--nb-text-3); letter-spacing: 1px; }
+.attention-action { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 6px; flex: none; height: var(--at-button-h); padding: 0 12px;
+  border-radius: 8px; background: var(--at-btn); color: var(--at-btn-ink); font-size: 12px; font-weight: 650; white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16),0 3px 10px rgba(var(--at-blue-rgb),.22);
+  transform: scale(.94); transition: transform 220ms var(--nb-ease-spring) 200ms,background 140ms;
+}
+.is-visible .attention-action { transform: none; }
+.is-hover .attention-action,.attention-action:hover { background: var(--at-btn-hover); }
+.attention-action:focus-visible { outline: 2px solid var(--at-blue-hi); outline-offset: 2px; }
+.attention-hint { font-size: 11px; font-weight: 450; color: var(--nb-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attention-action.is-manual { background: rgba(255,255,255,.07); color: var(--nb-text-2); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.attention-action.is-manual .attention-arrow { display: none; }
+.is-hover .attention-dot::after,.is-hover .attention-seam::after { animation-play-state: paused; }
+.is-switching .attention-content,.is-hiding .attention-content { opacity: 0; transform: translateY(-4px); filter: none;
+  transition: opacity 120ms var(--nb-ease-soft),transform 120ms var(--nb-ease-soft); }
+.is-replacing .attention-content { transition-delay: 0ms; }
+.is-hiding .attention-seam { transform: scaleX(0); opacity: 0; transition-delay: 0ms; }
+html[data-platform="win32"][data-attention="true"] { --nb-window-h: 114px; --at-window-height: 114; --nb-window-w: 384px; --nb-shoulder: 0px; }
+html[data-platform="win32"] .is-attention .notification-shape { background: linear-gradient(180deg,rgba(30,30,34,.97),rgba(21,22,26,.97)); }
+html[data-platform="win32"] .is-attention.is-hover .notification-shape { background: linear-gradient(180deg,#232326,#1B1B1E); }
+html[data-platform="win32"] .attention-seam { top: 0; border-radius: 16px 16px 0 0; }
+@keyframes attention-breath { 0%,100% { opacity: .18; } 50% { opacity: .34; } }
+@keyframes attention-ring { 0%,100% { transform: scale(1.2); opacity: .9; } 50% { transform: scale(2.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .is-attention .attention-seam,.is-attention .attention-seam::after,.is-attention .attention-dot::after,.is-attention .attention-action { animation: none; transform: none; transition: none; }
+  .is-attention .attention-content,.is-switching .attention-content,.is-hiding .attention-content { transform: none; filter: none; transition: opacity 150ms linear; }
+  html[data-attention="true"] .notification-root { transition: opacity 150ms linear; }
+}

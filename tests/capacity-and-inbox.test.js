@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createTaskInbox, completionEventId, rebuildTaskInbox, READ_RETENTION_MS } = require('../taskInbox');
+const { createTaskInbox, completionEventId, rebuildTaskInbox, MAX_RECORDS } = require('../taskInbox');
 const { createPersistentStore } = require('../fnos/app/server/persistentStore');
 const { digest } = require('../fnos/app/server/recovery');
 const { pullFullSnapshot, pullWorkspacePages, planWorkspaceSync, entityHash } = require('../workspace-sync');
@@ -26,8 +26,9 @@ test('completion ID dedupes delayed retries, restart and retains successive comp
  assert.notEqual(completionEventId({source:'cursor',event_id:'same'}),completionEventId({source:'codex',event_id:'same'}));
  assert.equal(inbox.accept({source:'gpt',taskId:'ambiguous'}).error,'invalid_source');
  assert.equal(inbox.accept({source:'gpt',completedAt:1}).error,'invalid_source');
- clock+=READ_RETENTION_MS;inbox.list();const saved=JSON.parse(fs.readFileSync(filePath));assert.equal(saved.records.length,1);assert.equal(Object.keys(saved.dedupe).length,1);
- assert.equal(inbox.accept(first).duplicate,false); // record and its dedupe expired together
+ for(let i=0;i<MAX_RECORDS;i++) { clock++; inbox.accept({source:'codex',eventId:`capacity-${i}`}); }
+ const saved=JSON.parse(fs.readFileSync(filePath));assert.equal(saved.records.length,MAX_RECORDS);assert.equal(Object.keys(saved.dedupe).length,MAX_RECORDS);
+ assert.equal(inbox.accept(first).duplicate,false); // record and its dedupe were evicted together
 });
 
 test('inbox rebuild cancellation preserves bytes; confirmation keeps exact backup and works after restart', t => {

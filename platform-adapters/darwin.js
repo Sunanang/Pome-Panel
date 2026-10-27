@@ -1,4 +1,6 @@
 'use strict';
+const pomeLocalePlatformAdaptersDarwin = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
+
 
 // macOS 适配层（P0-2）：main.js 里所有 JXA / osascript 逻辑原样迁入，行为不变。
 // 模块级状态（窗口扫描缓存、图标缓存与队列、上一个粘贴目标、汽水音乐播放态）随代码迁入实例。
@@ -401,10 +403,11 @@ function createDarwinAdapter(options = {}) {
 
   async function resolveTaskApp(source, { window, senderPid } = {}) {
     const apps = JSON.parse(await runJxa(RUNNING_APPS_JXA) || '[]');
-    // Claude runs inside a terminal (or an editor's integrated terminal).
+    // CLI sources run inside a terminal (or an editor's integrated terminal).
     // Walk its hook process ancestry instead of capturing an unrelated foreground app.
     const pid = Number(senderPid);
-    if (source === 'claude' && Number.isSafeInteger(pid) && pid > 1) {
+    const terminalSource = ['claude', 'grok', 'copilot'].includes(source) || source === 'antigravity' && window?.app === 'Terminal';
+    if (terminalSource && Number.isSafeInteger(pid) && pid > 1) {
       const parents = await new Promise(resolve => (options.execFile || execFile)('/bin/ps', ['-axo', 'pid=,ppid='], { timeout: 1000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout) => {
         resolve(new Map(error ? [] : String(stdout).trim().split('\n').map(line => line.trim().split(/\s+/).map(Number))));
       }));
@@ -418,7 +421,7 @@ function createDarwinAdapter(options = {}) {
     const candidates = apps.filter(row => taskAppMatches({ source, window }, row));
     // With no sender identity, prefer an exact terminal title later instead of
     // assigning an arbitrary terminal when several are running.
-    if (source === 'claude' && !window?.app && !window?.bundleId && candidates.length !== 1) return null;
+    if (terminalSource && !window?.app && !window?.bundleId && candidates.length !== 1) return null;
     return candidates[0] || null;
   }
 
@@ -509,20 +512,20 @@ function createDarwinAdapter(options = {}) {
     if (!await hasScreenRecordingAccess()) missing.push('screen-recording');
     if (missing.length === 0) return;
 
-    const names = missing.map((key) => (key === 'accessibility' ? '辅助功能' : '屏幕录制'));
+    const names = missing.map((key) => (key === 'accessibility' ? pomeLocalePlatformAdaptersDarwin.t("copy.accessibility.b8f88a") : pomeLocalePlatformAdaptersDarwin.t("copy.screenRecording.77dfb4")));
     const { response, checkboxChecked } = await dialog.showMessageBox({
       type: 'info',
-      message: `Pome Panel 需要「${names.join('」和「')}」权限`,
+      message: pomeLocalePlatformAdaptersDarwin.t("copy.pomePanelNeedsPermission.f16466", { arg1: (names.join(pomeLocalePlatformAdaptersDarwin.t("copy.and.545349"))) }),
       detail: [
-        '缺少这些权限时，「当前窗口」会读不到任何窗口，汽水音乐的播放控制也不会生效。',
+        pomeLocalePlatformAdaptersDarwin.t("copy.withoutThesePermissionsCurrentWindowsCannotRead.d29b9c"),
         '',
-        '授权后需要重新启动 Pome Panel 才会生效。',
-        'ad-hoc 签名的应用每次重新打包都要重新授权一次，这是没有开发者账号分发的固有限制。',
+        pomeLocalePlatformAdaptersDarwin.t("copy.restartPomePanelAfterGrantingPermissionTo.dace8e"),
+        pomeLocalePlatformAdaptersDarwin.t("copy.adHocSignedBuildsMayNeedPermission.5e8b38"),
       ].join('\n'),
-      buttons: ['打开系统设置', '以后再说'],
+      buttons: [pomeLocalePlatformAdaptersDarwin.t("copy.openSystemSettings.0407db"), pomeLocalePlatformAdaptersDarwin.t("copy.later.9d2055")],
       defaultId: 0,
       cancelId: 1,
-      checkboxLabel: '不再提示',
+      checkboxLabel: pomeLocalePlatformAdaptersDarwin.t("copy.donTAskAgain.a54a0a"),
       checkboxChecked: false,
     });
 

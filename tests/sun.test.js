@@ -9,6 +9,31 @@ const cities = JSON.parse(fs.readFileSync(path.join(__dirname, '../renderer/citi
 
 const SHANGHAI = { lat: 31.23, lng: 121.47, timeZone: 'Asia/Shanghai' };
 
+test('invalid persisted time zones recover while valid city zones remain independent of the host', () => {
+  assert.equal(sun.resolveTimeZone('Asia/NotARealZone', 'Asia/Shanghai'), 'Asia/Shanghai');
+  for (const value of ['invalid', {}, 99, 'x'.repeat(500)]) {
+    const model=sun.buildSunModel({...SHANGHAI,timeZone:value,now:new Date('2026-10-25T08:00:00Z')});
+    assert.equal(model.timeZone,'UTC');assert(model.arc.samples.length>0);
+  }
+  assert.equal(sun.resolveTimeZone('America/New_York','Asia/Shanghai'),'America/New_York');
+});
+
+test('the sun arc uses local clock samples after spring, autumn and half-hour DST transitions', () => {
+  for(const [timeZone,lat,lng,stamp] of [
+    ['America/New_York',40.7128,-74.006,'2026-03-08T08:00:00-04:00'],
+    ['America/New_York',40.7128,-74.006,'2026-11-01T08:00:00-05:00'],
+    ['Australia/Lord_Howe',-31.55,159.08,'2026-10-04T08:00:00+11:00'],
+    ['Australia/Lord_Howe',-31.55,159.08,'2026-04-05T08:00:00+10:30'],
+    ['America/New_York',40.7128,-74.006,'2026-11-02T08:00:00-05:00'],
+  ]) {
+    const model=sun.buildSunModel({timeZone,lat,lng,now:new Date(stamp)});
+    const next=model.arc.samples.findIndex(([minute])=>minute>=model.nowMin);
+    const [x0,y0]=model.arc.samples[Math.max(0,next-1)],[x1,y1]=model.arc.samples[next];
+    const onArc=x0===x1?y1:y0+(y1-y0)*(model.nowMin-x0)/(x1-x0);
+    assert(Math.abs(onArc-model.altitude)<.02,`${timeZone} ${stamp}: arc ${onArc}, sun ${model.altitude}`);
+  }
+});
+
 function shanghaiAt(hour, minute, second = 0) {
   const guess = Date.UTC(2026, 9, 8, hour, minute, second);
   const offset = 8 * 60;
@@ -186,7 +211,7 @@ test('current-time label follows Design B side, edge flip, night, and HH:MM form
 
 test('mini footer keeps full HH:MM within the ~190px card content width', () => {
   const widget = fs.readFileSync(path.join(__dirname, '../renderer/sun-widget.js'), 'utf8');
-  const miniFootLine = widget.split('\n').find((line) => line.includes('sun-mini-foot'));
+  const miniFootLine = widget.split('\n').find((line) => line.includes('sun-mini-foot'))?.replace(/\\"/g, '"');
   assert.ok(miniFootLine);
   assert.match(miniFootLine, /class="edge edge-rise"/);
   assert.doesNotMatch(miniFootLine, /class="sep"|·/);
@@ -351,6 +376,18 @@ test('introducing the sun module never reorders or relocates an existing layout'
   assert.equal(fresh.placements, null);
   assert.deepEqual(fresh.hiddenIds, ['sun']);
   previous.forEach((id) => assert.equal(fresh.sizes[id], defaults[id]));
+});
+
+test('blank, missing and invalid coordinates cannot become a false zero-island location', () => {
+  for (const value of ['', ' ', null, undefined, false, true, [], {}, 'NaN', 'Infinity', Infinity]) {
+    assert.equal(sun.parseCoordinate(value,90),null);
+    assert.equal(sun.parseManualLocation(value,'0').ok,false);
+    assert.equal(sun.parseManualLocation('0',value).ok,false);
+  }
+  assert.equal(sun.parseCoordinate('0',90),0);assert.equal(sun.parseCoordinate(0,180),0);
+  assert.equal(sun.parseManualLocation('-90','180').ok,true);
+  assert.equal(sun.parseManualLocation('90.001','0').ok,false);
+  assert.equal(sun.parseManualLocation('0','-180.001').ok,false);
 });
 
 function occupiedCells(placements, columns = 12, rows = 4) {

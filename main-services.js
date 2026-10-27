@@ -1,6 +1,8 @@
+const pomeLocaleMainServices = typeof module === 'object' && module.exports ? require("./localization/runtime") : globalThis.PomeI18n;
 const net = require('net');
 const path = require('path');
 const crypto = require('crypto');
+const notificationDomain = require('./renderer/notification-domain');
 
 function isPrivateAddress(address) {
   const value = String(address || '').trim().toLowerCase().split('%', 1)[0];
@@ -120,7 +122,9 @@ function createForegroundMediaPermissionCoordinator(defaults = {}) {
             layerOwner = null;
             restoreAlwaysOnTop = false;
             if (shouldRestore && targetToRestore && !targetToRestore.isDestroyed()) {
-              targetToRestore.setAlwaysOnTop(true, 'screen-saver');
+              // Match the main panel's normal layer: permission requests must
+              // not leave it above screenshots or input-method candidates.
+              targetToRestore.setAlwaysOnTop(true, 'floating');
             }
           }
         } finally {
@@ -135,7 +139,7 @@ function createForegroundMediaPermissionCoordinator(defaults = {}) {
 function extractPageTitle(html, fallback) {
   const ogTitle = extractMetaContent(html, 'og:title');
   const titleMatch = String(html || '').match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
-  return cleanTitle(ogTitle || (titleMatch && titleMatch[1]) || fallback) || String(fallback || '未命名链接');
+  return cleanTitle(ogTitle || (titleMatch && titleMatch[1]) || fallback) || String(fallback || pomeLocaleMainServices.t("copy.untitledLink.f4d376"));
 }
 
 function extractFaviconHref(html) {
@@ -314,8 +318,8 @@ function firstPayloadText(payload, keys) {
   return '';
 }
 
-function cleanTaskLine(value, maxLength) {
-  const line = String(value || '').split(/\r?\n/).map((item) => item.trim()).find(Boolean) || '';
+function cleanTaskLine(value, maxLength, skipBoilerplate = false) {
+  const line = String(value || '').split(/\r?\n/).map((item) => item.trim()).find((item) => item && (!skipBoilerplate || notificationDomain.concreteTitle(item.replace(/^[#>*`_~\-\s]+/, '').replace(/[`*_~]/g, '').trim()))) || '';
   const cleaned = line
     .replace(/^[#>*`_~\-\s]+/, '')
     .replace(/[`*_~]/g, '')
@@ -325,21 +329,9 @@ function cleanTaskLine(value, maxLength) {
   return Array.from(cleaned).slice(0, maxLength).join('');
 }
 
-const TASK_NOTIFICATION_FALLBACK_TITLES = {
-  codex: 'Codex 已完成任务',
-  claude: 'Claude 已完成任务',
-  cursor: 'Cursor 已完成任务',
-};
-
-function taskNotificationIdentity(payload, source = 'task') {
-  const data = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
-  const cwd = firstPayloadText(data, ['cwd', 'working_directory', 'working-directory']);
-  const project = cleanTaskLine(
-    firstPayloadText(data, ['project', 'project_name', 'project-name', 'projectName'])
-      || (cwd && path.isAbsolute(cwd) ? path.basename(path.normalize(cwd)) : ''),
-    48
-  );
-  const concreteTitle = firstPayloadText(data, [
+const TASK_TITLE_FIELDS = [
+    'completionSummary',
+    'completion_summary',
     'last_assistant_message',
     'last-assistant-message',
     'lastAssistantMessage',
@@ -358,25 +350,46 @@ function taskNotificationIdentity(payload, source = 'task') {
     'userPrompt',
     'message',
     'title',
-  ]);
-  return {
+  ];
+
+function taskNotificationIdentity(payload, source = 'task') {
+  const data = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+  source = notificationDomain.sourceKey(source);
+  const status = notificationDomain.statusKey(data.status, source);
+  const cwd = firstPayloadText(data, ['cwd', 'working_directory', 'working-directory']);
+  const project = cleanTaskLine(
+    firstPayloadText(data, ['project', 'project_name', 'project-name', 'projectName'])
+      || (cwd && (path.isAbsolute(cwd) || path.win32.isAbsolute(cwd)) ? cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : ''),
+    48
+  );
+  const concreteTitle = firstPayloadText(data, TASK_TITLE_FIELDS);  return {
     project,
-    title: cleanTaskLine(concreteTitle, 120)
-      || TASK_NOTIFICATION_FALLBACK_TITLES[source]
-      || '任务已完成',
+    title: notificationDomain.concreteTitle(cleanTaskLine(concreteTitle, 4096, true))
+      || notificationDomain.fallbackTitle(source, status, 'zh-CN'),
   };
 }
 
+function taskNotificationContent(payload, source) {
+  const identity = taskNotificationIdentity(payload, source);
+  const summary = firstPayloadText(payload, ['completionSummary', 'completion_summary', 'last_assistant_message', 'last-assistant-message', 'lastAssistantMessage', 'title']) || identity.title;
+  const clean = (value, max) => Array.from(String(value).replace(/[\u202a-\u202e\u2066-\u2069]/g, '').replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, ' ').trim()).slice(0, max).join('');
+  return { ...identity, titleIsFallback: !notificationDomain.concreteTitle(cleanTaskLine(firstPayloadText(payload, TASK_TITLE_FIELDS), 4096, true)), completionSummary: clean(summary, 4096),
+    sessionTitle: clean(firstPayloadText(payload, ['sessionTitle', 'session_title', 'thread_name']), 256) };
+}
+
+const TASK_TERMINAL_APPS = ['Terminal', '终端', 'iTerm', 'iTerm2', 'Warp', 'Ghostty', 'WezTerm', 'Alacritty', 'kitty', 'WindowsTerminal', 'PowerShell', 'cmd'];
 const TASK_SOURCE_APPS = {
   codex: ['ChatGPT', 'Codex'], cursor: ['Cursor'],
-  claude: ['Terminal', '终端', 'iTerm', 'iTerm2', 'Warp', 'Ghostty', 'WezTerm', 'Alacritty', 'kitty', 'WindowsTerminal', 'PowerShell', 'cmd'],
+  claude: TASK_TERMINAL_APPS, grok: TASK_TERMINAL_APPS, copilot: TASK_TERMINAL_APPS,
+  // Desktop IDE by default; CLI Stop payloads set window.app to Terminal and match via identity.app.
+  antigravity: ['Antigravity', 'Antigravity IDE', ...TASK_TERMINAL_APPS],
 };
 
 function normalizeTaskNotificationWindow(payload, source) {
   const data = payload?.window && typeof payload.window === 'object' ? payload.window : {};
   const clean = (value, max) => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max) || null : null;
   return {
-    app: clean(data.app, 160) || (source === 'codex' ? 'ChatGPT' : source === 'cursor' ? 'Cursor' : null),
+    app: clean(data.app, 160) || ({ codex: 'ChatGPT', cursor: 'Cursor', antigravity: 'Antigravity' }[source] || null),
     bundleId: clean(data.bundleId, 240),
     cwd: clean(firstPayloadText(payload, ['cwd', 'working_directory', 'working-directory']) || data.cwd, 4096),
   };
@@ -407,6 +420,74 @@ function normalizeCredentialInput(value, id, createdAt) {
     password,
     createdAt: Number.isFinite(createdAt) ? createdAt : Number.isFinite(value.createdAt) ? value.createdAt : Date.now(),
   };
+}
+
+function createCredentialsVaultStore({ filePath, safeStorage, disk = require('node:fs') } = {}) {
+  const failure = (code) => Object.assign(new Error(code), { code });
+  function available() {
+    if (!safeStorage?.isEncryptionAvailable()) throw failure('secure_storage_unavailable');
+  }
+  function normalizeRows(rows) {
+    if (!Array.isArray(rows)) throw failure('credentials_unreadable');
+    const normalized = rows.map(item => item && typeof item.id === 'string' && item.id
+      ? normalizeCredentialInput(item, item.id, item.createdAt) : null);
+    if (normalized.some(item => !item) || new Set(normalized.map(item => item.id)).size !== normalized.length) {
+      throw failure('credentials_unreadable');
+    }
+    return normalized;
+  }
+  function read() {
+    let bytes;
+    try { bytes = disk.readFileSync(filePath, 'utf8'); }
+    catch (error) { if (error.code === 'ENOENT') return []; throw failure('credentials_unreadable'); }
+    available();
+    try {
+      const envelope = JSON.parse(bytes);
+      if (envelope?.version !== 1 || typeof envelope.payload !== 'string' || !envelope.payload) throw failure('credentials_unreadable');
+      const decoded = safeStorage.decryptString(Buffer.from(envelope.payload, 'base64'));
+      return normalizeRows(JSON.parse(decoded));
+    } catch { throw failure('credentials_unreadable'); }
+  }
+  function write(rows) {
+    // A locked, damaged or unreadable existing vault is never an empty vault.
+    // This guard also protects remote materialization from replacing its bytes.
+    available(); read();
+    const normalized = normalizeRows(rows);
+    let serialized;
+    try {
+      const payload = safeStorage.encryptString(JSON.stringify(normalized)).toString('base64');
+      const envelope = { version: 1, payload };
+      serialized = `${JSON.stringify(envelope)}\n`;
+      require('./atomicStorage').writeJsonAtomic(filePath, envelope, disk);
+      return true;
+    } catch {
+      // Rename can commit before directory fsync fails. If these exact bytes
+      // are already visible, acknowledge that record instead of inviting the
+      // caller to retry a new UUID and create a duplicate credential.
+      try { if (serialized && disk.readFileSync(filePath, 'utf8') === serialized) return true; } catch {}
+      throw failure('credentials_save_failed');
+    }
+  }
+  return { read, write };
+}
+
+function switchPanelShortcut({ currentShortcut, nextShortcut, isRegistered, register, unregister, persist = () => true }) {
+  // Keep the previous global binding until both the new registration and its
+  // settings write succeed. A conflict or disk error must not disable wake-up.
+  const existing = nextShortcut !== 'Space' && nextShortcut === currentShortcut && isRegistered(nextShortcut);
+  let added = false;
+  if (nextShortcut !== 'Space' && !existing) {
+    try { added = register(nextShortcut) === true; } catch { added = false; }
+    if (!added) return { ok: false, error: 'register_failed', shortcut: currentShortcut };
+  }
+  let saved = false;
+  try { saved = persist() !== false; } catch { saved = false; }
+  if (!saved) {
+    if (added) unregister(nextShortcut);
+    return { ok: false, error: 'save_failed', shortcut: currentShortcut };
+  }
+  if (currentShortcut !== 'Space' && currentShortcut !== nextShortcut && isRegistered(currentShortcut)) unregister(currentShortcut);
+  return { ok: true, shortcut: nextShortcut };
 }
 
 function parseSmartLinkMetadata(value) {
@@ -565,6 +646,9 @@ function appSettingsLayoutPreferences(stored) {
     legacyWinLayout: source.legacyWinLayout === true,
     // 只认布尔值：没存过时用 WIN_NATIVE_DEFAULT（D16 关卡未过 → false）。
     winNative: typeof source.winNative === 'boolean' ? source.winNative : WIN_NATIVE_DEFAULT,
+    // Top bubble tips default on; only an explicit false disables them.
+    taskNotifications: source.taskNotifications !== false,
+    weatherEffects: source.weatherEffects !== false,
   };
 }
 
@@ -766,7 +850,7 @@ async function controlSodaMusic(action, dependencies = {}, currentPlaying = fals
 }
 
 const SYNC_CREDENTIALS_FILE = 'sync-credentials.json';
-const PAIR_HTTP_CONFIRM_TEXT = '配对码与新设备令牌将以明文 HTTP 传输，可能被窃听或篡改。确认继续？';
+const PAIR_HTTP_CONFIRM_TEXT = pomeLocaleMainServices.t("copy.thePairingCodeAndNewDeviceToken.e54205");
 
 /**
  * Pure helpers for NAS sync deviceToken persistence (safeStorage + 0600 file).
@@ -790,8 +874,8 @@ function createSyncCredentialsStore(deps = {}) {
     return pathMod.join(getUserDataPath(), fileName);
   }
 
-  // userData is pinned to "Dynamic Panel". Older runs may have written the
-  // same ciphertext under the product name or the pre-rename folder.
+  // Optional recovery for callers that explicitly supply getAppDataPath.
+  // Production migrates the profile once and reads only its new Pome folder.
   function credentialCandidates() {
     const primary = credentialsPath();
     const paths = [primary];
@@ -1034,9 +1118,12 @@ module.exports = {
   todoReminderState,
   todoReminderTimerDelay,
   taskNotificationIdentity,
+  taskNotificationContent,
   normalizeTaskNotificationWindow,
   taskAppMatches,
   normalizeCredentialInput,
+  createCredentialsVaultStore,
+  switchPanelShortcut,
   parseSmartLinkMetadata,
   parseSmartMaterialMetadata,
   selectTranscriptionSettings,

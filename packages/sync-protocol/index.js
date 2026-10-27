@@ -20,6 +20,7 @@ const pairing = require('./pairing');
 const migration = require('./migration');
 const endpoints = require('./endpoints');
 const secretBox = require('./secret-box');
+const aiCompletions = require('./ai-completions');
 
 module.exports = {
   ...schema,
@@ -30,4 +31,5 @@ module.exports = {
   ...migration,
   ...endpoints,
   ...secretBox,
+  ...aiCompletions,
 };

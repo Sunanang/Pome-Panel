@@ -73,7 +73,7 @@ async function run(contents) {
     if (size === 'mini') {
       assert.equal(await js(`document.getElementById('home-inbox-mini').hidden`), false);
       assert.equal(await js(`document.getElementById('home-inbox-unread').textContent`), '11');
-      assert.equal(await js(`document.getElementById('home-inbox-latest').title`), '打开 Codex');
+      assert.equal(await js(`document.getElementById('home-inbox-latest').title`), '打开 Codex · 已完成 · 完成 record-0');
       await js(`document.getElementById('home-inbox-latest').click()`);
       await until(`document.getElementById('task-inbox-status').textContent==='已打开来源软件。'`);
       assert.equal(launches.at(-1).id, 'record-0', 'mini still opens the latest record');
@@ -109,8 +109,8 @@ async function run(contents) {
   await until(`document.querySelector('.home-inbox-row')?.dataset.id==='new-on-first-page'`);
   assert.equal((await paging()).page, '1');
   await setCount(3);
-  for (const [index, source, label] of [[0, 'codex', '打开 Codex'], [1, 'cursor', '打开 Cursor'], [2, 'claude', '打开终端']]) {
-    assert.equal(await js(`document.querySelectorAll('.home-inbox-row')[${index}].title`), label);
+  for (const [index, source] of [[0, 'codex'], [1, 'cursor'], [2, 'claude']]) {
+    assert.match(await js(`document.querySelectorAll('.home-inbox-row')[${index}].getAttribute('aria-label')`), source === 'codex' ? /打开 Codex/ : source === 'cursor' ? /打开 Cursor/ : /打开终端/);
     await js(`document.querySelectorAll('.home-inbox-row')[${index}].click()`);
     await until(`document.querySelectorAll('.home-inbox-row')[${index}].dataset.unread==='false' && document.getElementById('task-inbox-status').textContent==='已打开来源软件。'`);
     assert.equal(launches.at(-1).source, source); assert.equal(launches.at(-1).window, null);
@@ -120,6 +120,14 @@ async function run(contents) {
   await until(`document.getElementById('task-inbox-status').textContent==='未找到 Codex。'`);
   assert.equal(await js(`document.querySelector('.home-inbox-detail')===null`), true);
   assert(queries.some(query => query.offset === 5 && query.limit === 5));
+  records[0] = { ...records[0], status: 'awaiting', sessionTitle: '原生会话', completionSummary: '完整摘要内容' };
+  await js('NotchTaskInbox.refresh()');
+  assert.equal(await js(`document.querySelector('.home-inbox-row').dataset.status`), 'awaiting');
+  assert.equal(await js(`document.querySelector('.home-inbox-event-status').textContent`), '等待确认');
+  assert.equal(await js(`document.querySelector('.home-inbox-row').title`), '原生会话\n完整摘要内容');
+  assert.equal(await js(`document.querySelector('.home-inbox-copy strong').title`), '');
+  records[0].status = 'failed'; await js('NotchTaskInbox.refresh()');
+  assert.equal(await js(`document.querySelector('.home-inbox-event-status').textContent`), '出错');
   assert.deepEqual(errors, []);
 }
 require('../main.js');

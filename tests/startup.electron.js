@@ -91,14 +91,15 @@ async function checkCursorTokenFlow(contents) {
         leaked: JSON.stringify(collectLocalStorageSnapshot()).includes('fixture-cursor-local-token') };
     })()
   `);
-  assert.equal(acquired.value, 'fixture-cursor-local-token');
+  assert.equal(acquired.value, '');
   assert.equal(acquired.type, 'password');
   assert.equal(acquired.disabled, false);
-  assert.equal(acquired.status.configured, false, '获取不能自动保存');
+  assert.equal(acquired.status.configured, true, '获取并保存一步完成');
   assert.equal(acquired.leaked, false, '凭证不能写入 LocalStorage');
   const saved = await contents.executeJavaScript(`
     (async () => {
       const button = document.getElementById('settings-cursor-token-save');
+      document.getElementById('settings-cursor-token').value='fixture-cursor-local-token';
       button.click();
       for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
       return { value: document.getElementById('settings-cursor-token').value,
@@ -120,12 +121,17 @@ async function checkCursorTokenFlow(contents) {
       for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
       return { value: input.value, disabled: button.disabled,
         hint: document.getElementById('settings-cursor-token-hint').textContent,
+        problem: document.querySelector('#ui-error-bar p').textContent,
+        diagnostic: document.querySelector('#ui-error-details pre').textContent,
         response: await window.notchAPI.readLocalCursorToken() };
     })()
   `);
   assert.equal(failed.value, 'keep-existing-input');
   assert.equal(failed.disabled, false);
-  assert.match(failed.hint, /尚未登录/);
+  assert.equal(failed.hint, '', 'failure uses only the shared error surface');
+  assert.match(failed.problem, /尚未登录/);
+  assert.match(failed.diagnostic, /cursor_token_missing/);
+  assert.doesNotMatch(failed.diagnostic, /must-not-reach-renderer/);
   assert.deepEqual(failed.response, { ok: false, error: 'cursor_token_missing' });
   const cleared = await contents.executeJavaScript(`
     (async () => {
@@ -149,28 +155,30 @@ async function checkCodexTokenFlow(contents) {
     for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
     return { value: input.value, type: input.type, disabled: button.disabled,
       status: await window.notchAPI.getCodexTokenStatus(),
-      sameCard: input.closest('.settings-ai-usage-card') === document.getElementById('settings-cursor-token').closest('.settings-ai-usage-card'),
+      sameCard: input.closest('#settings-ai-sources') === document.getElementById('settings-cursor-token').closest('#settings-ai-sources'),
       leaked: JSON.stringify(collectLocalStorageSnapshot()).includes('fixture-codex-token') };
   })()`);
-  assert.equal(acquired.value, 'fixture-codex-token');
+  assert.equal(acquired.value, '');
   assert.equal(acquired.type, 'password');
   assert.equal(acquired.disabled, false);
-  assert.equal(acquired.status.configured, false, 'acquisition must not automatically save');
+  assert.equal(acquired.status.configured, true, 'acquisition saves securely in one step');
   assert.equal(acquired.sameCard, true, 'both providers must be in one settings card');
   assert.equal(acquired.leaked, false);
   assert.equal(codexAuthReads, 1);
 
   const saved = await contents.executeJavaScript(`(async () => {
     const button = document.getElementById('settings-codex-token-save');
+    document.getElementById('settings-codex-token').value='fixture-codex-token';
     button.click();
     for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
-    await window.NotchAiUsage.refresh();
+    await window.NotchAiUsage.refresh({ force: true });
+    await new Promise(r=>setTimeout(r,850));
     return { status: await window.notchAPI.getCodexTokenStatus(),
       value: document.getElementById('settings-codex-token').value,
       settings: await window.notchAPI.getAppSettings(),
-      usage: await window.notchAPI.getCodexUsage(),
+      usage: await window.notchAPI.getCodexUsage({ force: true }),
       percent: document.querySelector('#codex-usage-rows strong').textContent,
-      footer: document.getElementById('codex-usage-footnote').textContent,
+      updated: document.querySelector('#codex-usage-rows .ai-usage-detail-updated').textContent,
       leaked: JSON.stringify(collectLocalStorageSnapshot()).includes('fixture-codex-token') };
   })()`);
   assert.equal(saved.status.configured, true);
@@ -178,7 +186,7 @@ async function checkCodexTokenFlow(contents) {
   assert.equal(saved.leaked, false);
   assert.equal(Object.hasOwn(saved.settings, 'encryptedCodexToken'), false);
   assert.equal(Object.hasOwn(saved.usage, 'token'), false);
-  assert.match(saved.footer, /^更新于/);
+  assert.match(saved.updated, /^更新于/);
   assert.equal(saved.usage.primary.percent, 67);
   assert.equal(saved.percent, '33%');
   assert.equal(saved.usage.authSource, 'manual');
@@ -190,20 +198,27 @@ async function checkCodexTokenFlow(contents) {
   const invalid = await contents.executeJavaScript(`(async () => {
     await window.NotchAiUsage.refresh({force:true});
     return { status: await window.notchAPI.getCodexTokenStatus(),
-      label: document.getElementById('ai-codex-source').textContent,
+      label: document.getElementById('ai-provider-codex').getAttribute('aria-description').split(String.fromCharCode(10))[1],
       percent: document.querySelector('#codex-usage-rows strong').textContent,
       guideVisible: !document.getElementById('settings-codex-token-guide').hidden,
-      footer: document.getElementById('codex-usage-footnote').textContent };
+      footer: document.getElementById('codex-usage-footnote').textContent,
+      detailTitle: document.getElementById('ai-provider-codex').getAttribute('aria-description'),
+      nativeTitle: document.getElementById('ai-provider-codex').title,
+      repairLabel: document.querySelector('#codex-usage-footnote button').getAttribute('aria-label') };
   })()`);
   assert.equal(invalid.status.manualTokenInvalid, true);
-  assert.equal(invalid.label, 'Token 失效'); assert.equal(invalid.percent, '--%');
+  assert.equal(invalid.label, 'Token 失效'); assert.equal(invalid.percent, '33%', 'failed refresh preserves the previous successful quota');
   assert.equal(invalid.guideVisible, true);
-  assert.match(invalid.footer, /Codex Token 已失效，请重新获取 · 去设置/);
+  assert.equal(invalid.footer, '失效去设置');
+  assert.match(invalid.detailTitle, /Token/);
+  assert.equal(invalid.nativeTitle, '', 'provider retains accessible details without a second native tooltip');
+  assert.match(invalid.repairLabel, /Codex.*去设置/);
   codexTelemetry = { ok:true, detected:true, updatedAt:new Date(Date.now()-60000).toISOString(),
     primary:{percent:45}, secondary:{percent:15}, plan:'plus' };
   const fallback = await contents.executeJavaScript(`(async () => {
     await window.NotchAiUsage.refresh({force:true});
-    return { label:document.getElementById('ai-codex-source').textContent,
+    await new Promise(r=>setTimeout(r,850));
+    return { label:document.getElementById('ai-provider-codex').getAttribute('aria-description').split(String.fromCharCode(10))[1],
       percent:document.querySelector('#codex-usage-rows strong').textContent };
   })()`);
   assert.equal(fallback.label, 'Token 失效 · 已改用本机'); assert.equal(fallback.percent, '55%');
@@ -227,11 +242,14 @@ async function checkCodexTokenFlow(contents) {
     for (let i = 0; i < 100 && button.disabled; i++) await new Promise(r => setTimeout(r, 20));
     return { value: input.value, disabled: button.disabled,
       hint: document.getElementById('settings-codex-token-hint').textContent,
+      diagnostic: document.querySelector('#ui-error-details pre').textContent,
       response: await window.notchAPI.readLocalCodexToken() };
   })()`);
   assert.equal(failed.value, 'keep-codex-input');
   assert.equal(failed.disabled, false);
-  assert.match(failed.hint, /没有可用 Token/);
+  assert.equal(failed.hint, '', 'Codex acquisition failure uses only the shared error surface');
+  assert.match(failed.diagnostic, /codex_token_missing/);
+  assert.doesNotMatch(failed.diagnostic, /must-not-reach-renderer/);
   assert.deepEqual(failed.response, { ok: false, error: 'codex_token_missing' });
   const cleared = await contents.executeJavaScript(`(async () => {
     const button = document.getElementById('settings-codex-token-clear'); button.click();

@@ -1,0 +1,45 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="bubble.css"><link rel="stylesheet" href="attn.css">
+<style>
+.scene { position: relative; overflow: hidden; }
+.wall { position: absolute; inset: -60px; filter: blur(26px) saturate(1.05); }
+.wall.mac { background:
+   radial-gradient(38% 70% at 18% 30%, #3b4a7a 0, transparent 70%),
+   radial-gradient(34% 80% at 52% 110%, #c77a5b 0, transparent 70%),
+   radial-gradient(40% 90% at 88% 20%, #2f6b72 0, transparent 70%),
+   radial-gradient(30% 60% at 70% 80%, #6a4a86 0, transparent 70%),
+   linear-gradient(180deg, #1d2236, #2a2433); }
+.wall.win { background:
+   radial-gradient(40% 90% at 50% 120%, #2f7cf0 0, transparent 70%),
+   radial-gradient(30% 70% at 30% 60%, #1b4fb3 0, transparent 70%),
+   radial-gradient(35% 80% at 75% 55%, #4a6fd6 0, transparent 70%),
+   linear-gradient(180deg, #0c1d3d, #12306a); }
+.grain { position: absolute; inset: 0; opacity: .06; mix-blend-mode: overlay;
+   background-image: repeating-radial-gradient(circle at 13% 27%, #fff 0 .5px, transparent .5px 2px); }
+.menubar { position: absolute; left: 0; right: 0; top: 0; height: 32px; display: flex; align-items: center; justify-content: space-between;
+   padding: 0 14px 0 18px; background: rgba(18,18,26,.32); backdrop-filter: blur(24px) saturate(1.4);
+   color: rgba(255,255,255,.92); font-size: 13px; font-weight: 500; letter-spacing: -.1px; }
+.menubar .l, .menubar .r { display: flex; align-items: center; gap: 18px; }
+.menubar .app { font-weight: 700; }
+.menubar .logo { width: 13px; height: 13px; border-radius: 4px; background: rgba(255,255,255,.88); }
+.menubar svg { height: 14px; display: block; }
+.notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 200px; height: 32px; background: #000;
+   border-radius: 0 0 10px 10px; }
+.notch::before, .notch::after { content: ''; position: absolute; top: 0; width: 6px; height: 6px; }
+.notch::before { left: -6px; background: radial-gradient(circle at 0 100%, transparent 5.5px, #000 6px); }
+.notch::after { right: -6px; background: radial-gradient(circle at 100% 100%, transparent 5.5px, #000 6px); }
+.anchor { position: absolute; top: 0; left: 50%; transform: translateX(-50%); }
+.anchor.win { top: 10px; }
+.caption { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; display: flex; align-items: center; justify-content: space-between;
+   padding: 0 16px; background: #0b0b0c; border-top: 1px solid rgba(255,255,255,.06); color: #8a8a8a; font-size: 11px; font-weight: 500; }
+.caption b { color: #e8e8e8; font-weight: 600; margin-right: 8px; }
+.caption .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); color: #d0d0d0; font-size: 10px; }
+.caption .ph { color: #5f5f5f; }
+ html,body{width:960px;height:220px;overflow:hidden}</style></head><body><div class="scene" style="width:960px;height:220px"><div style="position:absolute;left:0;right:0;top:0;bottom:30px;overflow:hidden">
+<div class="wall mac"></div><div class="grain"></div><div class="menubar"><div class="l"><span class="logo"></span><span class="app">Pome Panel</span><span>文件</span><span>编辑</span><span>窗口</span></div>
+    <div class="r"><svg viewBox="0 0 26 13" fill="none"><rect x=".7" y=".7" width="22" height="11.6" rx="3.2" stroke="currentColor" stroke-opacity=".5" stroke-width="1.2"/><rect x="2.6" y="2.6" width="15" height="7.8" rx="1.6" fill="currentColor"/><path d="M24.4 4.6v3.8" stroke="currentColor" stroke-opacity=".5" stroke-width="1.4" stroke-linecap="round"/></svg><svg viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 5a11 11 0 0 1 15 0"/><path d="M4 7.8a7.2 7.2 0 0 1 10 0"/><path d="M6.6 10.5a3.4 3.4 0 0 1 4.8 0"/></svg><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4.3"/><path d="m9.3 9.3 3 3"/></svg><span>10月16日 周五 17:31</span></div></div>
+<div class="anchor"><div class="isl-b " style=""><span class="shoulder l"></span><span class="shoulder r"></span>
+      <div class="shape"><div class="cap"></div><div class="seam"></div><div class="b-body"><div class="b-row1"><span class="b-chip"><span class="b-dot"></span>等待选择</span>
+        <span class="b-src"><svg class="mark" fill="currentColor" fill-rule="evenodd" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.106 5.68L12.5.135a.998.998 0 00-.998 0L1.893 5.68a.84.84 0 00-.419.726v11.186c0 .3.16.577.42.727l9.607 5.547a.999.999 0 00.998 0l9.608-5.547a.84.84 0 00.42-.727V6.407a.84.84 0 00-.42-.726zm-.603 1.176L12.228 22.92c-.063.108-.228.064-.228-.061V12.34a.59.59 0 00-.295-.51l-9.11-5.26c-.107-.062-.063-.228.062-.228h18.55c.264 0 .428.286.296.514z"></path></svg>Cursor<span class="sep">·</span><span class="proj">notch-todo</span></span><span class="b-spacer"></span>
+        <span class="b-trail">1 分钟</span></div>
+      <div class="b-title">这次修改直接上线，还是先预览？</div>
+      <div class="b-foot"><span class="b-cta">去 Cursor 选择<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7 7 3M4.2 3H7v2.8"/></svg></span><span class="b-hint">在 Cursor 中处理后自动收起</span></div></div></div></div></div></div><div class="caption"><span><b>choice-cursor.png</b>定稿 B · 等待选择 · Cursor · macOS</span><span class="ph">无倒计时 · 不自动消失 · 点击主体或按钮返回来源 · × 只隐藏</span></div></div></body></html>

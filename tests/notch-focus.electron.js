@@ -33,6 +33,7 @@ async function main() {
 
   try {
     await window.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    await window.webContents.executeJavaScript("PomeI18n.setState(PomeI18n.snapshot('zh-CN', ['zh-CN'])); true");
     diagnostic('Renderer test: page loaded');
     const freshProfileClipboardState = await window.webContents.executeJavaScript(`
       (() => ({
@@ -151,7 +152,7 @@ async function main() {
           return false;
         };
         // 生产默认开启超过四个 Tab，会进入左右分栏并让容器横跨整条顶栏。
-        document.getElementById('tabs').classList.add('is-split');
+        applyFeatureSettings({ features: { clip: false } });
         document.getElementById('notch').click();
         const opened = await waitForClass('expanded');
         const topbar = document.querySelector('.topbar').getBoundingClientRect();
@@ -272,7 +273,7 @@ async function main() {
       api: true,
       mirror: true,
       features: 6,
-      homeModules: 10,
+      homeModules: 11,
       shortcut: true,
       defaultTab: { exists: true, value: 'home', options: 8 },
       workspace: true,
@@ -629,7 +630,7 @@ async function main() {
           document.dispatchEvent(new CustomEvent('notch:tabchange', { detail: { tab: 'todo' } }));
           const tab = triggers.every(t => t.dataset.deadline === today());
           stale();
-          input.dispatchEvent(new Event('focus'));
+          input.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
           const inputFocus = trigger.dataset.deadline === today();
           stale();
           trigger.click();
@@ -645,7 +646,7 @@ async function main() {
           trigger.dataset.deadline = manualDeadline;
           trigger.dataset.deadlineSource = 'manual';
           window.dispatchEvent(new Event('focus'));
-          input.dispatchEvent(new Event('focus'));
+          input.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
           const manual = submit('rollover-manual') === manualDeadline;
           const resetAfterManual = trigger.dataset.deadline === today() && trigger.dataset.deadlineSource === 'default';
           return { automatic, wake, expand, tab, inputFocus, calendar, submits, manual, resetAfterManual };
@@ -817,7 +818,7 @@ async function main() {
       `);
       assert.equal(finalWidgetGuard.checked, true);
       assert.equal(finalWidgetGuard.visibleCount, 1);
-      assert.equal(finalWidgetGuard.storedCount, 9);
+      assert.equal(finalWidgetGuard.storedCount, 10);
       assert.match(finalWidgetGuard.message, /至少保留一个/);
     }
 
@@ -882,7 +883,7 @@ async function main() {
     `);
     assert.equal(transactionAudit.first.ok, true);
     assert.equal(transactionAudit.second.ok, true);
-    assert.deepEqual(transactionAudit.rapidHidden, ['inbox', 'mirror', 'note', 'sun']);
+    assert.deepEqual(transactionAudit.rapidHidden, ['inbox', 'mirror', 'note', 'sun', 'almanac']);
     assert.equal(transactionAudit.noop.changed, false);
     assert.equal(transactionAudit.eventCount, 0);
     assert.equal(transactionAudit.noOpStorageStable, true);
@@ -1202,9 +1203,13 @@ async function main() {
           animation.effect?.getKeyframes?.().map((frame) => Number(frame.opacity)).filter(Number.isFinite) || []
         ));
         const minimumTileOpacity = animatedOpacities.length ? Math.min(...animatedOpacities) : 1;
-        const realTileHasScale = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
+        const realTileDistortsText = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
           .some((tile) => tile.getAnimations().some((animation) => (
-            animation.effect?.getKeyframes?.().some((frame) => /scale/.test(String(frame.transform || '')))
+            animation.effect?.getKeyframes?.().some((frame) => {
+              if (!frame.transform || frame.transform === 'none') return false;
+              const matrix = new DOMMatrixReadOnly(frame.transform);
+              return Math.abs(matrix.a - matrix.d) > .001;
+            })
           )));
         const during = {
           beforeSize,
@@ -1212,20 +1217,24 @@ async function main() {
           ghostCount: ghosts.length,
           tileDurations,
           minimumTileOpacity,
-          realTileHasScale,
+          realTileDistortsText,
         };
-        // 单个动画允许到 1000ms，固定等 900ms 在负载高时会误报；等动画真正结束（最多 2s），
-        // 永不结束的动画仍会超时并在下面被计数。
-        await Promise.race([
-          Promise.all([...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
-            .flatMap((tile) => tile.getAnimations())
-            .map((animation) => animation.finished.catch(() => {}))),
-          new Promise((resolve) => setTimeout(resolve, 2000)),
-        ]);
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        // Movement can change which card is under the real pointer, starting
+        // another hover transition after the initial animation snapshot. Wait
+        // for two idle frames, bounded at 2s so a leaked animation still fails.
+        const motionDeadline = performance.now() + 2000;
+        let idleFrames = 0;
+        while (performance.now() < motionDeadline && idleFrames < 2) {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          const stillAnimating = document.getElementById('home-bento').classList.contains('layout-motion-active')
+            || [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')].some(tile => tile.getAnimations().length > 0);
+          idleFrames = stillAnimating ? 0 : idleFrames + 1;
+        }
         const ghostsAfter = document.querySelectorAll('.home-layout-ghost').length;
         const tileAnimationsAfter = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
           .reduce((count, tile) => count + tile.getAnimations().length, 0);
+        const remainingAnimations = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
+          .flatMap(tile => tile.getAnimations().map(animation => ({ module: tile.dataset.homeModule, property: animation.transitionProperty, state: animation.playState, frames: animation.effect.getKeyframes() })));
         applySizeViaContextMenu(resizingId, 'small');
         applySizeViaContextMenu(resizingId, 'mini');
         await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -1239,6 +1248,7 @@ async function main() {
           ...during,
           ghostsAfter,
           tileAnimationsAfter,
+          remainingAnimations,
           rapidDuplicateGhosts,
           rapidMaxTileAnimations,
           rapidGhostsAfter: document.querySelectorAll('.home-layout-ghost').length,
@@ -1253,9 +1263,9 @@ async function main() {
       `Auto Layout 应保留过程感，也不得拖沓：${JSON.stringify(autoLayoutMotionAudit.tileDurations)}`
     );
     assert.ok(autoLayoutMotionAudit.minimumTileOpacity >= 0.72, '重排期间真实卡片不得熄灭成黑块');
-    assert.equal(autoLayoutMotionAudit.realTileHasScale, true, '真实卡片应恢复连续 FLIP 几何过渡');
+    assert.equal(autoLayoutMotionAudit.realTileDistortsText, false, '尺寸过渡不得使用不等比缩放压扁文字');
     assert.equal(autoLayoutMotionAudit.ghostsAfter, 0, 'Auto Layout ghost 必须在动画后清理');
-    assert.equal(autoLayoutMotionAudit.tileAnimationsAfter, 0, '重排动画结束后不得残留组件动画');
+    assert.equal(autoLayoutMotionAudit.tileAnimationsAfter, 0, '重排动画结束后不得残留组件动画: ' + JSON.stringify(autoLayoutMotionAudit.remainingAnimations));
     assert.equal(autoLayoutMotionAudit.rapidDuplicateGhosts, false, '连续切换必须先清理上一轮 Auto Layout ghost');
     assert.ok(autoLayoutMotionAudit.rapidMaxTileAnimations <= 2, '连续切换不得叠加过多组件动画');
     assert.equal(autoLayoutMotionAudit.rapidGhostsAfter, 0, '连续切换结束后不得残留 Auto Layout ghost');

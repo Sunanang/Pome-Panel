@@ -29,30 +29,37 @@ async function run(c){
  const config=path.join(home,'.codex/config.toml'),original='# User configuration\nnotify = ["echo", "original-notify"]\n[model]\nname="untouched"\n';fs.writeFileSync(config,original);
  fs.writeFileSync(path.join(home,'.claude/settings.json'),JSON.stringify({hooks:{Stop:[{hooks:[{type:'command',command:'echo original'}]}]},permissions:{allow:['Read']}},null,4));
  await js('NotchAiSources.refresh()');await until(`document.getElementById('home-inbox').dataset.sourceState==='suggestion'`);await capture('first-detection');
- await js(`document.querySelector('.home-inbox-empty-actions button:last-child').click()`);await js(`NotchAiSources.dismiss('claude');NotchAiSources.dismiss('cursor');location.reload()`);
+ await js(`document.querySelector('.home-inbox-empty-actions button:last-child').click()`);await js(`NotchAiSources.dismiss('codex');NotchAiSources.dismiss('claude');NotchAiSources.dismiss('cursor');location.reload()`);
  await until(`window.NotchAiSources?.getState().ready && document.getElementById('home-inbox').dataset.sourceState==='none'`);assert.equal(await js(`NotchAiSources.getState().suggestion`),undefined,'dismiss persists across reload');await js('setMode(true)');
- await js(`setActiveTab('settings')`);await until(`document.querySelectorAll('.ai-source-row').length===3`);
+ await js(`setActiveTab('settings')`);await until(`document.querySelectorAll('.ai-source-row').length===8`);
  assert.equal(await js(`document.querySelectorAll('.ai-source-restart-hint').length`),0,'detection alone must not ask to restart');
  assert.equal(await js(`getComputedStyle(document.querySelector('.settings-column-primary')).overflowY`),'auto');
- await js(`document.querySelector('.ai-source-row[data-source="codex"] button').click()`);await until(`document.getElementById('ai-source-confirm').open`);
+ await js(`window.fixtureTrigger=document.querySelector('.ai-source-row[data-source="codex"] button');fixtureTrigger.scrollIntoView({block:'center'});fixtureTrigger.focus();fixtureTrigger.click()`);await until(`document.getElementById('ai-source-confirm').open && !fixtureTrigger.disabled`);
+ assert.equal(await js(`fixtureTrigger.isConnected && fixtureTrigger===document.querySelector('.ai-source-row[data-source="codex"] button')`),true,'busy renders must preserve the confirmation anchor');
  assert.equal(fs.readFileSync(config,'utf8'),original,'confirmation preview must not write');
- const bounds=await js(`(()=>{const d=document.getElementById('ai-source-confirm').getBoundingClientRect(),b=document.querySelector('.ai-source-row[data-source="codex"] button').getBoundingClientRect();return {top:d.top,bottom:d.bottom,left:d.left,right:d.right,h:innerHeight,w:innerWidth,buttonTop:b.top}})()`);assert(bounds.top>=0&&bounds.bottom<=bounds.h&&bounds.left>=0&&bounds.right<=bounds.w);assert(bounds.top<bounds.buttonTop,'confirmation floats above button');await capture('settings-confirm');
+ const bounds=await js(`(()=>{const d=document.getElementById('ai-source-confirm').getBoundingClientRect(),b=fixtureTrigger.getBoundingClientRect();return {top:d.top,bottom:d.bottom,left:d.left,right:d.right,h:innerHeight,w:innerWidth,buttonTop:b.top,expectedLeft:Math.max(12,Math.min(innerWidth-d.width-12,b.right-d.width))}})()`);assert(bounds.top>=0&&bounds.bottom<=bounds.h&&bounds.left>=0&&bounds.right<=bounds.w);assert(bounds.top<bounds.buttonTop,'confirmation floats above button');assert(Math.abs(bounds.left-bounds.expectedLeft)<1,'confirmation must align with its actual trigger');await capture('settings-confirm');
+ await js('NotchAiSources.refresh()');assert.equal(await js(`fixtureTrigger.isConnected && fixtureTrigger===document.querySelector('.ai-source-row[data-source="codex"] button')`),true,'status refresh must keep the open preview anchor');
  await js(`document.getElementById('ai-source-confirm-cancel').click()`);assert.equal(fs.readFileSync(config,'utf8'),original);
+ assert.equal(await js(`document.activeElement===fixtureTrigger`),true,'cancel restores focus to the connected trigger');
+ await js('fixtureTrigger.click()');await until(`document.getElementById('ai-source-confirm').open && !fixtureTrigger.disabled`);
+ await js(`document.getElementById('ai-source-confirm').dispatchEvent(new Event('cancel',{cancelable:true}))`);
+ assert.equal(await js(`!document.getElementById('ai-source-confirm').open && document.activeElement===fixtureTrigger`),true,'Escape restores focus to the connected trigger');
  assert.equal(await js(`document.querySelectorAll('.ai-source-restart-hint').length`),0,'cancelled preview must not ask to restart');
  async function assertRestartSources(expected){
-  assert.deepEqual(await js(`Array.from(document.querySelectorAll('.ai-source-restart-hint'),hint=>({source:hint.closest('.ai-source-row').dataset.source,text:hint.textContent}))`),expected.map(source=>({source,text:`已写入配置，请完全退出并重新打开 ${{codex:'Codex',claude:'Claude Code',cursor:'Cursor'}[source]} 后生效`})));
+  assert.deepEqual(await js(`Array.from(document.querySelectorAll('.ai-source-restart-hint'),hint=>({source:hint.closest('.ai-source-row').dataset.source,text:hint.textContent}))`),expected.map(source=>({source,text:source==='claude'?'已写入配置，请退出 Claude Code 并重新启动后生效':`已写入配置，请完全退出并重新打开 ${{codex:'Codex',claude:'Claude Code',cursor:'Cursor'}[source]} 后生效`})));
  }
  // Simulate a failed apply using only the isolated fixture configuration.
  await js(`NotchAiSources.request('cursor')`);await until(`document.getElementById('ai-source-confirm').open`);
  fs.writeFileSync(path.join(home,'.cursor/hooks.json'),'{}');
- await js(`document.getElementById('ai-source-confirm-apply').click()`);await until(`!document.getElementById('ai-source-confirm').open && document.getElementById('ai-sources-status').textContent.includes('配置文件已变化')`);
+ await js(`document.getElementById('ai-source-confirm-apply').click()`);await until(`!document.getElementById('ai-source-confirm').open && !document.getElementById('ui-error-bar').hidden && document.querySelector('#ui-error-details pre').textContent.includes('配置文件已变化')`);
+ assert.equal(await js(`document.getElementById('ai-sources-status').textContent`),'','failed apply has only one error surface');
  await assertRestartSources([]);assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('重新打开')`),false,'failed source must not ask to restart');
  async function apply(source,action='connect'){
   await js(`NotchAiSources.request('${source}','${action}',document.querySelector('.ai-source-row[data-source="${source}"] button'))`);await until(`document.getElementById('ai-source-confirm').open`);await js(`document.getElementById('ai-source-confirm-apply').click()`);await until(`!document.getElementById('ai-source-confirm').open && NotchAiSources.getState().sources.find(s=>s.source==='${source}').state==='${action==='disconnect'?'disconnected':'connected'}'`);
  }
  await apply('codex');assert(fs.readdirSync(path.dirname(config)).some(n=>n.includes('.pome-backup-')));
  await assertRestartSources(['codex']);assert(await js(`document.getElementById('ai-sources-status').textContent.includes('完全退出并重新打开 Codex')`));
- const beforeTest=await js('window.notchAPI.getTaskInbox()');const test=await js(`NotchAiSources.test('codex')`);assert.equal(test.ok,true,JSON.stringify(test));assert.equal(test.message,'测试通知已送达');assert.equal((await js('window.notchAPI.getTaskInbox()')).total,beforeTest.total,'tests do not enter history or unread');await capture('settings-test-delivered');
+ const beforeTest=await js('window.notchAPI.getTaskInbox()');const test=await js(`notchAPI.testAiSource('codex')`);assert.equal(test.ok,true,JSON.stringify(test));assert.equal(test.message,'测试通知已送达');assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('测试通知已送达')`),false,'backend testing has no settings delivery hint');assert.equal((await js('window.notchAPI.getTaskInbox()')).total,beforeTest.total,'tests do not enter history or unread');await capture('settings-test-delivered');
  await assertRestartSources(['codex']);
  // An already matching config is skipped: successful detection is not a new write.
  await js(`(async()=>{const preview=await notchAPI.previewAiSource('claude','connect');return notchAPI.applyAiSource(preview.preview.token);})()`);await js('NotchAiSources.refresh()');
@@ -66,10 +73,21 @@ async function run(c){
  fs.writeFileSync(path.join(home,'.cursor/hooks.json'),JSON.stringify({version:1,hooks:{stop:[{command:"ELECTRON_RUN_AS_NODE=1 '/missing/node' '/missing/cursor-notify.js' '--pome-panel-hook=cursor'"}]}}));
  await js('NotchAiSources.refresh()');await capture('settings-mixed-states');
  await apply('claude');await apply('cursor','repair');
- await assertRestartSources(['codex','claude','cursor']);assert(await js(`document.getElementById('ai-sources-status').textContent.includes('完全退出并重新打开 Cursor')`));
- for(const source of ['claude','cursor'])assert.equal((await js(`NotchAiSources.test('${source}')`)).ok,true);
+ await assertRestartSources(['cursor','codex','claude']);assert(await js(`document.getElementById('ai-sources-status').textContent.includes('完全退出并重新打开 Cursor')`));
+ for(const source of ['claude','cursor'])assert.equal((await js(`notchAPI.testAiSource('${source}')`)).ok,true);
  await capture('settings-all-connected');
- await apply('codex','disconnect');await assertRestartSources(['claude','cursor']);assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('Codex')`),false);assert.deepEqual(readConfig(config,'codex').value.notify,['echo','original-notify']);await apply('codex');
+ const cursorFile=path.join(home,'.cursor/hooks.json'),legacyCursor=JSON.parse(fs.readFileSync(cursorFile));
+ delete legacyCursor.hooks.afterAgentResponse;fs.writeFileSync(cursorFile,JSON.stringify(legacyCursor));
+ await js('NotchAiSources.refresh()');
+ await until(`Array.from(document.querySelectorAll('.ai-source-row[data-source="cursor"] button')).some(button=>button.textContent==='修复')`);
+ assert.equal(await js(`NotchAiSources.getState().sources.find(row=>row.source==='cursor').state`),'connected','legacy stop-only stays connected');
+ await js(`Array.from(document.querySelectorAll('.ai-source-row[data-source="cursor"] button')).find(button=>button.textContent==='修复').click()`);
+ await until(`document.getElementById('ai-source-confirm').open`);
+ await js(`document.getElementById('ai-source-confirm-apply').click()`);
+ await until(`!document.getElementById('ai-source-confirm').open && !NotchAiSources.getState().sources.find(row=>row.source==='cursor').summaryHookMissing`);
+ assert.equal(JSON.parse(fs.readFileSync(cursorFile)).hooks.afterAgentResponse.length,1);
+
+ await apply('codex','disconnect');await assertRestartSources(['cursor','claude']);assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('Codex')`),false);assert.deepEqual(readConfig(config,'codex').value.notify,['echo','original-notify']);await apply('codex');
  await js(`setActiveTab('home')`);const beforeToggle=await js(`({sizes:{...homeSizes},placements:JSON.parse(JSON.stringify(homeWorkingLayout.placements))})`);
  assert.equal((await js(`NotchHome.setModuleVisible('inbox',false)`)).ok,true);
  assert.equal(await js(`document.getElementById('home-inbox-placeholder').hidden`),false,'N1: vacated slot has add-module placeholder');
@@ -83,7 +101,7 @@ async function run(c){
  const invalid=await fetch(`http://127.0.0.1:${port}/notify/cursor`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{invalid'});assert.equal(invalid.status,400);await until(`document.getElementById('task-inbox-status').textContent.includes('完成事件无法处理')`);assert.equal((await js('window.notchAPI.getTaskInbox()')).total,13);
  await js('NotchTaskInbox.refresh()');await until(`document.getElementById('home-inbox-badge').textContent==='9+'`);await js(`setActiveTab('notes')`);
  const normalBadge=await js(`(()=>{const r=document.getElementById('home-inbox-badge').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})()`);
- const inboxFile=path.join(profile,'task-inbox.json'),intact=fs.readFileSync(inboxFile);fs.writeFileSync(inboxFile,'corrupt fixture');assert.equal((await send('cursor',{event_id:'fail'})).status,503);await until(`document.getElementById('home-inbox-badge').textContent==='!'`);
+ const inboxFile=path.join(profile,'task-inbox.json'),intact=fs.readFileSync(inboxFile);fs.writeFileSync(inboxFile,'corrupt fixture');assert.equal((await send('cursor',{event_id:'fail',title:'真实完成写入失败'})).status,503);await until(`document.getElementById('home-inbox-badge').textContent==='!'`);
  assert.deepEqual(await js(`(()=>{const r=document.getElementById('home-inbox-badge').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})()`),normalBadge,'N4: ! and 9+ have identical bounds');
  fs.writeFileSync(inboxFile,intact);await js('NotchTaskInbox.refresh()');await until(`document.getElementById('home-inbox').dataset.error!=='true'`);
  const saved=JSON.parse(fs.readFileSync(inboxFile));saved.records[0].source='gpt';fs.writeFileSync(inboxFile,JSON.stringify(saved));await js('NotchTaskInbox.refresh()');await js('NotchTaskInbox.refresh()');await until(`document.querySelector('.home-inbox-row')?.getAttribute('aria-label')?.startsWith('其他')`);

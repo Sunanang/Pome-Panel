@@ -1,11 +1,13 @@
 'use strict';
+const pomeLocaleRendererNasSyncMigration = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
+
 
 /**
  * Pure UI helpers for NAS sync migration (T5b).
  * No electron require — IPC via window.notchAPI.
  */
 (function initNasSyncMigration(global) {
-  const BANNER_TEXT = '迁移中，稍候';
+  const BANNER_TEXT = pomeLocaleRendererNasSyncMigration.t("copy.migratingPleaseWait.7aed12");
 
   function initialMigrationUiState() {
     return {
@@ -65,7 +67,7 @@
         next.readonly = false;
         next.bannerVisible = false;
         next.dialog = null;
-        next.toast = action.toast || '迁移完成';
+        next.toast = action.toast || pomeLocaleRendererNasSyncMigration.t("copy.migrationComplete.920d63");
         next.lastMigrationId = action.migrationId || next.lastMigrationId;
         return next;
       case 'skipped':
@@ -73,14 +75,14 @@
         next.readonly = false;
         next.bannerVisible = false;
         next.dialog = null;
-        next.toast = action.toast || '已进入同步';
+        next.toast = action.toast || pomeLocaleRendererNasSyncMigration.t("copy.syncEnabled.f1b086");
         return next;
       case 'failed':
         next.phase = 'failed';
         next.readonly = false;
         next.bannerVisible = false;
         next.dialog = null;
-        next.error = action.message || action.error || '迁移失败';
+        next.error = action.message || action.error || pomeLocaleRendererNasSyncMigration.t("copy.migrationFailed.35cda8");
         next.toast = next.error;
         next.lastMigrationId = action.migrationId || next.lastMigrationId;
         return next;
@@ -89,10 +91,10 @@
           id: 'migration-restore-confirm',
           role: 'dialog',
           controlId: 'migration.failed.restore',
-          title: '恢复上次迁移备份？',
-          body: '将用备份覆盖当前本地待办，此操作不可撤销。',
-          confirmLabel: '确认恢复',
-          cancelLabel: '取消',
+          title: pomeLocaleRendererNasSyncMigration.t("copy.restoreTheLastMigrationBackup.e76417"),
+          body: pomeLocaleRendererNasSyncMigration.t("copy.theBackupWillOverwriteCurrentLocalTasks.aa3737"),
+          confirmLabel: pomeLocaleRendererNasSyncMigration.t("copy.restore.51e44d"),
+          cancelLabel: pomeLocaleRendererNasSyncMigration.t("copy.cancel.2cd0f3"),
           choice: null,
         };
         return next;
@@ -114,21 +116,21 @@
     if (decision.decision === 'both_live_confirm' || decision.choiceKind === 'both_live') {
       const nas = decision.nas || {};
       const body = [
-        `本地 live：${decision.localLive || 0}`,
+        pomeLocaleRendererNasSyncMigration.t("copy.localLiveData.e31bc0", { arg1: (decision.localLive || 0) }),
         `NAS live：${nas.live || 0}`,
         `NAS serverRev：${nas.serverRev || 0}`,
-        nas.latestUpdatedAt ? `NAS 最新：${formatTime(nas.latestUpdatedAt)}` : null,
-        '请选择权威侧；另一侧将被覆盖。',
+        nas.latestUpdatedAt ? pomeLocaleRendererNasSyncMigration.t("copy.latestNasData.f96efe", { arg1: (formatTime(nas.latestUpdatedAt)) }) : null,
+        pomeLocaleRendererNasSyncMigration.t("copy.chooseTheAuthoritativeSideTheOtherSide.e96da7"),
       ].filter(Boolean).join('\n');
       return {
         id: 'migration-both-live',
         role: 'dialog',
         controlId: 'migration.both-live.confirm',
-        title: '两边都有内容',
+        title: pomeLocaleRendererNasSyncMigration.t("copy.bothSidesContainData.a4a06d"),
         body,
-        confirmLabel: '用本地',
-        altLabel: '用 NAS',
-        cancelLabel: '取消',
+        confirmLabel: pomeLocaleRendererNasSyncMigration.t("copy.useLocalData.818fb3"),
+        altLabel: pomeLocaleRendererNasSyncMigration.t("copy.useNasData.3c38f4"),
+        cancelLabel: pomeLocaleRendererNasSyncMigration.t("copy.cancel.2cd0f3"),
         choiceConfirm: 'use_local',
         choiceAlt: 'use_nas',
         allowDismiss: true,
@@ -139,10 +141,10 @@
         id: 'migration-history-empty',
         role: 'dialog',
         controlId: 'migration.history-empty.choice',
-        title: 'NAS 为历史清空库',
-        body: 'NAS 没有未删除的内容，但有删除历史。请选择恢复本地，或保持 NAS 删除结果。',
-        confirmLabel: '恢复本地',
-        cancelLabel: '保持 NAS 删除结果',
+        title: pomeLocaleRendererNasSyncMigration.t("copy.theNasHasAHistoryOfDeleted.de32a4"),
+        body: pomeLocaleRendererNasSyncMigration.t("copy.theNasHasNoLiveItemsBut.9cb2fc"),
+        confirmLabel: pomeLocaleRendererNasSyncMigration.t("copy.restoreLocalData.239b3d"),
+        cancelLabel: pomeLocaleRendererNasSyncMigration.t("copy.keepNasDeletions.4129ce"),
         choiceConfirm: 'restore_local',
         choiceCancel: 'keep_nas_deletes',
         allowDismiss: false,
@@ -154,7 +156,7 @@
   function formatTime(value) {
     if (typeof value === 'number') {
       try {
-        return new Date(value).toLocaleString();
+        return new Date(value).toLocaleString(pomeLocaleRendererNasSyncMigration.getState().formatLocale);
       } catch {
         return String(value);
       }
@@ -185,7 +187,7 @@
       const failure = {
         type: 'failed',
         error: (classified && classified.error) || 'classify_failed',
-        message: (classified && classified.message) || '无法判定迁移状态',
+        message: (classified && classified.message) || pomeLocaleRendererNasSyncMigration.t("copy.couldnTDetermineMigrationState.4d2f3f"),
       };
       emit(failure);
       return { ok: false, ...failure };
@@ -196,7 +198,7 @@
       const failure = {
         type: 'failed',
         error: 'local_corrupt',
-        message: decision.message || '本地待办损坏',
+        message: decision.message || pomeLocaleRendererNasSyncMigration.t("copy.localTaskDataIsDamaged.f42b61"),
       };
       emit(failure);
       return { ok: false, ...failure };
@@ -227,7 +229,7 @@
         emit({
           type: 'failed',
           error: 'cas_conflict',
-          message: '对端已变更，请重新判定',
+          message: pomeLocaleRendererNasSyncMigration.t("copy.theRemoteSideChangedCheckAgain.a12f81"),
           migrationId: result.migrationId,
         });
         return result;
@@ -235,7 +237,7 @@
       emit({
         type: 'failed',
         error: (result && result.error) || 'migration_failed',
-        message: (result && result.message) || '迁移失败',
+        message: (result && result.message) || pomeLocaleRendererNasSyncMigration.t("copy.migrationFailed.35cda8"),
         migrationId: result && result.migrationId,
       });
       return result || { ok: false, error: 'migration_failed' };

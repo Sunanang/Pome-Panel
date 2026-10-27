@@ -1,3 +1,4 @@
+const { assertCopy, keyFor } = require('./helpers/localized-copy.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -36,7 +37,8 @@ test('homepage exposes an explicit layout editor with all four card sizes', () =
   assert.match(html, /data-home-ctx-size="small"/);
   assert.match(html, /data-home-ctx-size="medium"/);
   assert.match(html, /data-home-ctx-size="large"/);
-  assert.match(appJs, /HOME_SIZE_LABELS\s*=\s*\{\s*mini:\s*'迷你',\s*small:\s*'小',\s*medium:\s*'中',\s*large:\s*'大'\s*\}/);
+  assert.match(appJs, /HOME_SIZE_LABELS/);
+  for (const label of ['迷你', '小', '中', '大']) assertCopy(appJs, label);
   assert.match(appJs, /\[data-widget-drag-handle\]/);
 });
 
@@ -75,7 +77,7 @@ test('settings exposes exactly one switch for every homepage widget', () => {
   const switches = [...html.matchAll(/data-settings-home-module="([^"]+)"/g)]
     .map((match) => match[1]);
   assert.deepEqual(switches, [
-    'music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'windows', 'mirror', 'note', 'commands', 'sun',
+    'music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'windows', 'mirror', 'note', 'commands', 'sun', 'almanac',
   ]);
   assert.match(workspaceJs, /isRecordingActive/);
   assert.match(workspaceJs, /recording_active/);

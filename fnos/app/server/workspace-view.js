@@ -6,15 +6,65 @@
  */
 
 const { decryptJson, isSealedPayload } = require('../packages/sync-protocol');
+const { createHash } = require('node:crypto');
 
 const TODO_LABELS = Object.freeze({
   P0: '课程',
   P1: '自媒体&写作',
   P2: 'Vibe coding',
   P3: '日常',
+  P4: '分类 5',
+  P5: '分类 6',
+  P6: '分类 7',
+  P7: '分类 8',
 });
 
 const AUDIO_MIMES = new Set(['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/x-m4a']);
+const AUDIO_MAX_BYTES = 6 * 1024 * 1024;
+const AUDIO_MAX_CHUNKS = 12;
+const audioChecks = new WeakMap();
+
+function recordingSource(payload, byId, recordingId) {
+  if (!payload || payload.audioOmitted === true) return null;
+  let parts;
+  if (typeof payload.audioBase64 === 'string' && payload.audioBase64) parts = [payload.audioBase64];
+  else {
+    const chunks = payload.audioChunks;
+    if (!Number.isSafeInteger(chunks) || chunks < 1 || chunks > AUDIO_MAX_CHUNKS) return null;
+    parts = [];
+    for (let index = 0; index < chunks; index++) {
+      const data = byId.get(`recording-blob:${recordingId}:${index}`)?.payload?.data;
+      if (typeof data !== 'string' || !data) return null;
+      parts.push(data);
+    }
+  }
+  // Bound decoding before allocation, including legacy rows with no checksum.
+  if (parts.reduce((bytes, part) => bytes + part.length, 0) > Math.ceil(AUDIO_MAX_BYTES / 3) * 4 + AUDIO_MAX_CHUNKS * 4) return null;
+  return { parts, checksum: payload.audioSha256 || '' };
+}
+
+function recordingBytes(source) {
+  if (!source) return null;
+  const parts = source.parts.map(part => Buffer.from(part, 'base64'));
+  const size = parts.reduce((bytes, part) => bytes + part.length, 0);
+  if (!size || size > AUDIO_MAX_BYTES || parts.some(part => !part.length)) return null;
+  const bytes = Buffer.concat(parts);
+  if (source.checksum && createHash('sha256').update(bytes).digest('hex') !== source.checksum) return null;
+  return bytes;
+}
+
+function hasRecordingAudio(payload, byId, recordingId) {
+  const source = recordingSource(payload, byId, recordingId);
+  if (!source) return false;
+  const cached = audioChecks.get(payload);
+  if (cached && cached.checksum === source.checksum && cached.parts.length === source.parts.length
+    && cached.parts.every((part, index) => part === source.parts[index])) return cached.valid;
+  const valid = Boolean(recordingBytes(source));
+  // Workspace payloads are immutable between sync writes. Cache only the check,
+  // not decoded audio, so metadata refreshes do not repeatedly hash all media.
+  audioChecks.set(payload, { ...source, valid });
+  return valid;
+}
 
 function clipText(value, limit) {
   const text = value == null ? '' : String(value);
@@ -39,6 +89,7 @@ function openSealed(payload, accountKey) {
 }
 
 function buildWorkspaceView(entities, accountKey) {
+  const byId = new Map((entities || []).filter(entity => entity?.entityId).map(entity => [String(entity.entityId), entity]));
   const notes = { home: '', activeId: '', archive: [] };
   const clipboard = [];
   const favorites = new Set();
@@ -96,8 +147,6 @@ function buildWorkspaceView(entities, accountKey) {
 
     if (collection === 'recordings') {
       if (id.startsWith('recording-blob:')) continue;
-      const hasInline = typeof payload.audioBase64 === 'string' && payload.audioBase64.length > 0;
-      const chunks = Number(payload.audioChunks) || 0;
       recordings.push({
         id: String(payload.id || id.slice('recording:'.length)),
         title: String(payload.title || '录音'),
@@ -106,7 +155,7 @@ function buildWorkspaceView(entities, accountKey) {
         durationMs: Math.max(0, Number(payload.durationMs) || 0),
         mimeType: String(payload.mimeType || 'audio/webm'),
         createdAt: Number(payload.createdAt) || 0,
-        hasAudio: hasInline || chunks > 0,
+        hasAudio: hasRecordingAudio(payload, byId, String(payload.id || id.slice('recording:'.length))),
         audioOmitted: payload.audioOmitted === true,
       });
       continue;
@@ -246,20 +295,9 @@ function buildWorkspaceMedia(entities, entityId) {
     const entity = byId.get(id);
     const payload = entity && entity.payload;
     if (!payload) return null;
-    if (typeof payload.audioBase64 === 'string' && payload.audioBase64) {
-      return { mime: safeAudioMime(payload.mimeType), bytes: Buffer.from(payload.audioBase64, 'base64') };
-    }
-    const chunks = Number(payload.audioChunks) || 0;
-    if (!chunks) return null;
     const recordingId = String(payload.id || id.slice('recording:'.length));
-    const parts = [];
-    for (let index = 0; index < chunks; index += 1) {
-      const blob = byId.get(`recording-blob:${recordingId}:${index}`);
-      const data = blob && blob.payload && blob.payload.data;
-      if (typeof data !== 'string' || !data) return null;
-      parts.push(Buffer.from(data, 'base64'));
-    }
-    return { mime: safeAudioMime(payload.mimeType), bytes: Buffer.concat(parts) };
+    const bytes = recordingBytes(recordingSource(payload, byId, recordingId));
+    return bytes ? { mime: safeAudioMime(payload.mimeType), bytes } : null;
   }
   return null;
 }

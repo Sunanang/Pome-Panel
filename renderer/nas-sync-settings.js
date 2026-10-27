@@ -1,4 +1,6 @@
 'use strict';
+const pomeLocaleRendererNasSyncSettings = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
+
 
 /**
  * Pure UI helpers for NAS sync settings (T6): status bar, endpoint editor, HTTP toggle.
@@ -15,7 +17,7 @@
       syncStatus: null,
       outboxCount: 0,
       uiState: 'unbound',
-      uiLabel: '未配对',
+      uiLabel: pomeLocaleRendererNasSyncSettings.t("copy.notPaired.af18b2"),
       channelLabel: '',
       lastSuccessLabel: '',
       insecureWarningVisible: false,
@@ -40,7 +42,7 @@
   function formatTime(ts) {
     if (!ts) return '—';
     try {
-      return new Date(ts).toLocaleString();
+      return new Date(ts).toLocaleString(pomeLocaleRendererNasSyncSettings.getState().formatLocale);
     } catch {
       return '—';
     }
@@ -116,7 +118,7 @@
       case 'failure':
         next.busy = false;
         next.testingId = null;
-        next.error = action.message || '操作失败';
+        next.error = action.message || pomeLocaleRendererNasSyncSettings.t("copy.operationFailed.0c3b4c");
         return next;
       case 'open_dialog':
         next.dialog = action.dialog || null;
@@ -137,10 +139,10 @@
       id: 'endpoint-http-confirm',
       controlId: HTTP_CONFIRM_CONTROL_ID,
       role: 'dialog',
-      title: '允许明文 HTTP',
-      body: '该地址不加密，设备令牌与待办内容可能被窃听或篡改。确认允许明文 HTTP？',
-      confirmLabel: '允许 HTTP',
-      cancelLabel: '取消',
+      title: pomeLocaleRendererNasSyncSettings.t("copy.allowUnencryptedHttp.2a5751"),
+      body: pomeLocaleRendererNasSyncSettings.t("copy.thisAddressIsNotEncryptedDeviceTokens.b46cf6"),
+      confirmLabel: pomeLocaleRendererNasSyncSettings.t("copy.allowHttp.67a9d8"),
+      cancelLabel: pomeLocaleRendererNasSyncSettings.t("copy.cancel.2cd0f3"),
     };
   }
 
@@ -149,10 +151,10 @@
       id: 'endpoint-delete-confirm',
       controlId: DELETE_CONFIRM_CONTROL_ID,
       role: 'dialog',
-      title: '删除 endpoint',
-      body: `确认删除 ${endpoint && endpoint.baseUrl ? endpoint.baseUrl : '该地址'}？\n若该地址用过设备令牌，可能已泄漏，建议随后吊销并重新配对。`,
-      confirmLabel: '删除',
-      cancelLabel: '取消',
+      title: pomeLocaleRendererNasSyncSettings.t("copy.deleteEndpoint.ef1469"),
+      body: pomeLocaleRendererNasSyncSettings.t("copy.deleteADeviceTokenUsedWithThis.d96849", { arg1: (endpoint && endpoint.baseUrl ? endpoint.baseUrl : pomeLocaleRendererNasSyncSettings.t("copy.thisAddress.230f20")) }),
+      confirmLabel: pomeLocaleRendererNasSyncSettings.t("copy.delete.2f9daa"),
+      cancelLabel: pomeLocaleRendererNasSyncSettings.t("copy.cancel.2cd0f3"),
       endpointId: endpoint && endpoint.endpointId,
     };
   }
@@ -162,30 +164,30 @@
       id: 'restore-backup-confirm',
       controlId: RESTORE_CONFIRM_CONTROL_ID,
       role: 'dialog',
-      title: '恢复上次迁移备份',
-      body: '将用上次迁移备份覆盖当前本地待办。此操作不可撤销，确认继续？',
-      confirmLabel: '恢复备份',
-      cancelLabel: '取消',
+      title: pomeLocaleRendererNasSyncSettings.t("copy.restoreTheLastMigrationBackup.93b935"),
+      body: pomeLocaleRendererNasSyncSettings.t("copy.theLastMigrationBackupWillOverwriteCurrent.24876d"),
+      confirmLabel: pomeLocaleRendererNasSyncSettings.t("copy.restoreBackup.1ae486"),
+      cancelLabel: pomeLocaleRendererNasSyncSettings.t("copy.cancel.2cd0f3"),
     };
   }
 
   function validateBaseUrlDraft(value) {
     const raw = String(value || '').trim();
-    if (!raw) return { ok: false, error: 'empty', message: '请输入 Base URL' };
+    if (!raw) return { ok: false, error: 'empty', message: pomeLocaleRendererNasSyncSettings.t("copy.enterABaseUrl.3c263f") };
     try {
       const url = new URL(raw);
       if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        return { ok: false, error: 'unsupported_protocol', message: '仅支持 http/https' };
+        return { ok: false, error: 'unsupported_protocol', message: pomeLocaleRendererNasSyncSettings.t("copy.onlyHttpAndHttpsAreSupported.dc41cb") };
       }
       if (url.username || url.password) {
-        return { ok: false, error: 'credentials_not_allowed', message: 'URL 不得含账号密码' };
+        return { ok: false, error: 'credentials_not_allowed', message: pomeLocaleRendererNasSyncSettings.t("copy.theUrlMustNotContainAUsername.804dbd") };
       }
       if (url.search || url.hash) {
-        return { ok: false, error: 'query_or_fragment_not_allowed', message: 'URL 不得含查询或片段' };
+        return { ok: false, error: 'query_or_fragment_not_allowed', message: pomeLocaleRendererNasSyncSettings.t("copy.theUrlMustNotContainAQuery.b26b29") };
       }
       return { ok: true, baseUrl: raw };
     } catch {
-      return { ok: false, error: 'invalid_url', message: 'URL 无效' };
+      return { ok: false, error: 'invalid_url', message: pomeLocaleRendererNasSyncSettings.t("copy.invalidUrl.d92df2") };
     }
   }
 
@@ -196,7 +198,7 @@
     const check = validateBaseUrlDraft(opts.baseUrl);
     if (!check.ok) return { ok: false, error: check.error, message: check.message };
     if (!opts.api || typeof opts.api.syncAddEndpoint !== 'function') {
-      return { ok: false, error: 'api_unavailable', message: '同步 API 不可用' };
+      return { ok: false, error: 'api_unavailable', message: pomeLocaleRendererNasSyncSettings.t("copy.syncApiUnavailable.af98a6") };
     }
     return opts.api.syncAddEndpoint({
       baseUrl: check.baseUrl,
@@ -238,33 +240,33 @@
   }
 
   const SYNC_ERROR_COPY = {
-    not_bound: '请先完成配对再同步',
-    binding_incomplete: '配对信息不完整，请重新配对',
-    missing_endpoint: '请先添加同步地址',
-    not_found: '找不到该 endpoint',
-    endpoint_id_required: '缺少 endpoint',
-    duplicate_endpoint: '该地址已存在',
-    disabled_by_policy: '已停用：需改为 HTTPS 或重新开启 HTTP 开关',
-    https_on_http: '该地址说的是 HTTP，不是 HTTPS。请把 Base URL 改为 http://…',
-    certificate_error: '证书不受信任。请在配对时核对指纹并确认；只信任该主机和端口的这一张证书',
-    certificate_fingerprint_mismatch: '证书已更换，请重新核对指纹后再信任',
-    timeout: '连接超时。请逐项检查：① 若 NAS 同步端口是明文 HTTP，请使用 http:// 而不是 https://；② 端口是 Pome Panel Sync 页面上的「设备同步端口」，且端口转发或 frp 等映射到该端口；③ 本机能够访问这台 NAS（优先试局域网 IP）。',
-    remote_closed: '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。',
-    connection_refused: '连不上同步端口。请确认飞牛应用正在运行，并且 FRP 或局域网指向当前的设备同步端口。',
-    ECONNRESET: '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。',
-    UND_ERR_SOCKET: '已经连上这台主机，但后面的同步服务没有回应就断开了。请确认飞牛应用正在运行，FRP 或局域网指向当前的设备同步端口；明文映射请用 http://，不要用 https://。',
-    ECONNREFUSED: '连不上同步端口。请确认飞牛应用正在运行，并且 FRP 或局域网指向当前的设备同步端口。',
-    invalid_url: 'URL 无效',
-    invalid_json: '服务器返回无法解析',
-    write_failed: '写入失败',
-    api_unavailable: '同步 API 不可用',
-    list_failed: '读取设备列表失败',
-    revoke_failed: '吊销失败',
-    invalid_revoke: '无法吊销该设备',
-    network_error: '网络不可用',
+    get not_bound() { return pomeLocaleRendererNasSyncSettings.t("copy.pairThisDeviceBeforeSyncing.5b7d9c"); },
+    get binding_incomplete() { return pomeLocaleRendererNasSyncSettings.t("copy.pairingInformationIsIncompletePairAgain.19121d"); },
+    get missing_endpoint() { return pomeLocaleRendererNasSyncSettings.t("copy.addASyncAddressFirst.d9a086"); },
+    get not_found() { return pomeLocaleRendererNasSyncSettings.t("copy.endpointNotFound.6b9856"); },
+    get endpoint_id_required() { return pomeLocaleRendererNasSyncSettings.t("copy.endpointMissing.7fbeac"); },
+    get duplicate_endpoint() { return pomeLocaleRendererNasSyncSettings.t("copy.thisAddressAlreadyExists.1f7891"); },
+    get disabled_by_policy() { return pomeLocaleRendererNasSyncSettings.t("copy.disabledUseHttpsOrAllowHttpAgain.bded2b"); },
+    get https_on_http() { return pomeLocaleRendererNasSyncSettings.t("copy.thisAddressUsesHttpNotHttpsChange.d61e18"); },
+    get certificate_error() { return pomeLocaleRendererNasSyncSettings.t("copy.certificateNotTrustedVerifyItsFingerprintDuring.4bae6f"); },
+    get certificate_fingerprint_mismatch() { return pomeLocaleRendererNasSyncSettings.t("copy.theCertificateChangedVerifyItsFingerprintBefore.6af6df"); },
+    get timeout() { return pomeLocaleRendererNasSyncSettings.t("copy.connectionTimedOutCheckUseHttpFor.6fedf7"); },
+    get remote_closed() { return pomeLocaleRendererNasSyncSettings.t("copy.theHostWasReachedButTheSync.1bab4e"); },
+    get connection_refused() { return pomeLocaleRendererNasSyncSettings.t("copy.canTReachTheSyncPortCheck.3a3a3e"); },
+    get ECONNRESET() { return pomeLocaleRendererNasSyncSettings.t("copy.theHostWasReachedButTheSync.1bab4e"); },
+    get UND_ERR_SOCKET() { return pomeLocaleRendererNasSyncSettings.t("copy.theHostWasReachedButTheSync.1bab4e"); },
+    get ECONNREFUSED() { return pomeLocaleRendererNasSyncSettings.t("copy.canTReachTheSyncPortCheck.3a3a3e"); },
+    get invalid_url() { return pomeLocaleRendererNasSyncSettings.t("copy.invalidUrl.d92df2"); },
+    get invalid_json() { return pomeLocaleRendererNasSyncSettings.t("copy.couldnTParseTheServerResponse.e2fabb"); },
+    get write_failed() { return pomeLocaleRendererNasSyncSettings.t("copy.writeFailed.f11e4f"); },
+    get api_unavailable() { return pomeLocaleRendererNasSyncSettings.t("copy.syncApiUnavailable.af98a6"); },
+    get list_failed() { return pomeLocaleRendererNasSyncSettings.t("copy.couldnTReadTheDeviceList.ff9bc1"); },
+    get revoke_failed() { return pomeLocaleRendererNasSyncSettings.t("copy.revocationFailed.eb0d97"); },
+    get invalid_revoke() { return pomeLocaleRendererNasSyncSettings.t("copy.canTRevokeThisDevice.0b0e36"); },
+    get network_error() { return pomeLocaleRendererNasSyncSettings.t("copy.networkUnavailable.35b379"); },
   };
 
-  const LOST_DEVICE_TOKEN_HINT = '本机曾配置同步地址，但设备令牌已丢失，请重新配对';
+  const LOST_DEVICE_TOKEN_HINT = pomeLocaleRendererNasSyncSettings.t("copy.thisDeviceHasASavedSyncAddress.fc3a23");
 
   function connectionEndpoints(view, status) {
     const endpoints = view?.endpoints || [];
@@ -280,15 +282,15 @@
   }
 
   function contentResultRows(results, bound) {
-    const names = ['待办', '笔记', '链接', '常用指令', '剪贴板', '录音元数据', '录音音频', 'AI 配置', '密钥'];
+    const names = ['待办', '笔记', '链接', '常用指令', '剪贴板', 'AI 完成', '录音元数据', '录音音频', 'AI 配置', '密钥'];
     for (const name of Object.keys(results || {})) if (!names.includes(name)) names.push(name);
     return names.map(name => {
       const row = bound ? results?.[name] : null;
       const date = row?.at ? new Date(row.at) : null;
       const valid = date && Number.isFinite(date.getTime());
-      return { name, message: row?.message || (bound ? '尚未完成首次资料同步' : '仅本机 · 未配对 NAS'),
+      return { name: pomeLocaleRendererNasSyncSettings.systemText(name), message: (row?.messageDescriptor ? pomeLocaleRendererNasSyncSettings.systemText(row.messageDescriptor) : row?.message ? pomeLocaleRendererNasSyncSettings.systemText(row.message) : null) || (bound ? pomeLocaleRendererNasSyncSettings.t("copy.initialDataSyncIsNotComplete.62dc6e") : pomeLocaleRendererNasSyncSettings.t("copy.localOnlyNasNotPaired.d36c6c")),
         ok: row?.ok, at: valid ? row.at : null,
-        time: valid ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—' };
+        time: valid ? date.toLocaleTimeString(pomeLocaleRendererNasSyncSettings.getState().formatLocale, { hour: '2-digit', minute: '2-digit' }) : '—' };
     });
   }
 
@@ -324,8 +326,8 @@
    * User-facing sync failure. Known codes become Chinese; unknown raw codes
    * fall back instead of being shown (for example `not_bound`).
    */
-  function humanizeSyncError(result, fallback = '操作失败') {
-    const fallbackText = fallback || '操作失败';
+  function humanizeSyncError(result, fallback = pomeLocaleRendererNasSyncSettings.t("copy.operationFailed.0c3b4c")) {
+    const fallbackText = fallback || pomeLocaleRendererNasSyncSettings.t("copy.operationFailed.0c3b4c");
     if (result == null || result === '') return fallbackText;
     if (typeof result === 'string') {
       return SYNC_ERROR_COPY[result]
@@ -338,7 +340,7 @@
     const message = result.message;
     const fromMessage = transportFailureCopy(message);
     if (fromMessage) return fromMessage;
-    if (message && !isRawErrorCode(message)) return message;
+    if (message && !isRawErrorCode(message)) return pomeLocaleRendererNasSyncSettings.systemText(message);
     return fallbackText;
   }
 

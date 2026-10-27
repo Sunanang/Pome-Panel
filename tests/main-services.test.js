@@ -76,7 +76,7 @@ test('first-run auto-launch only fires for a genuinely fresh install', () => {
   assert.equal(firstRunAutoLaunchPlan().reason, 'unsupported');
 });
 
-test('media permission prompts temporarily leave the screen-saver window layer', async () => {
+test('media permission prompts temporarily lower the panel and restore its normal floating layer', async () => {
   const events = [];
   let alwaysOnTop = true;
   const owner = {
@@ -110,19 +110,20 @@ test('media permission prompts temporarily leave the screen-saver window layer',
     ['activate'],
     ['focus'],
     ['request', false],
-    ['top', true, 'screen-saver'],
+    ['top', true, 'floating'],
     ['track', -1],
   ]);
 });
 
 test('media permission prompts restore the window layer when the system request fails', async () => {
   let alwaysOnTop = true;
+  let restoredLevel;
   const deltas = [];
   const owner = {
     isDestroyed: () => false,
     isVisible: () => true,
     isAlwaysOnTop: () => alwaysOnTop,
-    setAlwaysOnTop(value) { alwaysOnTop = value; },
+    setAlwaysOnTop(value, level) { alwaysOnTop = value; if (value) restoredLevel = level; },
     focus() {},
   };
 
@@ -136,17 +137,19 @@ test('media permission prompts restore the window layer when the system request 
   }), /permission service failed/);
 
   assert.equal(alwaysOnTop, true);
+  assert.equal(restoredLevel, 'floating');
   assert.deepEqual(deltas, [1, -1]);
 });
 
 test('overlapping media prompts stay below system UI until every request settles', async () => {
   let alwaysOnTop = true;
+  const restoredLevels = [];
   const deltas = [];
   const releases = [];
   const owner = {
     isDestroyed: () => false,
     isAlwaysOnTop: () => alwaysOnTop,
-    setAlwaysOnTop(value) { alwaysOnTop = value; },
+    setAlwaysOnTop(value, level) { alwaysOnTop = value; if (value) restoredLevels.push(level); },
     focus() {},
   };
   const coordinator = createForegroundMediaPermissionCoordinator({
@@ -163,11 +166,13 @@ test('overlapping media prompts stay below system UI until every request settles
   releases[0](true);
   assert.equal(await camera, true);
   assert.equal(alwaysOnTop, false, 'the second system prompt is still awaiting a decision');
+  assert.deepEqual(restoredLevels, []);
   assert.deepEqual(deltas, [1, 1, -1]);
 
   releases[1](false);
   assert.equal(await microphone, false);
   assert.equal(alwaysOnTop, true);
+  assert.deepEqual(restoredLevels, ['floating']);
   assert.deepEqual(deltas, [1, 1, -1, -1]);
 });
 
@@ -416,6 +421,9 @@ test('WIN_NATIVE_DEFAULT stays off until the antivirus gate (D16) passes', () =>
   assert.equal(appSettingsLayoutPreferences({}).winNative, WIN_NATIVE_DEFAULT);
   assert.equal(appSettingsLayoutPreferences({ winNative: true }).winNative, true);
   assert.equal(appSettingsLayoutPreferences({ winNative: false }).winNative, false);
+  assert.equal(appSettingsLayoutPreferences({}).taskNotifications, true);
+  assert.equal(appSettingsLayoutPreferences({ taskNotifications: false }).taskNotifications, false);
+  assert.equal(appSettingsLayoutPreferences({ taskNotifications: true }).taskNotifications, true);
 });
 
 test('todoReminderState fires once within the final hour and expires after the DDL', () => {
@@ -467,7 +475,16 @@ test('task notification identifies the repository and concrete finished work', (
   // 记录文件还没落盘时标题为空，各来源要退回自己的兜底文案。
   assert.equal(taskNotificationIdentity({ cwd: '/tmp/demo' }, 'claude').title, 'Claude 已完成任务');
   assert.equal(taskNotificationIdentity({ cwd: '/tmp/demo' }, 'codex').title, 'Codex 已完成任务');
-  assert.equal(taskNotificationIdentity({ cwd: '/tmp/demo' }, 'todo').title, '任务已完成');
+  assert.equal(taskNotificationIdentity({ cwd: '/tmp/demo' }, 'todo').title, '待办即将截止');
+});
+
+test('notification identity normalizes source fallbacks and Windows project paths', () => {
+  assert.equal(taskNotificationIdentity({}, 'CODEX').title, 'Codex 已完成任务');
+  assert.equal(taskNotificationIdentity({}, 'Claude Code').title, 'Claude 已完成任务');
+  assert.equal(taskNotificationIdentity({ status: 'failed' }, 'cursor').title, 'Cursor任务出错');
+  assert.equal(taskNotificationIdentity({ status: 'awaiting' }, 'claude').title, 'Claude等待确认');
+  assert.equal(taskNotificationIdentity({ cwd: 'C:\\Users\\Lando\\Pome-Panel' }, 'cursor').project, 'Pome-Panel');
+  assert.equal(taskNotificationIdentity({ 'last-assistant-message': '# 修复崩溃', title: '任务已完成' }, 'codex').title, '修复崩溃');
 });
 
 test('credential input trims metadata but preserves password bytes and rejects incomplete records', () => {
@@ -806,4 +823,19 @@ test('Soda Music play uses the play/pause toggle instead of the next-track key',
   assert.deepEqual(sodaShortcutSpec('previous'), { keyCode: 123, command: true, dismissOverlays: true });
   assert.notDeepEqual(sodaShortcutSpec('play'), sodaShortcutSpec('next'));
   assert.equal(sodaShortcutSpec('invalid'), null);
+});
+
+test('completion titles skip boilerplate and retain meaningful long text until UI truncation', () => {
+  const long = '修复窗口布局与数据同步。'.repeat(30);
+  assert.equal(taskNotificationIdentity({ last_assistant_message: `# 已完成\n\n${long}` }, 'codex').title, long);
+  assert.equal(taskNotificationIdentity({ title: '已完成' }, 'cursor').title, 'Cursor 已完成任务');
+  assert.equal(Array.from(taskNotificationIdentity({ title: '😀'.repeat(5000) }, 'claude').title).length, 4096);
+});
+
+test('native conversation title and multiline completion summary stay separate', () => {
+  const { taskNotificationContent } = require('../main-services');
+  const summary = '已完成\n\n修复布局。\n测试通过。';
+  const content = taskNotificationContent({ completionSummary: summary, session_title: '首页改版', project: 'Done' }, 'codex');
+  assert.equal(content.title, '修复布局。'); assert.equal(content.project, 'Done');
+  assert.equal(content.sessionTitle, '首页改版'); assert.equal(content.completionSummary, summary);
 });

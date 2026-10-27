@@ -1,3 +1,4 @@
+const { assertCopy, keyFor } = require('./helpers/localized-copy.cjs');
 'use strict';
 
 const test = require('node:test');
@@ -25,7 +26,7 @@ test('A.3 HTTP toggle markup + confirm dialog roles (S3)', () => {
   assert.match(css, /var\(--accent-orange\)/);
   assert.match(workspaceJs, /data-nas-http-toggle/);
   assert.match(workspaceJs, /buildHttpConfirmDialog/);
-  assert.match(workspaceJs, /允许明文 HTTP/);
+  assertCopy(workspaceJs, '允许明文 HTTP（不安全）');
 });
 
 test('HTTP confirm dialog copy mentions eavesdrop/tamper risk', () => {

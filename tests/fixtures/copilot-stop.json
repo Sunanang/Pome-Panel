@@ -1,0 +1,8 @@
+{
+  "sessionId": "copilot-session",
+  "timestamp": 1792458000000,
+  "cwd": "/tmp/workspace",
+  "transcriptPath": "/tmp/workspace/events.jsonl",
+  "stopReason": "end_turn",
+  "stop_hook_active": false
+}

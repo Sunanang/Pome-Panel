@@ -132,6 +132,8 @@ function post(payload) {
 async function main() {
   // 云端 / Web 会话里 127.0.0.1 不是这台 Mac，直接放弃。
   if (String(process.env.CLAUDE_CODE_REMOTE || '').toLowerCase() === 'true') return;
+  // Grok Build also loads Claude hooks; leave those sessions to grok-notify.
+  if (process.env.GROK_HOOK_EVENT) return;
 
   let payload;
   try {
@@ -154,6 +156,8 @@ async function main() {
 
   await post({
     source: 'claude',
+    hook_event_name: 'Stop',
+    status: payload.status,
     sender_pid: process.pid,
     session_id: typeof payload.session_id === 'string' ? payload.session_id : '',
     cwd: typeof payload.cwd === 'string' ? payload.cwd : '',

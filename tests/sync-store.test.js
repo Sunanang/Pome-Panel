@@ -87,23 +87,30 @@ test('bound startup: workspace.json hydrate then SQLite projection wins', () => 
     },
   };
 
+  const emptyExtra = { P4: [], P5: [], P6: [], P7: [] };
   const staleTodos = JSON.stringify({
     P0: [{ id: 'stale', text: 'from-workspace', done: false, createdAt: 1, deadline: '', remindedAt: 0 }],
     P1: [],
     P2: [],
     P3: [],
+    ...emptyExtra,
   });
   const liveTodos = JSON.stringify({
     P0: [{ id: 'live', text: 'from-sqlite', done: false, createdAt: 2, deadline: '', remindedAt: 0 }],
     P1: [],
     P2: [],
     P3: [],
+    ...emptyExtra,
   });
   const categoryNames = JSON.stringify({
     P0: '课程',
     P1: '自媒体&写作',
     P2: 'Vibe coding',
     P3: '日常',
+    P4: '分类 5',
+    P5: '分类 6',
+    P6: '分类 7',
+    P7: '分类 8',
   });
 
   applyStartupHydrationOrder({
@@ -133,7 +140,7 @@ test('unbound startup: hydrate only; no SQLite overwrite', () => {
       bag.set(key, value);
     },
   };
-  const staleTodos = JSON.stringify({ P0: [], P1: [], P2: [], P3: [] });
+  const staleTodos = JSON.stringify({ P0: [], P1: [], P2: [], P3: [], P4: [], P5: [], P6: [], P7: [] });
   applyStartupHydrationOrder({
     bound: false,
     workspaceSnapshot: { [TODO_STORAGE_KEY]: staleTodos },

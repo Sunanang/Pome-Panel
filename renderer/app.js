@@ -1,11 +1,22 @@
+const pomeLocaleRendererApp = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 const STORAGE_KEY = 'notch-todo-data';
-const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
+const PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
 const TODO_CATEGORY_KEY = 'notch-todo-category-names-v1';
+const TODO_CATEGORY_ORDER_KEY = 'notch-todo-category-order-v1';
+const TODO_CATEGORY_DEFAULT_ORDER = ['P0', 'P1', 'P2', 'P3'];
 const TODO_CATEGORY_DEFAULTS = {
-  P0: '课程',
-  P1: '自媒体&写作',
+  get P0() { return pomeLocaleRendererApp.t("copy.courses.60db1a"); },
+  get P1() { return pomeLocaleRendererApp.t("copy.mediaWriting.4672dc"); },
   P2: 'Vibe coding',
-  P3: '日常',
+  get P3() { return pomeLocaleRendererApp.t("copy.dailyLife.f648d6"); },
+  get P4() { return pomeLocaleRendererApp.t('todo.categoryDefault', { number: 5 }); },
+  get P5() { return pomeLocaleRendererApp.t('todo.categoryDefault', { number: 6 }); },
+  get P6() { return pomeLocaleRendererApp.t('todo.categoryDefault', { number: 7 }); },
+  get P7() { return pomeLocaleRendererApp.t('todo.categoryDefault', { number: 8 }); },
+};
+const TODO_DOT_CLASS = {
+  P0: 'dot-p0', P1: 'dot-p1', P2: 'dot-p2', P3: 'dot-p3',
+  P4: 'dot-p4', P5: 'dot-p5', P6: 'dot-p6', P7: 'dot-p7',
 };
 
 const app = document.getElementById('app');
@@ -52,11 +63,17 @@ function applyTodosSyncProjectionPayload(projection) {
     localStorage.setItem(TODO_CATEGORY_KEY, categoryNamesJson);
     data = loadData();
     todoCategoryNames = loadTodoCategoryNames();
-    PRIORITIES.forEach((priority) => {
-      if (typeof renderList === 'function') renderList(priority);
-      if (typeof updateCount === 'function') updateCount(priority);
-    });
-    if (typeof applyTodoCategoryNames === 'function') applyTodoCategoryNames();
+    if (typeof reconcileTodoCategoryOrderFromData === 'function') {
+      reconcileTodoCategoryOrderFromData();
+    }
+    if (typeof renderTodoBoard === 'function') renderTodoBoard();
+    else {
+      PRIORITIES.forEach((priority) => {
+        if (typeof renderList === 'function') renderList(priority);
+        if (typeof updateCount === 'function') updateCount(priority);
+      });
+      if (typeof applyTodoCategoryNames === 'function') applyTodoCategoryNames();
+    }
   } finally {
     applyingSyncTodosProjection = false;
   }
@@ -117,11 +134,29 @@ async function hydratePortableWorkspace() {
     ]);
     workspacePersistenceRoot = workspace.path;
     const previousRoot = localStorage.getItem('notch-workspace-root');
-    if (previousRoot && previousRoot !== workspace.path) {
+    const replacingWorkspace = sessionStorage.getItem('notch-workspace-replace') === '1';
+    const movedDefault = !replacingWorkspace && workspace.previousDefaultPath
+      && (!previousRoot || previousRoot === workspace.previousDefaultPath);
+    if (previousRoot && previousRoot !== workspace.path && !movedDefault) {
       sessionStorage.removeItem('notch-workspace-hydrated');
       sessionStorage.setItem('notch-workspace-replace', '1');
     }
     let imported = false;
+    if (movedDefault) {
+      // Keep the latest copied browser storage, which can be newer than the
+      // last workspace.json snapshot. Rebase media references before reloading.
+      for (const [key, field, directory] of [['notch-recordings', 'audioPath', 'recordings'], ['notch-clip-history', 'imagePath', 'clipboard-images']]) {
+        try {
+          const rows = JSON.parse(localStorage.getItem(key));
+          if (!Array.isArray(rows)) continue;
+          localStorage.setItem(key, JSON.stringify(rows.map(row => row && row[field]
+            ? { ...row, [field]: window.NotchPlatform.portableMediaPath(directory, row[field]) } : row)));
+        } catch {}
+      }
+      sessionStorage.removeItem('notch-workspace-replace');
+      localStorage.setItem('notch-workspace-root', workspace.path);
+      imported = true;
+    }
     if (sessionStorage.getItem('notch-workspace-hydrated') !== '1' && snapshot && typeof snapshot === 'object') {
       const replace = sessionStorage.getItem('notch-workspace-replace') === '1';
       if (replace) {
@@ -147,6 +182,11 @@ async function hydratePortableWorkspace() {
       return;
     }
     localStorage.setItem('notch-workspace-root', workspace.path);
+    // Wait until workspace import has finished: writing empty history earlier
+    // would mask persisted keys that hydration only imports when absent.
+    pruneClipHistory();
+    renderClipList();
+    renderClipFavs();
     // Bound startup: hydratePortableWorkspace → SQLite projection overrides workspace.
     await hydrateTodosSyncProjectionAfterWorkspace();
     workspacePersistenceTimer = setInterval(() => {
@@ -200,6 +240,12 @@ function dismissStatusToast(commitPending = true) {
 }
 
 function showStatusToast(message, options = {}) {
+  // Callers choose persistent failures explicitly; wording and locale do not decide.
+  if (options.kind === 'error' && !options.onAction && window.NotchUi?.showError) {
+    dismissStatusToast(true);
+    window.NotchUi.showError({ diagnostic: message, messageKey: options.messageKey, repairKey: options.repairKey, scope: options.scope, onRepair: options.onRepair });
+    return;
+  }
   dismissStatusToast(true);
   if (!statusToast || !statusToastMessage) return;
   const { actionLabel, onAction, onExpire, duration = 1800 } = options;
@@ -211,7 +257,7 @@ function showStatusToast(message, options = {}) {
   statusToastActionHandler = typeof onAction === 'function' ? onAction : null;
   statusToastExpireHandler = typeof onExpire === 'function' ? onExpire : null;
   if (statusToastAction && statusToastActionHandler) {
-    statusToastAction.textContent = actionLabel || '撤销';
+    pomeLocaleRendererApp.bind(statusToastAction, "textContent", () => (actionLabel || pomeLocaleRendererApp.t("copy.undo.926a50")));
     statusToastAction.hidden = false;
   }
   statusToast.classList.add('visible');
@@ -228,19 +274,21 @@ if (statusToastAction) {
 
 window.addEventListener('beforeunload', () => dismissStatusToast(true));
 
+function emptyTodoData() {
+  return Object.fromEntries(PRIORITIES.map((priority) => [priority, []]));
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { P0: [], P1: [], P2: [], P3: [] };
+    if (!raw) return emptyTodoData();
     const parsed = JSON.parse(raw);
-    return {
-      P0: normalizeTodoItems(parsed && parsed.P0),
-      P1: normalizeTodoItems(parsed && parsed.P1),
-      P2: normalizeTodoItems(parsed && parsed.P2),
-      P3: normalizeTodoItems(parsed && parsed.P3),
-    };
+    return Object.fromEntries(PRIORITIES.map((priority) => [
+      priority,
+      normalizeTodoItems(parsed && parsed[priority]),
+    ]));
   } catch (e) {
-    return { P0: [], P1: [], P2: [], P3: [] };
+    return emptyTodoData();
   }
 }
 
@@ -272,7 +320,7 @@ function normalizeTodoItems(value) {
 }
 
 function getLocalTodosForSync() {
-  const snapshot = { P0: [], P1: [], P2: [], P3: [] };
+  const snapshot = emptyTodoData();
   PRIORITIES.forEach((priority) => {
     snapshot[priority] = (data[priority] || []).map((item) => ({
       id: item.id,
@@ -293,7 +341,7 @@ function saveData(data) {
   }
   if (window.__nasTodoReadonly === true) {
     if (typeof showStatusToast === 'function') {
-      showStatusToast('迁移中，稍候', { kind: 'warning' });
+      showStatusToast(pomeLocaleRendererApp.t("copy.migratingPleaseWait.7aed12"), { kind: 'warning' });
     }
     return false;
   }
@@ -311,9 +359,11 @@ function saveData(data) {
 
 let data = loadData();
 let todoCategoryNames = loadTodoCategoryNames();
+let todoCategoryOrder = loadTodoCategoryOrder();
 const todoSelections = Object.fromEntries(PRIORITIES.map((priority) => [priority, new Set()]));
 const todoSelectionAnchors = Object.fromEntries(PRIORITIES.map((priority) => [priority, null]));
 let editingTodo = null;
+let todoBoardBound = false;
 
 function loadTodoCategoryNames() {
   try {
@@ -326,10 +376,57 @@ function loadTodoCategoryNames() {
   }
 }
 
+function loadTodoCategoryOrder() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TODO_CATEGORY_ORDER_KEY) || 'null');
+    const order = Array.isArray(parsed)
+      ? parsed.filter((id, index, list) => PRIORITIES.includes(id) && list.indexOf(id) === index)
+      : [];
+    if (order.length) return order;
+  } catch (error) {
+    // Fall through to the default four columns.
+  }
+  return [...TODO_CATEGORY_DEFAULT_ORDER];
+}
+
+/**
+ * Category order is local-only. After sync/hydration, surface any priority that
+ * already has todos so remote P4–P7 items are not invisible on this device.
+ */
+function reconcileTodoCategoryOrderFromData() {
+  const order = [...todoCategoryOrder];
+  let changed = false;
+  PRIORITIES.forEach((priority) => {
+    if ((data[priority] || []).length > 0 && !order.includes(priority)) {
+      order.push(priority);
+      changed = true;
+    }
+  });
+  if (!order.length) {
+    todoCategoryOrder = [...TODO_CATEGORY_DEFAULT_ORDER];
+    persistTodoCategoryOrder();
+    return;
+  }
+  if (changed) {
+    todoCategoryOrder = order;
+    persistTodoCategoryOrder();
+  }
+}
+
+function persistTodoCategoryOrder() {
+  if (window.__nasTodoReadonly === true) return false;
+  try {
+    localStorage.setItem(TODO_CATEGORY_ORDER_KEY, JSON.stringify(todoCategoryOrder));
+  } catch (error) {
+    // Keep the in-memory order for this session.
+  }
+  return true;
+}
+
 function persistTodoCategoryNames() {
   if (window.__nasTodoReadonly === true) {
     if (typeof showStatusToast === 'function') {
-      showStatusToast('迁移中，稍候', { kind: 'warning' });
+      showStatusToast(pomeLocaleRendererApp.t("copy.migratingPleaseWait.7aed12"), { kind: 'warning' });
     }
     return false;
   }
@@ -341,14 +438,154 @@ function persistTodoCategoryNames() {
   return true;
 }
 
-function applyTodoCategoryNames() {
-  PRIORITIES.forEach((categoryId) => {
-    const name = todoCategoryNames[categoryId];
+function applyTodoCategoryNames({ preserveDrafts = false } = {}) {
+  todoCategoryOrder.forEach((categoryId) => {
+    const name = todoCategoryNames[categoryId] || TODO_CATEGORY_DEFAULTS[categoryId] || categoryId;
     const input = document.querySelector(`.todo-category-name[data-category="${categoryId}"]`);
     const addInput = document.querySelector(`.add-row input[data-priority="${categoryId}"]`);
-    if (input) input.value = name;
-    if (addInput) addInput.setAttribute('aria-label', `添加${name}待办`);
+    if (input) {
+      const dirty = preserveDrafts && input.value !== input.defaultValue;
+      input.defaultValue = name;
+      if (!dirty) input.value = name;
+    }
+    if (addInput) addInput.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.addATaskTo.efb0ec", { arg1: (name) }));
   });
+}
+
+function quadrantHtml(priority) {
+  const name = escapeHtml(todoCategoryNames[priority] || TODO_CATEGORY_DEFAULTS[priority] || priority);
+  const dot = TODO_DOT_CLASS[priority] || 'dot-p3';
+  const canRemove = todoCategoryOrder.length > 1;
+  const attr = key => escapeHtml(pomeLocaleRendererApp.t(key));
+  return (
+    `<section class="quadrant tile" data-priority="${priority}">` +
+    `<div class="quadrant-header">` +
+    `<span class="dot ${dot}"></span>` +
+    `<input class="todo-category-name" data-category="${priority}" value="${name}" maxlength="24" aria-label="${attr('copy.renameTaskCategory.5f6c58')}" data-i18n-aria-label="copy.renameTaskCategory.5f6c58" />` +
+    `<button class="bulk-delete todo-bulk-delete" type="button" data-bulk-priority="${priority}" hidden>${attr('copy.delete.2f9daa')}</button>` +
+    `<button class="todo-remove-category" type="button" data-remove-priority="${priority}" aria-label="${attr('todo.removeCategory')}" title="${attr('todo.removeCategory')}" data-i18n-aria-label="todo.removeCategory" data-i18n-title="todo.removeCategory"${canRemove ? '' : ' hidden'}>×</button>` +
+    `<span class="count" data-priority="${priority}">0</span>` +
+    `</div>` +
+    `<ul class="todo-list" data-priority="${priority}"></ul>` +
+    `<div class="add-row">` +
+    `<input type="text" placeholder="${attr('copy.addATaskAndPressEnterTo.e40a0f')}" data-i18n-placeholder="copy.addATaskAndPressEnterTo.e40a0f" data-priority="${priority}" maxlength="80" />` +
+    `<button class="todo-deadline-trigger" type="button" data-deadline-priority="${priority}" aria-label="${attr('todo.chooseDeadline')}" data-i18n-aria-label="todo.chooseDeadline"><span>${attr('copy.date.70d0c1')}</span></button>` +
+    `</div>` +
+    `</section>`
+  );
+}
+
+function syncTodoAddCategoryButton() {
+  const button = document.getElementById('todo-add-category');
+  if (!button) return;
+  const full = todoCategoryOrder.length >= PRIORITIES.length;
+  const readonly = window.__nasTodoReadonly === true;
+  // Hide at 8 categories; also hide while migration readonly so it never steals taps.
+  button.hidden = full || readonly;
+  button.disabled = readonly;
+}
+
+function parkTodoDatePopover() {
+  const popover = document.getElementById('todo-date-popover');
+  // Mount on body with position:fixed so .panel { overflow:hidden } and
+  // .quadrant { overflow:hidden } cannot clip the calendar.
+  if (popover && popover.parentElement !== document.body) document.body.appendChild(popover);
+  return popover;
+}
+
+function positionTodoDatePopover(anchorEl) {
+  const popover = parkTodoDatePopover();
+  if (!popover || !anchorEl) return;
+  popover.hidden = false;
+  popover.classList.add('todo-date-popover--portal');
+  popover.style.visibility = 'hidden';
+  const anchorRect = anchorEl.getBoundingClientRect();
+  const popW = Math.max(popover.offsetWidth || 224, 200);
+  const popH = Math.max(popover.offsetHeight || 280, 220);
+  const gap = 8;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  let left = anchorRect.right - popW;
+  let top = anchorRect.top - popH - gap;
+  if (top < gap) top = anchorRect.bottom + gap;
+  left = Math.max(gap, Math.min(left, vw - popW - gap));
+  top = Math.max(gap, Math.min(top, vh - popH - gap));
+  popover.style.position = 'fixed';
+  popover.style.left = `${Math.round(left)}px`;
+  popover.style.top = `${Math.round(top)}px`;
+  popover.style.right = 'auto';
+  popover.style.bottom = 'auto';
+  popover.style.zIndex = '240';
+  popover.style.visibility = '';
+}
+
+function renderTodoBoard() {
+  const root = document.getElementById('todo-sections');
+  if (!root) return;
+  parkTodoDatePopover();
+  const existing = [...root.querySelectorAll('.quadrant')];
+  const structural = existing.map(node => node.dataset.priority).join('/') !== todoCategoryOrder.join('/');
+  if (todoEditorContext && (structural || (todoEditorContext.mode === 'edit'
+    && !(data[todoEditorContext.priority] || []).some(item => item.id === todoEditorContext.id)))) closeTodoEditor();
+  root.dataset.count = String(todoCategoryOrder.length);
+  existing.filter(node => !todoCategoryOrder.includes(node.dataset.priority)).forEach(node => node.remove());
+  todoCategoryOrder.forEach((priority, index) => {
+    let quadrant = root.querySelector(`.quadrant[data-priority="${priority}"]`);
+    if (!quadrant) {
+      root.insertAdjacentHTML('beforeend', quadrantHtml(priority));
+      quadrant = root.lastElementChild;
+    }
+    if (root.children[index] !== quadrant) root.insertBefore(quadrant, root.children[index]);
+    quadrant.querySelector('.todo-remove-category').hidden = todoCategoryOrder.length <= 1;
+  });
+  syncTodoAddCategoryButton();
+  applyTodoCategoryNames({ preserveDrafts: true });
+  todoCategoryOrder.forEach((priority) => {
+    renderList(priority);
+    updateCount(priority);
+    applyDefaultTodoDeadline(document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${priority}"]`));
+  });
+}
+
+function addTodoCategory() {
+  if (window.__nasTodoReadonly === true) return;
+  const next = PRIORITIES.find((priority) => !todoCategoryOrder.includes(priority));
+  if (!next) return;
+  todoCategoryOrder = [...todoCategoryOrder, next];
+  if (!Array.isArray(data[next])) data[next] = [];
+  if (!todoCategoryNames[next]) {
+    todoCategoryNames = window.NotchDomain.normalizeTodoCategoryNames(todoCategoryNames, TODO_CATEGORY_DEFAULTS);
+  }
+  persistTodoCategoryOrder();
+  persistTodoCategoryNames();
+  saveData(data);
+  mirrorTodoToSync({
+    op: 'upsert-category',
+    priority: next,
+    name: todoCategoryNames[next],
+  });
+  renderTodoBoard();
+}
+
+async function removeTodoCategory(priority) {
+  if (window.__nasTodoReadonly === true) return;
+  if (!todoCategoryOrder.includes(priority) || todoCategoryOrder.length <= 1) return;
+  const ids = new Set((data[priority] || []).map(item => item.id));
+  if (!await window.PomeDeleteConfirm.open({titleKey:'todo.removeCategory',items:[todoCategoryNames[priority] || priority],messageKey:'ui.delete.categoryHint',args:{count:ids.size}})) return;
+  if (window.__nasTodoReadonly === true || !todoCategoryOrder.includes(priority) || todoCategoryOrder.length <= 1
+    || (data[priority] || []).some(item => !ids.has(item.id))) return;
+  const removedItems = [...(data[priority] || [])];
+  data[priority] = [];
+  todoCategoryOrder = todoCategoryOrder.filter((id) => id !== priority);
+  todoSelections[priority] = new Set();
+  todoSelectionAnchors[priority] = null;
+  persistTodoCategoryOrder();
+  saveData(data);
+  // Main process delete-todo expects entityId (same as deleteTodo).
+  removedItems.forEach((item) => {
+    mirrorTodoToSync({ op: 'delete-todo', entityId: item.id });
+  });
+  renderTodoBoard();
 }
 if (window.notchAPI && typeof window.notchAPI.scheduleTodoReminders === 'function') {
   window.notchAPI
@@ -402,14 +639,14 @@ function todoItemHtml(priority, item) {
   const safeId = escapeHtml(item.id);
   const safeText = escapeHtml(item.text);
   const deadline = Number.isFinite(Date.parse(String(item.deadline || '')))
-    ? new Intl.DateTimeFormat('zh-CN', {
+    ? new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
       month: 'numeric',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     }).format(new Date(item.deadline))
     : '';
-  const toggleLabel = item.done ? `恢复未完成：${safeText}` : `标记完成：${safeText}`;
+  const toggleLabel = item.done ? pomeLocaleRendererApp.t("copy.markIncomplete.b29b66", { arg1: (safeText) }) : pomeLocaleRendererApp.t("copy.markComplete.56d5a3", { arg1: (safeText) });
   const battery = window.NotchDomain.todoTimeBattery(item, Date.now());
   // 逾期项整条填满红色并只显示一个白色感叹号：剩余 0% 是「快到了」，
   // 逾期是「已经欠账」，两者不能长得一样。
@@ -418,15 +655,9 @@ function todoItemHtml(priority, item) {
     : '';
   const isEditing = editingTodo?.priority === priority && editingTodo?.id === item.id;
   const contentHtml = isEditing
-    ? `<div class="todo-inline-editor"><input class="todo-inline-name" value="${safeText}" maxlength="80" aria-label="修改待办名称" />${batteryHtml}<button class="todo-inline-deadline" type="button" data-action="edit-deadline">${deadline || '日期'}</button><button class="todo-inline-save" type="button" data-action="save-edit" aria-label="保存修改">✓</button></div>`
-    : `<button class="todo-copy" type="button" data-action="edit" title="${safeText}" aria-label="修改：${safeText}"><span class="todo-text">${safeText}</span>${batteryHtml}${deadline ? `<time class="todo-ddl" datetime="${escapeHtml(item.deadline)}">${escapeHtml(deadline)}</time>` : ''}</button>`;
-  return `
-    <li class="todo-item${doneClass}${selectedClass}" data-id="${safeId}" data-priority="${priority}">
-      <button class="checkbox" type="button" data-action="toggle" aria-label="${toggleLabel}" aria-pressed="${item.done}">${checkSvg()}</button>
-      ${contentHtml}
-      <button class="delete" type="button" data-action="delete" aria-label="删除：${safeText}">×</button>
-    </li>
-  `;
+    ? ("<div class=\"todo-inline-editor\"><input class=\"todo-inline-name\" value=\"" + (safeText) + "\" maxlength=\"80\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.editTaskName.44f8a7")) + "\" data-i18n-aria-label=\"copy.editTaskName.44f8a7\" />" + (batteryHtml) + "<button class=\"todo-inline-deadline\" type=\"button\" data-action=\"edit-deadline\">" + (deadline || pomeLocaleRendererApp.t("copy.date.70d0c1")) + "</button><button class=\"todo-inline-save\" type=\"button\" data-action=\"save-edit\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.saveChanges.991bb7")) + "\" data-i18n-aria-label=\"copy.saveChanges.991bb7\">✓</button></div>")
+    : ("<button class=\"todo-copy\" type=\"button\" data-action=\"edit\" title=\"" + (safeText) + "\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.edit.fe62a2", { arg2: (safeText) })) + "\"><span class=\"todo-text\">" + (safeText) + "</span>" + (batteryHtml) + (deadline ? `<time class="todo-ddl" datetime="${escapeHtml(item.deadline)}">${escapeHtml(deadline)}</time>` : '') + "</button>");
+  return ("\n    <li class=\"todo-item" + (doneClass) + (selectedClass) + "\" data-id=\"" + (safeId) + "\" data-priority=\"" + (priority) + "\">\n      <button class=\"checkbox\" type=\"button\" data-action=\"toggle\" aria-label=\"" + (toggleLabel) + "\" aria-pressed=\"" + (item.done) + "\">" + (checkSvg()) + "</button>\n      " + (contentHtml) + "\n      <button class=\"delete\" type=\"button\" data-action=\"delete\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.delete.322a6b", { arg9: (safeText) })) + "\">×</button>\n    </li>\n  ");
 }
 
 function captureTodoPositions(priority) {
@@ -463,7 +694,20 @@ function renderList(priority, options = {}) {
   const list = document.querySelector(`.todo-list[data-priority="${priority}"]`);
   if (!list) return;
   const items = window.NotchDomain.sortTodosForDisplay(data[priority] || []);
+  if (editingTodo?.priority === priority && !items.some(item => item.id === editingTodo.id)) editingTodo = null;
+  const editor = list.querySelector('.todo-inline-name');
+  const draft = editor ? { id: editor.closest('.todo-item').dataset.id, value: editor.value,
+    focused: document.activeElement === editor, start: editor.selectionStart, end: editor.selectionEnd,
+    direction: editor.selectionDirection } : null;
   list.innerHTML = items.map((item) => todoItemHtml(priority, item)).join('');
+  const restored = draft && list.querySelector(`.todo-item[data-id="${CSS.escape(draft.id)}"] .todo-inline-name`);
+  if (restored) {
+    restored.value = draft.value;
+    if (draft.focused) {
+      restored.focus({ preventScroll: true });
+      restored.setSelectionRange(draft.start, draft.end, draft.direction);
+    }
+  }
   updateTodoBulkButton(priority);
   animateTodoOrder(priority, options.previousPositions);
   if (options.focusId) {
@@ -478,8 +722,8 @@ function updateTodoBulkButton(priority) {
   const count = todoSelections[priority]?.size || 0;
   if (!button) return;
   button.hidden = count === 0;
-  button.textContent = '删除';
-  button.setAttribute('aria-label', count ? `删除 ${count} 项` : '删除所选');
+  pomeLocaleRendererApp.bind(button, "textContent", () => (pomeLocaleRendererApp.t("copy.delete.2f9daa")));
+  button.setAttribute('aria-label', count ? pomeLocaleRendererApp.t("copy.deleteItems.0bfa6f", { arg1: (count) }) : pomeLocaleRendererApp.t("copy.deleteSelected.435bf8"));
 }
 
 function updateCount(priority) {
@@ -491,7 +735,11 @@ function updateCount(priority) {
 }
 
 function renderAll() {
-  PRIORITIES.forEach((p) => {
+  if (document.getElementById('todo-sections') && !document.querySelector('#todo-sections .quadrant')) {
+    renderTodoBoard();
+    return;
+  }
+  todoCategoryOrder.forEach((p) => {
     renderList(p);
     updateCount(p);
   });
@@ -520,7 +768,7 @@ function flashCheckboxPop(priority, id) {
 
 function addTodo(priority, text, deadline) {
   if (window.__nasTodoReadonly === true) {
-    if (typeof showStatusToast === 'function') showStatusToast('迁移中，稍候', { kind: 'warning' });
+    if (typeof showStatusToast === 'function') showStatusToast(pomeLocaleRendererApp.t("copy.migratingPleaseWait.7aed12"), { kind: 'warning' });
     return false;
   }
   const item = window.NotchDomain.createTodo(text, deadline, generateId(), Date.now());
@@ -576,7 +824,11 @@ function toggleTodo(priority, id) {
   if (nowDone) requestAnimationFrame(() => flashCheckboxPop(priority, id)); // 勾选弹一下
 }
 
-function deleteTodo(priority, id) {
+async function deleteTodo(priority, id) {
+  if (window.__nasTodoReadonly === true) return;
+  const target = (data[priority] || []).find(item => item.id === id);
+  if (!target || !await window.PomeDeleteConfirm.open({titleKey:'ui.delete.todoTitle',items:[target.text]})) return;
+  if (window.__nasTodoReadonly === true) return;
   const list = data[priority];
   const index = list.findIndex((t) => t.id === id);
   if (index === -1) return;
@@ -597,8 +849,8 @@ function deleteTodo(priority, id) {
     if (nextFocus) nextFocus.focus({ preventScroll: true });
   }
   const summary = removed.text.length > 18 ? `${removed.text.slice(0, 18)}…` : removed.text;
-  showStatusToast(`已删除“${summary}”`, {
-    actionLabel: '撤销',
+  showStatusToast(pomeLocaleRendererApp.t("copy.deleted.ada912", { arg1: (summary) }), {
+    actionLabel: pomeLocaleRendererApp.t("copy.undo.926a50"),
     duration: 5000,
     onAction: () => {
       if (list.some((item) => item.id === removed.id)) return;
@@ -611,7 +863,7 @@ function deleteTodo(priority, id) {
         `.todo-item[data-priority="${priority}"][data-id="${CSS.escape(id)}"] [data-action="toggle"]`
       );
       if (restored) restored.focus({ preventScroll: true });
-      showStatusToast('已撤销删除');
+      showStatusToast(pomeLocaleRendererApp.t("copy.deletionUndone.2e33cb"));
     },
   });
 }
@@ -688,7 +940,7 @@ function syncPanelAccessibility(expanded) {
   }
   if (!notch) return;
   notch.setAttribute('aria-expanded', String(expanded));
-  notch.setAttribute('aria-label', expanded ? '收起 Pome Panel' : '展开 Pome Panel');
+  notch.setAttribute('aria-label', expanded ? pomeLocaleRendererApp.t("copy.collapsePomePanel.b8359e") : pomeLocaleRendererApp.t("copy.expandPomePanel.07c85a"));
   if (expanded && document.activeElement === notch) {
     const activeTabButton = document.querySelector(`.tab[data-tab="${activeTab}"]`);
     if (activeTabButton) activeTabButton.focus({ preventScroll: true });
@@ -869,6 +1121,7 @@ notch.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keydown', (event) => {
+  if (document.querySelector('dialog[open]')) return;
   const target = event.target instanceof Element ? event.target : null;
   const editable = Boolean(target && target.closest(
     'input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video'
@@ -934,6 +1187,7 @@ document.addEventListener('compositionend', () => {
 
 if (window.notchAPI && typeof window.notchAPI.onEscape === 'function') {
   window.notchAPI.onEscape(() => {
+    if (window.PomeDeleteConfirm?.closeOnEscape()) return;
     if (window.closeWorkHubOverlay?.()) return;
     const el = document.activeElement;
     if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
@@ -1276,12 +1530,12 @@ function renderShortcutRecorderHint() {
   const hint = document.getElementById('shortcut-recorder-hint');
   if (!hint) return;
   const modifiers = window.NotchPlatform.modifierHints(readPlatformCapabilities());
-  hint.textContent = `可直接使用空格；其他按键建议搭配 ${modifiers.join(' / ')}`;
+  pomeLocaleRendererApp.bind(hint, "textContent", () => (pomeLocaleRendererApp.t("copy.useSpaceAloneOrCombineOtherKeys.250962", { arg1: (modifiers.join(' / ')) })));
 }
 
 const SHORTCUT_ERROR_TEXT = {
-  system_reserved: '该组合被系统占用',
-  occupied: '该快捷键已被占用',
+  system_reserved: pomeLocaleRendererApp.t("copy.thisCombinationIsReservedByTheSystem.e04553"),
+  occupied: pomeLocaleRendererApp.t("copy.thisShortcutIsAlreadyInUse.b4a985"),
 };
 
 shortcutRecorder?.addEventListener('keydown', async (event) => {
@@ -1294,11 +1548,11 @@ shortcutRecorder?.addEventListener('keydown', async (event) => {
   }
   const accelerator = keyEventToAccelerator(event);
   if (!accelerator) {
-    if (shortcutRecorderValue) shortcutRecorderValue.textContent = '请按下完整按键组合';
+    if (shortcutRecorderValue) pomeLocaleRendererApp.bind(shortcutRecorderValue, "textContent", () => (pomeLocaleRendererApp.t("copy.pressTheCompleteKeyCombination.2eeecd")));
     return;
   }
   if (accelerator !== 'Space' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-    if (shortcutRecorderValue) shortcutRecorderValue.textContent = '单键仅支持空格';
+    if (shortcutRecorderValue) pomeLocaleRendererApp.bind(shortcutRecorderValue, "textContent", () => (pomeLocaleRendererApp.t("copy.onlySpaceCanBeUsedAlone.9e1bc0")));
     return;
   }
   const display = window.NotchPlatform.formatAccelerator(accelerator, readPlatformCapabilities()) || accelerator;
@@ -1306,11 +1560,11 @@ shortcutRecorder?.addEventListener('keydown', async (event) => {
   const result = await window.notchAPI?.setPanelShortcut?.(accelerator).catch(() => ({ ok: false }));
   if (!result?.ok) {
     if (shortcutRecorderValue) {
-      shortcutRecorderValue.textContent = SHORTCUT_ERROR_TEXT[result?.error] || '无法使用该快捷键';
+      pomeLocaleRendererApp.bind(shortcutRecorderValue, "textContent", () => (SHORTCUT_ERROR_TEXT[result?.error] || pomeLocaleRendererApp.t("copy.thisShortcutCannotBeUsed.711008")));
     }
     return;
   }
-  showStatusToast(`快捷键已设为 ${display}`);
+  showStatusToast(pomeLocaleRendererApp.t("copy.shortcutSetTo.3aeabe", { arg1: (display) }));
   setTimeout(closeShortcutRecorder, 420);
 });
 
@@ -1320,7 +1574,7 @@ function openShortcutRecorder() {
   shortcutRecorderActive = true;
   shortcutRecorder.hidden = false;
   renderShortcutRecorderHint();
-  shortcutRecorderValue.textContent = '等待输入…';
+  pomeLocaleRendererApp.bind(shortcutRecorderValue, "textContent", () => (pomeLocaleRendererApp.t("copy.waitingForInput.3b286f")));
   requestAnimationFrame(() => shortcutRecorder.focus({ preventScroll: true }));
 }
 window.notchAPI?.onRecordShortcut?.(openShortcutRecorder);
@@ -1350,35 +1604,22 @@ function initTab() {
   setActiveTab('home');
 }
 
-document.querySelectorAll('.todo-category-name[data-category]').forEach((input) => {
-  const finishCategoryEdit = () => {
-    const categoryId = input.dataset.category;
-    todoCategoryNames = window.NotchDomain.normalizeTodoCategoryNames({
-      ...todoCategoryNames,
-      [categoryId]: input.value,
-    }, TODO_CATEGORY_DEFAULTS);
-    persistTodoCategoryNames();
-    applyTodoCategoryNames();
-    mirrorTodoToSync({
-      op: 'upsert-category',
-      priority: categoryId,
-      name: todoCategoryNames[categoryId],
-    });
-  };
-  input.addEventListener('change', finishCategoryEdit);
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.isComposing) {
-      event.preventDefault();
-      input.blur();
-    }
-    if (event.key === 'Escape') {
-      input.value = todoCategoryNames[input.dataset.category];
-      input.blur();
-    }
+function finishTodoCategoryEdit(input) {
+  if (!input) return;
+  const categoryId = input.dataset.category;
+  if (!PRIORITIES.includes(categoryId)) return;
+  todoCategoryNames = window.NotchDomain.normalizeTodoCategoryNames({
+    ...todoCategoryNames,
+    [categoryId]: input.value,
+  }, TODO_CATEGORY_DEFAULTS);
+  persistTodoCategoryNames();
+  applyTodoCategoryNames();
+  mirrorTodoToSync({
+    op: 'upsert-category',
+    priority: categoryId,
+    name: todoCategoryNames[categoryId],
   });
-});
-
-applyTodoCategoryNames();
+}
 
 const todoEditorBackdrop = document.getElementById('todo-date-popover');
 const todoEditorMonth = document.getElementById('todo-editor-month');
@@ -1388,26 +1629,81 @@ const todoCalendarGrid = document.getElementById('todo-calendar-grid');
 const todoEditorHour = document.getElementById('todo-editor-hour');
 const todoEditorMinute = document.getElementById('todo-editor-minute');
 const todoEditorError = document.getElementById('todo-editor-error');
+const todoEditorState = document.getElementById('todo-editor-state');
 let todoEditorContext = null;
 let todoEditorYear = new Date().getFullYear();
 let todoEditorMonthIndex = new Date().getMonth();
 let todoEditorDay = new Date().getDate();
 
-function fillTodoTimeOptions() {
-  if (todoEditorHour && !todoEditorHour.options.length) {
-    for (let hour = 0; hour < 24; hour += 1) todoEditorHour.add(new Option(String(hour).padStart(2, '0'), String(hour)));
+function todoTimePickerValue(picker) {
+  return picker?.querySelector('button[aria-selected="true"]')?.dataset.value ?? picker?.dataset.value ?? '';
+}
+
+function setTodoTimePickerValue(picker, value) {
+  if (!picker) return;
+  const want = String(value);
+  picker.dataset.value = want;
+  let matched = null;
+  picker.querySelectorAll('button[data-value]').forEach((button) => {
+    const matches = button.dataset.value === want;
+    const selected = matches && !todoEditorContext?.unset;
+    button.setAttribute('aria-selected', selected ? 'true' : 'false');
+    if (matches) matched = button;
+  });
+  if (matched) {
+    // Scroll only this list. scrollIntoView can move the board or panel as well.
+    picker.scrollTop += matched.getBoundingClientRect().top - picker.getBoundingClientRect().top
+      - picker.clientTop - (picker.clientHeight - matched.offsetHeight) / 2;
   }
-  if (todoEditorMinute && !todoEditorMinute.options.length) {
-    for (let minute = 0; minute < 60; minute += 5) todoEditorMinute.add(new Option(String(minute).padStart(2, '0'), String(minute)));
+}
+
+function fillTodoTimeOptions(selectedMinute) {
+  const fill = (picker, values) => {
+    const signature = values.join(',');
+    if (!picker || picker.dataset.values === signature) return;
+    picker.replaceChildren();
+    values.forEach((value) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.role = 'option';
+      button.dataset.value = String(value);
+      button.textContent = String(value).padStart(2, '0');
+      button.setAttribute('aria-selected', 'false');
+      picker.append(button);
+    });
+    picker.dataset.values = signature;
+  };
+  fill(todoEditorHour, Array.from({ length: 24 }, (_, hour) => hour));
+  const minutes = Array.from({ length: 12 }, (_, index) => index * 5);
+  // Imported/synced deadlines may not be on the five-minute grid. Show their
+  // actual minute instead of rounding an existing deadline just to open it.
+  if (Number.isInteger(selectedMinute) && !minutes.includes(selectedMinute)) minutes.push(selectedMinute);
+  fill(todoEditorMinute, minutes.sort((a, b) => a - b));
+}
+
+function renderTodoEditorState() {
+  if (todoEditorState) {
+    todoEditorState.hidden = !todoEditorContext?.initiallyUnset;
+    if (!todoEditorState.hidden) {
+      const key = todoEditorContext.unset ? 'todo.deadlineUnset' : 'todo.deadlineSet';
+      pomeLocaleRendererApp.bind(todoEditorState, 'textContent', () => pomeLocaleRendererApp.t(key));
+    }
+  }
+  for (const picker of [todoEditorHour, todoEditorMinute]) {
+    const value = todoTimePickerValue(picker);
+    picker?.querySelectorAll('button[data-value]').forEach(button => {
+      button.setAttribute('aria-selected', String(!todoEditorContext?.unset && button.dataset.value === value));
+    });
   }
 }
 
 function renderTodoCalendar() {
   if (!todoCalendarGrid) return;
+  renderTodoEditorState();
   const now = new Date();
   const days = new Date(todoEditorYear, todoEditorMonthIndex + 1, 0).getDate();
   const firstWeekday = (new Date(todoEditorYear, todoEditorMonthIndex, 1).getDay() + 6) % 7;
-  if (todoEditorMonth) todoEditorMonth.textContent = `${todoEditorYear}年 ${todoEditorMonthIndex + 1}月`;
+  if (todoEditorMonth) pomeLocaleRendererApp.bind(todoEditorMonth, "textContent", () => (pomeLocaleRendererApp.t("copy.message.23b25d", { arg1: (todoEditorYear), arg2: (todoEditorMonthIndex + 1) })));
   todoCalendarGrid.replaceChildren();
   for (let index = 0; index < firstWeekday; index += 1) todoCalendarGrid.append(document.createElement('span'));
   for (let day = 1; day <= days; day += 1) {
@@ -1415,7 +1711,9 @@ function renderTodoCalendar() {
     button.type = 'button';
     button.textContent = String(day);
     button.dataset.day = String(day);
-    button.className = day === todoEditorDay ? 'selected' : '';
+    const selected = day === todoEditorDay && !todoEditorContext?.unset;
+    button.className = selected ? 'selected' : '';
+    button.setAttribute('aria-pressed', String(selected));
     if (todoEditorYear === now.getFullYear() && todoEditorMonthIndex === now.getMonth() && day === now.getDate()) {
       button.classList.add('today');
     }
@@ -1437,16 +1735,17 @@ function selectedTodoDeadline() {
     year: todoEditorYear,
     month: todoEditorMonthIndex,
     day: todoEditorDay,
-    hour: todoEditorHour?.value,
-    minute: todoEditorMinute?.value,
+    hour: todoTimePickerValue(todoEditorHour),
+    minute: todoTimePickerValue(todoEditorMinute),
   });
 }
 
-function applyTodoEditorSelection(markManual = true) {
-  if (!todoEditorContext) return false;
+function applyTodoEditorSelection(userChanged = true) {
+  if (!todoEditorContext || window.__nasTodoReadonly === true) return false;
+  if (!userChanged && todoEditorContext.unset) return true;
   const deadline = selectedTodoDeadline();
   if (!deadline || Date.parse(deadline) <= Date.now()) {
-    if (todoEditorError) todoEditorError.textContent = '请选择晚于当前时间的截止点';
+    if (todoEditorError) pomeLocaleRendererApp.bind(todoEditorError, "textContent", () => (pomeLocaleRendererApp.t("copy.chooseADeadlineLaterThanNow.c1cc99")));
     return false;
   }
   if (todoEditorError) todoEditorError.textContent = '';
@@ -1454,14 +1753,21 @@ function applyTodoEditorSelection(markManual = true) {
   if (mode === 'edit') {
     const todo = (data[priority] || []).find((item) => item.id === id);
     if (!todo) return false;
+    // Opening only initializes/validates the controls. Selecting the same visible
+    // minute also preserves any existing seconds and timezone representation.
+    if (!userChanged || Math.floor(Date.parse(todo.deadline) / 60_000) === Math.floor(Date.parse(deadline) / 60_000)) return true;
     todo.deadline = deadline;
     saveData(data);
+    if (todoEditorContext.unset) {
+      todoEditorContext.unset = false;
+      renderTodoCalendar();
+    }
   } else {
     const trigger = document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${priority}"]`);
     if (!trigger) return false;
     trigger.dataset.deadline = deadline;
-    trigger.dataset.deadlineSource = markManual ? 'manual' : (trigger.dataset.deadlineSource || 'default');
-    trigger.querySelector('span').textContent = new Intl.DateTimeFormat('zh-CN', {
+    trigger.dataset.deadlineSource = userChanged ? 'manual' : (trigger.dataset.deadlineSource || 'default');
+    trigger.querySelector('span').textContent = new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
       day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
     }).format(new Date(deadline));
     trigger.classList.add('selected');
@@ -1471,35 +1777,32 @@ function applyTodoEditorSelection(markManual = true) {
 }
 
 function openTodoEditor(priority, item = null, anchor = null) {
+  if (window.__nasTodoReadonly === true) return;
   const now = new Date();
-  const addInput = document.querySelector(`.add-row input[data-priority="${priority}"]`);
   const trigger = document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${priority}"]`);
   if (!item) applyDefaultTodoDeadline(trigger, now);
-  const candidate = item && item.deadline ? new Date(item.deadline) : trigger?.dataset.deadline ? new Date(trigger.dataset.deadline) : null;
-  const selectedDate = candidate && Number.isFinite(candidate.getTime())
+  const current = item ? item.deadline : trigger?.dataset.deadline;
+  const candidate = current ? new Date(current) : null;
+  const hasDeadline = candidate && Number.isFinite(candidate.getTime());
+  const selectedDate = hasDeadline
     ? candidate
     : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 30, 0, 0);
-  todoEditorContext = { priority, id: item && item.id || '', mode: item ? 'edit' : 'add' };
+  const unset = Boolean(item && !hasDeadline);
+  todoEditorContext = { priority, id: item && item.id || '', mode: item ? 'edit' : 'add', unset, initiallyUnset: unset };
   todoEditorYear = selectedDate.getFullYear();
   todoEditorMonthIndex = selectedDate.getMonth();
   todoEditorDay = selectedDate.getDate();
-  fillTodoTimeOptions();
-  if (todoEditorHour) todoEditorHour.value = String(selectedDate.getHours());
-  if (todoEditorMinute) todoEditorMinute.value = String(Math.floor(selectedDate.getMinutes() / 5) * 5);
+  fillTodoTimeOptions(selectedDate.getMinutes());
   if (todoEditorError) todoEditorError.textContent = '';
   renderTodoCalendar();
   if (todoEditorBackdrop) {
     const target = anchor || (item
       ? document.querySelector(`.todo-item[data-id="${CSS.escape(item.id)}"] .todo-inline-deadline`)
       : trigger);
-    const quadrant = target?.closest('.quadrant') || document.querySelector(`.quadrant[data-priority="${priority}"]`);
-    quadrant?.appendChild(todoEditorBackdrop);
-    todoEditorBackdrop.hidden = false;
-    todoEditorBackdrop.style.removeProperty('left');
-    todoEditorBackdrop.style.removeProperty('top');
-    todoEditorBackdrop.style.right = '12px';
-    todoEditorBackdrop.style.bottom = '58px';
+    positionTodoDatePopover(target || trigger);
   }
+  setTodoTimePickerValue(todoEditorHour, selectedDate.getHours());
+  setTodoTimePickerValue(todoEditorMinute, selectedDate.getMinutes());
   applyTodoEditorSelection(false);
 }
 
@@ -1525,14 +1828,24 @@ function moveTodoCalendar(offset) {
 
 todoCalendarPrevious?.addEventListener('click', () => moveTodoCalendar(-1));
 todoCalendarNext?.addEventListener('click', () => moveTodoCalendar(1));
-todoEditorHour?.addEventListener('change', () => applyTodoEditorSelection(true));
-todoEditorMinute?.addEventListener('change', () => applyTodoEditorSelection(true));
+function onTodoTimePickerClick(event) {
+  const button = event.target.closest('button[data-value]');
+  const picker = event.currentTarget;
+  if (!button || !picker) return;
+  setTodoTimePickerValue(picker, button.dataset.value);
+  applyTodoEditorSelection(true);
+}
+todoEditorHour?.addEventListener('click', onTodoTimePickerClick);
+todoEditorMinute?.addEventListener('click', onTodoTimePickerClick);
 
 document.addEventListener('pointerdown', (event) => {
   if (todoEditorBackdrop?.hidden) return;
   if (todoEditorBackdrop.contains(event.target) || event.target.closest('.todo-deadline-trigger, .todo-inline-deadline')) return;
   closeTodoEditor();
 }, true);
+document.addEventListener('notch:will-collapse', closeTodoEditor);
+document.addEventListener('notch:tabchange', event => { if (event.detail?.tab !== 'todo') closeTodoEditor(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) closeTodoEditor(); });
 
 function applyDefaultTodoDeadline(trigger, now = new Date()) {
   if (!trigger || (trigger.dataset.deadline && trigger.dataset.deadlineSource !== 'default')) return;
@@ -1541,7 +1854,7 @@ function applyDefaultTodoDeadline(trigger, now = new Date()) {
   if (trigger.dataset.deadline === deadline && trigger.dataset.deadlineSource === 'default') return;
   trigger.dataset.deadline = deadline;
   trigger.dataset.deadlineSource = 'default';
-  trigger.querySelector('span').textContent = new Intl.DateTimeFormat('zh-CN', {
+  trigger.querySelector('span').textContent = new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
     day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(new Date(deadline));
   trigger.classList.add('selected');
@@ -1561,56 +1874,129 @@ function refreshDefaultTodoDeadlines(now = new Date()) {
   });
 }
 
-PRIORITIES.forEach((priority) => {
-  const input = document.querySelector(`.add-row input[data-priority="${priority}"]`);
+function submitTodoFromInput(input) {
+  const priority = input?.dataset?.priority;
+  if (!PRIORITIES.includes(priority)) return;
   const deadlineInput = document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${priority}"]`);
-  if (!input) return;
+  const value = input.value;
+  if (!value.trim()) return;
   applyDefaultTodoDeadline(deadlineInput);
+  if (!deadlineInput || !deadlineInput.dataset.deadline) {
+    deadlineInput?.classList.add('invalid');
+    openTodoEditor(priority);
+    return;
+  }
+  if (!addTodo(priority, value, deadlineInput.dataset.deadline)) {
+    deadlineInput.classList.add('invalid');
+    showStatusToast(pomeLocaleRendererApp.t("copy.invalidDeadlineFormat.88c2cb"));
+    return;
+  }
+  input.value = '';
+  if (todoEditorContext?.mode === 'add' && todoEditorContext.priority === priority) closeTodoEditor();
+  resetTodoDraftDeadline(deadlineInput);
+  deadlineInput.classList.remove('invalid');
+  input.focus({ preventScroll: true });
+}
 
-  const submitTodo = () => {
-    const value = input.value;
-    if (!value.trim()) return;
-    // Sleep or midnight may have passed since the form was rendered.
-    applyDefaultTodoDeadline(deadlineInput);
-    if (!deadlineInput || !deadlineInput.dataset.deadline) {
-      deadlineInput?.classList.add('invalid');
-      openTodoEditor(priority);
-      return;
-    }
-    if (!addTodo(priority, value, deadlineInput.dataset.deadline)) {
-      deadlineInput.classList.add('invalid');
-      showStatusToast('截止时间格式不正确');
-      return;
-    }
-    input.value = '';
-    if (todoEditorContext?.mode === 'add' && todoEditorContext.priority === priority) closeTodoEditor();
-    resetTodoDraftDeadline(deadlineInput);
-    deadlineInput.classList.remove('invalid');
-    input.focus({ preventScroll: true });
-  };
+function bindTodoBoardOnce() {
+  if (todoBoardBound) return;
+  const root = document.getElementById('todo-sections');
+  if (!root) return;
+  todoBoardBound = true;
 
-  input.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
-    e.preventDefault();
-    if (e.repeat) return;
-    submitTodo();
+  document.getElementById('todo-add-category')?.addEventListener('click', () => addTodoCategory());
+
+  root.addEventListener('change', (event) => {
+    const input = event.target.closest('.todo-category-name[data-category]');
+    if (input) finishTodoCategoryEdit(input);
   });
-  input.addEventListener('focus', () => applyDefaultTodoDeadline(deadlineInput));
-  deadlineInput?.addEventListener('click', () => openTodoEditor(priority));
-});
 
-PRIORITIES.forEach((priority) => {
-  const list = document.querySelector(`.todo-list[data-priority="${priority}"]`);
-  if (!list) return;
-  list.addEventListener('click', (e) => {
-    const item = e.target.closest('.todo-item');
+  root.addEventListener('keydown', (event) => {
+    const categoryInput = event.target.closest('.todo-category-name[data-category]');
+    if (categoryInput) {
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        categoryInput.blur();
+      }
+      if (event.key === 'Escape') {
+        categoryInput.value = todoCategoryNames[categoryInput.dataset.category] || '';
+        categoryInput.blur();
+      }
+      return;
+    }
+    const inline = event.target.closest('.todo-inline-name');
+    if (inline) {
+      const item = event.target.closest('.todo-item');
+      const priority = item?.dataset?.priority;
+      if (!item || !priority) return;
+      if (event.key === 'Escape') {
+        editingTodo = null;
+        renderList(priority);
+      } else if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        item.querySelector('[data-action="save-edit"]')?.click();
+      }
+      return;
+    }
+    const addInput = event.target.closest('.add-row input[data-priority]');
+    if (!addInput) return;
+    if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    if (event.repeat) return;
+    submitTodoFromInput(addInput);
+  });
+
+  root.addEventListener('focusin', (event) => {
+    const addInput = event.target.closest('.add-row input[data-priority]');
+    if (!addInput) return;
+    applyDefaultTodoDeadline(
+      document.querySelector(`.todo-deadline-trigger[data-deadline-priority="${addInput.dataset.priority}"]`)
+    );
+  });
+
+  root.addEventListener('click', async (event) => {
+    const remove = event.target.closest('[data-remove-priority]');
+    if (remove) {
+      removeTodoCategory(remove.dataset.removePriority);
+      return;
+    }
+    const bulk = event.target.closest('.todo-bulk-delete[data-bulk-priority]');
+    if (bulk) {
+      const priority = bulk.dataset.bulkPriority;
+      const selected = todoSelections[priority];
+      if (!selected || !selected.size) return;
+      const removed = (data[priority] || []).filter((item) => selected.has(item.id));
+      if (!await window.PomeDeleteConfirm.open({items:removed.map(item => item.text)})) return;
+      if (window.__nasTodoReadonly === true) return;
+      const ids = new Set(removed.map(item => item.id));
+      data[priority] = (data[priority] || []).filter((item) => !ids.has(item.id));
+      selected.clear();
+      todoSelectionAnchors[priority] = null;
+      saveData(data);
+      removed.forEach((item) => {
+        mirrorTodoToSync({ op: 'delete-todo', entityId: item.id });
+      });
+      renderList(priority);
+      updateCount(priority);
+      showStatusToast(pomeLocaleRendererApp.t("copy.selectedTasksDeleted.8f28c4"));
+      return;
+    }
+    const deadline = event.target.closest('.todo-deadline-trigger[data-deadline-priority]');
+    if (deadline) {
+      openTodoEditor(deadline.dataset.deadlinePriority);
+      return;
+    }
+    const list = event.target.closest('.todo-list[data-priority]');
+    if (!list) return;
+    const priority = list.dataset.priority;
+    const item = event.target.closest('.todo-item');
     if (!item) return;
     const id = item.dataset.id;
-    if (e.shiftKey) {
-      e.preventDefault();
+    if (event.shiftKey) {
+      event.preventDefault();
       const result = window.NotchDomain.updateRangeSelection(
         window.NotchDomain.sortTodosForDisplay(data[priority] || []).map((todo) => todo.id),
-        [...todoSelections[priority]],
+        [...(todoSelections[priority] || [])],
         id,
         todoSelectionAnchors[priority],
         true
@@ -1620,13 +2006,13 @@ PRIORITIES.forEach((priority) => {
       renderList(priority);
       return;
     }
-    const target = e.target.closest('[data-action]');
+    const target = event.target.closest('[data-action]');
     if (!target) return;
     const action = target.dataset.action;
     if (action === 'toggle') {
       toggleTodo(priority, id);
     } else if (action === 'edit') {
-      const todo = (data[priority] || []).find((item) => item.id === id);
+      const todo = (data[priority] || []).find((row) => row.id === id);
       if (todo) {
         editingTodo = { priority, id };
         renderList(priority);
@@ -1645,33 +2031,11 @@ PRIORITIES.forEach((priority) => {
       deleteTodo(priority, id);
     }
   });
-  list.addEventListener('keydown', (event) => {
-    const item = event.target.closest('.todo-item');
-    if (!item || !event.target.matches('.todo-inline-name')) return;
-    if (event.key === 'Escape') {
-      editingTodo = null;
-      renderList(priority);
-    } else if (event.key === 'Enter' && !event.isComposing) {
-      event.preventDefault();
-      item.querySelector('[data-action="save-edit"]')?.click();
-    }
-  });
-});
+}
 
-document.querySelectorAll('.todo-bulk-delete[data-bulk-priority]').forEach((button) => {
-  button.addEventListener('click', () => {
-    const priority = button.dataset.bulkPriority;
-    const selected = todoSelections[priority];
-    if (!selected || !selected.size) return;
-    data[priority] = (data[priority] || []).filter((item) => !selected.has(item.id));
-    selected.clear();
-    todoSelectionAnchors[priority] = null;
-    saveData(data);
-    renderList(priority);
-    updateCount(priority);
-    showStatusToast('已删除所选待办');
-  });
-});
+bindTodoBoardOnce();
+reconcileTodoCategoryOrderFromData();
+renderTodoBoard();
 
 // ============ 待办 · 常驻跨天刷新 ============
 // Draft dates must not depend on a home clock widget being present or visible.
@@ -1765,7 +2129,7 @@ function renderPomodoro() {
     pomodoroToggle.innerHTML = pomodoroRunning
       ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h3v10H8zM14 7h3v10h-3z" /></svg>'
       : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5z" /></svg>';
-    pomodoroToggle.setAttribute('aria-label', pomodoroRunning ? '暂停番茄钟' : '开始番茄钟');
+    pomodoroToggle.setAttribute('aria-label', pomodoroRunning ? pomeLocaleRendererApp.t("copy.pauseFocusTimer.c8fdd3") : pomeLocaleRendererApp.t("copy.startFocusTimer.b3da88"));
   }
   if (pomodoroReset) pomodoroReset.hidden = !pomodoroStarted;
   homePomodoro?.setAttribute('data-state', pomodoroRunning ? 'running' : (pomodoroStarted ? 'paused' : 'idle'));
@@ -1810,7 +2174,7 @@ pomodoroToggle?.addEventListener('click', () => {
   if (!pomodoroStarted) {
     commitPomodoroInputs();
     if (pomodoroConfiguredSeconds <= 0) {
-      showStatusToast('请先设置倒计时时间');
+      showStatusToast(pomeLocaleRendererApp.t("copy.setADurationFirst.ca86b2"));
       return;
     }
     pomodoroStarted = true;
@@ -1829,7 +2193,7 @@ pomodoroToggle?.addEventListener('click', () => {
         pomodoroStarted = false;
         clearInterval(pomodoroTimer);
         pomodoroTimer = null;
-        showStatusToast(`${completedMinutes} 分钟专注完成`);
+        showStatusToast(pomeLocaleRendererApp.t("copy.minuteFocusSessionComplete.4a8c00", { arg1: (completedMinutes) }));
         window.notchAPI?.notifyPomodoro?.(completedMinutes).catch(() => {});
       }
       renderPomodoro();
@@ -2227,9 +2591,9 @@ function applyNoteLineFormat(type) {
     const body = line.slice(indentation.length);
     if (shouldRemove) return indentation + body.replace(matcher, '');
     const content = stripNoteBlockPrefix(body) || (
-      type === 'heading' ? '标题' :
-      type === 'task' ? '待办' :
-      type === 'quote' ? '引用' : '项目'
+      type === 'heading' ? pomeLocaleRendererApp.t("copy.heading.c3405f") :
+      type === 'task' ? pomeLocaleRendererApp.t("copy.tasks.52fdbb") :
+      type === 'quote' ? pomeLocaleRendererApp.t("copy.quote.e0ec65") : pomeLocaleRendererApp.t("copy.item.79f326")
     );
     if (type === 'ordered') return indentation + String(orderedIndex++) + '. ' + content;
     if (type === 'heading') return indentation + '# ' + content;
@@ -2258,7 +2622,7 @@ function applyNoteLink() {
   const end = noteInput.selectionEnd;
   const direction = noteInput.selectionDirection;
   const selected = noteInput.value.slice(start, end);
-  const label = selected || '链接文字';
+  const label = selected || pomeLocaleRendererApp.t("copy.linkText.6f64e4");
   const url = 'https://';
   const replacement = '[' + label + '](' + url + ')';
   if (selected) {
@@ -2273,9 +2637,9 @@ let noteComposing = false;
 
 function applyNoteFormat(type) {
   if (!noteInput || noteComposing) return;
-  if (type === 'bold') return wrapNoteSelection('**', '**', '加粗文字');
-  if (type === 'italic') return wrapNoteSelection('*', '*', '斜体文字');
-  if (type === 'code') return wrapNoteSelection('`', '`', '代码');
+  if (type === 'bold') return wrapNoteSelection('**', '**', pomeLocaleRendererApp.t("copy.boldText.eb4d95"));
+  if (type === 'italic') return wrapNoteSelection('*', '*', pomeLocaleRendererApp.t("copy.italicText.1ebce6"));
+  if (type === 'code') return wrapNoteSelection('`', '`', pomeLocaleRendererApp.t("copy.code.e6f04f"));
   if (type === 'link') return applyNoteLink();
   applyNoteLineFormat(type);
 }
@@ -2318,7 +2682,7 @@ function setNoteMode(mode, focusTarget = true) {
   });
   if (noteEditButton) {
     noteEditButton.classList.toggle('active', !isPreview);
-    noteEditButton.textContent = isPreview ? '编辑' : '完成';
+    pomeLocaleRendererApp.bind(noteEditButton, "textContent", () => (isPreview ? pomeLocaleRendererApp.t("copy.edit.051836") : pomeLocaleRendererApp.t("copy.done.c0b3fb")));
     noteEditButton.setAttribute('aria-pressed', String(!isPreview));
   }
 
@@ -2463,7 +2827,7 @@ function loadNoteArchive() {
 let selectedNoteId = '';
 
 function noteArchiveTitle(note) {
-  return String(note && note.title || '').trim() || '未命名笔记';
+  return pomeLocaleRendererApp.noteTitle(note).trim() || pomeLocaleRendererApp.t("copy.untitledNote.b0b0ce");
 }
 
 function noteArchiveExcerpt(note) {
@@ -2472,7 +2836,7 @@ function noteArchiveExcerpt(note) {
 }
 
 function noteArchiveTime(timestamp) {
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
@@ -2538,8 +2902,8 @@ function renderNotesDetail(notes = loadNoteArchive()) {
     empty.className = 'notes-detail-empty';
     const hasArchive = loadNoteArchive().length > 0;
     empty.innerHTML = hasArchive
-      ? '<span class="notes-empty-mark" aria-hidden="true">⌕</span><strong>没有匹配的笔记</strong><p>试试搜索其他关键词。</p>'
-      : '<span class="notes-empty-mark" aria-hidden="true">✎</span><strong>还没有保存的笔记</strong><p>点击「新建」即可开始记录。</p>';
+      ? ("<span class=\"notes-empty-mark\" aria-hidden=\"true\">⌕</span><strong><span data-i18n=\"copy.noMatchingNotes.a187a5\">" + (pomeLocaleRendererApp.t("copy.noMatchingNotes.a187a5")) + "</span></strong><p><span data-i18n=\"copy.tryAnotherSearchTerm.6f0405\">" + (pomeLocaleRendererApp.t("copy.tryAnotherSearchTerm.6f0405")) + "</span></p>")
+      : ("<span class=\"notes-empty-mark\" aria-hidden=\"true\">✎</span><strong><span data-i18n=\"copy.noSavedNotesYet.ddc489\">" + (pomeLocaleRendererApp.t("copy.noSavedNotesYet.ddc489")) + "</span></strong><p><span data-i18n=\"copy.selectNewToStartWriting.a84fff\">" + (pomeLocaleRendererApp.t("copy.selectNewToStartWriting.a84fff")) + "</span></p>");
     notesDetail.append(empty);
     return;
   }
@@ -2557,14 +2921,14 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   title.className = 'notes-detail-title';
   title.dataset.noteId = note.id;
   title.value = String(note.title || '');
-  title.placeholder = '未命名笔记';
+  pomeLocaleRendererApp.bind(title, "placeholder", () => (pomeLocaleRendererApp.t("copy.untitledNote.b0b0ce")));
   title.maxLength = 80;
   title.autocomplete = 'off';
   title.spellcheck = false;
-  title.setAttribute('aria-label', '笔记标题，可直接修改');
+  title.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.noteTitleEditDirectly.abb0d0"));
   const time = document.createElement('time');
   time.className = 'notes-detail-time';
-  time.textContent = `更新于 ${noteArchiveTime(note.updatedAt)}`;
+  pomeLocaleRendererApp.bind(time, "textContent", () => (pomeLocaleRendererApp.t("copy.updated.7114c0", { arg1: (noteArchiveTime(note.updatedAt)) })));
   heading.append(title, time);
   const actions = document.createElement('div');
   actions.className = 'notes-detail-actions';
@@ -2572,10 +2936,10 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   const modeSwitch = document.createElement('div');
   modeSwitch.className = 'note-mode-switch notes-detail-mode-switch';
   modeSwitch.setAttribute('role', 'group');
-  modeSwitch.setAttribute('aria-label', '预览或编辑');
+  modeSwitch.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.previewOrEdit.566766"));
   ;[
-    ['preview', '预览'],
-    ['edit', '编辑'],
+    ['preview', pomeLocaleRendererApp.t("copy.preview.13d61f")],
+    ['edit', pomeLocaleRendererApp.t("copy.edit.051836")],
   ].forEach(([mode, label]) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -2590,8 +2954,8 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   remove.type = 'button';
   remove.className = 'notes-delete';
   remove.dataset.action = 'delete-note';
-  remove.setAttribute('aria-label', '删除笔记');
-  remove.title = '删除笔记';
+  remove.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.deleteNote.07a619"));
+  pomeLocaleRendererApp.bind(remove, "title", () => (pomeLocaleRendererApp.t("copy.deleteNote.07a619")));
   remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h10l1-12"/></svg>';
   actions.append(modeSwitch, remove);
   header.append(heading, actions);
@@ -2604,15 +2968,15 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   editor.className = 'notes-editor';
   editor.dataset.noteId = note.id;
   editor.value = note.content;
-  editor.placeholder = '用 Markdown 写笔记…';
-  editor.setAttribute('aria-label', `编辑笔记：${noteArchiveTitle(note)}`);
+  pomeLocaleRendererApp.bind(editor, "placeholder", () => (pomeLocaleRendererApp.t("copy.writeANoteInMarkdown.6e340b")));
+  editor.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.editNote.097174", { arg1: (noteArchiveTitle(note)) }));
   editor.spellcheck = false;
 
   const preview = document.createElement('div');
   preview.id = 'notes-preview';
   preview.className = 'note-preview notes-preview';
   preview.tabIndex = 0;
-  preview.setAttribute('aria-label', `预览笔记：${noteArchiveTitle(note)}`);
+  preview.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.previewNote.aa5b1d", { arg1: (noteArchiveTitle(note)) }));
   preview.replaceChildren(buildMarkdownPreview(note.content));
 
   const isPreview = notesDetailMode === 'preview';
@@ -2645,6 +3009,9 @@ async function requestNoteTitle(note) {
     noteTitleAttempts.delete(note.id);
     return;
   }
+  // A model reply can arrive inside the editor's save debounce. Commit that
+  // draft before comparing content, then update labels without rebuilding it.
+  flushNotesEditorSave();
   const next = window.NotchDomain.applyGeneratedNoteTitle(
     loadNoteArchive(),
     note.id,
@@ -2657,7 +3024,7 @@ async function requestNoteTitle(note) {
     return;
   }
   localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(next));
-  renderNotesLibrary();
+  updateSavedNotePresentation(updated);
 }
 
 function updateSavedNotePresentation(note) {
@@ -2665,8 +3032,8 @@ function updateSavedNotePresentation(note) {
   const title = noteArchiveTitle(note);
   const detailTitle = notesDetail?.querySelector('.notes-detail-title');
   const detailTime = notesDetail?.querySelector('.notes-detail-time');
-  if (detailTitle && document.activeElement !== detailTitle) detailTitle.value = note.title || '';
-  if (detailTime) detailTime.textContent = `已保存 · ${noteArchiveTime(note.updatedAt)}`;
+  if (detailTitle?.dataset.noteId === note.id && document.activeElement !== detailTitle) detailTitle.value = note.title || '';
+  if (detailTime && selectedNoteId === note.id) pomeLocaleRendererApp.bind(detailTime, "textContent", () => (pomeLocaleRendererApp.t("copy.saved.983d08", { arg1: (noteArchiveTime(note.updatedAt)) })));
   const row = notesList?.querySelector(`[data-note-id="${CSS.escape(note.id)}"]`);
   if (!row) return;
   const rowTitle = row.querySelector('strong');
@@ -2709,7 +3076,7 @@ function scheduleNotesEditorSave(editor) {
   pendingNotesEditor = editor;
   if (notesSaveTimer) clearTimeout(notesSaveTimer);
   const time = notesDetail?.querySelector('.notes-detail-time');
-  if (time) time.textContent = '正在保存…';
+  if (time) pomeLocaleRendererApp.bind(time, "textContent", () => (pomeLocaleRendererApp.t("copy.saving.6bdb44")));
   notesSaveTimer = setTimeout(() => {
     notesSaveTimer = null;
     const pending = pendingNotesEditor;
@@ -2723,13 +3090,13 @@ function renderNotesLibrary() {
   if (!notesList) return;
   const archive = loadNoteArchive();
   const notes = window.NotchDomain.filterNotes(archive, notesSearch?.value || '');
-  if (notesCount) notesCount.textContent = `${archive.length} 篇`;
+  if (notesCount) pomeLocaleRendererApp.bind(notesCount, "textContent", () => (pomeLocaleRendererApp.t("copy.notes.0b8a21", { arg1: (archive.length) })));
   if (!notes.some((note) => note.id === selectedNoteId)) selectedNoteId = notes[0]?.id || '';
   notesList.replaceChildren();
   if (!notes.length) {
     const empty = document.createElement('div');
     empty.className = 'notes-list-empty';
-    empty.textContent = archive.length ? '没有找到相关笔记' : '保存的笔记会出现在这里';
+    pomeLocaleRendererApp.bind(empty, "textContent", () => (archive.length ? pomeLocaleRendererApp.t("copy.noMatchingNotes.3b7e97") : pomeLocaleRendererApp.t("copy.savedNotesWillAppearHere.d4a4be")));
     notesList.append(empty);
     renderNotesDetail(notes);
     return;
@@ -2754,7 +3121,7 @@ function renderNotesLibrary() {
     const more = document.createElement('button');
     more.type = 'button';
     more.className = 'workspace-button compact';
-    more.textContent = `查看更多（已显示 ${notesVisibleLimit} / ${notes.length}）`;
+    pomeLocaleRendererApp.bind(more, "textContent", () => (pomeLocaleRendererApp.t("copy.showMore.8e8b5f", { arg1: (notesVisibleLimit), arg2: (notes.length) })));
     more.addEventListener('click', () => { notesVisibleLimit += 80; renderNotesLibrary(); });
     notesList.append(more);
   }
@@ -2781,13 +3148,13 @@ notesNewButton?.addEventListener('click', () => {
   requestAnimationFrame(() => {
     notesDetail?.querySelector('#notes-editor')?.focus({ preventScroll: true });
   });
-  showStatusToast('已新建笔记');
+  showStatusToast(pomeLocaleRendererApp.t("copy.noteCreated.246d61"));
 });
 
 noteSaveButton?.addEventListener('click', () => {
   const content = noteInput?.value.trim() || '';
   if (!content) {
-    showStatusToast('先写点内容再存档');
+    showStatusToast(pomeLocaleRendererApp.t("copy.writeSomethingBeforeArchiving.9a3119"));
     return;
   }
   const notes = loadNoteArchive();
@@ -2805,7 +3172,7 @@ noteSaveButton?.addEventListener('click', () => {
   localStorage.setItem(NOTE_KEY, noteInput.value);
   selectedNoteId = activeId;
   renderNotesLibrary();
-  showStatusToast('笔记已保存');
+  showStatusToast(pomeLocaleRendererApp.t("copy.noteSaved.6d1bf9"));
 });
 
 notesList?.addEventListener('click', (event) => {
@@ -2847,7 +3214,7 @@ notesDetail?.addEventListener('focusout', (event) => {
   if (event.target.closest('#notes-editor')) flushNotesEditorSave();
 });
 
-notesDetail?.addEventListener('click', (event) => {
+notesDetail?.addEventListener('click', async (event) => {
   const modeButton = event.target.closest('[data-notes-mode]');
   if (modeButton) {
     setNotesDetailMode(modeButton.dataset.notesMode);
@@ -2872,14 +3239,15 @@ notesDetail?.addEventListener('click', (event) => {
   const note = notes.find((item) => item.id === selectedNoteId);
   if (!note) return;
   if (action === 'delete-note') {
-    const next = notes.filter((item) => item.id !== note.id);
+    if (!await window.PomeDeleteConfirm.open({titleKey:'copy.deleteNote.07a619',items:[noteArchiveTitle(note)]})) return;
+    const next = loadNoteArchive().filter((item) => item.id !== note.id);
     localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(next));
     if (localStorage.getItem(NOTE_ACTIVE_ARCHIVE_KEY) === note.id) {
       localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
     }
     selectedNoteId = next[0]?.id || '';
     renderNotesLibrary();
-    showStatusToast('笔记已删除');
+    showStatusToast(pomeLocaleRendererApp.t("copy.noteDeleted.381e47"));
     return;
   }
 });
@@ -2939,7 +3307,7 @@ const HOME_ORDER_KEY = 'notch-home-order-v3';
 const HOME_SIZES_KEY = 'notch-home-widget-sizes-v2';
 const HOME_PLACEMENTS_KEY = 'notch-home-placements-v1';
 const HOME_HIDDEN_MODULES_KEY = 'notch-home-hidden-modules-v1';
-const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'windows', 'mirror', 'note', 'commands', 'sun'];
+const HOME_MODULE_REGISTRY = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'windows', 'mirror', 'note', 'commands', 'sun', 'almanac'];
 // 渲染层只读能力层（P0-1），不再自己判断平台。主进程通过 preload 下发 capabilities；
 // 拿不到时（例如没有 preload 的测试窗口）才用本地能力层按平台名补齐。
 function readPlatformCapabilities() {
@@ -2948,14 +3316,20 @@ function readPlatformCapabilities() {
   return window.NotchPlatform.resolveCapabilities(exposed?.platform || window.notchAPI?.platform || 'darwin');
 }
 const unavailableHomeModules = [...readPlatformCapabilities().unavailableHomeModules];
-const effectiveHomeHidden = (hidden) => window.NotchPlatform.effectiveHiddenModules(hidden, HOME_MODULE_REGISTRY, unavailableHomeModules);
+let homeCapabilities = readPlatformCapabilities();
+let windowsInlineRequested = false;
+try { windowsInlineRequested = localStorage.getItem('pome-windows-inline-v1') === '1'; } catch {}
+const effectiveHomeHidden = (hidden) => window.NotchPlatform.effectiveHiddenModules(hidden, HOME_MODULE_REGISTRY,
+  !windowsInlineRequested && homeCapabilities.features.winNativeSetting && !homeCapabilities.features.windowSwitcher
+    ? [...unavailableHomeModules, 'windows'] : unavailableHomeModules);
 // 运行期能力降级（Windows 原生模块加载失败 / 用户关闭开关）时重算首页可见模块。
 window.notchAPI?.onCapabilitiesChanged?.((capabilities) => {
   if (!Array.isArray(capabilities?.unavailableHomeModules)) return;
+  homeCapabilities = capabilities;
   unavailableHomeModules.splice(0, unavailableHomeModules.length, ...capabilities.unavailableHomeModules);
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
 });
-const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'commands', 'mirror', 'note', 'windows', 'sun'];
+const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'commands', 'mirror', 'note', 'windows', 'sun', 'almanac'];
 const HOME_SIZE_DEFAULTS = {
   music: 'small',
   windows: 'medium',
@@ -2967,26 +3341,99 @@ const HOME_SIZE_DEFAULTS = {
   pomodoro: 'mini',
   cursor: 'small',
   sun: 'medium',
+  // Small keeps the Windows first-run 12×4 fill at exactly 48 cells with sun enabled.
+  almanac: 'small',
 };
-const HOME_SIZE_LABELS = { mini: '迷你', small: '小', medium: '中', large: '大' };
+const HOME_SIZE_LABELS = { get mini() { return pomeLocaleRendererApp.t("copy.mini.43d4ba"); }, get small() { return pomeLocaleRendererApp.t("copy.small.6a7339"); }, get medium() { return pomeLocaleRendererApp.t("copy.medium.a567bd"); }, get large() { return pomeLocaleRendererApp.t("copy.large.7d4ca7"); } };
 const homeBento = document.getElementById('home-bento');
 const homeContextMenu = document.getElementById('home-context-menu');
 const homeTabPanel = document.getElementById('tab-home');
+// New profiles and an exact old Windows default get platform defaults.
+// Customized visibility, sizes and deliberate gaps remain the user's choices.
+let freshWindowsHome = false;
+try {
+  freshWindowsHome = readPlatformCapabilities().homeDefaults?.showSun === true
+    && [HOME_ORDER_KEY, HOME_SIZES_KEY, HOME_PLACEMENTS_KEY, HOME_HIDDEN_MODULES_KEY, 'notch-home-layout-v2']
+      .every((key) => localStorage.getItem(key) === null);
+} catch {}
 
 function bindHomeTilePointerGlow(bento) {
-  if (!bento || bento.dataset.tileGlowBound === 'true') return;
+  if (!bento || bento.dataset.tileGlowBound === 'true') return () => {};
   bento.dataset.tileGlowBound = 'true';
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const tiles = [...bento.querySelectorAll('.tile')];
+  let frame = null;
+  let pending = null;
+  let active = null;
+  let bounds = null;
+  const clearTile = (tile, immediate = false) => {
+    tile.classList.remove('is-hover-tilted');
+    ['--tile-pointer-x', '--tile-pointer-y', '--tile-x', '--tile-y'].forEach(key => tile.style.removeProperty(key));
+    if (immediate) tile.getAnimations().forEach(animation => {
+      if (animation.transitionProperty === 'transform' || animation.transitionProperty === 'box-shadow') animation.cancel();
+    });
+  };
+  const reset = ({ immediate = false } = {}) => {
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
+    pending = null;
+    tiles.forEach(tile => {
+      if (immediate || tile.classList.contains('is-hover-tilted') || tile.style.getPropertyValue('--tile-pointer-x')) clearTile(tile, immediate);
+    });
+    active = null;
+    bounds = null;
+  };
+  const eligible = (tile, target) => {
+    if (!tile || tile.hidden || !isExpanded || activeTab !== 'home' || modeBusy || reducedMotion.matches
+      || bento.dataset.layoutEditing === 'true' || bento.classList.contains('layout-motion-active')
+      || bento.classList.contains('layout-dragging') || tile.contains(document.activeElement)) return false;
+    const control = target.closest?.('input, textarea, select, button, a, [role="button"], [contenteditable]');
+    // The mirror cover is the whole card. Other controls keep a stationary hit
+    // target, including command tooltips, timer inputs and nested popovers.
+    return !control || control.id === 'mirror-stage';
+  };
+  const paint = () => {
+    frame = null;
+    const point = pending;
+    pending = null;
+    const tile = point?.target.closest?.('.home-bento > .tile');
+    if (!point || !eligible(tile, point.target)) { reset(); return; }
+    if (active !== tile) {
+      if (active) clearTile(active);
+      clearTile(tile, true);
+      // Cache the resting rectangle: reading a rotated rectangle on each move
+      // feeds the transform back into its own input and causes edge jitter.
+      bounds = tile.getBoundingClientRect();
+      active = tile;
+    }
+    const x = Math.max(-1, Math.min(1, (point.x - bounds.left) / Math.max(1, bounds.width) * 2 - 1));
+    const y = Math.max(-1, Math.min(1, (point.y - bounds.top) / Math.max(1, bounds.height) * 2 - 1));
+    tile.style.setProperty('--tile-pointer-x', x.toFixed(4));
+    tile.style.setProperty('--tile-pointer-y', y.toFixed(4));
+    tile.style.setProperty('--tile-x', `${((x + 1) * 50).toFixed(2)}%`);
+    tile.style.setProperty('--tile-y', `${((y + 1) * 50).toFixed(2)}%`);
+    tile.classList.add('is-hover-tilted');
+  };
   bento.addEventListener('pointermove', (event) => {
     const tile = event.target.closest?.('.home-bento > .tile');
-    if (!tile || !bento.contains(tile)) return;
-    const rect = tile.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 100;
-    const y = ((event.clientY - rect.top) / Math.max(1, rect.height)) * 100;
-    tile.style.setProperty('--tile-x', `${x.toFixed(2)}%`);
-    tile.style.setProperty('--tile-y', `${y.toFixed(2)}%`);
+    if (event.pointerType === 'touch' || event.buttons || !eligible(tile, event.target)) { reset(); return; }
+    pending = { target: event.target, x: event.clientX, y: event.clientY };
+    if (frame === null) frame = requestAnimationFrame(paint);
   });
+  bento.addEventListener('pointerleave', () => reset());
+  bento.addEventListener('pointercancel', () => reset({ immediate: true }));
+  bento.addEventListener('pointerdown', () => reset({ immediate: true }), true);
+  bento.addEventListener('focusin', () => reset({ immediate: true }));
+  bento.addEventListener('scroll', () => reset({ immediate: true }), true);
+  window.addEventListener('blur', () => reset({ immediate: true }));
+  window.addEventListener('resize', () => reset({ immediate: true }));
+  reducedMotion.addEventListener('change', () => reset({ immediate: true }));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) reset({ immediate: true }); });
+  document.addEventListener('notch:will-collapse', () => reset({ immediate: true }));
+  document.addEventListener('notch:tabchange', event => { if (event.detail?.tab !== 'home') reset({ immediate: true }); });
+  return reset;
 }
-bindHomeTilePointerGlow(homeBento);
+const resetHomeTilePointerMotion = bindHomeTilePointerGlow(homeBento);
 
 const homeTiles = homeBento
   ? Array.from(homeBento.querySelectorAll('[data-home-module]'))
@@ -3132,6 +3579,17 @@ if (!homeInboxSavedPlacement) {
 if (legacyDefaultHome) { homeOrder = [...HOME_ORDER_DEFAULTS]; homeSizes = {...HOME_SIZE_DEFAULTS}; homeWorkingLayout = null; }
 const loadedHomeVisibility = loadHiddenHomeModules();
 let hiddenHomeModules = loadedHomeVisibility.hiddenIds;
+const repairWindowsDefaultHome = readPlatformCapabilities().homeDefaults?.showSun === true
+  && window.NotchDomain.isLegacyWindowsDefaultHomeLayout({
+    order: homeOrder, defaultOrder: HOME_ORDER_DEFAULTS, sizes: homeSizes, defaults: HOME_SIZE_DEFAULTS,
+    placements: homeWorkingLayout?.placements, hiddenIds: hiddenHomeModules,
+    unavailableIds: effectiveHomeHidden([]), registry: HOME_MODULE_REGISTRY,
+  });
+const useWindowsHomeDefaults = freshWindowsHome || repairWindowsDefaultHome;
+if (repairWindowsDefaultHome) {
+  hiddenHomeModules = hiddenHomeModules.filter(id => id !== 'sun');
+  homeWorkingLayout = null;
+}
 let homeVisibilityPersisted = true;
 let homeLayoutReadOnly = false;
 let homeLayoutMotionGeneration = 0;
@@ -3148,8 +3606,10 @@ function saveHomeLayout() {
       localStorage.setItem(HOME_PLACEMENTS_KEY, JSON.stringify(homeWorkingLayout.placements));
       if (homeInboxSavedPlacement) localStorage.setItem(HOME_INBOX_SLOT_KEY, JSON.stringify(homeInboxSavedPlacement));
     }
+    return true;
   } catch (error) {
     // LocalStorage 不可用时仍保留当前会话内的布局。
+    return false;
   }
 }
 
@@ -3222,7 +3682,9 @@ function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSi
           : { layout: candidate, changed: false };
         const resolved = sealed.layout || candidate;
         homeWorkingLayout = cloneHomeLayout(resolved);
-        if (persistSeal && sealed.changed) saveHomeLayout();
+        // Fresh Windows fill must persist the sealed pack even when sealing is a no-op,
+        // otherwise reload re-packs without sealGaps and can reshuffle cards.
+        if (persistSeal) saveHomeLayout();
         return resolved;
       }
     }
@@ -3235,7 +3697,7 @@ function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSi
       : { layout, changed: false };
     const resolved = sealed.layout || layout;
     homeWorkingLayout = cloneHomeLayout(resolved);
-    if (persistSeal && sealed.changed) saveHomeLayout();
+    if (persistSeal) saveHomeLayout();
     return resolved;
   }
   return null;
@@ -3273,18 +3735,19 @@ function captureHomeLayoutVisualState() {
   return { surface: { left: surface.left, top: surface.top }, tiles };
 }
 
-function animateCommittedHomeLayout(reason, beforeState) {
+function animateCommittedHomeLayout(reason, beforeState, { draggedId = null } = {}) {
   if (!homeBento || !beforeState || reason === 'initial' || reason === 'rollback'
     || reason === 'size-preview' || reason === 'drag-commit'
     || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const generation = homeLayoutMotionGeneration;
   const isPreview = reason === 'reorder-preview';
-  const duration = isPreview
+  const isDragRelease = reason === 'drag-release';
+  const duration = isDragRelease ? 260 : isPreview
     ? 560
     : reason === 'reorder'
       ? Math.round(HOME_LAYOUT_MOTION_MS * 1.2)
       : HOME_LAYOUT_MOTION_MS;
-  const easing = isPreview
+  const easing = isDragRelease ? 'cubic-bezier(0.22, 1.12, 0.36, 1)' : isPreview
     ? 'cubic-bezier(0.22, 1, 0.36, 1)'
     : reason === 'reorder'
       ? 'cubic-bezier(0.33, 1, 0.32, 1)'
@@ -3307,17 +3770,18 @@ function animateCommittedHomeLayout(reason, beforeState) {
     const moved = Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5;
     const resized = Math.abs(scaleX - 1) >= 0.01 || Math.abs(scaleY - 1) >= 0.01;
     if (previous && !moved && !resized) return;
-    // 预览让位只做平移，避免缩放造成顿挫；正式提交才允许轻微缩放
-    const useScale = !isPreview && resized;
-    const fromTransform = useScale
-      ? `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`
-      : `translate(${dx}px, ${dy}px)`;
-    const toTransform = useScale ? 'translate(0, 0) scale(1, 1)' : 'translate(0, 0)';
+    // Animate placement, not the text's aspect ratio. A size change can have
+    // very different width/height ratios and must never stretch the content.
+    // Only the lifted card settles its uniform drag scale. Never stretch text
+    // when a sibling's footprint changes during packing.
+    const settleScale = isDragRelease && moduleId === draggedId ? scaleX : 1;
+    const fromTransform = `translate(${dx}px, ${dy}px) scale(${settleScale})`;
+    const toTransform = 'translate(0, 0) scale(1)';
     const animation = tile.animate(
       previous
         ? [
-          { transform: fromTransform },
-          { transform: toTransform },
+          { transform: fromTransform, transformOrigin: 'top left' },
+          { transform: toTransform, transformOrigin: 'top left' },
         ]
         : [
           { opacity: 0.72, transform: 'translateY(8px)' },
@@ -3346,6 +3810,7 @@ function animateCommittedHomeLayout(reason, beforeState) {
 
 function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   if (!homeBento || !layout) throw new Error('A validated homepage layout is required.');
+  resetHomeTilePointerMotion({ immediate: true });
   // 先采样当前可见位置（含进行中的 FLIP），再取消旧动画，避免先闪回再起步。
   const beforeState = reason === 'initial' || reason === 'rollback'
     || reason === 'size-preview' || reason === 'drag-commit'
@@ -3422,7 +3887,9 @@ if (!HOME_ORDER_DEFAULTS.every((id) => homeOrder.includes(id))
   || homeOrder.length !== HOME_ORDER_DEFAULTS.length) {
   homeOrder = loadHomeOrder();
 }
-const introducedSunLayout = window.NotchDomain.introduceHomeModule({
+const introducedSunLayout = useWindowsHomeDefaults ? {
+  order: homeOrder, sizes: homeSizes, hiddenIds: hiddenHomeModules, placements: null,
+} : window.NotchDomain.introduceHomeModule({
   order: homeOrder,
   sizes: homeSizes,
   defaults: HOME_SIZE_DEFAULTS,
@@ -3445,6 +3912,34 @@ if (introducedSunLayout.placements) {
     ))),
   };
 }
+let almanacAlreadyKnown = false;
+try { almanacAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'almanac'); } catch {}
+const introducedAlmanacLayout = (almanacAlreadyKnown || useWindowsHomeDefaults) ? {
+  order: homeOrder, sizes: homeSizes, hiddenIds: hiddenHomeModules,
+  placements: homeWorkingLayout?.placements || null,
+} : window.NotchDomain.introduceHomeModule({
+  order: homeOrder,
+  sizes: homeSizes,
+  defaults: HOME_SIZE_DEFAULTS,
+  placements: homeWorkingLayout?.placements || null,
+  hiddenIds: hiddenHomeModules,
+  moduleId: 'almanac',
+  defaultSize: HOME_SIZE_DEFAULTS.almanac,
+  registry: HOME_MODULE_REGISTRY,
+});
+const almanacHiddenChanged = JSON.stringify(hiddenHomeModules) !== JSON.stringify(introducedAlmanacLayout.hiddenIds);
+homeOrder = introducedAlmanacLayout.order;
+homeSizes = introducedAlmanacLayout.sizes;
+hiddenHomeModules = introducedAlmanacLayout.hiddenIds;
+if (introducedAlmanacLayout.placements) {
+  homeWorkingLayout = {
+    allowGaps: true,
+    placements: introducedAlmanacLayout.placements,
+    variants: Object.fromEntries(Object.entries(introducedAlmanacLayout.placements).map(([id, item]) => (
+      [id, window.NotchDomain.layoutVariantForPlacement(item)]
+    ))),
+  };
+}
 let inboxAlreadyKnown = false;
 try { inboxAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'inbox'); } catch {}
 const introducedInboxLayout = inboxAlreadyKnown ? { sizes: homeSizes, placements: homeWorkingLayout?.placements, hiddenIds: effectiveHomeHidden(hiddenHomeModules) } : window.NotchDomain.normalizeHomeInboxLayout({
@@ -3456,11 +3951,12 @@ const inboxHiddenChanged = !hiddenHomeModules.includes('inbox') && introducedInb
 if (inboxHiddenChanged) hiddenHomeModules.push('inbox');
 if (introducedInboxLayout.placements) homeWorkingLayout = { allowGaps: true, placements: introducedInboxLayout.placements };
 saveHomeLayout();
-if (sunHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
+if (repairWindowsDefaultHome || sunHiddenChanged || almanacHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
 
 let initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
-  sealGaps: false,
-  persistSeal: false,
+  forcePack: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
+  sealGaps: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
+  persistSeal: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
 });
 if (!initialHomeLayout) {
   // Repair once without entering safe mode: keep visibility prefs, reset packable sizes.
@@ -3498,6 +3994,16 @@ function visibilitySnapshot() {
 }
 
 function setHomeModuleVisible(moduleId, visible) {
+  const before = windowsInlineRequested;
+  const requestInline = moduleId === 'windows' && visible === true && homeCapabilities.features.winNativeSetting && !before;
+  if (requestInline) windowsInlineRequested = true;
+  const result = setHomeModuleVisibleCore(moduleId, visible, requestInline);
+  if (!result.ok) windowsInlineRequested = before;
+  else if (requestInline) { try { localStorage.setItem('pome-windows-inline-v1', '1'); } catch {} }
+  if (result.ok && result.changed && result.persisted) window.NotchUi?.clearError('home:layout');
+  return result;
+}
+function setHomeModuleVisibleCore(moduleId, visible, force = false) {
   const current = [...hiddenHomeModules];
   if (unavailableHomeModules.includes(moduleId)) return { ok: false, changed: false, error: 'unsupported', hiddenIds: current, persisted: homeVisibilityPersisted };
   const currentlyVisible = visibilitySnapshot().visibleIds;
@@ -3514,7 +4020,7 @@ function setHomeModuleVisible(moduleId, visible) {
     visible
   );
   if (!next.ok) return { ...next, changed: false, persisted: homeVisibilityPersisted };
-  const changed = JSON.stringify(next.hiddenIds) !== JSON.stringify(current);
+  const changed = force || JSON.stringify(next.hiddenIds) !== JSON.stringify(current);
   if (!changed) {
     return { ok: true, changed: false, hiddenIds: current, persisted: homeVisibilityPersisted };
   }
@@ -3554,8 +4060,9 @@ function setHomeModuleVisible(moduleId, visible) {
       try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch {}
       return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
     }
-    const persisted = saveHiddenHomeModules();
-    saveHomeLayout();
+    const visibilityPersisted = saveHiddenHomeModules();
+    const layoutPersisted = saveHomeLayout();
+    const persisted = visibilityPersisted && layoutPersisted;
     document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
     return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
   }
@@ -3617,8 +4124,9 @@ function setHomeModuleVisible(moduleId, visible) {
     try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch (rollbackError) {}
     return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
   }
-  const persisted = saveHiddenHomeModules();
-  if (fittedSizes || JSON.stringify(homeSizes) !== JSON.stringify(previousSizes)) saveHomeLayout();
+  const visibilityPersisted = saveHiddenHomeModules();
+  const layoutPersisted = fittedSizes || JSON.stringify(homeSizes) !== JSON.stringify(previousSizes) ? saveHomeLayout() : true;
+  const persisted = visibilityPersisted && layoutPersisted;
   const detail = visibilitySnapshot();
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail }));
   return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
@@ -3628,6 +4136,12 @@ window.NotchHome = Object.freeze({
   getVisibility: visibilitySnapshot,
   isVisible: (moduleId) => visibilitySnapshot().visibleIds.includes(String(moduleId || '')),
   setModuleVisible: setHomeModuleVisible,
+  saveLayout: () => {
+    if (homeLayoutReadOnly) return { ok:false, error:'layout_read_only' };
+    const visibilitySaved = saveHiddenHomeModules();
+    const layoutSaved = saveHomeLayout();
+    return { ok:visibilitySaved && layoutSaved, error:visibilitySaved && layoutSaved ? null : 'home_layout_storage_unavailable' };
+  },
 });
 document.getElementById('home-inbox-placeholder')?.addEventListener('click', async () => {
   await setActiveTab('settings');
@@ -3643,6 +4157,8 @@ if (homeLayoutReadOnly) document.dispatchEvent(new CustomEvent('notch:home-layou
 if (homeBento) {
   let pendingLongPress = null;
   let dragState = null;
+  let homeDragFrame = null;
+  let pendingHomeDragPoint = null;
   let suppressHomeClickUntil = 0;
   let homeLayoutEditing = false;
   let contextModuleId = '';
@@ -3656,6 +4172,7 @@ if (homeBento) {
   const homeLayoutSaveBtn = document.getElementById('home-layout-save');
   const homeLayoutCancelBtn = document.getElementById('home-layout-cancel');
   let homeLayoutEditSnapshot = null;
+  let homeLayoutSaveFailed = false;
 
   const syncHomeContextMenu = () => {
     if (!homeContextMenu) return;
@@ -3664,7 +4181,7 @@ if (homeBento) {
       // 编辑中：右键只调尺寸，不出现编辑项
       editBtn.hidden = homeLayoutEditing;
       editBtn.removeAttribute('aria-pressed');
-      editBtn.textContent = '编辑布局';
+      pomeLocaleRendererApp.bind(editBtn, "textContent", () => (pomeLocaleRendererApp.t("copy.editLayout.c427bd")));
     }
     const size = contextModuleId
       ? (homeSizes[contextModuleId] || HOME_SIZE_DEFAULTS[contextModuleId] || 'medium')
@@ -3725,9 +4242,11 @@ if (homeBento) {
   };
 
   const setHomeLayoutEditing = (editing, { silent = false, action = 'enter' } = {}) => {
+    resetHomeTilePointerMotion({ immediate: true });
     const next = Boolean(editing) && !homeLayoutReadOnly;
     const wasEditing = homeLayoutEditing;
     if (next && !wasEditing) {
+      homeLayoutSaveFailed = false;
       homeLayoutEditSnapshot = {
         order: [...homeOrder],
         sizes: { ...homeSizes },
@@ -3735,16 +4254,29 @@ if (homeBento) {
       };
     }
     if (!next && wasEditing) {
+      cancelHomeDrag();
       if (action === 'cancel' && homeLayoutEditSnapshot) {
         homeOrder = [...homeLayoutEditSnapshot.order];
         homeSizes = { ...homeLayoutEditSnapshot.sizes };
         homeWorkingLayout = cloneHomeLayout(homeLayoutEditSnapshot.layout);
         const layout = homeWorkingLayout || resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, { forcePack: true });
         if (layout) applyHomeLayout(layout, { reason: 'rollback' });
-        saveHomeLayout();
+        if (saveHomeLayout() && homeLayoutSaveFailed) window.NotchUi?.clearError('home:layout');
       } else if (action === 'save') {
-        saveHomeLayout();
+        const changed = JSON.stringify(homeLayoutEditSnapshot) !== JSON.stringify({
+          order: [...homeOrder], sizes: { ...homeSizes }, layout: cloneHomeLayout(homeWorkingLayout),
+        });
+        if (!saveHomeLayout()) {
+          homeLayoutSaveFailed = true;
+          showStatusToast(pomeLocaleRendererApp.t('ui.error.layoutSave'), {
+            kind:'error', messageKey:'ui.error.layoutSave', repairKey:'ui.error.layoutSaveRepair',
+            scope:'home:layout', onRepair:() => { void setActiveTab('home').then(() => homeLayoutSaveBtn?.focus({ preventScroll:true })); },
+          });
+          return; // Keep the edit snapshot and save/cancel controls available for retry.
+        }
+        if (changed || homeLayoutSaveFailed) window.NotchUi?.clearError('home:layout');
       }
+      homeLayoutSaveFailed = false;
       homeLayoutEditSnapshot = null;
     }
     homeLayoutEditing = next;
@@ -3753,9 +4285,9 @@ if (homeBento) {
     syncHomeLayoutEditBar();
     syncHomeContextMenu();
     if (!silent && next && !wasEditing) {
-      showStatusToast('已进入编辑：拖动卡片互换位置，完成后点保存');
+      showStatusToast(pomeLocaleRendererApp.t("copy.dragCardsToSwapPositionsThenSave.adf3b9"));
     } else if (!silent && !next && wasEditing) {
-      showStatusToast(action === 'cancel' ? '已取消布局修改' : '布局已保存');
+      showStatusToast(action === 'cancel' ? pomeLocaleRendererApp.t("copy.layoutChangesCanceled.bd25dc") : pomeLocaleRendererApp.t("copy.layoutSaved.76afba"));
     }
   };
   setHomeLayoutEditing(false, { silent: true });
@@ -3764,9 +4296,6 @@ if (homeBento) {
     homeTiles.forEach((tile) => tile.classList.remove('layout-drop-target'));
   };
 
-  const ordersEqual = (a, b) => Array.isArray(a) && Array.isArray(b)
-    && a.length === b.length && a.every((id, index) => id === b[index]);
-
   const swappedOrderFrom = (baseOrder, sourceId, targetId) => {
     const next = [...baseOrder];
     const sourceIndex = next.indexOf(sourceId);
@@ -3774,21 +4303,6 @@ if (homeBento) {
     if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return null;
     [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
     return next;
-  };
-
-  const applyHomeOrder = (nextOrder, reason, { forcePack = false } = {}) => {
-    const previous = [...homeOrder];
-    const previousLayout = cloneHomeLayout(homeWorkingLayout);
-    homeOrder = [...nextOrder];
-    if (forcePack) homeWorkingLayout = null;
-    const layout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, { forcePack });
-    if (!layout) {
-      homeOrder = previous;
-      homeWorkingLayout = previousLayout;
-      return false;
-    }
-    applyHomeLayout(layout, { reason });
-    return true;
   };
 
   // Exchange origins while preserving both footprints; only collisions require packing.
@@ -3816,7 +4330,7 @@ if (homeBento) {
     homeWorkingLayout = next;
     // 拖动预览已完成让位：松手只落格，不再播一次互换动画
     applyHomeLayout(next, { reason: fromDrag ? 'drag-commit' : 'reorder' });
-    if (!homeLayoutEditing) saveHomeLayout();
+    if (!homeLayoutEditing && saveHomeLayout()) window.NotchUi?.clearError('home:layout');
     return true;
   };
 
@@ -3850,39 +4364,42 @@ if (homeBento) {
   // Preview the same placement plan used on drop, using translations without resizing.
   const previewDisplaceTarget = (sourceId, targetId) => {
     if (!dragState?.originRects) return;
-    clearDisplacePreview();
     clearDropTarget();
     dragState.previewTargetId = targetId || null;
     dragState.target = null;
-    if (!targetId) return;
+    if (!targetId) { clearDisplacePreview(); return; }
     const original = dragState.originLayout;
-    const preview = window.NotchDomain.swapHomeWidgetPlacements(original, sourceId, targetId, { order: dragState.originOrder });
-    if (!preview) return;
+    if (!dragState.previewPlans.has(targetId)) {
+      dragState.previewPlans.set(targetId, window.NotchDomain.swapHomeWidgetPlacements(
+        original, sourceId, targetId, { order: dragState.originOrder }
+      ));
+    }
+    const preview = dragState.previewPlans.get(targetId);
+    if (!preview) { clearDisplacePreview(); return; }
     const targetTile = homeBento.querySelector(`[data-home-module="${targetId}"]`);
     if (!targetTile) return;
-    const bounds = homeBento.getBoundingClientRect();
-    const style = getComputedStyle(homeBento);
-    const columnGap = parseFloat(style.columnGap) * bounds.width / homeBento.offsetWidth;
-    const rowGap = parseFloat(style.rowGap) * bounds.height / homeBento.offsetHeight;
-    const pitchX = (bounds.width + columnGap) / 12;
-    const pitchY = (bounds.height + rowGap) / 4;
+    const { pitchX, pitchY } = dragState;
     homeTiles.forEach((item) => {
       const id = item.dataset.homeModule;
       if (id === sourceId || !original.placements[id] || !preview.placements[id]) return;
       const dx = (preview.placements[id].column - original.placements[id].column) * pitchX;
       const dy = (preview.placements[id].row - original.placements[id].row) * pitchY;
-      if (!dx && !dy) return;
-      item.style.setProperty('--home-displace-x', `${dx}px`);
-      item.style.setProperty('--home-displace-y', `${dy}px`);
-      item.classList.add('layout-displacing');
+      item.classList.toggle('layout-displacing', Boolean(dx || dy));
+      if (dx || dy) {
+        item.style.setProperty('--home-displace-x', `${dx}px`);
+        item.style.setProperty('--home-displace-y', `${dy}px`);
+      } else {
+        item.style.removeProperty('--home-displace-x');
+        item.style.removeProperty('--home-displace-y');
+      }
     });
-    const placeholder = document.createElement('div');
+    const placeholder = homeBento.querySelector('.home-swap-placeholder') || document.createElement('div');
     const destination = preview.placements[sourceId];
     placeholder.className = 'home-swap-placeholder';
     placeholder.setAttribute('aria-hidden', 'true');
     placeholder.style.gridColumn = `${destination.column + 1} / span ${destination.width}`;
     placeholder.style.gridRow = `${destination.row + 1} / span ${destination.height}`;
-    homeBento.append(placeholder);
+    if (!placeholder.isConnected) homeBento.append(placeholder);
     dragState.target = targetTile;
   };
 
@@ -3920,6 +4437,30 @@ if (homeBento) {
     return best && !best.hidden ? best : null;
   };
 
+  const cancelHomeDragFrame = () => {
+    if (homeDragFrame !== null) cancelAnimationFrame(homeDragFrame);
+    homeDragFrame = null;
+    pendingHomeDragPoint = null;
+  };
+
+  const paintHomeDrag = ({ clientX, clientY }) => {
+    if (!dragState) return;
+    const { tile } = dragState;
+    const target = findDropTargetAt(clientX, clientY, tile);
+    const nextTargetId = target?.dataset.homeModule || null;
+    if (nextTargetId !== dragState.previewTargetId) {
+      previewDisplaceTarget(tile.dataset.homeModule, nextTargetId);
+    }
+    tile.style.setProperty('--home-drag-x', `${clientX - dragState.startX}px`);
+    tile.style.setProperty('--home-drag-y', `${clientY - dragState.startY}px`);
+  };
+
+  const flushHomeDragFrame = () => {
+    const point = pendingHomeDragPoint;
+    cancelHomeDragFrame();
+    if (point) paintHomeDrag(point);
+  };
+
   const applyContextSize = (moduleId, requested) => {
     if (!moduleId || homeLayoutReadOnly) return;
     const previousSizes = homeSizes;
@@ -3937,12 +4478,13 @@ if (homeBento) {
     if (!layout) {
       homeSizes = previousSizes;
       homeWorkingLayout = previousLayout;
-      showStatusToast('当前空间不足，请先缩小其他模块');
+      showStatusToast(pomeLocaleRendererApp.t("copy.notEnoughSpaceMakeAnotherWidgetSmaller.cb3c70"));
       return;
     }
     applyHomeLayout(layout, { reason: 'size' });
-    if (!homeLayoutEditing) saveHomeLayout();
-    showStatusToast(`已设为${HOME_SIZE_LABELS[homeSizes[moduleId]]}组件`);
+    const persisted = homeLayoutEditing ? false : saveHomeLayout();
+    if (persisted && JSON.stringify(homeSizes) !== JSON.stringify(previousSizes)) window.NotchUi?.clearError('home:layout');
+    showStatusToast(pomeLocaleRendererApp.t("copy.widgetSizeSetTo.f1ae86", { arg1: (HOME_SIZE_LABELS[homeSizes[moduleId]]) }));
   };
 
   homeContextMenu?.addEventListener('click', (event) => {
@@ -3972,7 +4514,7 @@ if (homeBento) {
     hideHomeContextMenu();
   }, true);
 
-  window.addEventListener('blur', hideHomeContextMenu);
+  window.addEventListener('blur', () => dismissHomeLayoutChrome());
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       hideHomeContextMenu();
@@ -3980,21 +4522,33 @@ if (homeBento) {
     }
   });
 
-  const dismissHomeLayoutChrome = ({ cancelEdit = false } = {}) => {
-    hideHomeContextMenu();
+  function cancelHomeDrag() {
+    cancelHomeDragFrame();
+    cancelHomeLayoutMotion();
+    if (pendingLongPress) {
+      clearTimeout(pendingLongPress.timer);
+      pendingLongPress = null;
+    }
     if (dragState) {
       clearDisplacePreview();
       clearDropTarget();
       const { tile, pointerId } = dragState;
+      dragState = null;
       if (tile.hasPointerCapture?.(pointerId)) tile.releasePointerCapture(pointerId);
       tile.classList.remove('is-dragging', 'hit-test-off');
       tile.style.removeProperty('--home-drag-x');
       tile.style.removeProperty('--home-drag-y');
       homeBento.classList.remove('layout-dragging');
-      dragState = null;
+      suppressHomeClickUntil = Date.now() + 280;
     } else {
       clearDisplacePreview();
     }
+    clearDropTarget();
+  }
+
+  const dismissHomeLayoutChrome = ({ cancelEdit = false } = {}) => {
+    hideHomeContextMenu();
+    cancelHomeDrag();
     if (cancelEdit && homeLayoutEditing) {
       setHomeLayoutEditing(false, { action: 'cancel', silent: true });
     }
@@ -4008,6 +4562,12 @@ if (homeBento) {
     if (event.detail?.expanded) return;
     dismissHomeLayoutChrome({ cancelEdit: true });
   });
+  document.addEventListener('notch:tabchange', (event) => {
+    if (event.detail?.tab !== 'home') dismissHomeLayoutChrome();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) dismissHomeLayoutChrome();
+  });
 
   homeBento.addEventListener('contextmenu', (event) => {
     if (homeLayoutReadOnly) return;
@@ -4018,9 +4578,19 @@ if (homeBento) {
   });
 
   const finishHomeDrag = (event, cancelled = false) => {
+    const activePointer = dragState?.pointerId ?? pendingLongPress?.pointerId;
+    if (activePointer !== undefined && event.pointerId !== activePointer) return;
     if (pendingLongPress) clearTimeout(pendingLongPress.timer);
     pendingLongPress = null;
     if (!dragState) return;
+    // A release can arrive before the queued animation frame, or at a newer
+    // location. Commit the actual release point; cancelled frames never paint.
+    if (cancelled) cancelHomeDragFrame();
+    else {
+      pendingHomeDragPoint = { clientX: event.clientX, clientY: event.clientY };
+      flushHomeDragFrame();
+    }
+    const releaseState = cancelled ? null : captureHomeLayoutVisualState();
     const { tile, pointerId, previewTargetId } = dragState;
     if (tile.hasPointerCapture?.(pointerId)) tile.releasePointerCapture(pointerId);
     const sourceId = tile.dataset.homeModule;
@@ -4045,6 +4615,8 @@ if (homeBento) {
     dragState = null;
     suppressHomeClickUntil = Date.now() + 280;
 
+    if (releaseState) animateCommittedHomeLayout('drag-release', releaseState, { draggedId: sourceId });
+
     requestAnimationFrame(() => {
       homeTiles.forEach((item) => {
         item.style.removeProperty('transition');
@@ -4052,14 +4624,46 @@ if (homeBento) {
     });
 
     if (cancelled || !finalTargetId) return;
-    if (swapped) showStatusToast('已互换位置');
-    else showStatusToast('空间不够，无法交换');
+    if (swapped) showStatusToast(pomeLocaleRendererApp.t("copy.positionsSwapped.290b00"));
+    else showStatusToast(pomeLocaleRendererApp.t("copy.notEnoughSpaceToSwap.94e606"));
+  };
+
+  const beginHomeDrag = (press) => {
+    // A cancelled press must never wake later, or borrow a newer press's state.
+    if (pendingLongPress !== press) return;
+    if (!homeLayoutEditing || homeLayoutReadOnly || !isExpanded || activeTab !== 'home' || press.tile.hidden) {
+      clearTimeout(press.timer);
+      pendingLongPress = null;
+      return;
+    }
+    clearTimeout(press.timer);
+    const { tile, pointerId, startX, startY } = press;
+    try { tile.setPointerCapture?.(pointerId); } catch (error) {
+      pendingLongPress = null;
+      return;
+    }
+    cancelHomeLayoutMotion();
+    const originRects = captureOriginRects();
+    const bounds = homeBento.getBoundingClientRect();
+    const style = getComputedStyle(homeBento);
+    const columnGap = parseFloat(style.columnGap) * bounds.width / homeBento.offsetWidth;
+    const rowGap = parseFloat(style.rowGap) * bounds.height / homeBento.offsetHeight;
+    dragState = {
+      tile, target: null, pointerId, startX, startY,
+      originOrder: [...homeOrder], originRects,
+      originLayout: cloneHomeLayout(homeWorkingLayout), previewTargetId: null,
+      previewPlans: new Map(), pitchX: (bounds.width + columnGap) / 12, pitchY: (bounds.height + rowGap) / 4,
+    };
+    homeBento.classList.add('layout-dragging');
+    tile.classList.add('is-dragging');
+    pendingLongPress = null;
   };
 
   homeBento.addEventListener('pointerdown', (event) => {
     if (event.button !== 0 || event.isPrimary === false) return;
     hideHomeContextMenu();
     if (!homeLayoutEditing || homeLayoutReadOnly) return;
+    if (dragState) return;
     const tile = event.target.closest('[data-home-module]');
     if (!tile || tile.hidden || !homeBento.contains(tile)) return;
     // 编辑布局时整卡可拖（含随笔记 textarea、镜子 button、工具条）
@@ -4067,79 +4671,40 @@ if (homeBento) {
       event.preventDefault();
     }
 
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startDrag = () => {
-      if (!pendingLongPress) return;
-      tile.setPointerCapture?.(event.pointerId);
-      homeBento.classList.add('layout-dragging');
-      tile.classList.add('is-dragging');
-      dragState = {
-        tile,
-        target: null,
-        pointerId: event.pointerId,
-        startX,
-        startY,
-        originOrder: [...homeOrder],
-        originRects: captureOriginRects(),
-        originLayout: cloneHomeLayout(homeWorkingLayout),
-        previewTargetId: null,
-      };
-      pendingLongPress = null;
-    };
+    if (pendingLongPress) clearTimeout(pendingLongPress.timer);
     // Short delay so click/press still feels intentional, but whole-tile drag in edit mode
-    pendingLongPress = {
+    const press = {
       tile,
-      startX,
-      startY,
+      startX: event.clientX,
+      startY: event.clientY,
       pointerId: event.pointerId,
-      timer: setTimeout(startDrag, 120),
+      timer: null,
     };
+    pendingLongPress = press;
+    press.timer = setTimeout(() => beginHomeDrag(press), 120);
   });
 
   homeBento.addEventListener('pointermove', (event) => {
     if (pendingLongPress) {
+      if (event.pointerId !== pendingLongPress.pointerId) return;
       const moved = Math.hypot(
         event.clientX - pendingLongPress.startX,
         event.clientY - pendingLongPress.startY
       );
-      if (moved > 6 && pendingLongPress.timer) {
+      if (moved > 6) {
         // start immediately once user clearly drags
-        clearTimeout(pendingLongPress.timer);
-        pendingLongPress.timer = null;
-        const tile = pendingLongPress.tile;
-        tile.setPointerCapture?.(event.pointerId);
-        homeBento.classList.add('layout-dragging');
-        tile.classList.add('is-dragging');
-        dragState = {
-          tile,
-          target: null,
-          pointerId: event.pointerId,
-          startX: pendingLongPress.startX,
-          startY: pendingLongPress.startY,
-          originOrder: [...homeOrder],
-          originRects: captureOriginRects(),
-          originLayout: cloneHomeLayout(homeWorkingLayout),
-          previewTargetId: null,
-        };
-        pendingLongPress = null;
-      } else if (moved > 6) {
-        clearTimeout(pendingLongPress.timer);
-        pendingLongPress = null;
+        beginHomeDrag(pendingLongPress);
       }
       if (!dragState) return;
     }
     if (!dragState || dragState.pointerId !== event.pointerId) return;
     event.preventDefault();
-    const { tile } = dragState;
-    const target = findDropTargetAt(event.clientX, event.clientY, tile);
-    const nextTargetId = target ? target.dataset.homeModule : null;
-    // 指针离开目标原位就取消让位，避免误吸到旁列大模块后一直粘着
-    if (nextTargetId !== dragState.previewTargetId) {
-      previewDisplaceTarget(tile.dataset.homeModule, nextTargetId);
+    pendingHomeDragPoint = { clientX: event.clientX, clientY: event.clientY };
+    // Keep the card attached to the pointer, with at most one paint per frame.
+    // A timeout debounce would delay every movement until the pointer stopped.
+    if (homeDragFrame === null) {
+      homeDragFrame = requestAnimationFrame(flushHomeDragFrame);
     }
-    tile.style.setProperty('--home-drag-x', `${event.clientX - dragState.startX}px`);
-    tile.style.setProperty('--home-drag-y', `${event.clientY - dragState.startY}px`);
   });
 
   homeBento.addEventListener('pointerup', (event) => finishHomeDrag(event, false));
@@ -4163,6 +4728,8 @@ function bindDockSurface(surface, selector, maxScale = 1.14) {
   if (!surface) return;
   let frame = null;
   const reset = () => {
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
     surface.querySelectorAll(selector).forEach((item) => {
       item.style.removeProperty('--dock-scale');
       item.style.removeProperty('--dock-lift');
@@ -4187,6 +4754,17 @@ function bindDockSurface(surface, selector, maxScale = 1.14) {
     });
   });
   surface.addEventListener('pointerleave', reset);
+  window.addEventListener('blur', reset);
+  document.addEventListener('notch:will-collapse', reset);
+  document.addEventListener('notch:tabchange', (event) => {
+    if (event.detail?.tab !== 'home') reset();
+  });
+  document.addEventListener('notch:home-modules-changed', (event) => {
+    if (Array.isArray(event.detail?.visibleIds) && !event.detail.visibleIds.includes('windows')) reset();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) reset();
+  });
 }
 
 [
@@ -4237,29 +4815,10 @@ if (window.notchAPI && typeof window.notchAPI.onMirrorImageChanged === 'function
   window.notchAPI.onMirrorImageChanged(applyMirrorCover);
 }
 const mirrorVideo = document.getElementById('mirror-video');
-const mirrorPixelReveal = document.getElementById('mirror-pixel-reveal');
 let mirrorStream = null;
 let mirrorStarting = false;
+let mirrorGeneration = 0;
 let mirrorZoom = 1;
-
-function replayMirrorPixelReveal() {
-  if (!mirrorPixelReveal || !homeMirror || activeTab !== 'home') return;
-  if (!mirrorPixelReveal.childElementCount) {
-    const fragment = document.createDocumentFragment();
-    for (let index = 0; index < 80; index++) {
-      const pixel = document.createElement('i');
-      const row = Math.floor(index / 10);
-      const column = index % 10;
-      pixel.style.setProperty('--pixel-delay', `${(row * 24 + column * 13 + ((row + column) % 3) * 17)}ms`);
-      fragment.appendChild(pixel);
-    }
-    mirrorPixelReveal.appendChild(fragment);
-  }
-  mirrorPixelReveal.classList.remove('revealing');
-  void mirrorPixelReveal.offsetWidth;
-  mirrorPixelReveal.classList.add('revealing');
-  setTimeout(() => mirrorPixelReveal.classList.remove('revealing'), 1120);
-}
 
 function setMirrorZoom(value) {
   mirrorZoom = value;
@@ -4267,6 +4826,7 @@ function setMirrorZoom(value) {
 }
 
 function stopMirror() {
+  mirrorGeneration += 1;
   if (mirrorStream) {
     mirrorStream.getTracks().forEach((track) => track.stop());
     mirrorStream = null;
@@ -4278,17 +4838,18 @@ function stopMirror() {
   mirrorStarting = false;
   setMirrorZoom(1);
   homeMirror?.classList.remove('live', 'camera-starting');
-  mirrorStage?.setAttribute('aria-label', '打开实时镜子');
+  mirrorStage?.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.openLiveMirror.108daa"));
   mirrorStage?.setAttribute('aria-pressed', 'false');
   mirrorStage?.removeAttribute('aria-busy');
 }
 
 // 被系统挡住时，除了说清楚还要给一条出路：Windows 上没有授权弹窗，
 // 用户必须自己去隐私设置里把「允许应用访问摄像头」打开（P3-2）。
-async function showMediaPermissionToast(kind) {
+async function showMediaPermissionToast(kind, isCurrent = () => true) {
   const prompt = await window.notchAPI?.getMediaAccessStatus?.(kind).catch(() => null);
+  if (!isCurrent()) return;
   if (!prompt) {
-    showStatusToast(kind === 'camera' ? '需要摄像头权限才能打开镜子' : '需要麦克风权限');
+    showStatusToast(kind === 'camera' ? pomeLocaleRendererApp.t("copy.cameraPermissionIsNeededToOpenThe.50c6ae") : pomeLocaleRendererApp.t("copy.microphonePermissionRequired.0d9923"));
     return;
   }
   showStatusToast(prompt.message, prompt.canOpenSettings ? {
@@ -4300,6 +4861,9 @@ async function showMediaPermissionToast(kind) {
 
 async function startMirror() {
   if (mirrorStarting || mirrorStream || !mirrorVideo) return;
+  const generation = ++mirrorGeneration;
+  const isCurrent = () => generation === mirrorGeneration;
+  const canContinue = () => isCurrent() && mirrorStarting && isExpanded && activeTab === 'home' && !homeMirror?.hidden;
   mirrorStarting = true;
   homeMirror?.classList.add('camera-starting');
   mirrorStage?.setAttribute('aria-busy', 'true');
@@ -4307,8 +4871,9 @@ async function startMirror() {
     const permitted = !window.notchAPI || typeof window.notchAPI.ensureCamera !== 'function'
       ? true
       : await window.notchAPI.ensureCamera();
+    if (!isCurrent()) return;
     if (!permitted) throw new Error('camera_permission_denied');
-    if (!mirrorStarting || !isExpanded || activeTab !== 'home') return;
+    if (!canContinue()) return;
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
@@ -4317,28 +4882,38 @@ async function startMirror() {
         height: { ideal: 1280 },
       },
     });
-    if (!isExpanded || activeTab !== 'home' || !mirrorStarting) {
+    if (!canContinue()) {
       stream.getTracks().forEach((track) => track.stop());
       return;
     }
     mirrorStream = stream;
     mirrorVideo.srcObject = stream;
     await mirrorVideo.play();
+    // stop / restart may happen while permission, capture or play is pending.
+    // An older request must not take ownership or clear a newer request's UI.
+    if (!canContinue() || mirrorStream !== stream) {
+      if (isCurrent() && mirrorStream === stream) stopMirror();
+      return;
+    }
     setMirrorZoom(1);
     homeMirror?.classList.add('live');
-    mirrorStage?.setAttribute('aria-label', '关闭实时镜子');
+    mirrorStage?.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.closeLiveMirror.a64be7"));
     mirrorStage?.setAttribute('aria-pressed', 'true');
   } catch (error) {
+    if (!isCurrent()) return;
     stopMirror();
+    const stoppedGeneration = mirrorGeneration;
     const denied = error && (
       error.name === 'NotAllowedError' || error.message === 'camera_permission_denied'
     );
-    if (denied) await showMediaPermissionToast('camera');
-    else showStatusToast('暂时无法打开摄像头');
+    if (denied) await showMediaPermissionToast('camera', () => mirrorGeneration === stoppedGeneration);
+    else showStatusToast(pomeLocaleRendererApp.t("copy.couldnTOpenTheCamera.7e9d5c"));
   } finally {
-    mirrorStarting = false;
-    homeMirror?.classList.remove('camera-starting');
-    mirrorStage?.removeAttribute('aria-busy');
+    if (isCurrent()) {
+      mirrorStarting = false;
+      homeMirror?.classList.remove('camera-starting');
+      mirrorStage?.removeAttribute('aria-busy');
+    }
   }
 }
 
@@ -4378,7 +4953,7 @@ function renderClipFavs() {
   if (!favEntries.length) {
     clipfavListEl.innerHTML =
       '<button class="clipfav-empty" type="button" data-action="goto-clip">' +
-      '去"剪贴板"Tab 给常用记录加星 →' +
+      pomeLocaleRendererApp.t("copy.starItemsInClipboardToKeepThem.f3311e") +
       '</button>';
     lastRenderedFavsVersion = clipDataVersion; // 空态也标记已渲染
     return;
@@ -4392,12 +4967,12 @@ function renderClipFavs() {
       if (entry.type === 'image') {
         const dataUrl = entry.imagePath ? clipImageCache.get(entry.imagePath) : null;
         const mediaHtml = dataUrl
-          ? `<img class="clipfav-thumb" src="${escapeHtml(dataUrl)}" alt="图片" draggable="false"/>`
-          : `<div class="clipfav-thumb-placeholder">图</div>`;
+          ? ("<img class=\"clipfav-thumb\" src=\"" + (escapeHtml(dataUrl)) + "\" alt=\"" + (pomeLocaleRendererApp.attribute("copy.image.d24c10")) + "\" data-i18n-alt=\"copy.image.d24c10\" draggable=\"false\"/>")
+          : ("<div class=\"clipfav-thumb-placeholder\"><span data-i18n=\"copy.image.801357\">" + (pomeLocaleRendererApp.t("copy.image.801357")) + "</span></div>");
         return (
-          `<div class="clipfav-item clip-type-image" data-id="${safeId}" role="button" tabindex="0" title="图片">` +
+          ("<div class=\"clipfav-item clip-type-image\" data-id=\"" + (safeId) + "\" role=\"button\" tabindex=\"0\" title=\"" + (pomeLocaleRendererApp.attribute("copy.image.d24c10")) + "\" data-i18n-title=\"copy.image.d24c10\">") +
           mediaHtml +
-          `<span class="clipfav-text">图片</span>` +
+          ("<span class=\"clipfav-text\"><span data-i18n=\"copy.image.d24c10\">" + (pomeLocaleRendererApp.t("copy.image.d24c10")) + "</span></span>") +
           `</div>`
         );
       }
@@ -4471,7 +5046,6 @@ if (clipfavListEl) {
 // ============ 剪贴板历史 ============
 const CLIP_HISTORY_KEY = 'notch-clip-history';
 const CLIP_FAV_KEY = 'notch-clip-favorites';
-const CLIP_MAX = 100;
 const CLIP_URL_RE = /^https?:\/\//i;
 const starOutlineSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg>';
 const starFilledSvg = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg>';
@@ -4551,6 +5125,23 @@ let clipClearArmed = false;
 // 防重入标志：renderClipList 内按需图片预加载完成后的二次渲染
 let clipRenderPending = false;
 
+function pruneClipHistory() {
+  const trimmed = window.NotchDomain.trimClipboardHistory(clipHistory, clipFavorites);
+  clipHistory = trimmed.history;
+  // A synced or restored row may share an image with a surviving favorite.
+  const imageKey = imagePath => window.NotchPlatform.portableMediaPath('clipboard-images', imagePath);
+  const retainedPaths = new Set(clipHistory.map(row => row.imagePath).filter(Boolean).map(imageKey));
+  const evictedPaths = [...new Set(trimmed.evicted.map(row => row.imagePath)
+    .filter(imagePath => imagePath && !retainedPaths.has(imageKey(imagePath))))];
+  saveClipHistory(clipHistory);
+  saveClipFavorites(clipFavorites);
+  clipDataVersion++;
+  evictedPaths.forEach(imagePath => clipImageCache.delete(imagePath));
+  if (evictedPaths.length && window.notchAPI?.deleteClipImages) {
+    window.notchAPI.deleteClipImages(evictedPaths).catch(() => {});
+  }
+}
+
 async function preloadClipImage(imagePath) {
   if (!imagePath) return;
   if (clipImageCache.has(imagePath)) return;
@@ -4577,22 +5168,8 @@ async function addClipEntry(raw) {
   };
 
   // 每一次系统复制都是独立历史事件；相同内容也必须保留为两条记录。
-  const updated = window.NotchDomain.prependClipboardHistory(clipHistory, entry, CLIP_MAX);
-  clipHistory = updated.history;
-  const evicted = updated.evicted;
-  if (evicted.length > 0) {
-    const evictedPaths = evicted
-      .filter((e) => e.type === 'image' && e.imagePath)
-      .map((e) => e.imagePath);
-    if (evictedPaths.length > 0) {
-      if (window.notchAPI && typeof window.notchAPI.deleteClipImages === 'function') {
-        window.notchAPI.deleteClipImages(evictedPaths).catch(() => {});
-      }
-      evictedPaths.forEach((p) => clipImageCache.delete(p));
-    }
-  }
-
-  saveClipHistory(clipHistory);
+  clipHistory = [entry, ...clipHistory];
+  pruneClipHistory();
 
   // 图片条目预加载缩略图
   if (entry.type === 'image' && entry.imagePath) {
@@ -4607,9 +5184,9 @@ async function addClipEntry(raw) {
 function formatClipTime(ts) {
   const now = Date.now();
   const diff = now - ts;
-  if (diff < 60 * 1000) return '刚刚';
-  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`;
-  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)} 小时前`;
+  if (diff < 60 * 1000) return pomeLocaleRendererApp.t("copy.justNow.de6785");
+  if (diff < 60 * 60 * 1000) return pomeLocaleRendererApp.t("copy.minutesAgo.5c5fd5", { arg1: (Math.floor(diff / 60000)) });
+  if (diff < 24 * 60 * 60 * 1000) return pomeLocaleRendererApp.t("copy.hoursAgo.9112fb", { arg1: (Math.floor(diff / 3600000)) });
   const d = new Date(ts);
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
@@ -4617,23 +5194,16 @@ function formatClipTime(ts) {
 function clipEntryHtml(entry, faved) {
   const favClass = faved ? ' faved' : '';
   const star = faved ? starFilledSvg : starOutlineSvg;
-  const favLabel = faved ? '取消收藏' : '收藏';
+  const favLabel = faved ? pomeLocaleRendererApp.t("copy.unstar.dca608") : pomeLocaleRendererApp.t("copy.star.60a535");
   const timeStr = escapeHtml(formatClipTime(entry.timestamp));
   const safeId = escapeHtml(entry.id);
 
   if (entry.type === 'image') {
     const dataUrl = entry.imagePath ? clipImageCache.get(entry.imagePath) : null;
     const thumbHtml = dataUrl
-      ? `<img class="clip-thumb" src="${escapeHtml(dataUrl)}" alt="图片" draggable="false"/>`
-      : `<span class="clip-thumb-placeholder">图片加载中…</span>`;
-    return `<div class="clip-item clip-item-image clip-type-image" data-id="${safeId}">
-  <button class="clip-copy-target" type="button" data-action="copy" aria-label="复制图片">
-    <span class="clip-thumb-wrap">${thumbHtml}</span>
-    <span class="clip-meta"><span class="clip-time">${timeStr}</span></span>
-  </button>
-  <button class="clip-fav-btn${favClass}" type="button" data-action="fav" aria-label="${favLabel}">${star}</button>
-  <button class="clip-del-btn" type="button" data-action="delete" aria-label="删除">×</button>
-</div>`;
+      ? ("<img class=\"clip-thumb\" src=\"" + (escapeHtml(dataUrl)) + "\" alt=\"" + (pomeLocaleRendererApp.attribute("copy.image.d24c10")) + "\" data-i18n-alt=\"copy.image.d24c10\" draggable=\"false\"/>")
+      : ("<span class=\"clip-thumb-placeholder\"><span data-i18n=\"copy.loadingImage.f304d7\">" + (pomeLocaleRendererApp.t("copy.loadingImage.f304d7")) + "</span></span>");
+    return ("<div class=\"clip-item clip-item-image clip-type-image\" data-id=\"" + (safeId) + "\">\n  <button class=\"clip-copy-target\" type=\"button\" data-action=\"copy\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.copyImage.4c2b82")) + "\" data-i18n-aria-label=\"copy.copyImage.4c2b82\">\n    <span class=\"clip-thumb-wrap\">" + (thumbHtml) + "</span>\n    <span class=\"clip-meta\"><span class=\"clip-time\">" + (timeStr) + "</span></span>\n  </button>\n  <button class=\"clip-fav-btn" + (favClass) + "\" type=\"button\" data-action=\"fav\" aria-label=\"" + (favLabel) + "\">" + (star) + "</button>\n  <button class=\"clip-del-btn\" type=\"button\" data-action=\"delete\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.delete.2f9daa")) + "\" data-i18n-aria-label=\"copy.delete.2f9daa\">×</button>\n</div>");
   }
 
   // text | url 条目
@@ -4641,16 +5211,9 @@ function clipEntryHtml(entry, faved) {
   const isUrl = entry.type === 'url' || (entry.text && CLIP_URL_RE.test(entry.text));
   const typeClass = isUrl ? 'clip-type-url' : 'clip-type-text';
   const accessiblePreview = escapeHtml(
-    (entry.text || '').replace(/\s+/g, ' ').trim().slice(0, 80) || '空白内容'
+    (entry.text || '').replace(/\s+/g, ' ').trim().slice(0, 80) || pomeLocaleRendererApp.t("copy.blankContent.09d2d3")
   );
-  return `<div class="clip-item clip-item-text ${typeClass}" data-id="${safeId}">
-  <button class="clip-copy-target" type="button" data-action="copy" aria-label="复制：${accessiblePreview}">
-    <span class="clip-text">${safeText}</span>
-    <span class="clip-meta"><span class="clip-time">${timeStr}</span></span>
-  </button>
-  <button class="clip-fav-btn${favClass}" type="button" data-action="fav" aria-label="${favLabel}">${star}</button>
-  <button class="clip-del-btn" type="button" data-action="delete" aria-label="删除">×</button>
-</div>`;
+  return ("<div class=\"clip-item clip-item-text " + (typeClass) + "\" data-id=\"" + (safeId) + "\">\n  <button class=\"clip-copy-target\" type=\"button\" data-action=\"copy\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.copy.3f65f7", { arg3: (accessiblePreview) })) + "\">\n    <span class=\"clip-text\">" + (safeText) + "</span>\n    <span class=\"clip-meta\"><span class=\"clip-time\">" + (timeStr) + "</span></span>\n  </button>\n  <button class=\"clip-fav-btn" + (favClass) + "\" type=\"button\" data-action=\"fav\" aria-label=\"" + (favLabel) + "\">" + (star) + "</button>\n  <button class=\"clip-del-btn\" type=\"button\" data-action=\"delete\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.delete.2f9daa")) + "\" data-i18n-aria-label=\"copy.delete.2f9daa\">×</button>\n</div>");
 }
 
 function getFilteredClipItems() {
@@ -4675,7 +5238,7 @@ function renderClipList() {
   if (items.length === 0) {
     clipListEl.innerHTML =
       '<div class="clip-empty">' +
-      (clipHistory.length ? '没有符合条件的记录' : '复制点什么，历史会出现在这里') +
+      (clipHistory.length ? pomeLocaleRendererApp.t("copy.noMatchingItems.4659ba") : pomeLocaleRendererApp.t("copy.copySomethingToSeeItsHistoryHere.f0571f")) +
       '</div>';
     lastRenderedClipVersion = clipDataVersion; // 空态也标记已渲染
     return;
@@ -4785,8 +5348,7 @@ function toggleClipFavorite(id, focusContext = null) {
   } else {
     clipFavorites.splice(idx, 1);
   }
-  clipDataVersion++; // clipFavorites 已变
-  saveClipFavorites(clipFavorites);
+  pruneClipHistory();
   renderClipList();
   renderClipFavs();
   if (focusContext && focusContext.restoreFocus) {
@@ -4816,8 +5378,8 @@ function deleteClipEntry(id, focusContext = null) {
   if (focusContext && focusContext.restoreFocus) {
     focusClipControl([focusContext.nextId, focusContext.previousId]);
   }
-  showStatusToast('已删除剪贴记录', {
-    actionLabel: '撤销',
+  showStatusToast(pomeLocaleRendererApp.t("copy.clipboardEntryDeleted.be12bb"), {
+    actionLabel: pomeLocaleRendererApp.t("copy.undo.926a50"),
     duration: 5000,
     onAction: () => {
       if (clipHistory.some((item) => item.id === id)) return;
@@ -4825,13 +5387,11 @@ function deleteClipEntry(id, focusContext = null) {
       if (favoriteIndex !== -1) {
         clipFavorites.splice(Math.min(favoriteIndex, clipFavorites.length), 0, id);
       }
-      clipDataVersion++;
-      saveClipHistory(clipHistory);
-      saveClipFavorites(clipFavorites);
+      pruneClipHistory();
       renderClipList();
       renderClipFavs();
       focusClipControl([id]);
-      showStatusToast('已撤销删除');
+      showStatusToast(pomeLocaleRendererApp.t("copy.deletionUndone.2e33cb"));
     },
     onExpire: () => {
       if (entry.type !== 'image' || !entry.imagePath) return;
@@ -4847,22 +5407,22 @@ function resetClipClearConfirmation() {
   clipClearArmed = false;
   if (clipClearBtn) {
     clipClearBtn.classList.remove('confirming');
-    clipClearBtn.setAttribute('aria-label', '清空历史');
+    clipClearBtn.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.clearHistory.17ac4a"));
   }
 }
 
 function requestClearClipHistory() {
   if (clipHistory.length === 0) {
-    showStatusToast('剪贴板历史已是空的');
+    showStatusToast(pomeLocaleRendererApp.t("copy.clipboardHistoryIsAlreadyEmpty.d4a211"));
     return;
   }
   if (!clipClearArmed) {
     clipClearArmed = true;
     if (clipClearBtn) {
       clipClearBtn.classList.add('confirming');
-      clipClearBtn.setAttribute('aria-label', `再次点击确认清空 ${clipHistory.length} 条历史`);
+      clipClearBtn.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.clickAgainToClearHistoryEntries.04c46d", { arg1: (clipHistory.length) }));
     }
-    showStatusToast(`再点一次垃圾桶，清空 ${clipHistory.length} 条记录`, {
+    showStatusToast(pomeLocaleRendererApp.t("copy.clickTheBinAgainToClearEntries.8ef455", { arg1: (clipHistory.length) }), {
       duration: 3000,
       onExpire: resetClipClearConfirmation,
     });
@@ -4896,7 +5456,7 @@ function clearClipHistory() {
   }
   renderClipList();
   renderClipFavs();
-  showStatusToast(`已清空 ${removedCount} 条剪贴记录`);
+  showStatusToast(pomeLocaleRendererApp.t("copy.clearedClipboardEntries.e98862", { arg1: (removedCount) }));
 }
 
 async function copyClipEntry(id) {
@@ -4908,19 +5468,19 @@ async function copyClipEntry(id) {
       ? await window.notchAPI.pasteClipboard(entry)
       : { ok: await window.notchAPI.writeClipboard(entry), pasted: false };
     if (!result?.ok) {
-      showStatusToast('复制失败，请重试');
+      showStatusToast(pomeLocaleRendererApp.t("copy.copyFailedTryAgain.86ee28"));
       return false;
     }
     showStatusToast(result.pasted
-      ? '已填入刚才的输入框'
+      ? pomeLocaleRendererApp.t("copy.pastedIntoThePreviousInput.dd7d6e")
       : result.permissionRequired
-        ? '请开启辅助功能权限；内容已复制'
+        ? pomeLocaleRendererApp.t("copy.enableAccessibilityPermissionContentHasBeenCopied.20d80d")
         // Windows：目标以管理员身份运行时 UIPI 会静默吞掉按键，只能请用户手动粘贴（P4-1）。
         : result.reason === 'elevated'
-          ? '已复制；目标窗口以管理员身份运行，请手动粘贴'
-          : entry.type === 'image' ? '图片已复制，可直接粘贴' : '已复制，可直接粘贴');
+          ? pomeLocaleRendererApp.t("copy.copiedTheTargetAppIsRunningAs.e85a67")
+          : entry.type === 'image' ? pomeLocaleRendererApp.t("copy.imageCopiedReadyToPaste.5abf25") : pomeLocaleRendererApp.t("copy.copiedReadyToPaste.afa9e1"));
   } catch (e) {
-    showStatusToast('复制失败，请重试');
+    showStatusToast(pomeLocaleRendererApp.t("copy.copyFailedTryAgain.86ee28"));
     return false;
   }
   // 视觉反馈：800ms 后移除 copied 类
@@ -5011,12 +5571,11 @@ function applyWorkspaceClipboard(clipboard) {
   if (!clipboard || typeof clipboard !== 'object') return;
   if (Array.isArray(clipboard.history)) {
     clipHistory = clipboard.history.map(normalizeClipEntry).filter(Boolean);
-    saveClipHistory(clipHistory);
   }
   if (Array.isArray(clipboard.favorites)) {
     clipFavorites = clipboard.favorites.filter((id) => typeof id === 'string');
-    saveClipFavorites(clipFavorites);
   }
+  pruneClipHistory();
   if (typeof renderClipList === 'function') renderClipList();
   if (typeof renderClipFavs === 'function') renderClipFavs();
 }
@@ -5042,7 +5601,8 @@ document.addEventListener('nas-sync:todos-projection', (event) => {
     /* ignore */
   }
   data = loadData();
-  renderAll();
+  reconcileTodoCategoryOrderFromData();
+  renderTodoBoard();
 });
 renderClipList(); // 首屏确保 clip-list DOM 就绪时渲染一次（幂等）
 renderClipFavs(); // 首屏渲染收藏剪贴块
@@ -5053,3 +5613,37 @@ window.prepareWorkspaceBackupSnapshot = () => {
   localStorage.setItem('notch-home-note', noteInput.value);
   return collectLocalStorageSnapshot();
 };
+
+window.addEventListener('pome:language-changed', () => {
+  let savedCategories = {};
+  try { savedCategories = JSON.parse(localStorage.getItem(TODO_CATEGORY_KEY) || '{}') || {}; } catch {}
+  for (const priority of PRIORITIES) {
+    // Saved names are user data; surrounding control labels still follow the UI language.
+    if (!savedCategories[priority]) {
+      const input = document.querySelector(`.todo-category-name[data-category="${priority}"]`);
+      const previous = todoCategoryNames[priority];
+      todoCategoryNames[priority] = TODO_CATEGORY_DEFAULTS[priority];
+      if (input) {
+        const dirty = input.value !== input.defaultValue;
+        input.defaultValue = todoCategoryNames[priority];
+        if (!dirty || input.value === previous) input.value = todoCategoryNames[priority];
+      }
+    }
+    const addInput = document.querySelector(`.add-row input[data-priority="${priority}"]`);
+    if (addInput) addInput.setAttribute('aria-label', pomeLocaleRendererApp.t('copy.addATaskTo.efb0ec', { arg1: todoCategoryNames[priority] }));
+  }
+  for (const button of document.querySelectorAll('.todo-bulk-delete')) {
+    button.textContent = pomeLocaleRendererApp.t('copy.delete.2f9daa');
+  }
+  for (const trigger of document.querySelectorAll('.todo-deadline-trigger')) {
+    const deadline = trigger.dataset.deadline;
+    const label = trigger.querySelector('span');
+    if (!label) continue;
+    // Keep selected deadlines reformatted; empty triggers need the localized "日期/Date" label.
+    if (deadline && trigger.classList.contains('selected')) {
+      label.textContent = pomeLocaleRendererApp.date(deadline, { day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    } else {
+      label.textContent = pomeLocaleRendererApp.t('copy.date.70d0c1');
+    }
+  }
+});

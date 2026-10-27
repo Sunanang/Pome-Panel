@@ -45,7 +45,28 @@ function readCapabilities() {
   return deepFreeze({ platform: process.platform });
 }
 
+// The renderer's shared localization runtime owns the supported-language
+// catalog. Type-check main-process snapshots here without a second, stale
+// bilingual allowlist that drops the other eight languages' broadcasts.
+function isLocalizationState(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && typeof value.effectiveLocale === 'string' && typeof value.preference === 'string'
+    && typeof value.formatLocale === 'string' && Number.isInteger(value.revision);
+}
+function readLocalization() {
+  const argument = process.argv.find(value => value.startsWith('--pome-locale='));
+  try {
+    const value = argument && decodeBase64Json(argument.slice('--pome-locale='.length));
+    if (isLocalizationState(value)) return deepFreeze(value);
+  } catch {}
+  return deepFreeze({ preference: 'system', effectiveLocale: 'en-US', formatLocale: 'en-US', revision: 0 });
+}
 contextBridge.exposeInMainWorld('notchAPI', {
+  localization: readLocalization(),
+  setLanguage: value => ipcRenderer.invoke('settings:set-language', value),
+  onLocalizationChanged: cb => subscribe('localization:changed', (_event, value) => {
+    if (isLocalizationState(value)) cb(deepFreeze(value));
+  }),
   // platform 保留一个版本给尚未迁移到 capabilities 的调用方。
   platform: process.platform,
   // additionalArguments 只在创建窗口时生效，运行期的能力变化走 capabilities:changed。
@@ -85,6 +106,21 @@ contextBridge.exposeInMainWorld('notchAPI', {
   onCursorTokenChanged: (cb) => subscribe('cursor:token-changed', (event, status) => cb(status)),
   setCursorToken: (token) => ipcRenderer.invoke('cursor:set-token', token),
   clearCursorToken: () => ipcRenderer.invoke('cursor:clear-token'),
+  getGrokbotUsage: (options) => ipcRenderer.invoke('grokbot:usage', options || {}),
+  getClaudeUsage: (options) => ipcRenderer.invoke('claude:usage', options || {}),
+  getCopilotUsage: (options) => ipcRenderer.invoke('copilot:usage', options || {}),
+  getGrokUsage: (options) => ipcRenderer.invoke('grok:usage', options || {}),
+  getAntigravityUsage: (options) => ipcRenderer.invoke('antigravity:usage', options || {}),
+  getManusUsage: (options) => ipcRenderer.invoke('manus:usage', options || {}),
+  getManusCompletionStatus: () => ipcRenderer.invoke('manus:completion-status'),
+  setManusCompletionEnabled: (enabled) => ipcRenderer.invoke('manus:completion-set-enabled', enabled === true),
+  checkManusCompletion: () => ipcRenderer.invoke('manus:completion-check'),
+  previewManusCompletion: () => ipcRenderer.invoke('manus:completion-preview'),
+  onManusCompletionStatus: (cb) => subscribe('manus:completion-changed', (_event, status) => cb(status)),
+  getAiProviderTokenStatus: (providerId) => ipcRenderer.invoke('ai-provider:token-status', providerId),
+  setAiProviderToken: (providerId, token, options) => ipcRenderer.invoke('ai-provider:set-token', providerId, token, options),
+  clearAiProviderToken: (providerId) => ipcRenderer.invoke('ai-provider:clear-token', providerId),
+  onAiProviderTokenChanged: (cb) => subscribe('ai-provider:token-changed', (event, status) => cb(status)),
   controlMusic: (action) => ipcRenderer.invoke('music:control', action),
   inspectLink: (url) => ipcRenderer.invoke('links:inspect', url),
   listWindows: () => ipcRenderer.invoke('windows:list'),
@@ -101,7 +137,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   copyCredential: (id, field) => ipcRenderer.invoke('credentials:copy', { id, field }),
   getTranscriptionConfig: () => ipcRenderer.invoke('transcription:get-config'),
   setTranscriptionConfig: (config) => ipcRenderer.invoke('transcription:set-config', config),
-  startTranscription: () => ipcRenderer.invoke('transcription:start'),
+  startTranscription: language => ipcRenderer.invoke('transcription:start', { language }),
   sendTranscriptionAudio: (bytes) => ipcRenderer.send('transcription:audio', bytes),
   finishTranscription: () => ipcRenderer.invoke('transcription:finish'),
   onTranscriptionEvent: (cb) => subscribe('transcription:event', (event, payload) => cb(payload)),
@@ -110,6 +146,11 @@ contextBridge.exposeInMainWorld('notchAPI', {
   onTaskInboxError: (cb) => subscribe('tasks:inbox-error', (_event, error) => cb(error)),
   rebuildTaskInbox: () => ipcRenderer.invoke('tasks:rebuild'),
   getTaskInbox: (options) => ipcRenderer.invoke('tasks:inbox', options || {}),
+  getAiAttention: () => ipcRenderer.invoke('ai-attention:list'),
+  showAiAttention: key => ipcRenderer.invoke('ai-attention:show', key),
+  openAiAttention: key => ipcRenderer.invoke('ai-attention:open', key),
+  rebuildAiAttention: () => ipcRenderer.invoke('ai-attention:rebuild'),
+  onAiAttentionChanged: cb => subscribe('ai-attention:changed', () => cb()),
   markTaskRead: (id) => ipcRenderer.invoke('tasks:read', id),
   openTaskSource: (id) => ipcRenderer.invoke('tasks:open-source', id),
   getAiSources: () => ipcRenderer.invoke('tasks:sources'),
@@ -123,10 +164,14 @@ contextBridge.exposeInMainWorld('notchAPI', {
   onToggleShortcut: (cb) => subscribe('shortcut:toggle-panel', () => cb()),
   getHoverSpaceStatus: () => ipcRenderer.invoke('shortcut:hover-space-status'),
   getAppSettings: () => ipcRenderer.invoke('settings:get'),
+  completeWelcome: () => ipcRenderer.invoke('settings:complete-welcome'),
   setFeature: (featureId, enabled) => ipcRenderer.invoke('settings:set-feature', { featureId, enabled }),
   setDefaultTab: (tab) => ipcRenderer.invoke('settings:set-default-tab', tab),
   setWinNative: (enabled) => ipcRenderer.invoke('settings:set-win-native', enabled === true),
   setAutoLaunch: (enabled) => ipcRenderer.invoke('settings:set-auto-launch', enabled === true),
+  setTaskNotifications: (enabled) => ipcRenderer.invoke('settings:set-task-notifications', enabled === true),
+  setWeatherEffects: (enabled) => ipcRenderer.invoke('settings:set-weather-effects', enabled === true),
+  getSunWeather: (location) => ipcRenderer.invoke('sun:weather', location),
   setPanelShortcut: (accelerator) => ipcRenderer.invoke('settings:set-shortcut', accelerator),
   onAppSettingsChanged: (cb) => subscribe('settings:changed', (event, settings) => cb(settings)),
   onRecordShortcut: (cb) => subscribe('app:record-shortcut', () => cb()),
@@ -161,16 +206,22 @@ contextBridge.exposeInMainWorld('notchAPI', {
     subscribe('task-notification:show', (event, notification) => cb(notification)),
   onTaskNotificationQueue: (cb) =>
     subscribe('task-notification:queue', (event, count) => cb(count)),
+  onTaskNotificationTiming: (cb) =>
+    subscribe('task-notification:timing', (event, timing) => cb(timing)),
+  taskNotificationShown: (eventId) => ipcRenderer.send('task-notification:shown', eventId),
+  taskNotificationResize: (size) => ipcRenderer.send('task-notification:resize', size),
+  dismissTaskNotification: (eventId) => ipcRenderer.send('task-notification:close', eventId),
   onTaskNotificationHide: (cb) =>
-    subscribe('task-notification:hide', (event, eventId) => cb(eventId)),
+    subscribe('task-notification:hide', (event, payload) => cb(payload)),
   onTaskCompletion: (cb) =>
     subscribe('task-completion:new', (event, notification) => cb(notification)),
+  onTaskInboxChanged: (cb) => subscribe('tasks:inbox-changed', () => cb()),
   taskNotificationDismissed: (eventId) =>
     ipcRenderer.send('task-notification:dismissed', eventId),
   activateTaskNotification: (eventId) =>
     ipcRenderer.invoke('task-notification:activate', eventId),
-  taskNotificationHover: (paused) =>
-    ipcRenderer.send('task-notification:hover', paused === true),
+  taskNotificationHover: (paused, eventId) =>
+    ipcRenderer.send('task-notification:hover', { paused: paused === true, eventId }),
   syncGetStatus: () => ipcRenderer.invoke('sync:get-status'),
   syncGetDashboard: () => ipcRenderer.invoke('sync:get-dashboard'),
   syncListEndpoints: () => ipcRenderer.invoke('sync:list-endpoints'),

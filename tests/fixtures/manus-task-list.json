@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "request_id": "req_task_list_fixture",
+  "data": [
+    {
+      "id": "task_fixture_active",
+      "status": "running",
+      "created_at": 1760925600,
+      "updated_at": 1760925660,
+      "task_type": "standard",
+      "share_visibility": "private",
+      "title": "Active fixture task",
+      "task_url": "https://manus.im/app/task_fixture_active",
+      "has_running_background_jobs": false
+    },
+    {
+      "id": "task_fixture_done",
+      "status": "stopped",
+      "created_at": 1760922000,
+      "updated_at": 1760922300,
+      "task_type": "standard",
+      "share_visibility": "private",
+      "title": "Completed fixture task",
+      "task_url": "https://manus.im/app/task_fixture_done",
+      "has_running_background_jobs": false
+    },
+    {
+      "id": "task_fixture_project",
+      "status": "stopped",
+      "created_at": 1760918400,
+      "updated_at": 1760919000,
+      "task_type": "project",
+      "share_visibility": "private",
+      "title": "Project fixture task",
+      "task_url": "https://manus.im/app/task_fixture_project",
+      "has_running_background_jobs": false
+    },
+    {
+      "id": "task_fixture_sub",
+      "status": "stopped",
+      "created_at": 1760914800,
+      "updated_at": 1760915000,
+      "task_type": "agent_subtask",
+      "share_visibility": "private",
+      "title": "Subtask must be ignored",
+      "task_url": "https://manus.im/app/task_fixture_sub"
+    }
+  ],
+  "has_more": false
+}

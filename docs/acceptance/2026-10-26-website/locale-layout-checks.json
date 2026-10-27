@@ -1,0 +1,1085 @@
+{
+  "languages": [
+    {
+      "locale": "en-US",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Overview",
+              "left": 56.1875,
+              "right": 278.875,
+              "width": 222.6875
+            },
+            {
+              "text": "Demo",
+              "left": 282.875,
+              "right": 487.421875,
+              "width": 204.546875
+            },
+            {
+              "text": "Workspace",
+              "left": 491.421875,
+              "right": 723.46875,
+              "width": 232.046875
+            },
+            {
+              "text": "Local & sync",
+              "left": 727.46875,
+              "right": 967.8125,
+              "width": 240.34375
+            }
+          ],
+          "headerActions": 676.515625,
+          "brandRight": 182.234375,
+          "heroGap": -145.140625
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Overview",
+              "left": 27,
+              "right": 105.78125,
+              "width": 78.78125
+            },
+            {
+              "text": "Demo",
+              "left": 109.78125,
+              "right": 170.421875,
+              "width": 60.640625
+            },
+            {
+              "text": "Workspace",
+              "left": 174.421875,
+              "right": 262.5625,
+              "width": 88.140625
+            },
+            {
+              "text": "Local & sync",
+              "left": 266.5625,
+              "right": 363,
+              "width": 96.4375
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Overview",
+              "left": 27,
+              "right": 88.46875,
+              "width": 61.46875
+            },
+            {
+              "text": "Demo",
+              "left": 92.46875,
+              "right": 137.203125,
+              "width": 44.734375
+            },
+            {
+              "text": "Workspace",
+              "left": 141.203125,
+              "right": 211.234375,
+              "width": 70.03125
+            },
+            {
+              "text": "Local & sync",
+              "left": 215.234375,
+              "right": 293,
+              "width": 77.765625
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    },
+    {
+      "locale": "zh-CN",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "概览",
+              "left": 56.1875,
+              "right": 269.84375,
+              "width": 213.65625
+            },
+            {
+              "text": "体验",
+              "left": 273.84375,
+              "right": 487.515625,
+              "width": 213.671875
+            },
+            {
+              "text": "工作台",
+              "left": 491.515625,
+              "right": 716.421875,
+              "width": 224.90625
+            },
+            {
+              "text": "本地与同步",
+              "left": 720.421875,
+              "right": 967.8125,
+              "width": 247.390625
+            }
+          ],
+          "headerActions": 672.71875,
+          "brandRight": 182.234375,
+          "heroGap": -164.078125
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "概览",
+              "left": 27,
+              "right": 96.75,
+              "width": 69.75
+            },
+            {
+              "text": "体验",
+              "left": 100.75,
+              "right": 170.515625,
+              "width": 69.765625
+            },
+            {
+              "text": "工作台",
+              "left": 174.515625,
+              "right": 255.515625,
+              "width": 81
+            },
+            {
+              "text": "本地与同步",
+              "left": 259.515625,
+              "right": 363,
+              "width": 103.484375
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "概览",
+              "left": 27,
+              "right": 80.28125,
+              "width": 53.28125
+            },
+            {
+              "text": "体验",
+              "left": 84.28125,
+              "right": 137.5625,
+              "width": 53.28125
+            },
+            {
+              "text": "工作台",
+              "left": 141.5625,
+              "right": 205.0625,
+              "width": 63.5
+            },
+            {
+              "text": "本地与同步",
+              "left": 209.0625,
+              "right": 293,
+              "width": 83.9375
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    },
+    {
+      "locale": "zh-TW",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "概覽",
+              "left": 56.1875,
+              "right": 269.84375,
+              "width": 213.65625
+            },
+            {
+              "text": "體驗",
+              "left": 273.84375,
+              "right": 487.515625,
+              "width": 213.671875
+            },
+            {
+              "text": "工作台",
+              "left": 491.515625,
+              "right": 716.421875,
+              "width": 224.90625
+            },
+            {
+              "text": "本機與同步",
+              "left": 720.421875,
+              "right": 967.8125,
+              "width": 247.390625
+            }
+          ],
+          "headerActions": 672.71875,
+          "brandRight": 182.234375,
+          "heroGap": -164.078125
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "概覽",
+              "left": 27,
+              "right": 96.75,
+              "width": 69.75
+            },
+            {
+              "text": "體驗",
+              "left": 100.75,
+              "right": 170.515625,
+              "width": 69.765625
+            },
+            {
+              "text": "工作台",
+              "left": 174.515625,
+              "right": 255.515625,
+              "width": 81
+            },
+            {
+              "text": "本機與同步",
+              "left": 259.515625,
+              "right": 363,
+              "width": 103.484375
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "概覽",
+              "left": 27,
+              "right": 80.28125,
+              "width": 53.28125
+            },
+            {
+              "text": "體驗",
+              "left": 84.28125,
+              "right": 137.5625,
+              "width": 53.28125
+            },
+            {
+              "text": "工作台",
+              "left": 141.5625,
+              "right": 205.0625,
+              "width": 63.5
+            },
+            {
+              "text": "本機與同步",
+              "left": 209.0625,
+              "right": 293,
+              "width": 83.9375
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    },
+    {
+      "locale": "ja-JP",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "概要",
+              "left": 56.1875,
+              "right": 254.1875,
+              "width": 198
+            },
+            {
+              "text": "体験",
+              "left": 258.1875,
+              "right": 456.203125,
+              "width": 198.015625
+            },
+            {
+              "text": "ワークスペース",
+              "left": 460.203125,
+              "right": 711.125,
+              "width": 250.921875
+            },
+            {
+              "text": "ローカルと同期",
+              "left": 715.125,
+              "right": 967.8125,
+              "width": 252.6875
+            }
+          ],
+          "headerActions": 657.203125,
+          "brandRight": 182.234375,
+          "heroGap": -142.015625
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "概要",
+              "left": 27,
+              "right": 81.09375,
+              "width": 54.09375
+            },
+            {
+              "text": "体験",
+              "left": 85.09375,
+              "right": 139.203125,
+              "width": 54.109375
+            },
+            {
+              "text": "ワークスペース",
+              "left": 143.203125,
+              "right": 250.21875,
+              "width": 107.015625
+            },
+            {
+              "text": "ローカルと同期",
+              "left": 254.21875,
+              "right": 363,
+              "width": 108.78125
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "概要",
+              "left": 27,
+              "right": 66.046875,
+              "width": 39.046875
+            },
+            {
+              "text": "体験",
+              "left": 70.046875,
+              "right": 109.09375,
+              "width": 39.046875
+            },
+            {
+              "text": "ワークスペース",
+              "left": 113.09375,
+              "right": 200.25,
+              "width": 87.15625
+            },
+            {
+              "text": "ローカルと同期",
+              "left": 204.25,
+              "right": 293,
+              "width": 88.75
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    },
+    {
+      "locale": "ko-KR",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "소개",
+              "left": 56.1875,
+              "right": 265.234375,
+              "width": 209.046875
+            },
+            {
+              "text": "체험",
+              "left": 269.234375,
+              "right": 478.296875,
+              "width": 209.0625
+            },
+            {
+              "text": "작업 공간",
+              "left": 482.296875,
+              "right": 713.53125,
+              "width": 231.234375
+            },
+            {
+              "text": "로컬과 동기화",
+              "left": 717.53125,
+              "right": 967.8125,
+              "width": 250.28125
+            }
+          ],
+          "headerActions": 676.171875,
+          "brandRight": 182.234375,
+          "heroGap": -138.015625
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "소개",
+              "left": 27,
+              "right": 92.140625,
+              "width": 65.140625
+            },
+            {
+              "text": "체험",
+              "left": 96.140625,
+              "right": 161.296875,
+              "width": 65.15625
+            },
+            {
+              "text": "작업 공간",
+              "left": 165.296875,
+              "right": 252.625,
+              "width": 87.328125
+            },
+            {
+              "text": "로컬과 동기화",
+              "left": 256.625,
+              "right": 363,
+              "width": 106.375
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "소개",
+              "left": 27,
+              "right": 76.0625,
+              "width": 49.0625
+            },
+            {
+              "text": "체험",
+              "left": 80.0625,
+              "right": 129.125,
+              "width": 49.0625
+            },
+            {
+              "text": "작업 공간",
+              "left": 133.125,
+              "right": 202.40625,
+              "width": 69.28125
+            },
+            {
+              "text": "로컬과 동기화",
+              "left": 206.40625,
+              "right": 293,
+              "width": 86.59375
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    },
+    {
+      "locale": "es-ES",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Resumen",
+              "left": 56.1875,
+              "right": 273.546875,
+              "width": 217.359375
+            },
+            {
+              "text": "Demo",
+              "left": 277.546875,
+              "right": 477.296875,
+              "width": 199.75
+            },
+            {
+              "text": "Panel",
+              "left": 481.296875,
+              "right": 679.09375,
+              "width": 197.796875
+            },
+            {
+              "text": "Local y sincronización",
+              "left": 683.09375,
+              "right": 967.8125,
+              "width": 284.71875
+            }
+          ],
+          "headerActions": 647.421875,
+          "brandRight": 182.234375,
+          "heroGap": -176.328125
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Resumen",
+              "left": 27,
+              "right": 100.453125,
+              "width": 73.453125
+            },
+            {
+              "text": "Demo",
+              "left": 104.453125,
+              "right": 160.296875,
+              "width": 55.84375
+            },
+            {
+              "text": "Panel",
+              "left": 164.296875,
+              "right": 218.1875,
+              "width": 53.890625
+            },
+            {
+              "text": "Local y sincronización",
+              "left": 222.1875,
+              "right": 363,
+              "width": 140.8125
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Resumen",
+              "left": 27,
+              "right": 83.484375,
+              "width": 56.484375
+            },
+            {
+              "text": "Demo",
+              "left": 87.484375,
+              "right": 127.796875,
+              "width": 40.3125
+            },
+            {
+              "text": "Panel",
+              "left": 131.796875,
+              "right": 170.390625,
+              "width": 38.59375
+            },
+            {
+              "text": "Local y sincronización",
+              "left": 174.390625,
+              "right": 293,
+              "width": 118.609375
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    },
+    {
+      "locale": "fr-FR",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Aperçu",
+              "left": 56.1875,
+              "right": 270.46875,
+              "width": 214.28125
+            },
+            {
+              "text": "Démo",
+              "left": 274.46875,
+              "right": 481.96875,
+              "width": 207.5
+            },
+            {
+              "text": "Espace",
+              "left": 485.96875,
+              "right": 700.78125,
+              "width": 214.8125
+            },
+            {
+              "text": "Local et synchro",
+              "left": 704.78125,
+              "right": 967.8125,
+              "width": 263.03125
+            }
+          ],
+          "headerActions": 650.984375,
+          "brandRight": 182.234375,
+          "heroGap": -176.328125
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Aperçu",
+              "left": 27,
+              "right": 97.375,
+              "width": 70.375
+            },
+            {
+              "text": "Démo",
+              "left": 101.375,
+              "right": 164.96875,
+              "width": 63.59375
+            },
+            {
+              "text": "Espace",
+              "left": 168.96875,
+              "right": 239.875,
+              "width": 70.90625
+            },
+            {
+              "text": "Local et synchro",
+              "left": 243.875,
+              "right": 363,
+              "width": 119.125
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Aperçu",
+              "left": 27,
+              "right": 80.734375,
+              "width": 53.734375
+            },
+            {
+              "text": "Démo",
+              "left": 84.734375,
+              "right": 132.1875,
+              "width": 47.453125
+            },
+            {
+              "text": "Espace",
+              "left": 136.1875,
+              "right": 190.390625,
+              "width": 54.203125
+            },
+            {
+              "text": "Local et synchro",
+              "left": 194.390625,
+              "right": 293,
+              "width": 98.609375
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    },
+    {
+      "locale": "de-DE",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Übersicht",
+              "left": 56.1875,
+              "right": 280.21875,
+              "width": 224.03125
+            },
+            {
+              "text": "Demo",
+              "left": 284.21875,
+              "right": 487.953125,
+              "width": 203.734375
+            },
+            {
+              "text": "Workspace",
+              "left": 491.953125,
+              "right": 723.203125,
+              "width": 231.25
+            },
+            {
+              "text": "Lokal & Sync",
+              "left": 727.203125,
+              "right": 967.8125,
+              "width": 240.609375
+            }
+          ],
+          "headerActions": 661.421875,
+          "brandRight": 182.234375,
+          "heroGap": -176.328125
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Übersicht",
+              "left": 27,
+              "right": 107.125,
+              "width": 80.125
+            },
+            {
+              "text": "Demo",
+              "left": 111.125,
+              "right": 170.953125,
+              "width": 59.828125
+            },
+            {
+              "text": "Workspace",
+              "left": 174.953125,
+              "right": 262.296875,
+              "width": 87.34375
+            },
+            {
+              "text": "Lokal & Sync",
+              "left": 266.296875,
+              "right": 363,
+              "width": 96.703125
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Übersicht",
+              "left": 27,
+              "right": 89.734375,
+              "width": 62.734375
+            },
+            {
+              "text": "Demo",
+              "left": 93.734375,
+              "right": 137.734375,
+              "width": 44
+            },
+            {
+              "text": "Workspace",
+              "left": 141.734375,
+              "right": 211.015625,
+              "width": 69.28125
+            },
+            {
+              "text": "Lokal & Sync",
+              "left": 215.015625,
+              "right": 293,
+              "width": 77.984375
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    },
+    {
+      "locale": "ru-RU",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Обзор",
+              "left": 56.1875,
+              "right": 279.21875,
+              "width": 223.03125
+            },
+            {
+              "text": "Демо",
+              "left": 283.21875,
+              "right": 501.265625,
+              "width": 218.046875
+            },
+            {
+              "text": "Панель",
+              "left": 505.265625,
+              "right": 733.171875,
+              "width": 227.90625
+            },
+            {
+              "text": "Данные",
+              "left": 737.171875,
+              "right": 967.8125,
+              "width": 230.640625
+            }
+          ],
+          "headerActions": 651.125,
+          "brandRight": 182.234375,
+          "heroGap": -176.328125
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Обзор",
+              "left": 27,
+              "right": 106.125,
+              "width": 79.125
+            },
+            {
+              "text": "Демо",
+              "left": 110.125,
+              "right": 184.265625,
+              "width": 74.140625
+            },
+            {
+              "text": "Панель",
+              "left": 188.265625,
+              "right": 272.265625,
+              "width": 84
+            },
+            {
+              "text": "Данные",
+              "left": 276.265625,
+              "right": 363,
+              "width": 86.734375
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Обзор",
+              "left": 27,
+              "right": 88.78125,
+              "width": 61.78125
+            },
+            {
+              "text": "Демо",
+              "left": 92.78125,
+              "right": 149.96875,
+              "width": 57.1875
+            },
+            {
+              "text": "Панель",
+              "left": 153.96875,
+              "right": 220.234375,
+              "width": 66.265625
+            },
+            {
+              "text": "Данные",
+              "left": 224.234375,
+              "right": 293,
+              "width": 68.765625
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    },
+    {
+      "locale": "pt-BR",
+      "metadata": true,
+      "localizedProduct": true,
+      "dialog": true,
+      "geometry": [
+        {
+          "width": 1024,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Visão geral",
+              "left": 56.1875,
+              "right": 293.078125,
+              "width": 236.890625
+            },
+            {
+              "text": "Demo",
+              "left": 297.078125,
+              "right": 506.296875,
+              "width": 209.21875
+            },
+            {
+              "text": "Painel",
+              "left": 510.296875,
+              "right": 720.328125,
+              "width": 210.03125
+            },
+            {
+              "text": "Local e sync",
+              "left": 724.328125,
+              "right": 967.8125,
+              "width": 243.484375
+            }
+          ],
+          "headerActions": 660.25,
+          "brandRight": 182.234375,
+          "heroGap": -176.328125
+        },
+        {
+          "width": 390,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Visão geral",
+              "left": 27,
+              "right": 119.984375,
+              "width": 92.984375
+            },
+            {
+              "text": "Demo",
+              "left": 123.984375,
+              "right": 189.296875,
+              "width": 65.3125
+            },
+            {
+              "text": "Painel",
+              "left": 193.296875,
+              "right": 259.421875,
+              "width": 66.125
+            },
+            {
+              "text": "Local e sync",
+              "left": 263.421875,
+              "right": 363,
+              "width": 99.578125
+            }
+          ],
+          "headerActions": 198,
+          "brandRight": 140.5625,
+          "heroGap": 18
+        },
+        {
+          "width": 320,
+          "overflow": false,
+          "links": [
+            {
+              "text": "Visão geral",
+              "left": 27,
+              "right": 101.546875,
+              "width": 74.546875
+            },
+            {
+              "text": "Demo",
+              "left": 105.546875,
+              "right": 154.53125,
+              "width": 48.984375
+            },
+            {
+              "text": "Painel",
+              "left": 158.53125,
+              "right": 208.390625,
+              "width": 49.859375
+            },
+            {
+              "text": "Local e sync",
+              "left": 212.390625,
+              "right": 293,
+              "width": 80.609375
+            }
+          ],
+          "headerActions": 142,
+          "brandRight": 124.6875,
+          "heroGap": 18
+        }
+      ]
+    }
+  ],
+  "preferenceCases": [
+    "automatic no-op",
+    "manual precedence",
+    "reload",
+    "browser script variants",
+    "return to browser",
+    "browser languagechange",
+    "storage blocked",
+    "state preservation"
+  ],
+  "errors": []
+}

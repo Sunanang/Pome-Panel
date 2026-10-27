@@ -3,14 +3,14 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { createHash } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const { decodeCursorToken, isCursorEncryptedToken } = require('./platform-adapters/cursor-secrets');
 
 const API_BASE = 'https://api2.cursor.sh';
 const PERIOD_PATH = '/aiserver.v1.DashboardService/GetCurrentPeriodUsage';
-const SAND_PATH = '/aiserver.v1.DashboardService/GetSandUsageStatus';
 const CACHE_TTL_MS = 60_000;
 
-let cache = null;
 
 function cursorStateDbPath() {
   if (process.platform === 'darwin') {
@@ -22,7 +22,7 @@ function cursorStateDbPath() {
   return path.join(os.homedir(), '.config', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
 }
 
-function readAuthToken(dbPath = cursorStateDbPath()) {
+function readAuthToken(dbPath = cursorStateDbPath(), { decryptToken = decodeCursorToken, force = false } = {}) {
   if (!fs.existsSync(dbPath)) {
     return { ok: false, error: 'cursor_db_missing', path: dbPath };
   }
@@ -32,8 +32,16 @@ function readAuthToken(dbPath = cursorStateDbPath()) {
     const row = db.prepare('SELECT value FROM ItemTable WHERE key = ?').get('cursorAuth/accessToken');
     const emailRow = db.prepare('SELECT value FROM ItemTable WHERE key = ?').get('cursorAuth/cachedEmail');
     const planRow = db.prepare('SELECT value FROM ItemTable WHERE key = ?').get('cursorAuth/stripeMembershipType');
-    const token = row && row.value != null ? String(row.value) : '';
-    if (!token) return { ok: false, error: 'cursor_token_missing', path: dbPath };
+    const stored = row && row.value != null ? String(row.value) : '';
+    if (!stored) return { ok: false, error: 'cursor_token_missing', path: dbPath };
+    let token;
+    try {
+      token = decryptToken(stored, { dbPath, force });
+      if (!token || isCursorEncryptedToken(token)) throw new Error();
+    } catch (error) {
+      return { ok: false, detected: true, error: error.code === 'cursor_token_encrypted_unsupported'
+        ? error.code : 'cursor_token_decrypt_failed', path: dbPath };
+    }
     return {
       ok: true,
       token,
@@ -53,10 +61,11 @@ function isAuthFailure(error) {
   return status === 401 || status === 403;
 }
 
-async function postConnect(pathname, token, body = {}) {
-  const response = await fetch(`${API_BASE}${pathname}`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(15000),
+async function postConnect(pathname, token, body = {}, { fetchImpl = fetch, signal } = {}) {
+  if (isCursorEncryptedToken(token)) throw new Error('cursor_token_decrypt_failed');
+  const response = await fetchImpl(`${API_BASE}${pathname}`, {
+    method: 'POST', redirect: 'error',
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -74,10 +83,12 @@ async function postConnect(pathname, token, body = {}) {
     err.body = json || text;
     throw err;
   }
+  if (!json || typeof json !== 'object' || Array.isArray(json)) throw new Error('cursor_invalid_response');
   return json;
 }
 
 function toNumber(value) {
+  if (value == null || typeof value === 'boolean' || typeof value === 'string' && !value.trim()) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -95,7 +106,7 @@ function msToIso(value) {
   try { return new Date(ms).toISOString(); } catch (_) { return null; }
 }
 
-function buildSnapshot(period, sand, auth) {
+function buildSnapshot(period, auth) {
   const planUsage = period && period.planUsage ? period.planUsage : {};
   return {
     ok: true,
@@ -112,14 +123,6 @@ function buildSnapshot(period, sand, auth) {
       percent: clampPercent(planUsage.apiPercentUsed),
       detail: period && period.namedModelSelectedDisplayMessage || null,
     },
-    grokBot: {
-      label: 'Grok Bot',
-      percent: clampPercent(sand && (sand.usagePercent ?? sand.usage_percent)),
-      periodStart: sand && (sand.currentPeriodStart || sand.current_period_start) || null,
-      resetAt: sand && (sand.nextResetTimestampUtc || sand.next_reset_timestamp_utc) || null,
-      hasAvailableUsage: sand ? sand.hasAvailableUsage !== false : null,
-      detail: sand && sand.grokPlanLabel || null,
-    },
     billing: {
       cycleStart: msToIso(period && period.billingCycleStart),
       cycleEnd: msToIso(period && period.billingCycleEnd),
@@ -129,89 +132,71 @@ function buildSnapshot(period, sand, auth) {
   };
 }
 
-async function fetchUsageWithToken(token, authMeta = {}) {
-  const [period, sand] = await Promise.all([
-    postConnect(PERIOD_PATH, token, {}),
-    postConnect(SAND_PATH, token, {}),
-  ]);
-  return buildSnapshot(period, sand, authMeta);
-}
-
-async function fetchCursorUsage({ force = false, manualToken = '' } = {}) {
-  const manual = String(manualToken || '').trim();
-  const cacheKey = manual ? `manual:${manual.slice(0, 12)}` : 'local';
-  if (
-    !force
-    && cache
-    && cache.key === cacheKey
-    && (Date.now() - cache.cachedAt) < CACHE_TTL_MS
-    && !cache.snapshot.manualTokenInvalid
-  ) {
-    return { ...cache.snapshot, cached: true };
+// Like Codex's service, requests belong to a credential generation. Never expose
+// credentials (or response bodies) in IPC, errors or cache keys sent to the UI.
+function createCursorUsageService({ fetchImpl = (...args) => fetch(...args), readAuth = readAuthToken, now = Date.now } = {}) {
+  let key = '', generation = 0, pending = null, lastAttempt = null, lastSuccess = null, manualInvalid = false;
+  function reset() {
+    generation++; pending?.controller.abort();
+    pending = null; lastAttempt = null; lastSuccess = null; key = ''; manualInvalid = false;
   }
-
-  let manualTokenInvalid = false;
-  let manualFailure = null;
-
-  if (manual) {
-    try {
-      const snapshot = await fetchUsageWithToken(manual, { email: null, plan: null });
-      snapshot.authSource = 'manual';
-      snapshot.manualTokenInvalid = false;
-      snapshot.manualTokenConfigured = true;
-      cache = { cachedAt: Date.now(), key: cacheKey, snapshot };
-      return { ...snapshot, cached: false };
-    } catch (error) {
-      manualFailure = error;
-      if (isAuthFailure(error)) manualTokenInvalid = true;
-      // 其他错误也回退本机，双保险
+  async function getUsage({ force = false, manualToken = '' } = {}) {
+    // Older Pome versions accidentally saved Cursor's ciphertext as a manual
+    // token. Ignore that device-bound copy and use the current local sign-in.
+    const savedManual = String(manualToken || '').trim();
+    const manual = isCursorEncryptedToken(savedManual) ? '' : savedManual;
+    let auth;
+    try { auth = readAuth(); } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
+    // Re-read the owner's login before cache lookup: local sign-out/account switch
+    // must invalidate snapshots even when a request is in flight.
+    const identity = createHash('sha256').update(JSON.stringify([manual, auth.ok ? auth.token : null, auth.email || null])).digest('hex');
+    if (key !== identity) { reset(); key = identity; }
+    const revision = generation;
+    if (!force && lastAttempt && now() - lastAttempt.at < CACHE_TTL_MS) return { ...lastAttempt.result, cached: true };
+    if (!pending) {
+      const controller = new AbortController();
+      async function fetchWithToken(token, meta, source) {
+        const period = await postConnect(PERIOD_PATH, token, {}, { fetchImpl, signal: controller.signal });
+        const snapshot = buildSnapshot(period, meta);
+        snapshot.fetchedAt = new Date(now()).toISOString();
+        snapshot.authSource = source;
+        return snapshot;
+      }
+      const task = (async () => {
+        let manualTokenInvalid = manualInvalid, manualFailure = false;
+        if (manual) {
+          try { return { ...await fetchWithToken(manual, {}, 'manual'), manualTokenConfigured: true, manualTokenInvalid: false }; }
+          catch (error) { manualTokenInvalid ||= isAuthFailure(error); manualFailure = true; }
+        }
+        if (auth.ok) {
+          try {
+            const snapshot = await fetchWithToken(auth.token, auth, 'local');
+            return { ...snapshot, manualTokenConfigured: Boolean(manual), manualTokenInvalid: false,
+              ...(manualFailure ? { warning: manualTokenInvalid ? '手动 Token 已失效，已改用本机登录态' : '手动 Token 请求失败，已改用本机登录态' } : {}) };
+          } catch (error) {
+            if (isAuthFailure(error)) return { ok: false, error: 'cursor_token_invalid', status: error.status, manualTokenInvalid, authSource: null, manualTokenConfigured: Boolean(manual) };
+          }
+        }
+        return { ok: false, error: manualTokenInvalid ? 'cursor_manual_token_invalid' : manual || auth.ok ? 'cursor_fetch_failed' : auth.error,
+          manualTokenInvalid, manualTokenConfigured: Boolean(manual), authSource: null };
+      })();
+      pending = { controller, task };
     }
+    const request = pending;
+    let result = await request.task;
+    if (revision !== generation) return { superseded: true };
+    if (pending === request) pending = null;
+    manualInvalid = result.manualTokenInvalid === true;
+    if (result.ok) lastSuccess = result;
+    else if (result.manualTokenInvalid || result.status === 401 || result.status === 403) lastSuccess = null;
+    else if (lastSuccess) result = { ...lastSuccess, stale: true, cached: true, refreshError: result.error };
+    lastAttempt = { at: now(), result };
+    return result;
   }
-
-  const auth = readAuthToken();
-  if (!auth.ok) {
-    return {
-      ok: false,
-      error: manualTokenInvalid ? 'cursor_manual_token_invalid' : auth.error,
-      detail: auth.detail || (manualFailure && manualFailure.message) || null,
-      status: manualFailure && manualFailure.status || null,
-      manualTokenInvalid,
-      manualTokenConfigured: Boolean(manual),
-      authSource: null,
-      fetchedAt: new Date().toISOString(),
-    };
-  }
-
-  try {
-    const snapshot = await fetchUsageWithToken(auth.token, auth);
-    snapshot.authSource = 'local';
-    snapshot.manualTokenConfigured = Boolean(manual);
-    snapshot.manualTokenInvalid = manualTokenInvalid;
-    if (manualTokenInvalid) {
-      snapshot.warning = '手动 Token 已失效，已改用本机登录态';
-    } else if (manual && manualFailure && !manualTokenInvalid) {
-      snapshot.warning = '手动 Token 请求失败，已改用本机登录态';
-    }
-    cache = { cachedAt: Date.now(), key: 'local', snapshot };
-    return { ...snapshot, cached: false };
-  } catch (error) {
-    return {
-      ok: false,
-      error: manualTokenInvalid ? 'cursor_manual_token_invalid' : (error && error.message || 'cursor_fetch_failed'),
-      status: error && error.status || null,
-      manualTokenInvalid,
-      manualTokenConfigured: Boolean(manual),
-      authSource: null,
-      fetchedAt: new Date().toISOString(),
-    };
-  }
+  return { getUsage, reset };
 }
-
-module.exports = {
-  cursorStateDbPath,
-  readAuthToken,
-  fetchCursorUsage,
-  buildSnapshot,
-  CACHE_TTL_MS,
-  isAuthFailure,
-};
+const defaultService = createCursorUsageService();
+const fetchCursorUsage = options => defaultService.getUsage(options);
+const resetCursorUsage = () => defaultService.reset();
+module.exports = { cursorStateDbPath, readAuthToken, fetchCursorUsage, resetCursorUsage, createCursorUsageService,
+  buildSnapshot, CACHE_TTL_MS, isAuthFailure };

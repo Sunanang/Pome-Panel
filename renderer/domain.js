@@ -1,3 +1,4 @@
+const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 (function exposeNotchDomain(root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -55,12 +56,12 @@
   function classifyLink(url, title) {
     const haystack = `${url || ''} ${title || ''}`;
     const matched = CATEGORY_RULES.find(([, pattern]) => pattern.test(haystack));
-    return matched ? matched[0] : '其他';
+    return matched ? pomeLocaleRendererDomain.systemText(matched[0]) : pomeLocaleRendererDomain.t("copy.other.d2909f");
   }
 
   function addLinkToGroups(groups, link, category) {
     const source = Array.isArray(groups) ? groups : [];
-    const groupName = String(category || '').trim() || '其他';
+    const groupName = String(category || '').trim() || pomeLocaleRendererDomain.t("copy.other.d2909f");
     const index = source.findIndex((group) => group && group.name === groupName);
     if (index >= 0) {
       return source.map((group, groupIndex) => groupIndex === index
@@ -173,13 +174,23 @@
     ));
   }
 
-  function prependClipboardHistory(history, entry, maxEntries = 100) {
+  function trimClipboardHistory(history, favorites = [], maxEntries = 100) {
     const limit = Math.max(1, Math.floor(Number(maxEntries) || 100));
-    const next = [entry, ...(Array.isArray(history) ? history : [])];
-    return {
-      history: next.slice(0, limit),
-      evicted: next.slice(limit),
-    };
+    const favoriteIds = new Set(Array.isArray(favorites) ? favorites : []);
+    const rows = (Array.isArray(history) ? history : []).filter(row => row && typeof row === 'object').sort((left, right) =>
+      (Number(right.timestamp) || 0) - (Number(left.timestamp) || 0)
+      || (String(left.id) < String(right.id) ? -1 : String(left.id) > String(right.id) ? 1 : 0));
+    const kept = [], evicted = [];
+    let ordinary = 0;
+    for (const row of rows) {
+      if (favoriteIds.has(row.id) || ordinary++ < limit) kept.push(row);
+      else evicted.push(row);
+    }
+    return { history: kept, evicted };
+  }
+
+  function prependClipboardHistory(history, entry, maxEntries = 100, favorites = []) {
+    return trimClipboardHistory([entry, ...(Array.isArray(history) ? history : [])], favorites, maxEntries);
   }
 
   function createCommand(text, id, createdAt) {
@@ -229,7 +240,7 @@
     if (!value || typeof value !== 'object') return null;
     const transcript = String(value.transcript || '').trim();
     const createdAt = Number.isFinite(value.createdAt) ? value.createdAt : Date.now();
-    const fallbackTitle = new Date(createdAt).toLocaleString('zh-CN', {
+    const fallbackTitle = new Date(createdAt).toLocaleString(pomeLocaleRendererDomain.getState().formatLocale, {
       month: 'numeric',
       day: 'numeric',
       hour: '2-digit',
@@ -245,7 +256,7 @@
       ...(value.audioSyncReason ? { audioSyncReason: String(value.audioSyncReason) } : {}),
       mimeType: typeof value.mimeType === 'string' ? value.mimeType : 'audio/webm',
       title: String(value.title || fallbackTitle).trim(),
-      category: String(value.category || '未分类').replace(/\s+/g, ' ').trim().slice(0, 24),
+      category: String(value.category || pomeLocaleRendererDomain.t("copy.uncategorized.54b89f")).replace(/\s+/g, ' ').trim().slice(0, 24),
     };
   }
 
@@ -290,7 +301,7 @@
   }
 
   function deriveWindowDisplayName(item) {
-    const appName = String(item && item.appName || '').replace(/\s+/g, ' ').trim() || '应用';
+    const appName = String(item && item.appName || '').replace(/\s+/g, ' ').trim() || pomeLocaleRendererDomain.t("copy.app.63c73c");
     const title = String(item && item.title || '').replace(/\s+/g, ' ').trim();
     if (!title) return appName;
 
@@ -394,7 +405,7 @@
 
   function credentialRowAction(options = {}) {
     if (options.requestedAction === 'delete') {
-      return { type: 'delete', label: '删除', ariaLabel: '删除密钥' };
+      return { type: 'delete', label: pomeLocaleRendererDomain.t("copy.delete.2f9daa"), ariaLabel: pomeLocaleRendererDomain.t("copy.deleteCredential.311d71") };
     }
     if (options.copyField === 'account' || options.copyField === 'password') {
       return { type: 'copy', field: options.copyField };
@@ -501,9 +512,9 @@
   function apiCredentialStatuses(config) {
     const value = config && typeof config === 'object' ? config : {};
     const status = (configured, needsReentry) => {
-      if (configured) return { label: '已安全保存', state: 'saved' };
-      if (needsReentry) return { label: '需重新输入', state: 'warning' };
-      return { label: '未配置', state: 'empty' };
+      if (configured) return { label: pomeLocaleRendererDomain.t("copy.savedSecurely.6e643d"), state: 'saved' };
+      if (needsReentry) return { label: pomeLocaleRendererDomain.t("copy.enterAgain.029503"), state: 'warning' };
+      return { label: pomeLocaleRendererDomain.t("copy.notConfigured.80a57e"), state: 'empty' };
     };
     return {
       transcription: status(Boolean(value.configured), Boolean(value.asrNeedsReentry)),
@@ -520,7 +531,7 @@
       defaultTab: String(appSettings.defaultTab || 'home'),
       autoLaunch: appSettings.autoLaunch === true,
       workspacePath: String(workspace.path || ''),
-      workspaceLabel: workspace.portable ? '自定义文件夹' : '默认文件夹',
+      workspaceLabel: workspace.portable ? pomeLocaleRendererDomain.t("copy.customFolder.f76b26") : pomeLocaleRendererDomain.t("copy.defaultFolder.dc3290"),
       transcription: statuses.transcription,
       llm: statuses.llm,
     };
@@ -573,7 +584,7 @@
     const total = deadline - createdAt;
     if (!Number.isFinite(current)) return null;
     if (!Number.isFinite(deadline) || !Number.isFinite(createdAt) || total <= 0) {
-      return { percent: 0, tone: 'red', overdue: false, label: '待补充有效截止时间' };
+      return { percent: 0, tone: 'red', overdue: false, label: pomeLocaleRendererDomain.t("copy.setAValidDeadline.0cf240") };
     }
     // 逾期必须与「剩余 0%」分开：后者只是取整落到 0，前者已经欠账。
     // 逾期项的电量条改为整条填满 + 白色感叹号，不能再显示成一条空槽。
@@ -584,7 +595,7 @@
       percent,
       tone,
       overdue,
-      label: overdue ? '已逾期' : `剩余 ${percent}%`,
+      label: overdue ? pomeLocaleRendererDomain.t("copy.overdue.13c68d") : pomeLocaleRendererDomain.t("copy.remaining.c83bf4", { arg1: (percent) }),
     };
   }
 
@@ -1193,6 +1204,21 @@
     return true;
   }
 
+  // The old Windows default saved the Mac slots minus unavailable modules,
+  // leaving holes and automatically hiding sun. Match the entire known baseline;
+  // a user's different order, size, visibility or placement must stay untouched.
+  function isLegacyWindowsDefaultHomeLayout({ order, defaultOrder, sizes, defaults, placements, hiddenIds = [], unavailableIds = [], registry }) {
+    if (!placements || !defaults || !Array.isArray(defaultOrder) || !Array.isArray(registry)) return false;
+    if (!unavailableIds.includes('music') || !unavailableIds.includes('windows')) return false;
+    if (hiddenIds.length !== 1 || hiddenIds[0] !== 'sun') return false;
+    if (JSON.stringify(order) !== JSON.stringify(defaultOrder)) return false;
+    if (registry.some(id => sizes?.[id] !== defaults[id])) return false;
+    const baseline = normalizeHomeInboxLayout({ order: defaultOrder, sizes: defaults, registry, hiddenIds: [...unavailableIds, 'sun'] }).placements;
+    return baseline && Object.keys(placements).length === Object.keys(baseline).length
+      && Object.entries(baseline).every(([id, p]) => placements[id]
+        && ['column', 'row', 'width', 'height'].every(key => placements[id][key] === p[key]));
+  }
+
   // Insert a new inbox without rewriting user-selected footprints. Try its
   // preferred slot, any free/repacked slot, then only shrink the new module.
   function normalizeHomeInboxLayout({ order, sizes, placements, hiddenIds = [], registry = [], preservePositions = false, preferredInboxPlacement = null }) {
@@ -1315,6 +1341,7 @@
     moveLinkToPosition,
     renameGroup,
     prependClipboardHistory,
+    trimClipboardHistory,
     createExclusiveAsyncTask,
     createCommand,
     createRecording,
@@ -1346,6 +1373,7 @@
     normalizeHomeLayout,
     normalizeHomeInboxLayout,
     isLegacyDefaultHomeLayout,
+    isLegacyWindowsDefaultHomeLayout,
     swapHomeLayoutSlots,
     normalizeTodoCategoryNames,
     normalizeHomeWidgetSizes,

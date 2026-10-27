@@ -8,6 +8,39 @@
 ; ${isUpdated} 保护是必须的：升级安装时旧版本的卸载器也会跑一遍，
 ; 不加判断就会把用户的自启设置连同升级一起抹掉。
 
+; 使用标准安装向导：先说明目录与快捷方式，再进入可浏览的目录选择页。
+!macro customHeader
+  !include "${BUILD_RESOURCES_DIR}\i18n\messages.nsh"
+!macroend
+
+; Use the current user's UI language for both install and uninstall. Region and
+; the application's manual preference must not override the system language.
+!macro PomeSystemLanguage
+  Push $0
+  System::Call 'kernel32::GetUserDefaultUILanguage() i.r0'
+  StrCpy $LANGUAGE 1033
+  ${If} $0 == 2052
+  ${OrIf} $0 == 4100
+    StrCpy $LANGUAGE 2052
+  ${EndIf}
+  Pop $0
+!macroend
+
+!macro preInit
+  !insertmacro PomeSystemLanguage
+!macroend
+
+!macro customUnInit
+  !insertmacro PomeSystemLanguage
+!macroend
+
+!macro customWelcomePage
+  !define MUI_WELCOMEPAGE_TITLE "$(POME_WELCOME_TITLE)"
+  !define MUI_WELCOMEPAGE_TEXT "$(POME_WELCOME_TEXT)"
+  !insertmacro MUI_PAGE_WELCOME
+  !define MUI_DIRECTORYPAGE_TEXT_TOP "$(POME_DIRECTORY_TEXT)"
+!macroend
+
 !macro customUnInstall
   ${ifNot} ${isUpdated}
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "com.dynamicpanel.app"

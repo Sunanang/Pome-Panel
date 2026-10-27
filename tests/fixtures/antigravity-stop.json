@@ -1,0 +1,11 @@
+{
+  "executionNum": 1,
+  "terminationReason": "model_stop",
+  "error": "",
+  "fullyIdle": true,
+  "conversationId": "antigravity-conversation",
+  "workspacePaths": ["/tmp/workspace"],
+  "transcriptPath": "/tmp/.gemini/antigravity/brain/antigravity-conversation/.system_generated/logs/transcript.jsonl",
+  "artifactDirectoryPath": "/tmp/.gemini/antigravity/brain/antigravity-conversation",
+  "modelName": "fixture-model"
+}

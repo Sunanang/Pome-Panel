@@ -1,7 +1,7 @@
 'use strict';
 
 const { schemaEnvelope, isSchemaCompatible, SCHEMA_VERSION } = require('./schema');
-const { isP0EnabledCollection } = require('../packages/sync-protocol');
+const { isP0EnabledCollection, normalizeSyncedCompletion } = require('../packages/sync-protocol');
 
 const SYNC_BODY_MAX_BYTES = 12 * 1024 * 1024;
 const { buildWorkspaceView, buildWorkspaceMedia } = require('./workspace-view');
@@ -79,6 +79,11 @@ function validateMutationShape(m) {
   if (m.op !== 'upsert' && m.op !== 'delete') return 'invalid_op';
   if (!isP0EnabledCollection(m.collection)) return 'collection_not_enabled';
   if (!isSchemaCompatible(m.schemaVersion)) return 'schema_incompatible';
+  if (m.collection === 'aiCompletions' || String(m.entityId).startsWith('completion:')) {
+    const row = m.op === 'upsert' ? normalizeSyncedCompletion(m.payload) : null;
+    if (m.collection !== 'aiCompletions' || !/^completion:[a-f0-9]{64}$/.test(m.entityId)
+      || (m.op === 'upsert' && (!row || m.entityId !== `completion:${row.id}`))) return 'invalid_ai_completion';
+  }
   return null;
 }
 

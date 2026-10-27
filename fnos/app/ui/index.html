@@ -6,6 +6,10 @@
   <meta name="gateway-prefix" content="/app/pome-panel" />
   <title>Pome Panel</title>
   <link rel="stylesheet" href="/app/pome-panel/styles.css" />
+  <script type="module" src="/app/pome-panel/i18n/host.js"></script>
+  <script src="/app/pome-panel/i18n/resources.js"></script>
+  <script src="/app/pome-panel/i18n/runtime.js"></script>
+  <script src="/app/pome-panel/i18n/browser.js"></script>
 </head>
 <body>
   <div id="app" class="expanded" data-control-root="fnos-web-panel">
@@ -17,7 +21,7 @@
               <rect x="3" y="4" width="18" height="12" rx="2" />
               <path d="M8 20h8M12 16v4" />
             </svg>
-            <span class="tab-label">设备</span>
+            <span class="tab-label"><span data-i18n="copy.devices.e15064">设备</span></span>
           </button>
           <button class="tab" id="tab-button-todo" type="button" data-tab="todo" role="tab" aria-controls="tab-todo" aria-selected="false" tabindex="-1">
             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -26,52 +30,53 @@
               <path d="M4 17h7" />
               <path d="M17.5 7.5 19 9l2.5-3" />
             </svg>
-            <span class="tab-label">待办</span>
+            <span class="tab-label"><span data-i18n="copy.tasks.52fdbb">待办</span></span>
           </button>
           <button class="tab" id="tab-button-clip" type="button" data-tab="clip" role="tab" aria-controls="tab-clip" aria-selected="false" tabindex="-1">
             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
               <rect x="9" y="3" width="6" height="4" rx="1" />
             </svg>
-            <span class="tab-label">剪贴</span>
+            <span class="tab-label"><span data-i18n="copy.clipboard.658c84">剪贴</span></span>
           </button>
           <button class="tab" id="tab-button-notes" type="button" data-tab="notes" role="tab" aria-controls="tab-notes" aria-selected="false" tabindex="-1">
             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M5 4h14v16H5z" />
               <path d="M8 8h8M8 12h8M8 16h5" />
             </svg>
-            <span class="tab-label">笔记</span>
+            <span class="tab-label"><span data-i18n="copy.notes.b778e3">笔记</span></span>
           </button>
           <button class="tab" id="tab-button-commands" type="button" data-tab="commands" role="tab" aria-controls="tab-commands" aria-selected="false" tabindex="-1">
             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M4 7l6 5-6 5" />
               <path d="M12 17h8" />
             </svg>
-            <span class="tab-label">常用命令</span>
+            <span class="tab-label"><span data-i18n="copy.commands.1cbb8f">常用命令</span></span>
           </button>
           <button class="tab" id="tab-button-links" type="button" data-tab="links" role="tab" aria-controls="tab-links" aria-selected="false" tabindex="-1">
             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" />
               <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1" />
             </svg>
-            <span class="tab-label">链接</span>
+            <span class="tab-label"><span data-i18n="copy.links.305378">链接</span></span>
           </button>
           <button class="tab" id="tab-button-recordings" type="button" data-tab="recordings" role="tab" aria-controls="tab-recordings" aria-selected="false" tabindex="-1">
             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="8" y="3" width="8" height="13" rx="4" />
               <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7" />
             </svg>
-            <span class="tab-label">录制</span>
+            <span class="tab-label"><span data-i18n="copy.recordings.4b6ef7">录制</span></span>
           </button>
           <button class="tab" id="tab-button-credentials" type="button" data-tab="credentials" role="tab" aria-controls="tab-credentials" aria-selected="false" tabindex="-1">
             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="8" cy="15" r="4" />
               <path d="m11 12 7-7 2 2-2 2 1.5 1.5-2.5 2.5-1.5-1.5-2 2" />
             </svg>
-            <span class="tab-label">密钥</span>
+            <span class="tab-label"><span data-i18n="copy.credentials.f67bca">密钥</span></span>
           </button>
         </div>
-        <span class="nas-web-status-pill" id="session-pill" data-state="unknown" role="status">检测会话…</span>
+        <select aria-label="Language" data-language-preference><option value="system" data-i18n="settings.system">跟随系统</option><option value="zh-CN">简体中文</option><option value="en-US">English</option></select>
+        <span class="nas-web-status-pill" id="session-pill" data-state="unknown" role="status"><span data-i18n="copy.checkingSession.8667ba">检测会话…</span></span>
       </header>
 
       <div class="panels" id="panels">
@@ -80,27 +85,27 @@
             <section class="tile settings-card device-port-card" aria-labelledby="device-port-title">
               <div class="settings-card-heading">
                 <div>
-                  <span class="tile-label">同步地址</span>
-                  <strong id="device-port-title">本机同步端口</strong>
+                  <span class="tile-label"><span data-i18n="copy.syncAddress.afea64">同步地址</span></span>
+                  <strong id="device-port-title"><span data-i18n="copy.deviceSyncPort.3d1e25">本机同步端口</span></strong>
                 </div>
-                <button type="button" class="workspace-button compact" id="device-port-copy" data-control-id="fnos.devices.port-copy" hidden>复制</button>
+                <button type="button" class="workspace-button compact" id="device-port-copy" data-control-id="fnos.devices.port-copy" hidden><span data-i18n="copy.copy.63d90d">复制</span></button>
               </div>
-              <p class="device-port-value" id="device-port-value" data-control-id="fnos.devices.port">读取中…</p>
-              <p class="device-port-hint" id="device-port-hint">这是安装时填写的固定端口。默认仅本机；开启「局域网」后可用 http://NAS内网IP:端口。外网访问时，使用你映射后的外网地址（公网 IP 或域名 + 端口）。不要填成 NAS:34931，除非安装时填的就是 34931。同步端口默认是明文 HTTP，直接暴露到公网有被扫描和访问的风险。</p>
+              <p class="device-port-value" id="device-port-value" data-control-id="fnos.devices.port"><span data-i18n="copy.loading.346ff6">读取中…</span></p>
+              <p class="device-port-hint" id="device-port-hint"><span data-i18n="copy.thisIsTheFixedPortConfiguredDuring.c8b7ff">这是安装时填写的固定端口。默认仅本机；开启「局域网」后可用 http://NAS内网IP:端口。外网访问时，使用你映射后的外网地址（公网 IP 或域名 + 端口）。不要填成 NAS:34931，除非安装时填的就是 34931。同步端口默认是明文 HTTP，直接暴露到公网有被扫描和访问的风险。</span></p>
             </section>
             <section class="tile settings-card" aria-labelledby="nas-pair-title">
               <div class="settings-card-heading">
                 <div>
-                  <span class="tile-label">飞牛 NAS</span>
-                  <strong id="nas-pair-title">生成配对码</strong>
+                  <span class="tile-label"><span data-i18n="copy.fygoNas.ec24dd">飞牛 NAS</span></span>
+                  <strong id="nas-pair-title"><span data-i18n="copy.generatePairingCode.c85ef7">生成配对码</span></strong>
                 </div>
-                <small>约 5 分钟有效</small>
+                <small><span data-i18n="copy.validForAbout5Minutes.3096cc">约 5 分钟有效</span></small>
               </div>
-              <p>在已登录的飞牛会话下生成配对码，于桌面「设置 → NAS 同步」完成绑定。配对码只显示一次。</p>
-              <p class="settings-nas-sync-hint" id="session-note">正在确认飞牛登录…</p>
-              <div class="settings-nas-sync-actions pair-actions" aria-label="配对操作">
-                <button type="button" class="workspace-button compact primary" id="pair-start-btn" data-control-id="fnos.pair.start" disabled>生成配对码</button>
-                <button type="button" class="workspace-button compact" id="pair-refresh-btn" data-control-id="fnos.pair.refresh">刷新</button>
+              <p><span data-i18n="copy.generateACodeWhileSignedInTo.7d2f9d">在已登录的飞牛会话下生成配对码，于桌面「设置 → NAS 同步」完成绑定。配对码只显示一次。</span></p>
+              <p class="settings-nas-sync-hint" id="session-note"><span data-i18n="copy.checkingNasSignIn.5cedf9">正在确认飞牛登录…</span></p>
+              <div class="settings-nas-sync-actions pair-actions" aria-label="配对操作" data-i18n-aria-label="copy.pairingActions.80750f">
+                <button type="button" class="workspace-button compact primary" id="pair-start-btn" data-control-id="fnos.pair.start" disabled><span data-i18n="copy.generatePairingCode.c85ef7">生成配对码</span></button>
+                <button type="button" class="workspace-button compact" id="pair-refresh-btn" data-control-id="fnos.pair.refresh"><span data-i18n="copy.refresh.aee887">刷新</span></button>
               </div>
               <p class="settings-nas-sync-hint" id="pair-status" role="status" data-control-id="fnos.pair.status"></p>
               <div class="nas-web-code-block" id="pair-code-wrap" hidden>
@@ -111,13 +116,13 @@
             <section class="tile settings-card" aria-labelledby="nas-web-devices-title">
               <div class="settings-card-heading">
                 <div>
-                  <span class="tile-label">已绑定</span>
-                  <strong id="nas-web-devices-title">已配对设备</strong>
+                  <span class="tile-label"><span data-i18n="copy.bound.f70c00">已绑定</span></span>
+                  <strong id="nas-web-devices-title"><span data-i18n="copy.pairedDevices.ed269d">已配对设备</span></strong>
                 </div>
-                <small>只在飞牛显示</small>
+                <small><span data-i18n="copy.shownOnTheNasOnly.1e1c29">只在飞牛显示</span></small>
               </div>
-              <ul class="settings-nas-device-list" id="device-list" aria-label="已配对设备" data-control-id="fnos.devices.list"></ul>
-              <p class="settings-nas-sync-hint" id="device-empty" data-control-id="fnos.devices.empty">尚无设备。桌面配对成功后显示；不安全绑定会标注。</p>
+              <ul class="settings-nas-device-list" id="device-list" aria-label="已配对设备" data-control-id="fnos.devices.list" data-i18n-aria-label="copy.pairedDevices.ed269d"></ul>
+              <p class="settings-nas-sync-hint" id="device-empty" data-control-id="fnos.devices.empty"><span data-i18n="copy.noDevicesYetPairedDesktopDevicesAppear.b75284">尚无设备。桌面配对成功后显示；不安全绑定会标注。</span></p>
             </section>
           </div>
         </section>
@@ -127,7 +132,7 @@
             <section class="quadrant tile" data-priority="P0">
               <div class="quadrant-header">
                 <span class="dot dot-p0"></span>
-                <span class="quadrant-title" id="todo-name-P0">课程</span>
+                <span class="quadrant-title" id="todo-name-P0"><span data-i18n="copy.courses.60db1a">课程</span></span>
                 <span class="count" id="todo-count-P0" data-priority="P0">0</span>
               </div>
               <ul class="todo-list" id="todo-list-P0" data-priority="P0"></ul>
@@ -135,7 +140,7 @@
             <section class="quadrant tile" data-priority="P1">
               <div class="quadrant-header">
                 <span class="dot dot-p1"></span>
-                <span class="quadrant-title" id="todo-name-P1">自媒体&amp;写作</span>
+                <span class="quadrant-title" id="todo-name-P1"><span data-i18n="copy.mediaWriting.4672dc">自媒体&amp;写作</span></span>
                 <span class="count" id="todo-count-P1" data-priority="P1">0</span>
               </div>
               <ul class="todo-list" id="todo-list-P1" data-priority="P1"></ul>
@@ -151,7 +156,7 @@
             <section class="quadrant tile" data-priority="P3">
               <div class="quadrant-header">
                 <span class="dot dot-p3"></span>
-                <span class="quadrant-title" id="todo-name-P3">日常</span>
+                <span class="quadrant-title" id="todo-name-P3"><span data-i18n="copy.dailyLife.f648d6">日常</span></span>
                 <span class="count" id="todo-count-P3" data-priority="P3">0</span>
               </div>
               <ul class="todo-list" id="todo-list-P3" data-priority="P3"></ul>
@@ -162,11 +167,11 @@
         <section id="tab-clip" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-clip" hidden>
           <div class="clip-panel">
             <div class="clip-toolbar" id="clip-toolbar">
-              <button class="clip-filter active" id="clip-filter-all" data-filter="all" type="button">全部</button>
-              <button class="clip-filter" id="clip-filter-text" data-filter="text" type="button">文字</button>
-              <button class="clip-filter" id="clip-filter-image" data-filter="image" type="button">图片</button>
-              <button class="clip-filter" id="clip-filter-faved" data-filter="faved" type="button">收藏</button>
-              <button class="clip-clear-btn" id="clip-clear-btn" type="button" aria-label="清空历史" title="剪贴板随桌面同步，这里不能清空">
+              <button class="clip-filter active" id="clip-filter-all" data-filter="all" type="button"><span data-i18n="copy.all.5c55a6">全部</span></button>
+              <button class="clip-filter" id="clip-filter-text" data-filter="text" type="button"><span data-i18n="copy.text.14b69b">文字</span></button>
+              <button class="clip-filter" id="clip-filter-image" data-filter="image" type="button"><span data-i18n="copy.image.d24c10">图片</span></button>
+              <button class="clip-filter" id="clip-filter-faved" data-filter="faved" type="button"><span data-i18n="copy.star.60a535">收藏</span></button>
+              <button class="clip-clear-btn" id="clip-clear-btn" type="button" aria-label="清空历史" title="剪贴板随桌面同步，这里不能清空" data-i18n-aria-label="copy.clearHistory.17ac4a" data-i18n-title="copy.clipboardSyncsFromDesktopAndCannotBe.b9cfe5">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M4 7h16" />
                   <path d="M9 7V5h6v2" />
@@ -175,7 +180,7 @@
               </button>
             </div>
             <div class="clip-list" id="clip-list">
-              <div class="clip-empty" id="clip-empty">复制点什么，历史会出现在这里</div>
+              <div class="clip-empty" id="clip-empty"><span data-i18n="copy.copySomethingToSeeItsHistoryHere.f0571f">复制点什么，历史会出现在这里</span></div>
             </div>
           </div>
         </section>
@@ -185,13 +190,13 @@
             <aside class="notes-library tile">
               <div class="notes-library-head">
                 <div class="notes-library-title">
-                  <span class="tile-label">笔记库</span>
-                  <strong id="notes-count">0 篇</strong>
+                  <span class="tile-label"><span data-i18n="copy.noteLibrary.7e16a8">笔记库</span></span>
+                  <strong id="notes-count"><span data-i18n="copy.0Notes.4e9dc3">0 篇</span></strong>
                 </div>
               </div>
               <label class="notes-search-wrap">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-                <input id="notes-search" type="search" placeholder="搜索笔记" aria-label="搜索笔记" autocomplete="off" />
+                <input id="notes-search" type="search" placeholder="搜索笔记" aria-label="搜索笔记" autocomplete="off"  data-i18n-placeholder="copy.searchNotes.d8912a" data-i18n-aria-label="copy.searchNotes.d8912a"/>
               </label>
               <div class="notes-list" id="notes-list"></div>
             </aside>
@@ -215,7 +220,7 @@
           <div class="recordings-page">
             <aside class="recording-library">
               <div class="recording-library-head">
-                <div><span class="tile-label">录音资料库</span><strong id="recording-count">0 条</strong></div>
+                <div><span class="tile-label"><span data-i18n="copy.recordingLibrary.65e54b">录音资料库</span></span><strong id="recording-count"><span data-i18n="copy.0Items.dce294">0 条</span></strong></div>
               </div>
               <div class="recording-list" id="recording-list"></div>
             </aside>
@@ -227,18 +232,18 @@
           <div class="credentials-page">
             <section class="tile settings-card credentials-form-card">
               <div class="credentials-heading">
-                <div><span class="tile-label">智能能力</span><strong>API 配置</strong></div>
-                <span class="secure-chip">只读</span>
+                <div><span class="tile-label"><span data-i18n="copy.aiFeatures.1b6636">智能能力</span></span><strong><span data-i18n="copy.apiConfiguration.0313d1">API 配置</span></strong></div>
+                <span class="secure-chip"><span data-i18n="copy.readOnly.3b5ec3">只读</span></span>
               </div>
               <div class="settings-status-list">
-                <div><span>通义百炼实时转写</span><small id="nas-asr-status" data-state="empty">未配置</small></div>
-                <div><span>对话模型</span><small id="nas-llm-status" data-state="empty">未配置</small></div>
+                <div><span><span data-i18n="copy.modelStudioLiveTranscription.c513a8">通义百炼实时转写</span></span><small id="nas-asr-status" data-state="empty"><span data-i18n="copy.notConfigured.80a57e">未配置</span></small></div>
+                <div><span><span data-i18n="copy.chatModel.eb399b">对话模型</span></span><small id="nas-llm-status" data-state="empty"><span data-i18n="copy.notConfigured.80a57e">未配置</span></small></div>
               </div>
               <p id="nas-ai-meta"></p>
             </section>
             <section class="tile credentials-library">
               <div class="credentials-library-head">
-                <div><span class="tile-label">账号密码</span><strong id="credential-count">0 项</strong></div>
+                <div><span class="tile-label"><span data-i18n="copy.accountsPasswords.164c7a">账号密码</span></span><strong id="credential-count"><span data-i18n="copy.0Items.c35a86">0 项</span></strong></div>
               </div>
               <div class="credential-list" id="credential-list"></div>
             </section>

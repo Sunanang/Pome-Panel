@@ -1,201 +1,262 @@
 'use strict';
+const pomeLocaleRendererNotification = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
+
 
 const root = document.getElementById('notification-root');
 const shell = document.getElementById('notification-shell');
+const openButton = document.getElementById('notification-open');
+const closeButton = document.getElementById('notification-close');
 const titleElement = document.getElementById('notification-title');
 const sourceElement = document.getElementById('notification-source');
 const detailElement = document.getElementById('notification-detail');
 const queueElement = document.getElementById('notification-queue');
-
+const timeElement = document.getElementById('notification-time');
+const progressElement = document.getElementById('notification-progress');
+const progressFill = document.getElementById('notification-progress-fill');
+const domain = window.PomeNotification;
 const api = window.notchAPI;
-// notification.html 不加载 platform.js（CSP 不允许内联脚本），平台标识在这里设置。
 let capabilities = api?.capabilities || null;
-const platformName = String(capabilities?.platform || api?.platform || '');
-if (/^[a-z0-9]+$/.test(platformName)) {
-  document.documentElement.dataset.platform = platformName;
-  document.documentElement.classList.add(`platform-${platformName}`);
-}
-// 没有窗口聚焦能力时点击只关闭提醒，标签也照此说明。
+const platformName = String(capabilities?.platform || api?.platform || 'darwin');
+if (/^[a-z0-9]+$/.test(platformName)) document.documentElement.dataset.platform = platformName;
 const canFocusWindows = () => capabilities?.features?.windowFocus === true;
 function applyShellLabel() {
-  shell.setAttribute('aria-label', canFocusWindows() ? '打开任务对应窗口' : '关闭任务提醒');
+  openButton.setAttribute('aria-label', pomeLocaleRendererNotification.t(canFocusWindows()
+    ? "copy.openTheSourceApp.ce1839" : "copy.dismissTaskNotification.30ec6c"));
+  if (currentNotification?.attentionKind) renderAttention();
 }
-applyShellLabel();
-api?.onCapabilitiesChanged?.((next) => {
-  capabilities = next;
-  applyShellLabel();
-});
-const HIDE_FALLBACK_MS = 420;
-const MAX_QUEUE_COUNT = 99;
+api?.onCapabilitiesChanged?.(next => { capabilities = next; applyShellLabel(); });
 
+const HIDE_FALLBACK_MS = 420;
+const cssNumber = (name, fallback) => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || fallback;
 let hideFallback = null;
-let currentEventId = null;
+let enterFallback = null;
+let timeTicker = null;
+let progressFrame = null;
+let currentNotification = null;
 let isVisible = false;
 let isHiding = false;
 let isHovering = false;
+let timing = null;
+let lastHeight = 0;
+let keepShell = false;
+let activationError = false;
+let activating = false;
+applyShellLabel();
 
-function firstText(values, fallback) {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  }
-  return fallback;
+function updateHeight() {
+  if (!currentNotification || !isVisible || isHiding) return;
+  const height = currentNotification.attentionKind ? cssNumber('--at-window-height', 146)
+    : cssNumber('--nb-base-height', 92) + (titleElement.offsetHeight > 18 ? 18 : 0);
+  document.documentElement.style.setProperty('--nb-window-h', `${height}px`);
+  if (height === lastHeight) return;
+  lastHeight = height;
+  api?.taskNotificationResize?.({ eventId: currentNotification.eventId, height });
 }
-
-function normalizeNotification(payload) {
-  const data = payload && typeof payload === 'object' ? payload : {};
-  const stringPayload = typeof payload === 'string' ? payload : '';
-  const sourceKey = firstText(
-    [data.source, data.provider, data.agent, data.app, data.type],
-    'task'
-  ).toLowerCase();
-  const sourceNames = {
-    codex: 'Codex',
-    claude: 'Claude',
-    cursor: 'Cursor',
-    gpt: '其他',
-    task: '任务',
-    todo: '待办',
-  };
-  const project = firstText([data.project, data.projectName, data.workspace], '');
-
-  return {
-    title: firstText(
-      [data.title, data.taskTitle, data.taskName, data.name, stringPayload],
-      '任务已完成'
-    ),
-    source: sourceNames[sourceKey] || '任务',
-    detail: firstText(
-      [data.detail],
-      sourceKey === 'todo'
-        ? '将在 1 小时内截止'
-        : project
-          ? `已完成 · ${project}`
-          : '已完成，可以查看了'
-    ),
-    queueCount: readQueueCount(data.queueCount ?? data.pendingCount ?? data.pending),
-    eventId: data.eventId ?? null,
-    sourceKey,
-  };
-}
-
-function readEventId(value) {
-  if (value && typeof value === 'object') return value.eventId ?? null;
-  return value ?? null;
-}
-
-function readQueueCount(value) {
-  const raw = Array.isArray(value)
-    ? value.length
-    : value && typeof value === 'object'
-      ? value.queueCount ?? value.pendingCount ?? value.pending ?? value.count
-      : value;
-  const count = Number(raw);
-  if (!Number.isFinite(count) || count <= 0) return 0;
-  return Math.min(MAX_QUEUE_COUNT, Math.floor(count));
-}
-
 function setQueueCount(value) {
-  const count = readQueueCount(value);
+  const count = domain.queueCount(value);
   queueElement.textContent = `+${count}`;
   queueElement.hidden = count === 0;
+  const attentionQueue = document.getElementById('attention-queue');
+  document.getElementById('attention-queue-count').textContent = `+${count}`; attentionQueue.hidden = count === 0;
+  updateHeight();
 }
-
-function clearHideFallback() {
-  if (!hideFallback) return;
-  clearTimeout(hideFallback);
-  hideFallback = null;
+function updateTime() {
+  if (!currentNotification) return;
+  const text = domain.relativeTime(currentNotification.occurredAt);
+  if (timeElement.textContent !== text) { timeElement.textContent = text; updateHeight(); }
+  document.getElementById('attention-time').textContent = text;
 }
-
+function renderProgress() {
+  cancelAnimationFrame(progressFrame);
+  if (!timing || !isVisible || isHiding || currentNotification?.status === 'awaiting') return;
+  const remaining = Math.max(0, timing.remainingMs - (timing.paused ? 0 : Math.max(0, Date.now() - timing.startedAt)));
+  progressFill.style.transform = `scaleX(${Math.min(1, remaining / timing.durationMs)})`;
+  if (!timing.paused && remaining > 0) progressFrame = requestAnimationFrame(renderProgress);
+}
+function applyTiming(value) {
+  if (!currentNotification || value?.eventId !== currentNotification.eventId) return;
+  timing = value;
+  renderProgress();
+}
 function reportHover(hovering) {
   if (isHovering === hovering) return;
   isHovering = hovering;
-  if (api && typeof api.taskNotificationHover === 'function') {
-    api.taskNotificationHover(hovering);
-  }
+  shell.classList.toggle('is-hover', hovering);
+  api?.taskNotificationHover?.(hovering, currentNotification?.eventId);
+  updateHeight();
 }
-
+function stopTickers() {
+  clearTimeout(enterFallback);
+  clearInterval(timeTicker);
+  cancelAnimationFrame(progressFrame);
+  enterFallback = null;
+  timeTicker = null;
+  progressFrame = null;
+}
 function showNotification(payload) {
-  const notification = normalizeNotification(payload);
-
-  clearHideFallback();
-  currentEventId = notification.eventId;
+  stopTickers();
+  clearTimeout(hideFallback);
+  currentNotification = domain.normalize(payload);
+  const notification = currentNotification;
+  document.documentElement.dataset.attention = String(Boolean(notification.attentionKind));
+  shell.classList.toggle('is-attention', Boolean(notification.attentionKind));
+  document.getElementById('attention-content').hidden = !notification.attentionKind;
+  shell.querySelector('.attention-seam').hidden = !notification.attentionKind;
   isVisible = true;
+  activationError = false;
+  activating = false;
   isHiding = false;
-
+  timing = null;
+  keepShell = false;
+  const replace = payload?.replace === true && root.classList.contains('is-visible');
+  lastHeight = 0;
   titleElement.textContent = notification.title;
+  titleElement.title = [notification.sessionTitle, notification.titleIsFallback ? notification.title : notification.completionSummary || notification.title].filter(Boolean).join('\n');
   sourceElement.textContent = notification.source;
   detailElement.textContent = notification.detail;
+  detailElement.hidden = !notification.detail;
+  document.getElementById('notification-separator').hidden = !notification.detail;
+  shell.classList.remove('has-activation-error');
   shell.dataset.source = notification.sourceKey;
-  setQueueCount(notification.queueCount);
-
+  shell.dataset.status = notification.status;
+  const brandPath = `./${domain.iconPath(notification.sourceKey)}`;
+  document.getElementById('notification-brand').style.setProperty('--nb-brand', `url("${brandPath}")`);
+  document.getElementById('attention-brand').src = brandPath;
+  if (notification.attentionKind) renderAttention();
+  document.getElementById('notification-status-glyph').setAttribute('href', `./assets/notification/glyphs.svg#${notification.status}`);
+  document.getElementById('notification-status').setAttribute('aria-label', { completed: pomeLocaleRendererNotification.t("copy.completed.f28461"), due: pomeLocaleRendererNotification.t("copy.dueSoon.ea0afa"), failed: pomeLocaleRendererNotification.t("copy.failed.01ad2b"), awaiting: pomeLocaleRendererNotification.t("copy.awaitingConfirmation.e5d218") }[notification.status]);
+  progressElement.hidden = notification.status === 'awaiting';
+  progressFill.style.transform = 'scaleX(1)';
   root.hidden = false;
-  shell.classList.remove('is-visible', 'is-hiding');
-  void shell.offsetWidth;
-
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      if (!isVisible || isHiding) return;
-      shell.classList.add('is-visible');
-    });
-  });
+  if (!replace) root.classList.remove('is-visible', 'is-hiding', 'is-switching', 'is-replacing');
+  else root.classList.add('is-replacing');
+  updateTime();
+  setQueueCount(notification.queueCount);
+  updateHeight();
+  void root.offsetWidth;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (!isVisible || isHiding || notification !== currentNotification) return;
+    root.classList.add('is-visible');
+    root.classList.remove('is-switching');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    enterFallback = setTimeout(() => {
+      if (!isVisible || isHiding || notification !== currentNotification) return;
+      api?.taskNotificationShown?.(notification.eventId);
+      reportHover(shell.matches(':hover'));
+      // A reused window may still be under the pointer when the next item appears.
+      api?.taskNotificationHover?.(isHovering, notification.eventId);
+    }, reduce ? 120 : replace ? 180 : cssNumber('--nb-enter-ms', 300));
+  }));
+  timeTicker = setInterval(updateTime, 1000);
 }
-
 function finishHide() {
   if (!isHiding) return;
-  clearHideFallback();
+  clearTimeout(hideFallback);
+  stopTickers();
   reportHover(false);
-
   isVisible = false;
   isHiding = false;
-  shell.classList.remove('is-visible', 'is-hiding');
-  root.hidden = true;
-
-  if (api && typeof api.taskNotificationDismissed === 'function') {
-    api.taskNotificationDismissed(currentEventId);
+  if (!keepShell) {
+    root.classList.remove('is-visible', 'is-hiding', 'is-switching', 'is-replacing');
+    root.hidden = true;
   }
+  api?.taskNotificationDismissed?.(currentNotification?.eventId);
 }
-
-function hideNotification(eventId) {
-  if (!isVisible || isHiding) return;
-
-  const requestedEventId = readEventId(eventId);
-  if (requestedEventId !== null) currentEventId = requestedEventId;
+function hideNotification(value) {
+  const eventId = value && typeof value === 'object' ? value.eventId : value;
+  if (!isVisible || isHiding || (eventId != null && eventId !== currentNotification?.eventId)) return;
   isHiding = true;
+  keepShell = value?.keepShell === true;
+  stopTickers();
   reportHover(false);
-
-  shell.classList.remove('is-visible');
-  shell.classList.add('is-hiding');
-  hideFallback = setTimeout(finishHide, HIDE_FALLBACK_MS);
+  if (keepShell) root.classList.add('is-switching');
+  else { root.classList.remove('is-visible'); root.classList.add('is-hiding'); }
+  hideFallback = setTimeout(finishHide, keepShell ? 120 : matchMedia('(prefers-reduced-motion: reduce)').matches ? 120 : cssNumber('--nb-hide-ms', HIDE_FALLBACK_MS));
 }
-
-function subscribe(method, callback) {
-  if (!api || typeof api[method] !== 'function') return;
-  api[method](callback);
+function dismissNotification() {
+  if (!isVisible || isHiding) return;
+  if (api?.dismissTaskNotification) api.dismissTaskNotification(currentNotification.eventId);
+  else hideNotification(currentNotification.eventId);
 }
-
 shell.addEventListener('pointerenter', () => reportHover(true));
-shell.addEventListener('pointerleave', () => reportHover(false));
-shell.addEventListener('click', async () => {
-  if (canFocusWindows() && api && typeof api.activateTaskNotification === 'function') {
-    try { await api.activateTaskNotification(currentEventId); } catch (error) {}
+shell.addEventListener('pointerleave', () => { if (!activationError && !shell.matches(':focus-within')) reportHover(false); });
+shell.addEventListener('focusin', () => reportHover(true));
+shell.addEventListener('focusout', () => { if (!activationError && !shell.matches(':hover') && !shell.matches(':focus-within')) reportHover(false); });
+function renderAttention() {
+  const notification = currentNotification;
+  if (notification.attentionTitleKey) notification.title = pomeLocaleRendererNotification.t(notification.attentionTitleKey, { command: notification.commandPreview });
+  const copy = domain.attentionCopy(notification.attentionKind, notification.source, canFocusWindows(), notification.manualResolution);
+  document.getElementById('attention-label').textContent = copy.label;
+  document.getElementById('attention-source').textContent = notification.source;
+  const project = document.getElementById('attention-project');
+  project.textContent = notification.project; project.hidden = !notification.project;
+  const title = document.getElementById('attention-title'); title.textContent = notification.title; title.title = notification.title;
+  if (notification.commandPreview) {
+    const marker = `${notification.commandPreview} ••••`, parts = notification.title.split(marker);
+    if (parts.length === 2) {
+      const command = document.createElement('span'); command.className = 'attention-command'; command.textContent = `${notification.commandPreview} `;
+      const mask = document.createElement('span'); mask.className = 'attention-command-mask'; mask.textContent = '••••'; command.append(mask);
+      title.replaceChildren(document.createTextNode(parts[0]), command, document.createTextNode(parts[1]));
+    }
   }
-  hideNotification(currentEventId);
-});
-shell.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    hideNotification(currentEventId);
+  document.getElementById('attention-action-label').textContent = copy.action;
+  document.getElementById('attention-action').classList.toggle('is-manual', !canFocusWindows());
+  document.getElementById('attention-hint').textContent = copy.hint;
+}
+async function activateNotification() {
+  if (!isVisible || isHiding || activating) return;
+  const eventId = currentNotification.eventId;
+  const isAttention = Boolean(currentNotification.attentionKind);
+  if (!canFocusWindows()) {
+    dismissNotification();
+    return;
   }
+  if (api?.activateTaskNotification) {
+    activating = true;
+    let result;
+    try { result = await api.activateTaskNotification(eventId); } catch { result = { ok: false }; }
+    if (currentNotification?.eventId !== eventId) return;
+    activating = false;
+    if (result !== true && result?.ok !== true) {
+      activationError = true;
+      pomeLocaleRendererNotification.bind(detailElement, "textContent", () => (result?.message || pomeLocaleRendererNotification.t("copy.couldnTOpenTheSourceAppTry.180b9d")));
+      detailElement.title = detailElement.textContent;
+      detailElement.hidden = false;
+      document.getElementById('notification-separator').hidden = false;
+      shell.classList.add('has-activation-error');
+      if (isAttention) document.getElementById('attention-hint').textContent = detailElement.textContent;
+      reportHover(true);
+      return;
+    }
+    if (isAttention) {
+      activationError = false;
+      shell.classList.remove('has-activation-error');
+      renderAttention();
+      api?.taskNotificationHover?.(isHovering, eventId);
+    }
+  }
+  if (currentNotification?.eventId === eventId && !isAttention) dismissNotification();
+}
+openButton.addEventListener('click', activateNotification);
+document.getElementById('attention-action').addEventListener('click', event => { event.stopPropagation(); void activateNotification(); });
+document.getElementById('attention-close').addEventListener('click', event => { event.stopPropagation(); dismissNotification(); });
+closeButton.addEventListener('click', event => { event.stopPropagation(); dismissNotification(); });
+shell.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && currentNotification?.status !== 'awaiting') { event.preventDefault(); dismissNotification(); }
 });
-shell.addEventListener('transitionend', (event) => {
-  if (event.target !== shell || event.propertyName !== 'clip-path') return;
-  if (isHiding) finishHide();
+window.addEventListener('blur', () => { if (!activationError) reportHover(false); });
+window.addEventListener('resize', updateHeight);
+window.addEventListener('beforeunload', stopTickers);
+api?.onTaskNotification?.(showNotification);
+api?.onTaskNotificationQueue?.(setQueueCount);
+api?.onTaskNotificationHide?.(hideNotification);
+api?.onTaskNotificationTiming?.(applyTiming);
+
+window.addEventListener('pome:language-changed', () => {
+  applyShellLabel();
+  if (!currentNotification) return;
+  if (currentNotification.attentionKind) renderAttention();
+  if (currentNotification.titleIsFallback) { titleElement.textContent = domain.fallbackTitle(currentNotification.sourceKey, currentNotification.status); titleElement.title = [currentNotification.sessionTitle, titleElement.textContent].filter(Boolean).join('\n'); }
+  if (currentNotification.status === 'due' && !activationError) detailElement.textContent = pomeLocaleRendererNotification.t('copy.dueWithin1Hour.955b14');
+  updateTime(); updateHeight();
 });
-
-window.addEventListener('blur', () => reportHover(false));
-window.addEventListener('beforeunload', () => reportHover(false));
-
-subscribe('onTaskNotification', showNotification);
-subscribe('onTaskNotificationQueue', setQueueCount);
-subscribe('onTaskNotificationHide', hideNotification);

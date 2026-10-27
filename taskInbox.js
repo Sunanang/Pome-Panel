@@ -1,13 +1,16 @@
 'use strict';
 
 const fs = require('node:fs');
+const { statusKey } = require('./renderer/notification-domain');
 const { randomUUID, createHash } = require('node:crypto');
 const { readJsonStrict, writeJsonAtomic, writeAtomic } = require('./atomicStorage');
+const { visibleCompletion } = require('./aiEventPolicy');
+const { AI_COMPLETION_LIMIT, completionSyncKey, normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory, sanitizeCompletionText } = require('./packages/sync-protocol/ai-completions');
 
-const READ_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
-const SOURCES = new Set(['codex', 'claude', 'cursor']);
+const { completionIds } = require('./aiProviderCatalog');
+const MAX_RECORDS = AI_COMPLETION_LIMIT;
+const SOURCES = new Set(completionIds());
 const HISTORICAL_SOURCES = new Set([...SOURCES, 'gpt']);
-const RETENTION_LABEL = '默认显示最近 20 条，可查看更多；已读记录保留 30 天，未读记录不自动清理；事件去重信息随记录保留。';
 const clean = (value, max) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 
 // Explicit identities survive retries. Legacy payloads without an event identity
@@ -48,6 +51,15 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     throw Object.assign(new Error('收件箱格式损坏，原文件已保留。'), { code: 'storage_corrupt' });
   }
   if (new Set(state.records.map((r) => r.id)).size !== state.records.length || Object.values(state.dedupe).some((r) => !r || typeof r.id !== 'string' || !Number.isFinite(r.at))) throw Object.assign(new Error('收件箱格式损坏，原文件已保留。'), { code: 'storage_corrupt' });
+  let sanitizedLegacy = false;
+  state.records = state.records.map(record => {
+    const next = { ...record, status: statusKey(record.status, record.source) };
+    if (record.source === 'manus') for (const key of ['title', 'project', 'sessionTitle', 'completionSummary']) {
+      const value = sanitizeCompletionText('manus', record[key]);
+      if (value !== (record[key] || '')) { next[key] = value; sanitizedLegacy = true; }
+    }
+    return next;
+  });
   const diskVersion = () => { if (!disk.existsSync(filePath)) return null; const stat = disk.statSync(filePath); return [stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':'); };
   const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
   let lastDiskVersion = diskVersion();
@@ -59,15 +71,35 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     if (currentDigest === lastDiskDigest) { lastDiskVersion = version; return; }
     throw Object.assign(new Error('收件箱文件在外部发生变化，原文件已保留，请重新读取。'), { code: 'storage_changed' });
   }
-  function commit(next) { checkDisk(); writeJsonAtomic(filePath, next, disk); state = next; lastDiskVersion = diskVersion(); lastDiskDigest = digest(`${JSON.stringify(next)}\n`); }
+  function commit(next) {
+    checkDisk();
+    const serialized = `${JSON.stringify(next)}\n`;
+    const remember = () => {
+      const version = diskVersion();
+      state = next; lastDiskVersion = version; lastDiskDigest = digest(serialized);
+    };
+    try { writeJsonAtomic(filePath, next, disk); remember(); }
+    catch (error) {
+      // The rename may already be visible when directory fsync reports an
+      // error. Adopt only the exact bytes of our write, then still report the
+      // durability failure. Otherwise all later reads would misclassify our
+      // committed event as an external edit and permanently pause the inbox.
+      try {
+        if (disk.readFileSync(filePath, 'utf8') === serialized) {
+          remember(); error.taskInboxCommitted = true;
+        }
+      } catch { /* Preserve the original write error when the disk cannot be read. */ }
+      throw error;
+    }
+  }
   function prune() {
     checkDisk();
-    const ts = now();
-    const records = state.records.filter((r) => r.readAt === null || ts - r.readAt < READ_RETENTION_MS);
+    const records = trimCompletionHistory(state.records);
     const ids = new Set(records.map(row => row.id));
     const dedupe = Object.fromEntries(Object.entries(state.dedupe).filter(([, row]) => ids.has(row.id) && row.stable === true));
-    if (records.length !== state.records.length || Object.keys(dedupe).length !== Object.keys(state.dedupe).length) {
+    if (sanitizedLegacy || records.some((row, index) => row.id !== state.records[index]?.id) || records.length !== state.records.length || Object.keys(dedupe).length !== Object.keys(state.dedupe).length) {
       commit({ ...state, records, dedupe });
+      sanitizedLegacy = false;
     }
   }
   function accept(input) {
@@ -76,33 +108,39 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     prune();
     const ts = now();
     const taskId = clean(input.taskId, 160);
-    const title = clean(input.title, 240);
-    const project = clean(input.project, 320);
+    const title = sanitizeCompletionText(input.source, clean(input.title, 4096));
+    const project = sanitizeCompletionText(input.source, clean(input.project, 320));
     const key = `event:${stableId}`;
     const prior = state.dedupe[key];
     if (prior) return { ok: true, duplicate: true, record: get(prior.id) };
     const rawCompletedAt = input.completedAt ?? input.completed_at;
     const parsedCompletedAt = typeof rawCompletedAt === 'string' && !/^\d+(\.\d+)?$/.test(rawCompletedAt) ? Date.parse(rawCompletedAt) : Number(rawCompletedAt);
     const record = {
-      id: randomUUID(), completionEventId: stableId, source: input.source, taskId, title, project,
+      id: randomUUID(), completionEventId: stableId, source: input.source, status: statusKey(input.status, input.source), taskId, title, project,
+      titleIsFallback: input.titleIsFallback === true,
+      sessionTitle: sanitizeCompletionText(input.source, clean(input.sessionTitle, 256)), completionSummary: sanitizeCompletionText(input.source, clean(input.completionSummary || input.title, 4096)),
       receivedAt: ts, completedAt: Number.isFinite(parsedCompletedAt) && parsedCompletedAt > 0 ? parsedCompletedAt : ts, readAt: null,
       window: input.window && typeof input.window === 'object' ? {
         app: clean(input.window.app, 160), title: clean(input.window.title, 320),
         bundleId: clean(input.window.bundleId, 240) || null, cwd: clean(input.window.cwd, 4096) || null,
       } : null,
     };
-    commit({ version: 1, records: [record, ...state.records],
-      dedupe: { ...state.dedupe, [key]: { id: record.id, at: ts, stable: true } } });
+    const records = trimCompletionHistory([record, ...state.records]);
+    const ids = new Set(records.map(row => row.id));
+    const dedupe = Object.fromEntries(Object.entries({ ...state.dedupe, [key]: { id: record.id, at: ts, stable: true } })
+      .filter(([, row]) => ids.has(row.id)));
+    commit({ version: 1, records, dedupe });
     return { ok: true, duplicate: false, record: { ...record } };
   }
-  function get(id) { const row = state.records.find((r) => r.id === id); return row ? structuredClone(row) : null; }
+  function get(id) { prune(); const row = state.records.find((r) => r.id === id); return row ? structuredClone(row) : null; }
   function list({ offset = 0, limit = 20 } = {}) {
     prune();
     offset = Math.max(0, Math.trunc(Number(offset) || 0));
     limit = Math.max(1, Math.min(100, Math.trunc(Number(limit) || 20)));
-    return { items: structuredClone(state.records.slice(offset, offset + limit)),
-      total: state.records.length, unread: state.records.filter((r) => r.readAt === null).length,
-      offset, hasMore: offset + limit < state.records.length, retentionLabel: RETENTION_LABEL };
+    const visible = state.records.filter(visibleCompletion);
+    return { items: structuredClone(visible.slice(offset, offset + limit)),
+      total: visible.length, unread: visible.filter((r) => r.readAt === null).length,
+      offset, hasMore: offset + limit < visible.length };
   }
   function markRead(id) {
     checkDisk();
@@ -113,7 +151,31 @@ function createTaskInbox({ filePath, now = Date.now, disk = fs } = {}) {
     }
     return { ok: true, record: get(id) };
   }
-  return { accept, get, list, markRead };
+  function snapshotForSync() { prune(); return structuredClone(state.records); }
+  function replaceFromSync(rows) {
+    prune();
+    if (!Array.isArray(rows)) throw new Error('invalid_ai_completion_history');
+    const local = new Map(state.records.map(row => [completionSyncKey(row), row]));
+    const merged = new Map();
+    for (const row of rows) {
+      let normalized = normalizeSyncedCompletion(row);
+      if (!normalized) throw new Error('invalid_ai_completion_history');
+      const prior = local.get(normalized.id);
+      if (prior) normalized = mergeSyncedCompletions(prior, normalized);
+      if (merged.has(normalized.id)) normalized = mergeSyncedCompletions(merged.get(normalized.id), normalized);
+      merged.set(normalized.id, normalized);
+    }
+    const records = trimCompletionHistory([...merged.values()]).map(row => {
+      const prior = local.get(row.id);
+      return { ...row, id: prior?.id || row.id, window: prior?.window || null };
+    });
+    const dedupe = Object.fromEntries(records.map(row => [`event:${row.completionEventId}`, { id: row.id, at: row.receivedAt, stable: true }]));
+    const next = { version: 1, records, dedupe };
+    if (JSON.stringify(next) !== JSON.stringify(state)) commit(next);
+    return { ok: true, total: records.length };
+  }
+  prune();
+  return { accept, get, list, markRead, snapshotForSync, replaceFromSync };
 }
 
-module.exports = { completionEventId, rebuildTaskInbox, createTaskInbox, READ_RETENTION_MS, RETENTION_LABEL };
+module.exports = { completionEventId, rebuildTaskInbox, createTaskInbox, MAX_RECORDS };

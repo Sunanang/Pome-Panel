@@ -1,3 +1,4 @@
+const pomeLocalePlatform = typeof module === 'object' && module.exports ? require("./localization/runtime") : globalThis.PomeI18n;
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.NotchPlatform = factory();
@@ -11,6 +12,7 @@
     const win = platform === 'win32';
     return {
       platform,
+      homeDefaults: { showSun: win, fillGrid: win },
       layout: {
         areaKind: win ? 'workArea' : 'bounds', // 夹紧 / 侧边停靠的参考区域
         topInsetKind: mac ? 'menuBar' : 'none',
@@ -50,7 +52,7 @@
     }
     caps.unavailableHomeModules = [
       !caps.features.musicControl && 'music',
-      !caps.features.windowSwitcher && 'windows',
+      !caps.features.windowSwitcher && !caps.features.winNativeSetting && 'windows',
     ].filter(Boolean);
     // 旧的扁平字段：留一个版本给尚未迁移到 features.* 的调用方。
     caps.automaticPaste = caps.features.automaticPaste;
@@ -114,13 +116,13 @@
   // ============ 麦克风 / 摄像头提示（P3-2） ============
   // Mac 由系统弹授权框，Windows 没有可编程弹窗，只能把用户送到隐私设置；
   // 两端连"设置"的叫法都不一样，所以文案由能力层算，渲染层只负责显示。
-  const MEDIA_KIND_LABELS = { microphone: '麦克风', camera: '摄像头' };
+  const MEDIA_KIND_LABELS = { get microphone() { return pomeLocalePlatform.t("copy.microphone.714cac"); }, get camera() { return pomeLocalePlatform.t("copy.camera.fac308"); } };
 
   function mediaAccessPrompt(kind, status, caps) {
     const pane = MEDIA_KIND_LABELS[kind] ? kind : 'microphone';
     const label = MEDIA_KIND_LABELS[pane];
     const windows = Boolean(caps && caps.platform === 'win32');
-    const settingsName = windows ? 'Windows 设置' : '系统设置';
+    const settingsName = windows ? pomeLocalePlatform.t("copy.windowsSettings.993323") : pomeLocalePlatform.t("copy.systemSettings.68ea5d");
     const panes = (caps && caps.privacyPanes) || [];
     // not-determined / unknown 也要能给出入口：Windows 上总开关关着时
     // getMediaAccessStatus 未必如实返回 denied，getUserMedia 却已经失败了。
@@ -129,9 +131,9 @@
       pane,
       denied,
       message: denied
-        ? `无法访问${label} · 请在${settingsName}中允许 Pome Panel`
-        : `无法访问${label} · 请检查${settingsName}中的权限`,
-      actionLabel: windows ? '打开 Windows 隐私设置' : '打开系统设置',
+        ? pomeLocalePlatform.t("copy.canTAccessAllowPomePanelIn.3ab394", { arg1: (label), arg2: (settingsName) })
+        : pomeLocalePlatform.t("copy.canTAccessCheckPermissionsIn.d8606e", { arg1: (label), arg2: (settingsName) }),
+      actionLabel: windows ? pomeLocalePlatform.t("copy.openWindowsPrivacySettings.11b260") : pomeLocalePlatform.t("copy.openSystemSettings.0407db"),
       canOpenSettings: panes.includes(pane),
     };
   }

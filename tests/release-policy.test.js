@@ -4,14 +4,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const yaml = require('js-yaml');
 
 const projectRoot = path.join(__dirname, '..');
 const releasePolicyScript = path.join(projectRoot, 'scripts', 'release-policy.js');
 const releaseWorkflowPath = path.join(projectRoot, '.github', 'workflows', 'release-dmg.yml');
 const entitlementsPath = path.join(projectRoot, 'build', 'entitlements.mac.plist');
 const readmePath = path.join(projectRoot, 'README.md');
-const websiteDownloadPath = path.join(projectRoot, 'website', 'app', 'landingDownload.mjs');
-const websiteContentPath = path.join(projectRoot, 'website', 'app', 'landingContent.ts');
+const userGuidePath = path.join(projectRoot, 'docs', 'user-guide.md');
 const packageVersion = require(path.join(projectRoot, 'package.json')).version;
 const packageConfig = require(path.join(projectRoot, 'package.json'));
 
@@ -77,8 +77,9 @@ test('a pushed version tag that disagrees with package.json is rejected', (t) =>
 
 test('the release workflow lets manual runs verify artifacts while policy gates publishing', () => {
   const workflow = fs.readFileSync(releaseWorkflowPath, 'utf8');
+  const config = yaml.load(workflow);
 
-  assert.match(workflow, /^\s{2}workflow_dispatch:\s*$/m);
+  assert.ok(Object.hasOwn(config.on, 'workflow_dispatch'), 'manual builds must remain available');
   assert.match(workflow, /id:\s*release[\s\S]*?run:\s*node scripts\/release-policy\.js/);
   assert.match(workflow, /name:\s*Build DMG[\s\S]*?run:\s*npm run build/);
   assert.match(workflow, /name:\s*Verify and checksum DMG/);
@@ -88,9 +89,21 @@ test('the release workflow lets manual runs verify artifacts while policy gates 
   );
 });
 
+test('only superseded pull-request checks may cancel an active run', () => {
+  const config = yaml.load(fs.readFileSync(releaseWorkflowPath, 'utf8'));
+  assert.equal(config.concurrency.group, 'release-${{ github.ref }}');
+  assert.equal(config.concurrency['cancel-in-progress'], "${{ github.event_name == 'pull_request' }}", 'main, tag and manual installer builds must finish without cancellation');
+});
+
 test('NAS builds use a pinned official tool and join the desktop release gate', () => {
   const workflow = fs.readFileSync(releaseWorkflowPath, 'utf8');
+  const config = yaml.load(workflow);
   const nas = workflow.slice(workflow.indexOf('\n  nas:'), workflow.indexOf('\n  release:'));
+  const nasSteps = config.jobs.nas.steps;
+  const dependencyInstall = nasSteps.findIndex(step => step.name === 'Install NAS test dependencies');
+  const nasTests = nasSteps.findIndex(step => step.name === 'Test NAS server and packaging');
+  assert.ok(dependencyInstall >= 0 && dependencyInstall < nasTests, 'fresh NAS runners must install test dependencies first');
+  assert.match(nasSteps[dependencyInstall].run, /npm ci.*--ignore-scripts/);
   assert.match(nas, /runs-on: ubuntu-24\.04/);
   assert.match(nas, /node scripts\/release-policy\.js/);
   assert.match(nas, /node --test .*tests\/fnos-\*\.test\.js.*tests\/fpk-build\.test\.js/);
@@ -100,7 +113,9 @@ test('NAS builds use a pinned official tool and join the desktop release gate', 
   assert.match(nas, /run: node scripts\/build-fpk\.js/);
   assert.match(nas, /name: nas-installer/);
   assert.match(nas, /dist\.noindex\/\*-fnos-all\.fpk\.sha256/);
-  assert.match(workflow, /needs: \[mac, windows, nas\]/);
+  for (const platform of ['mac', 'windows', 'nas']) {
+    assert.ok(config.jobs.release.needs.includes(platform), `${platform} must gate release publishing`);
+  }
   assert.match(workflow, /pattern: '\*-installer'/);
   assert.match(workflow, /gh release create .*release-assets\/\*\.fpk/);
   assert.ok(workflow.indexOf('sha256sum --check *.sha256') < workflow.indexOf('gh release create'));
@@ -138,6 +153,15 @@ test('macOS packaging declares the Electron 44 minimum and least-privilege runti
   assert.match(entitlements, /com\.apple\.security\.cs\.disable-library-validation/);
 });
 
+test('Windows uses a directory-selection wizard and repairs desktop shortcuts on manual reinstall', () => {
+  const nsis = packageConfig.build.nsis;
+  assert.equal(nsis.oneClick, false, 'show the installation wizard');
+  assert.equal(nsis.allowToChangeInstallationDirectory, true, 'allow a user-selected directory');
+  assert.equal(nsis.createDesktopShortcut, 'always', 'restore missing desktop shortcuts on manual reinstall');
+  assert.equal(nsis.createStartMenuShortcut, true);
+  assert.equal(nsis.deleteAppDataOnUninstall, false);
+});
+
 // P3-1：卸载后残留的 Run 值会让系统反复尝试拉起已被删掉的 exe。
 test('the NSIS uninstaller clears the auto-launch registry values, but not on upgrade', () => {
   const installerPath = path.join(projectRoot, 'build', 'installer.nsh');
@@ -171,28 +195,26 @@ test('Windows reads the effective login-item state instead of just the Run key',
 });
 
 // P3-4：Windows 用户装完之后要能自己配通知钩子、跨过 SmartScreen、知道哪些事做不到。
-test('the README documents the Windows hooks, SmartScreen and known limits', () => {
+test('the README links to Windows hook, SmartScreen and platform-limit guidance', () => {
   const readme = fs.readFileSync(readmePath, 'utf8');
-  assert.match(readme, /%USERPROFILE%\\\.codex\\config\.toml/);
-  assert.match(readme, /%USERPROFILE%\\\.claude\\settings\.json/);
-  assert.match(readme, /%LOCALAPPDATA%\\Programs\\Pome Panel/);
-  assert.match(readme, /SmartScreen/);
-  assert.match(readme, /仍要运行/);
+  assert.match(readme, /\]\(docs\/user-guide\.md#windows-上的几件事\)/);
+  const guide = fs.readFileSync(userGuidePath, 'utf8');
+  assert.match(guide, /%USERPROFILE%\\\.codex\\config\.toml/);
+  assert.match(guide, /%USERPROFILE%\\\.claude\\settings\.json/);
+  assert.match(guide, /%LOCALAPPDATA%\\Programs\\Pome Panel/);
+  assert.match(guide, /SmartScreen/);
+  assert.match(guide, /仍要运行/);
   for (const limit of ['不签名', '虚拟桌面', '汽水音乐', 'arm64', '9px']) {
-    assert.match(readme, new RegExp(limit), `已知限制里缺少「${limit}」`);
+    assert.match(guide, new RegExp(limit), `已知限制里缺少「${limit}」`);
   }
   // P1 之后 Windows 也能拖到四边，旧的"仍贴在工作区顶部居中"说明必须撤掉。
-  assert.doesNotMatch(readme, /Windows 仍贴在工作区顶部居中/);
-  assert.doesNotMatch(readme, /Windows 的折叠态是工作区顶部居中的 200×38/);
+  assert.doesNotMatch(guide, /Windows 仍贴在工作区顶部居中/);
+  assert.doesNotMatch(guide, /Windows 的折叠态是工作区顶部居中的 200×38/);
 });
 
-test('website download entry points stay on the latest release', () => {
+test('README downloads use GitHub Releases without removed marketing-site assets', () => {
   const readme = fs.readFileSync(readmePath, 'utf8');
-  const websiteDownload = fs.readFileSync(websiteDownloadPath, 'utf8');
-  const websiteContent = fs.readFileSync(websiteContentPath, 'utf8');
-
-  // The product README is an introduction. Download, changelog, and release notes stay on the website.
   assert.doesNotMatch(readme, /^##\s*(下载|安装|更新日志|发布|Changelog|Release)\b/im);
-  assert.match(websiteContent, /DOWNLOAD_URL\s*=\s*"https:\/\/github\.com\/Sunanang\/Pome-Panel\/releases\/latest"/);
-  assert.match(websiteDownload, /LATEST_RELEASE_API_URL\s*=\s*"https:\/\/api\.github\.com\/repos\/Sunanang\/Pome-Panel\/releases\/latest"/);
+  assert.match(readme, /https:\/\/github\.com\/Sunanang\/Pome-Panel\/releases/);
+  assert.doesNotMatch(readme, /website\/public\//);
 });

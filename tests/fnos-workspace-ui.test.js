@@ -215,6 +215,42 @@ test('workspace view masks secrets and keeps media bytes off the JSON', () => {
   assert.equal(buildWorkspaceMedia(entities, 'ai:settings'), null);
 });
 
+test('NAS audio validates inline and chunked bytes before advertising or serving playback', () => {
+  const { buildWorkspaceEntities, AUDIO_CHUNK_RAW, AUDIO_MAX_RAW } = require('../workspace-sync');
+  const build = size => buildWorkspaceEntities({ recordings: [{ id: 'audio', transcript: 'keep metadata',
+    audioBase64: Buffer.alloc(size, 17).toString('base64') }] }).entities;
+  for (const size of [10, AUDIO_CHUNK_RAW + 1, AUDIO_MAX_RAW]) {
+    const entities = build(size);
+    assert.equal(buildWorkspaceView(entities).recordings[0].hasAudio, true);
+    assert.equal(buildWorkspaceMedia(entities, 'recording:audio').bytes.length, size);
+  }
+  const inline = build(10);
+  inline[0].payload.audioBase64 = Buffer.from('tampered').toString('base64');
+  const corrupt = build(AUDIO_CHUNK_RAW + 1);
+  assert.equal(buildWorkspaceView(corrupt).recordings[0].hasAudio, true);
+  corrupt[1].payload.data = Buffer.from('tampered').toString('base64');
+  for (const entities of [inline, corrupt, build(AUDIO_CHUNK_RAW + 1).slice(0, -1)]) {
+    const row = buildWorkspaceView(entities).recordings[0];
+    assert.equal(row.hasAudio, false);
+    assert.equal(row.transcript, 'keep metadata');
+    assert.equal(buildWorkspaceMedia(entities, 'recording:audio'), null);
+  }
+});
+
+test('NAS audio bounds malformed chunk counts and bytes, preserving legacy audio without hashes', () => {
+  for (const chunks of [Infinity, Number.MAX_SAFE_INTEGER, 13, -1, .5, '2']) {
+    const entities = [{ entityId: 'recording:r', collection: 'recordings', payload: { id: 'r', audioChunks: chunks } }];
+    assert.equal(buildWorkspaceView(entities).recordings[0].hasAudio, false);
+    assert.equal(buildWorkspaceMedia(entities, 'recording:r'), null);
+  }
+  const entities = [{ entityId: 'recording:r', collection: 'recordings', payload: { id: 'r', audioBase64: Buffer.from('legacy').toString('base64') } }];
+  assert.equal(buildWorkspaceView(entities).recordings[0].hasAudio, true);
+  assert.equal(buildWorkspaceMedia(entities, 'recording:r').bytes.toString(), 'legacy');
+  entities[0].payload.audioBase64 = Buffer.alloc(6 * 1024 * 1024 + 1).toString('base64');
+  assert.equal(buildWorkspaceView(entities).recordings[0].hasAudio, false);
+  assert.equal(buildWorkspaceMedia(entities, 'recording:r'), null);
+});
+
 test('GET /api/v1/workspace and media require a session and redact secrets', async () => {
   const store = createMemoryStore({ serverId: 'srv-panel' });
   const key = store.getOrCreateAccountSyncKey('uid-alice');
@@ -308,6 +344,51 @@ test('GET /api/v1/workspace and media require a session and redact secrets', asy
   assert.equal(byDevice.getJson().notes.home, '会议纪要');
 });
 
+test('NAS media URLs and pending requests are released when their rendered owner is replaced', async t => {
+  const created = [], revoked = [], pending = [], signals = [];
+  t.mock.method(URL, 'createObjectURL', () => { const url = `blob:media-${created.length}`; created.push(url); return url; });
+  t.mock.method(URL, 'revokeObjectURL', url => revoked.push(url));
+  const events = {}, win = { addEventListener: (name, callback) => { events[name] = callback; } };
+  const view = {
+    clipboard: [{ id: 'image', type: 'image', hasImage: true }],
+    recordings: [{ id: 'one', hasAudio: true }, { id: 'two', hasAudio: true }],
+  };
+  let delay = false;
+  const fetchImpl = async (url, options) => {
+    if (!String(url).includes('/workspace/media/')) return { ok: true, json: async () => view };
+    signals.push(options.signal);
+    return { ok: true, blob: () => delay ? new Promise(resolve => pending.push(resolve)) : Promise.resolve(new Blob(['media'])) };
+  };
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  const { doc, store } = makeDom();
+  const controller = panelUi.createPanelController({ document: doc, window: win, fetch: fetchImpl });
+  await controller.init(); await flush();
+  assert.equal(created.length, 2);
+  let pauses = 0;
+  const audio = store['recording-detail'].children.find(child => child.className === 'recording-audio').children[0];
+  audio.pause = () => { pauses++; };
+  store['clip-filter-text'].listeners.click[0]();
+  assert.deepEqual(revoked, [created[0]]);
+  store['clip-filter-all'].listeners.click[0](); await flush();
+  store['recording-list'].children[1].listeners.click[0](); await flush();
+  assert.equal(pauses, 1, 'replacing a player stops its audio before releasing the URL');
+  assert(revoked.includes(created[1]), 'reselecting audio releases its previous player URL');
+  events['pome:language-changed'](); await flush();
+  assert.equal(created.length - revoked.length, 2, 'only current image and audio retain URLs after localization');
+  delay = true;
+  store['clip-filter-image'].listeners.click[0](); await flush();
+  const waitingSignal = signals.at(-1), count = created.length;
+  store['clip-filter-text'].listeners.click[0]();
+  assert.equal(waitingSignal.aborted, true);
+  pending[0](new Blob(['late media'])); await flush();
+  assert.equal(created.length, count, 'a late response cannot allocate a URL for a removed image');
+  events.pagehide();
+  assert.equal(created.length, revoked.length, 'page departure releases remaining media');
+  delay = false; events.pageshow({ persisted: true }); await flush();
+  assert.equal(created.length - revoked.length, 1, 'back-forward cache restore recreates the remaining player URL');
+  events.pagehide();
+});
+
 test('panel controller renders synced notes and switches to devices', async () => {
   const view = {
     notes: { home: '会议纪要', activeId: '', archive: [] },
@@ -333,7 +414,7 @@ test('panel controller renders synced notes and switches to devices', async () =
       ],
     }],
     todos: [{ id: 't1', text: '写周报', done: false, categoryId: 'P0', deadline: '23:30' }],
-    categories: { P0: '课程', P1: '自媒体&写作', P2: 'Vibe coding', P3: '日常' },
+    categories: { P0: '课程', P1: '自媒体&写作', P2: 'Vibe coding', P3: '日常', P4: '分类 5', P5: '分类 6', P6: '分类 7', P7: '分类 8' },
     ai: { configured: true, asr: '已配置', llm: '未配置', model: 'qwen', region: '', workspaceId: '' },
     secrets: [{ id: 's1', service: 'OpenAI', account: 'a…m', configured: true }],
     counts: { notes: 1, clipboard: 1, recordings: 1, links: 2, todos: 1, secrets: 1 },

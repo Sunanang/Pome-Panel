@@ -49,7 +49,8 @@ const DEVICE_PORT_GUIDANCE_TEXT =
 const APP_PATH_SEGMENT = 'pome-panel-sync';
 
 function isLoopbackHost(host) {
-  const h = String(host || '').toLowerCase();
+  // WHATWG URL.hostname keeps brackets around an IPv6 literal.
+  const h = String(host || '').toLowerCase().replace(/^\[([^\]]+)\]$/, '$1');
   return h === '127.0.0.1' || h === 'localhost' || h === '::1';
 }
 

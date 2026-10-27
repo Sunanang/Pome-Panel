@@ -1,3 +1,4 @@
+const pomeLocaleRendererTaskInboxDomain = typeof module === 'object' && module.exports ? require("../localization/runtime") : globalThis.PomeI18n;
 (function (root) {
   function pagination(total, page, pageSize) {
     const count = Math.max(0, Math.trunc(Number(total) || 0));
@@ -5,7 +6,7 @@
     const lastPage = Math.max(0, Math.ceil(count / size) - 1);
     const current = Math.max(0, Math.min(lastPage, Math.trunc(Number(page) || 0)));
     return { page: current, offset: current * size, limit: size, visible: count > size,
-      previous: current > 0, next: (current + 1) * size < count, label: current > 0 ? `第 ${current + 1} 页` : '' };
+      previous: current > 0, next: (current + 1) * size < count, label: current > 0 ? pomeLocaleRendererTaskInboxDomain.t("copy.page.73ea33", { arg1: (current + 1) }) : '' };
   }
   const api = Object.freeze({ pagination });
   if (typeof module === 'object' && module.exports) module.exports = api;

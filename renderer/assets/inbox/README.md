@@ -8,4 +8,11 @@
 
 新增 cursor.svg：https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/cursor.svg。
 
-UI 仅接入 Codex / Claude Code / Cursor。circle-alert.svg 来自 Lucide 官方图标库，许可证见 LICENSE-alert，用于损坏状态的小型提示。
+完成接入图标：Codex / Claude Code / Cursor / Grok / Copilot CLI / Antigravity / Manus（Manus 走 API 轮询，非 HTTP hook）。`grok.svg` 使用 Lobe Icons / 定稿源包的 xAI Grok 字形标；`grokbot.svg` 使用 xAI Grok Bot 官方页的头像标（头形 + 眼睛镂空，evenodd 路径以便 CSS mask），与 Grok 字形区分；仪表盘仍为 Grok Bot 保留圆角方底。`manus.svg` 使用定稿源包提供的官方白色字形（manus-white），用于深色卡片和通知蒙版。circle-alert.svg 来自 Lucide，许可证见 LICENSE-alert，用于损坏状态的小型提示。
+
+- `copilot.svg`：GitHub Primer Octicons 的 [copilot-24](https://github.com/primer/octicons/blob/main/icons/copilot-24.svg)，MIT 许可证见 LICENSE-copilot.txt；填色改为白色。
+- `antigravity.svg`：[官方 favicon](https://www.antigravity.google/favicon.svg) 中的标志轮廓，去掉背景与颜色效果，裁切 viewBox 并改为白色，以用于通知蒙版。
+
+定稿源包：[AI 剩余额度 B 仪表盘](https://drive.google.com/file/d/17r9ApKIEm8M3XhLLLL2sgvxHp7bYHbW9/view)。额度模块与面板共用系统字体栈，不再单独挂载 Inter。
+
+- `clock.svg`：Lucide 官方 [clock](https://github.com/lucide-icons/lucide/blob/main/icons/clock.svg)，许可证同 LICENSE-alert，用于额度数据过期提示。

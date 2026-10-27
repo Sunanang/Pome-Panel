@@ -1,0 +1,82 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="bubble.css"><link rel="stylesheet" href="attn.css">
+<style>
+.scene { position: relative; overflow: hidden; }
+.wall { position: absolute; inset: -60px; filter: blur(26px) saturate(1.05); }
+.wall.mac { background:
+   radial-gradient(38% 70% at 18% 30%, #3b4a7a 0, transparent 70%),
+   radial-gradient(34% 80% at 52% 110%, #c77a5b 0, transparent 70%),
+   radial-gradient(40% 90% at 88% 20%, #2f6b72 0, transparent 70%),
+   radial-gradient(30% 60% at 70% 80%, #6a4a86 0, transparent 70%),
+   linear-gradient(180deg, #1d2236, #2a2433); }
+.wall.win { background:
+   radial-gradient(40% 90% at 50% 120%, #2f7cf0 0, transparent 70%),
+   radial-gradient(30% 70% at 30% 60%, #1b4fb3 0, transparent 70%),
+   radial-gradient(35% 80% at 75% 55%, #4a6fd6 0, transparent 70%),
+   linear-gradient(180deg, #0c1d3d, #12306a); }
+.grain { position: absolute; inset: 0; opacity: .06; mix-blend-mode: overlay;
+   background-image: repeating-radial-gradient(circle at 13% 27%, #fff 0 .5px, transparent .5px 2px); }
+.menubar { position: absolute; left: 0; right: 0; top: 0; height: 32px; display: flex; align-items: center; justify-content: space-between;
+   padding: 0 14px 0 18px; background: rgba(18,18,26,.32); backdrop-filter: blur(24px) saturate(1.4);
+   color: rgba(255,255,255,.92); font-size: 13px; font-weight: 500; letter-spacing: -.1px; }
+.menubar .l, .menubar .r { display: flex; align-items: center; gap: 18px; }
+.menubar .app { font-weight: 700; }
+.menubar .logo { width: 13px; height: 13px; border-radius: 4px; background: rgba(255,255,255,.88); }
+.menubar svg { height: 14px; display: block; }
+.notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 200px; height: 32px; background: #000;
+   border-radius: 0 0 10px 10px; }
+.notch::before, .notch::after { content: ''; position: absolute; top: 0; width: 6px; height: 6px; }
+.notch::before { left: -6px; background: radial-gradient(circle at 0 100%, transparent 5.5px, #000 6px); }
+.notch::after { right: -6px; background: radial-gradient(circle at 100% 100%, transparent 5.5px, #000 6px); }
+.anchor { position: absolute; top: 0; left: 50%; transform: translateX(-50%); }
+.anchor.win { top: 10px; }
+.caption { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; display: flex; align-items: center; justify-content: space-between;
+   padding: 0 16px; background: #0b0b0c; border-top: 1px solid rgba(255,255,255,.06); color: #8a8a8a; font-size: 11px; font-weight: 500; }
+.caption b { color: #e8e8e8; font-weight: 600; margin-right: 8px; }
+.caption .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); color: #d0d0d0; font-size: 10px; }
+.caption .ph { color: #5f5f5f; }
+
+body { background: #0c0c0d; color: #e9e9e9; }
+h1 { margin: 0 0 6px; font-size: 26px; font-weight: 650; letter-spacing: -.3px; }
+.lede { margin: 0; color: #8c8c8c; font-size: 13px; font-weight: 450; line-height: 1.6; }
+h2 { margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #bdbdbd; letter-spacing: .2px; }
+.panel { background: #121214; border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 20px 22px; }
+.dim { position: absolute; color: #ff6b8a; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dim.h { height: 0; border-top: 1px solid #ff6b8a; }
+.dim.h::before, .dim.h::after { content: ''; position: absolute; top: -5px; width: 1px; height: 9px; background: #ff6b8a; }
+.dim.h::before { left: 0; } .dim.h::after { right: 0; }
+.dim.h span { position: absolute; left: 50%; transform: translate(-50%, -17px); background: #0c0c0d; padding: 0 4px; }
+.dim.h.below span { transform: translate(-50%, 3px); }
+.dim.v { width: 0; border-left: 1px solid #ff6b8a; }
+.dim.v::before, .dim.v::after { content: ''; position: absolute; left: -5px; height: 1px; width: 9px; background: #ff6b8a; }
+.dim.v::before { top: 0; } .dim.v::after { bottom: 0; }
+.dim.v span { position: absolute; top: 50%; transform: translate(6px, -50%); background: #0c0c0d; padding: 0 4px; }
+.dim.v.left span { transform: translate(calc(-100% - 6px), -50%); }
+.dim.c { color: #6ec1ff; } .dim.c.h, .dim.c.v { border-color: #6ec1ff; } .dim.c::before, .dim.c::after { background: #6ec1ff; }
+.callout { position: absolute; font-size: 11.5px; color: #cfcfcf; font-weight: 500; white-space: nowrap; }
+.callout::before { content: ''; position: absolute; width: 6px; height: 6px; border-radius: 9px; background: #ffd166; left: -12px; top: 5px; }
+.leader { position: absolute; border-top: 1px dashed rgba(255,209,102,.5); height: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 12px; }
+td { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.05); vertical-align: middle; }
+td:first-child { color: #8c8c8c; width: 40%; }
+.sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -3px; margin-right: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.m { font-family: 'SF Mono', ui-monospace, monospace; font-size: 11.5px; color: #e6e6e6; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); font-size: 10.5px; color: #cfcfcf; margin-left: 6px; }
+ html,body{width:2100px;height:4200px;overflow:hidden}</style></head><body><div style="width:2100px;padding:48px 50px">
+      <h1>Pome Panel · AI 等待操作提醒 · 定稿 B（Status Rail · 蓝）</h1>
+      <p class="lede">R3 方向 B，琥珀全部换为等待蓝；布局、尺寸、动效不变。无倒计时 · 不自动消失 · 只返回来源，不在气泡内作答 · × 只隐藏 · 来源解决后自动撤销。</p>
+      <div style="margin:16px 0 0;font-size:12px"><span style="display:inline-flex;align-items:center;gap:8px;margin-right:22px"><span class="sw" style="background:#438CFF"></span><span class="m">#438CFF</span><span style="color:#8c8c8c">等待蓝：接缝光线 / 标签底 / 圆点 / Win 顶线</span></span><span style="display:inline-flex;align-items:center;gap:8px;margin-right:22px"><span class="sw" style="background:#8DB8FF"></span><span class="m">#8DB8FF</span><span style="color:#8c8c8c">标签文字</span></span><span style="display:inline-flex;align-items:center;gap:8px;margin-right:22px"><span class="sw" style="background:#2F6FE0"></span><span class="m">#2F6FE0</span><span style="color:#8c8c8c">按钮底 · 白字 4.70:1 AA</span></span><span style="display:inline-flex;align-items:center;gap:8px;margin-right:22px"><span class="sw" style="background:#2A66D6"></span><span class="m">#2A66D6</span><span style="color:#8c8c8c">按钮悬停 · 5.29:1</span></span></div>
+      <div style="display:grid;grid-template-columns:980px 980px;gap:40px;margin-top:28px">
+        <div><h2>参照 · 已批准的完成气泡（400×92）</h2><img src="ref-completion-codex.png" style="width:980px;display:block;border-radius:10px"></div>
+        <div><h2>定稿 · 等待输入（400×146）</h2><img src="../input-codex.png" style="width:980px;display:block;border-radius:10px"></div></div>
+      <h2 style="margin-top:36px">全套</h2>
+      <div style="display:grid;grid-template-columns:980px 980px;gap:24px 40px"><div><div style="font-size:12.5px;color:#d8d8d8;margin:0 0 7px">等待输入 · Codex<span class="m" style="color:#666;margin-left:8px;font-size:10.5px">input-codex.png</span></div>
+          <img src="../input-codex.png" style="width:980px;display:block;border-radius:10px"></div><div><div style="font-size:12.5px;color:#d8d8d8;margin:0 0 7px">等待选择 · Cursor<span class="m" style="color:#666;margin-left:8px;font-size:10.5px">choice-cursor.png</span></div>
+          <img src="../choice-cursor.png" style="width:980px;display:block;border-radius:10px"></div><div><div style="font-size:12.5px;color:#d8d8d8;margin:0 0 7px">等待授权 · Claude<span class="m" style="color:#666;margin-left:8px;font-size:10.5px">auth-claude.png</span></div>
+          <img src="../auth-claude.png" style="width:980px;display:block;border-radius:10px"></div><div><div style="font-size:12.5px;color:#d8d8d8;margin:0 0 7px">授权 · 敏感参数打码<span class="m" style="color:#666;margin-left:8px;font-size:10.5px">auth-masked-claude.png</span></div>
+          <img src="../auth-masked-claude.png" style="width:980px;display:block;border-radius:10px"></div><div><div style="font-size:12.5px;color:#d8d8d8;margin:0 0 7px">+N 另有 2 条等待<span class="m" style="color:#666;margin-left:8px;font-size:10.5px">queue.png</span></div>
+          <img src="../queue.png" style="width:980px;display:block;border-radius:10px"></div><div><div style="font-size:12.5px;color:#d8d8d8;margin:0 0 7px">悬停 · 轮转暂停 · ×<span class="m" style="color:#666;margin-left:8px;font-size:10.5px">hover.png</span></div>
+          <img src="../hover.png" style="width:980px;display:block;border-radius:10px"></div><div><div style="font-size:12.5px;color:#d8d8d8;margin:0 0 7px">Windows 浮动卡片<span class="m" style="color:#666;margin-left:8px;font-size:10.5px">windows.png</span></div>
+          <img src="../windows.png" style="width:980px;display:block;border-radius:10px"></div><div><div style="font-size:12.5px;color:#d8d8d8;margin:0 0 7px">Windows · 「请返回来源软件」<span class="m" style="color:#666;margin-left:8px;font-size:10.5px">windows-fallback.png</span></div>
+          <img src="../windows-fallback.png" style="width:980px;display:block;border-radius:10px"></div></div>
+      <h2 style="margin-top:36px">spec.png</h2><img src="../spec.png" style="width:2000px;display:block;border-radius:10px">
+    </div></body></html>

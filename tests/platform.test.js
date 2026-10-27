@@ -21,13 +21,18 @@ test('a desktop narrower than the capsule never produces a wider window', () => 
 });
 
 test('Windows capabilities cannot enable Mac-only integrations', () => {
-  assert.deepEqual(platform.capabilities('win32').unavailableHomeModules, ['music', 'windows']);
+  assert.deepEqual(platform.capabilities('win32').unavailableHomeModules, ['music']);
   assert.equal(platform.capabilities('win32').automaticPaste, false);
   assert.equal(platform.capabilities('win32').autoLaunch, true);
   assert.deepEqual(platform.capabilities('darwin').unavailableHomeModules, []);
 });
 
 // ============ 能力层 v2（P0-1） ============
+test('fresh homepage defaults enable sun and fill available space only on Windows', () => {
+  assert.deepEqual(platform.resolveCapabilities('win32').homeDefaults, { showSun: true, fillGrid: true });
+  assert.deepEqual(platform.resolveCapabilities('darwin').homeDefaults, { showSun: false, fillGrid: false });
+});
+
 test('Mac has every integration and keeps the menu bar as its top inset', () => {
   const caps = platform.resolveCapabilities('darwin');
   assert.deepEqual(caps.unavailableHomeModules, []);
@@ -49,12 +54,12 @@ test('Mac has every integration and keeps the menu bar as its top inset', () => 
 
 test('Windows native features stay off until the module loads and the switch is on', () => {
   const off = platform.resolveCapabilities('win32', { nativeAvailable: false, winNativeEnabled: true });
-  assert.deepEqual(off.unavailableHomeModules, ['music', 'windows']);
+  assert.deepEqual(off.unavailableHomeModules, ['music']);
   assert.equal(off.features.windowSwitcher, false);
   assert.equal(off.features.automaticPaste, false);
 
   const disabled = platform.resolveCapabilities('win32', { nativeAvailable: true, winNativeEnabled: false });
-  assert.deepEqual(disabled.unavailableHomeModules, ['music', 'windows']);
+  assert.deepEqual(disabled.unavailableHomeModules, ['music']);
 
   const on = platform.resolveCapabilities('win32', { nativeAvailable: true, winNativeEnabled: true });
   // D4：汽水音乐永久不可用，所以 native 全开时首页仍缺 music。
@@ -158,7 +163,7 @@ test('platform filtering leaves saved preferences intact and recovers a usable h
   const hidden = ['pomodoro', 'recorder', 'mirror', 'note', 'commands'];
   const before = [...hidden];
   // cursor stays visible, so the "all available hidden" recovery does not strip pomodoro.
-  assert.deepEqual(platform.effectiveHiddenModules(hidden, registry, ['music', 'windows']), ['music', 'pomodoro', 'recorder', 'windows', 'mirror', 'note', 'commands']);
+  assert.deepEqual(platform.effectiveHiddenModules(hidden, registry, ['music']), ['music', 'pomodoro', 'recorder', 'mirror', 'note', 'commands']);
   assert.deepEqual(hidden, before);
   assert.deepEqual(platform.effectiveHiddenModules(hidden, registry, []), hidden);
 });

@@ -1,12 +1,13 @@
 'use strict';
 
 /**
- * Workspace sync projections: notes, links, clipboard, recordings, AI settings,
+ * Workspace sync projections: notes, links, clipboard, AI completions, recordings, AI settings,
  * and the secrets vault. Todos stay on the existing todo entity path.
  * Secret and AI-key payloads are AES-GCM boxes; this module never logs them.
  */
 
 const crypto = require('node:crypto');
+const { trimClipboardHistory } = require('./renderer/domain');
 const {
   COLLECTIONS,
   SCHEMA_VERSION,
@@ -16,6 +17,9 @@ const {
   encryptJson,
   decryptJson,
   isSealedPayload,
+  normalizeSyncedCompletion,
+  mergeSyncedCompletions,
+  trimCompletionHistory,
 } = require('./packages/sync-protocol');
 
 const AUDIO_CHUNK_RAW = 512 * 1024;
@@ -28,6 +32,7 @@ const WORKSPACE_COLLECTIONS = Object.freeze([
   COLLECTIONS.LINKS,
   COLLECTIONS.COMMANDS,
   COLLECTIONS.CLIPBOARD_HISTORY,
+  COLLECTIONS.AI_COMPLETIONS,
   COLLECTIONS.RECORDINGS,
   COLLECTIONS.AI_SETTINGS,
   COLLECTIONS.SECRETS,
@@ -41,6 +46,7 @@ function emptySnapshot() {
     links: [],
     commands: [],
     clipboard: { history: [], favorites: [] },
+    aiCompletions: [],
     recordings: [],
     aiSettings: null,
     secrets: [],
@@ -71,12 +77,13 @@ function countWorkspaceContent(snapshot, { todoLive = 0 } = {}) {
     links: links.length,
     commands: commands.length,
     clipboardHistory: clips.length,
+    aiCompletions: asArray(source.aiCompletions).length,
     recordings: recordings.length,
     aiSettings: aiCount,
     secrets: secrets.length,
   };
   counts.total = counts.todos + counts.notes + counts.links + counts.commands
-    + counts.clipboardHistory + counts.recordings + counts.aiSettings + counts.secrets;
+    + counts.clipboardHistory + counts.aiCompletions + counts.recordings + counts.aiSettings + counts.secrets;
   return counts;
 }
 
@@ -99,6 +106,7 @@ function collectionForEntityId(entityId) {
   if (id.startsWith('link:')) return COLLECTIONS.LINKS;
   if (id.startsWith('command:')) return COLLECTIONS.COMMANDS;
   if (id.startsWith('clip:')) return COLLECTIONS.CLIPBOARD_HISTORY;
+  if (id.startsWith('completion:')) return COLLECTIONS.AI_COMPLETIONS;
   if (id.startsWith('recording')) return COLLECTIONS.RECORDINGS;
   if (id.startsWith('secret:')) return COLLECTIONS.SECRETS;
   if (id === 'ai:settings') return COLLECTIONS.AI_SETTINGS;
@@ -177,6 +185,15 @@ function dedupeRows(rows, keyOf, prefer) {
 function dedupeWorkspaceSnapshot(snapshot) {
   const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
   const next = { ...source };
+  if (Array.isArray(source.aiCompletions)) {
+    const unique = new Map();
+    for (const row of source.aiCompletions) {
+      const normalized = normalizeSyncedCompletion(row);
+      if (!normalized) throw new Error('invalid_ai_completion_history');
+      unique.set(normalized.id, unique.has(normalized.id) ? mergeSyncedCompletions(unique.get(normalized.id), normalized) : normalized);
+    }
+    next.aiCompletions = trimCompletionHistory([...unique.values()]);
+  }
 
   if (Array.isArray(source.commands)) {
     next.commands = dedupeRows(source.commands, (row) => {
@@ -231,7 +248,7 @@ function dedupeWorkspaceSnapshot(snapshot) {
       const mapped = result.remap.get(String(id)) || String(id);
       if (!favorites.includes(mapped)) favorites.push(mapped);
     }
-    next.clipboard = { ...clipboard, history: result.rows, favorites };
+    next.clipboard = { ...clipboard, history: trimClipboardHistory(result.rows, favorites).history, favorites };
   }
 
   if (Array.isArray(source.secrets)) {
@@ -415,6 +432,10 @@ function buildWorkspaceEntities(snapshot, { accountKey = null } = {}) {
     pushEntity(entities, COLLECTIONS.CLIPBOARD_HISTORY, 'clip:favorites', { ids: favorites });
   }
 
+  for (const row of asArray(source.aiCompletions)) {
+    pushEntity(entities, COLLECTIONS.AI_COMPLETIONS, `completion:${row.id}`, row);
+  }
+
   for (const recording of asArray(source.recordings)) {
     if (!recording || recording.isDraft === true) continue;
     appendRecordingEntities(entities, warnings, recording);
@@ -477,6 +498,7 @@ function planWorkspaceSync({ index, localEntities, remoteChanges, deviceName = '
   const prior = index && typeof index === 'object' ? index : {};
   const hashes = { ...prior };
   const remoteIds = new Set();
+  const completionMerges = new Map();
   const localList = Array.isArray(localEntities) ? [...localEntities] : [];
   function noteVersion(local) { const p = local.payload; const rootTitle = p.conflict?.originalTitle || p.title || (local.entityId === 'note:home' ? '首页笔记' : '笔记'); const title = p.conflict && String(p.title || '').startsWith(`${rootTitle}（冲突副本 · `) ? rootTitle : p.title || rootTitle; return crypto.createHash('sha256').update(JSON.stringify({ title, content: p.content ?? p.markdown ?? '' })).digest('hex'); }
   function preserveNote(local, provenance = null) {
@@ -520,6 +542,13 @@ function planWorkspaceSync({ index, localEntities, remoteChanges, deviceName = '
     };
     const local = localById.get(change.entityId);
     const baseline = prior[change.entityId];
+    if (entity.collection === COLLECTIONS.AI_COMPLETIONS && local) {
+      const payload = mergeSyncedCompletions(local.payload, entity.payload);
+      const combined = { ...entity, payload };
+      remoteIds.add(entity.entityId); merged.set(entity.entityId, combined); hashes[entity.entityId] = entityHash(entity);
+      if (entityHash(combined) !== entityHash(entity)) completionMerges.set(entity.entityId, combined);
+      continue;
+    }
     if (entity.collection === COLLECTIONS.NOTES && change.entityId !== 'note:active' && local && (baseline === undefined || entityHash(local) !== baseline) && entityHash(entity) !== baseline && entityHash(local) !== entityHash(entity)) {
       if (noteVersion(local) === noteVersion(entity)) { remoteIds.add(entity.entityId); merged.set(entity.entityId, entity); hashes[entity.entityId] = entityHash(entity); continue; }
       preserveNote(local); remoteIds.add(entity.entityId); merged.set(entity.entityId, entity); hashes[entity.entityId] = entityHash(entity); continue;
@@ -536,7 +565,8 @@ function planWorkspaceSync({ index, localEntities, remoteChanges, deviceName = '
   }
 
   const appliedIndex = { ...hashes };
-  const toPush = [];
+  const toPush = [...completionMerges.values()];
+  for (const entity of completionMerges.values()) hashes[entity.entityId] = entityHash(entity);
   const localIds = new Set(localList.map((entity) => entity.entityId));
   for (const entity of localList) {
     if (remoteIds.has(entity.entityId)) continue;
@@ -554,12 +584,26 @@ function planWorkspaceSync({ index, localEntities, remoteChanges, deviceName = '
     delete hashes[entityId];
   }
 
-  return {
-    toPush,
-    appliedIndex,
-    nextIndex: hashes,
-    mergedEntities: [...merged.values()],
-  };
+  // Apply the same capacity after the complete local/remote merge. Send deletes
+  // for evicted remote rows so another pull cannot restore them indefinitely.
+  const clips = [...merged.values()].filter(entity => entity.collection === COLLECTIONS.CLIPBOARD_HISTORY && entity.entityId !== 'clip:favorites');
+  const favorites = asArray(merged.get('clip:favorites')?.payload?.ids);
+  const trimmed = trimClipboardHistory(clips.map(entity => ({ ...entity.payload, id: entity.entityId })),
+    favorites.map(id => `clip:${id}`));
+  const completions = [...merged.values()].filter(entity => entity.collection === COLLECTIONS.AI_COMPLETIONS);
+  const keptCompletions = new Set(trimCompletionHistory(completions.map(entity => ({ ...entity.payload, syncEntityId: entity.entityId }))).map(row => row.syncEntityId));
+  const evictedIds = new Set([...trimmed.evicted.map(row => row.id), ...completions.filter(entity => !keptCompletions.has(entity.entityId)).map(entity => entity.entityId)]);
+  for (let i = toPush.length - 1; i >= 0; i--) {
+    if (evictedIds.has(toPush[i].entityId)) toPush.splice(i, 1);
+  }
+  for (const entityId of evictedIds) {
+    merged.delete(entityId);
+    delete hashes[entityId];
+    if (prior[entityId] !== undefined || remoteIds.has(entityId)) {
+      toPush.push({ entityId, collection: collectionForEntityId(entityId), op: 'delete', payload: {} });
+    }
+  }
+  return { toPush, appliedIndex, nextIndex: hashes, mergedEntities: [...merged.values()] };
 }
 
 function unseal(payload, accountKey) {
@@ -658,6 +702,12 @@ function projectWorkspaceEntities(entities, { accountKey = null } = {}) {
     }
     if (id === 'clip:favorites') {
       snapshot.clipboard.favorites = asArray(payload.ids).map((item) => String(item));
+      continue;
+    }
+    if (id.startsWith('completion:')) {
+      const row = normalizeSyncedCompletion(payload);
+      if (!row || id !== `completion:${row.id}`) throw new Error('invalid_ai_completion_history');
+      snapshot.aiCompletions.push(row);
       continue;
     }
     if (id.startsWith('clip:')) {
@@ -840,7 +890,7 @@ function workspaceProjectionToStorage(storage, projection) {
     if (Array.isArray(projection[field])) next[key] = JSON.stringify(projection[field]);
   }
   if (projection.clipboard) {
-    next['notch-clip-history'] = JSON.stringify(projection.clipboard.history || []);
+    next['notch-clip-history'] = JSON.stringify(trimClipboardHistory(projection.clipboard.history, projection.clipboard.favorites).history);
     next['notch-clip-favorites'] = JSON.stringify(projection.clipboard.favorites || []);
   }
   return next;
