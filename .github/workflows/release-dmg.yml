@@ -1,21 +1,53 @@
 name: Release macOS, Windows and NAS
-
-on:
-  workflow_dispatch:
-  # 分支推送与 PR 构建三端产物，桌面端验证安装；只有推送 v*.*.* 标签才发布。
+'on':
+  workflow_dispatch: null
   push:
-    branches: [main, 'feat/**']
-    tags: ['v*.*.*']
-  pull_request:
-
+    branches:
+      - main
+      - feat/**
+    tags:
+      - v*.*.*
+  pull_request: null
 permissions:
   contents: write
-
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
+  changes:
+    name: Classify website-only update
+    runs-on: ubuntu-latest
+    outputs:
+      website_only: ${{ steps.scope.outputs.website_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Detect website-only changes
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |-
+          node <<'NODE'
+          const {execFileSync}=require('node:child_process');
+          const fs=require('node:fs');
+          const {EVENT_NAME,REF,BASE_SHA,HEAD_SHA,GITHUB_OUTPUT}=process.env;
+          let websiteOnly=false;
+          if (EVENT_NAME!=='workflow_dispatch' && !REF.startsWith('refs/tags/') && /^[a-f0-9]{40}$/.test(BASE_SHA||'') && !/^0+$/.test(BASE_SHA)) {
+            const files=execFileSync('git',['diff','--name-only','-z',BASE_SHA,HEAD_SHA],{encoding:'utf8'}).split(String.fromCharCode(0)).filter(Boolean);
+            const workflowPaths=new Set(['.github/workflows/release-dmg.yml','.github/workflows/pages.yml']);
+            websiteOnly=files.some(file=>file.startsWith('website/')) && files.every(file=>file.startsWith('website/')||workflowPaths.has(file));
+            console.log('Changed files:',files.length);
+          }
+          fs.appendFileSync(GITHUB_OUTPUT,'website_only='+websiteOnly+String.fromCharCode(10));
+          console.log('Website-only update:',websiteOnly);
+          NODE
   mac:
     name: Build Apple Silicon DMG
     runs-on: macos-14
@@ -26,11 +58,26 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: ${{ needs.changes.outputs.website_only == 'true' && 'website/package-lock.json' || 'package-lock.json' }}
+      - name: Validate website without building installers
+        if: needs.changes.outputs.website_only == 'true'
+        working-directory: website
+        shell: bash
+        run: |-
+          npm ci --no-audit --no-fund
+          npm run i18n:check
+          npm run test:i18n
+          npm run build
+          npm run test:sites
       - run: node scripts/release-policy.js
+        if: needs.changes.outputs.website_only != 'true'
       - run: npm ci
+        if: needs.changes.outputs.website_only != 'true'
       - run: npm test
+        if: needs.changes.outputs.website_only != 'true'
       - name: Build DMG
         run: npm run build
+        if: needs.changes.outputs.website_only != 'true'
       - name: Verify and checksum DMG
         shell: bash
         run: |
@@ -48,6 +95,7 @@ jobs:
           hdiutil verify "dist.noindex/Pome-Panel-${version}-arm64.dmg"
           cd dist.noindex
           shasum -a 256 "Pome-Panel-${version}-arm64.dmg" > "Pome-Panel-${version}-arm64.dmg.sha256"
+        if: needs.changes.outputs.website_only != 'true'
       - uses: actions/upload-artifact@v4
         with:
           name: mac-installer
@@ -55,7 +103,9 @@ jobs:
             dist.noindex/*.dmg
             dist.noindex/*.dmg.sha256
           if-no-files-found: error
-
+        if: needs.changes.outputs.website_only != 'true'
+    needs:
+      - changes
   windows:
     name: Build and test Windows installer
     runs-on: windows-latest
@@ -66,15 +116,31 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: ${{ needs.changes.outputs.website_only == 'true' && 'website/package-lock.json' || 'package-lock.json' }}
+      - name: Validate website without building installers
+        if: needs.changes.outputs.website_only == 'true'
+        working-directory: website
+        shell: bash
+        run: |-
+          npm ci --no-audit --no-fund
+          npm run i18n:check
+          npm run test:i18n
+          npm run build
+          npm run test:sites
       - run: node scripts/release-policy.js
+        if: needs.changes.outputs.website_only != 'true'
       - run: npm ci
+        if: needs.changes.outputs.website_only != 'true'
       - run: npm test
+        if: needs.changes.outputs.website_only != 'true'
       - run: npm run build:win
+        if: needs.changes.outputs.website_only != 'true'
       - name: Verify installed Windows application
         shell: pwsh
         run: ./scripts/verify-windows.ps1
+        if: needs.changes.outputs.website_only != 'true'
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: (always()) && needs.changes.outputs.website_only != 'true'
         with:
           name: windows-test-evidence
           path: dist.noindex/windows-smoke/
@@ -85,7 +151,9 @@ jobs:
             dist.noindex/*-setup.exe
             dist.noindex/*-setup.exe.sha256
           if-no-files-found: error
-
+        if: needs.changes.outputs.website_only != 'true'
+    needs:
+      - changes
   nas:
     name: Build fnOS FPK
     runs-on: ubuntu-24.04
@@ -95,9 +163,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Validate website without building installers
+        if: needs.changes.outputs.website_only == 'true'
+        working-directory: website
+        shell: bash
+        run: |-
+          npm ci --no-audit --no-fund
+          npm run i18n:check
+          npm run test:i18n
+          npm run build
+          npm run test:sites
       - run: node scripts/release-policy.js
+        if: needs.changes.outputs.website_only != 'true'
       - name: Test NAS server and packaging
-        run: node --test tests/fnos-*.test.js tests/sync-protocol.test.js tests/schema-version.test.js tests/nas-recovery.test.js tests/fpk-build.test.js tests/release-policy.test.js
+        run: >-
+          node --test tests/fnos-*.test.js tests/sync-protocol.test.js tests/schema-version.test.js tests/nas-recovery.test.js tests/fpk-build.test.js
+          tests/release-policy.test.js
+        if: needs.changes.outputs.website_only != 'true'
       - name: Install pinned official fnpack
         shell: bash
         run: |
@@ -109,8 +191,10 @@ jobs:
           printf '%s  %s\n' '54b97fa7b70968c4d05c79840f5daeff508957d0bb2062fdb0376d00d9615c93' "$FNPACK" | sha256sum --check -
           chmod +x "$FNPACK"
           printf 'FNPACK=%s\n' "$FNPACK" >> "$GITHUB_ENV"
+        if: needs.changes.outputs.website_only != 'true'
       - name: Build NAS FPK and checksum
         run: node scripts/build-fpk.js
+        if: needs.changes.outputs.website_only != 'true'
       - uses: actions/upload-artifact@v4
         with:
           name: nas-installer
@@ -118,10 +202,16 @@ jobs:
             dist.noindex/*-fnos-all.fpk
             dist.noindex/*-fnos-all.fpk.sha256
           if-no-files-found: error
-
+        if: needs.changes.outputs.website_only != 'true'
+    needs:
+      - changes
   release:
     name: Publish verified installers
-    needs: [mac, windows, nas]
+    needs:
+      - changes
+      - mac
+      - windows
+      - nas
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -140,10 +230,17 @@ jobs:
         if: steps.release.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
+        run: >
           cd release-assets
+
           sha256sum --check *.sha256
+
           cd ..
+
           sed "s/{{VERSION}}/${{ steps.release.outputs.version }}/g" docs/release-notes.md > release-notes.rendered.md
+
           if grep -q '{{VERSION}}' release-notes.rendered.md; then echo 'release notes placeholder not rendered' >&2; exit 1; fi
-          gh release create "${GITHUB_REF_NAME}" release-assets/*.dmg release-assets/*.exe release-assets/*.fpk release-assets/*.sha256 --title "Pome Panel ${GITHUB_REF_NAME}" --notes-file release-notes.rendered.md
+
+          gh release create "${GITHUB_REF_NAME}" release-assets/*.dmg release-assets/*.exe release-assets/*.fpk release-assets/*.sha256 --title "Pome Panel
+          ${GITHUB_REF_NAME}" --notes-file release-notes.rendered.md
+    if: needs.changes.outputs.website_only != 'true'
