@@ -272,6 +272,7 @@ async function run(mainContents) {
 }
 
 async function verifyMcpAuthorization(mainContents) {
+  const canFocus = await mainContents.executeJavaScript('notchAPI.capabilities.features.windowFocus');
   const inbox = () => mainContents.executeJavaScript('notchAPI.getTaskInbox()');
   const pending = () => mainContents.executeJavaScript('notchAPI.getAiAttention()');
   const before = await inbox();
@@ -288,7 +289,7 @@ async function verifyMcpAuthorization(mainContents) {
   let win = await shown('请到 Cursor 完成 Google Drive 授权');
   const firstDisplay = await evaluate(win, 'currentNotification.eventId');
   assert.equal(await evaluate(win, 'currentNotification.attentionKind'), 'authorization');
-  assert.equal(await evaluate(win, 'document.getElementById("attention-hint").textContent'), '授权后可关闭此提醒');
+  assert.equal(await evaluate(win, 'document.getElementById("attention-hint").textContent'), canFocus ? '授权后可关闭此提醒' : 'Windows 原生能力关闭 · 点击仅关闭提醒');
   assert.equal(win.getBounds().height, process.platform === 'win32' ? 114 : 146);
   const first = (await pending()).items.find(row => row.event.eventId === firstId);
   assert(first); assert.equal(first.state, 'pending');
@@ -302,7 +303,7 @@ async function verifyMcpAuthorization(mainContents) {
   const after = await inbox();
   assert.equal(after.total, before.total); assert.equal(after.unread, before.unread);
   await evaluate(win, `PomeI18n.setState({preference:'en-US',effectiveLocale:'en-US'});window.dispatchEvent(new Event('pome:language-changed'))`);
-  assert.equal(await evaluate(win, 'document.getElementById("attention-hint").textContent'), 'Dismiss after authorizing');
+  assert.equal(await evaluate(win, 'document.getElementById("attention-hint").textContent'), canFocus ? 'Dismiss after authorizing' : 'Windows native features off · Click to dismiss');
   await capture(win, 'cursor-mcp-authorization-english');
   await evaluate(win, `PomeI18n.setState({preference:'zh-CN',effectiveLocale:'zh-CN'});window.dispatchEvent(new Event('pome:language-changed'))`);
   await capture(win, 'cursor-mcp-authorization');
