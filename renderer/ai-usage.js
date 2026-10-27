@@ -326,8 +326,16 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
           glyph.selectNodeContents(name);
         }
       }
-      const rowHeight = rows ? rows*number('--q-window-line')+(rows-1)*number('--q-window-gap') : 0;
+      let rowHeight = rows ? rows*number('--q-window-line')+(rows-1)*number('--q-window-gap') : 0;
       card.style.setProperty('--q-window-height', `${rowHeight}px`);
+      const rowContent = card.querySelector('.q-inline-content');
+      if (rowContent && m.inlineRows.length <= rows) {
+        // Font ink can extend a fraction below its line box. Reserve its actual
+        // painted height so classic scrollbars do not consume 15px for one
+        // overflowing pixel. More than three pools still keep their scroller.
+        rowHeight = Math.max(rowHeight, rowContent.scrollHeight);
+        card.style.setProperty('--q-window-height', `${rowHeight}px`);
+      }
       if (size !== 'mini') {
         const group = card.querySelector('.q-gauge-group'), area = group.getBoundingClientRect();
         const padding = parseFloat(getComputedStyle(group).paddingBottom) || 0;
