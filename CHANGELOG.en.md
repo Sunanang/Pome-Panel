@@ -6,6 +6,7 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- When Windows native capabilities are disabled, clicking a completion bubble only dismisses it. Label the action accordingly and enforce the rule in the main process; explicit source opening from the inbox remains separate.
 - Reserve measured temperature and Chinese weather-name widths in weather cards, shorten long headings, and omit the small location button's decorative chevron to prevent Windows clipping or overflow. Cover wide negative readings and long German headings at medium/large sizes, and set an explicit Chinese locale for cold-start inbox recovery acceptance.
 - Show and focus animation acceptance windows, set motion preferences explicitly, and sample layout-return interpolation on its actual CSS animation timeline to avoid software-rendering and background-window timing failures.
 - Enable native window visibility before loading the weather acceptance page and cover both motion preferences, keeping the hidden-window effects suspension check reliable.

@@ -401,14 +401,19 @@ async function previewVariants() {
       if (platform==='win32') assert.equal(await evaluate(preview,'getComputedStyle(document.querySelector(".notification-cap")).display'),'none');
       if (name.endsWith('-native-off')) {
         assert.equal(await evaluate(preview, 'sourceElement.textContent'), require('../aiProviderCatalog').get(fixture.source).label);
-        assert.equal(await evaluate(preview, 'openButton.getAttribute("aria-label")'), '打开任务对应窗口');
+        assert.equal(await evaluate(preview, 'openButton.getAttribute("aria-label")'), '关闭任务提醒');
         const count = activated.length;
-        await evaluate(preview, 'openButton.click()');
-        // Preview windows are not the live notificationWindow, so activate IPC is rejected
-        // before taskApps.open. The renderer must still attempt open (not silent-dismiss).
-        await until(() => evaluate(preview, 'activationError'), name+' activation IPC rejection reaches the renderer');
+        let closeRequested = false;
+        const onClose = (event, eventId) => { if (event.sender === preview.webContents && eventId === name) closeRequested = true; };
+        ipcMain.on('task-notification:close', onClose);
+        try {
+          await evaluate(preview, 'openButton.click()');
+          // Preview windows are not the trusted live notificationWindow. Verify
+          // the dismiss request; production lifecycle checks cover actual hiding.
+          await until(() => closeRequested, name+' requests dismissal without native focus');
+        } finally { ipcMain.removeListener('task-notification:close', onClose); }
         assert.equal(activated.length, count);
-        assert.equal(await evaluate(preview, 'activationError'), true);
+        assert.equal(await evaluate(preview, 'activationError'), false);
       }
       // Reduced motion keeps every piece of content and uses only a fade.
       preview.webContents.debugger.attach('1.3');
