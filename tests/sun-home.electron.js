@@ -64,6 +64,8 @@ async function runPlatform(name) {
   win.webContents.on('console-message', details => { if (details.level === 'error') errors.push(details.message); });
   try {
     await win.loadFile(path.join(__dirname, '..', 'renderer/index.html'));
+    win.show();
+    win.focus();
     win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await js('setMode(true)');
