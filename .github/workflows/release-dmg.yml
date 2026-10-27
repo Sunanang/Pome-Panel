@@ -12,7 +12,7 @@ permissions:
   contents: write
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   changes:
     name: Classify website-only update

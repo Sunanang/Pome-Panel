@@ -66,7 +66,10 @@ async function run(c){
  }
  // Fixture setup only: arbitrary widget sets replace the removed product presets.
  function seedHomeFixture(ids = HOME_MODULE_REGISTRY.filter(id=>!unavailableHomeModules.includes(id))) {
-  if(ids.includes('windows'))windowsInlineRequested=true;
+  if(ids.includes('windows')){
+   windowsInlineRequested=true;
+   if(homeCapabilities.features.winNativeSetting)localStorage.setItem('pome-windows-inline-v1','1');
+  }
   hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
   homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
   const defaults=Object.fromEntries(ids.map(id=>[id,HOME_SIZE_DEFAULTS[id]]));

@@ -89,6 +89,12 @@ test('the release workflow lets manual runs verify artifacts while policy gates 
   );
 });
 
+test('only superseded pull-request checks may cancel an active run', () => {
+  const config = yaml.load(fs.readFileSync(releaseWorkflowPath, 'utf8'));
+  assert.equal(config.concurrency.group, 'release-${{ github.ref }}');
+  assert.equal(config.concurrency['cancel-in-progress'], "${{ github.event_name == 'pull_request' }}", 'main, tag and manual installer builds must finish without cancellation');
+});
+
 test('NAS builds use a pinned official tool and join the desktop release gate', () => {
   const workflow = fs.readFileSync(releaseWorkflowPath, 'utf8');
   const config = yaml.load(workflow);
