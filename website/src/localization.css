@@ -1,0 +1,126 @@
+.header-actions { display:flex; align-items:center; gap:10px; flex:0 0 auto; }
+.language-picker {
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  height:40px;
+  max-width:172px;
+  padding:0 13px;
+  border:1px solid var(--control-border);
+  border-radius:var(--control-radius);
+  background:var(--control-fill);
+  color:#bdb7b2;
+  transition:border-color .2s, background .2s;
+}
+.language-picker:hover { background:var(--control-hover); border-color:var(--control-border-hover); }
+.language-picker:has(select:focus-visible) { outline:2px solid #dcb6ba; outline-offset:4px; }
+.language-picker>svg { flex-shrink:0; pointer-events:none; }
+.language-picker select {
+  appearance:none;
+  -webkit-appearance:none;
+  min-width:0;
+  max-width:120px;
+  width:100%;
+  height:100%;
+  padding:0;
+  margin:0;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  font-size:11px;
+  cursor:pointer;
+  text-overflow:ellipsis;
+  color-scheme:dark;
+}
+.language-picker option { background:#202022; color:#f0ece8; }
+.product-language-note { max-width:1120px; margin:18px auto 0; color:#85817e; font-size:10px; line-height:1.7; }
+.hero-description { max-width:520px; }
+html[data-script="latin"] .hero h1 { font-size:clamp(36px,3.7vw,56px); line-height:1.28; letter-spacing:-.045em; }
+html:is([lang="zh-CN"],[lang="zh-TW"]) .hero h1 { font-size:clamp(34px,4.05vw,60px); line-height:1.35; }
+html:is([lang="ja-JP"],[lang="ko-KR"]) .hero h1 { font-size:clamp(30px,3.1vw,46px); line-height:1.4; }
+html[data-script="latin"] :is(.story h2,.workspace-title h2,.local-section h2) { font-size:clamp(30px,3.3vw,49px); letter-spacing:-.035em; }
+.story-heading>p,.workspace-title>p { max-width:42%; }
+.story-heading { gap:35px; }
+.hero-bottom { gap:25px; }
+.hero-bottom>span { max-width:42%; }
+.connection-status { text-align:center; line-height:1.75; }
+.button, .connection-button { text-align:center; }
+.download-dialog { max-height:calc(100svh - 48px); overflow:auto; }
+@media (max-width:1300px) and (min-width:1101px) {
+  .site-header .header-nav a { padding-left:11px; padding-right:11px; }
+  .site-header .header-nav a.nav-external { display:none; }
+}
+@media (max-width:1100px) {
+  :root { --header-height:116px; }
+  .site-header { align-items:flex-start; padding-top:15px; padding-bottom:59px; }
+  .site-header>.brand { min-height:36px; }
+  .site-header .header-nav { position:absolute; left:var(--gutter); right:var(--gutter); bottom:10px; justify-content:center; }
+  .site-header .header-nav a.nav-external { display:none; }
+  .site-header .header-nav a.nav-link { display:inline-flex; flex:1 1 auto; min-width:0; padding:7px 9px; min-height:32px; font-size:11px; }
+  .nav-cta { min-height:36px; padding:8px 15px; font-size:11px; }
+  .language-picker { height:36px; }
+  .hero-content { padding-top:172px; }
+}
+@media (max-width:900px) {
+  .story-heading { gap:25px; }
+  .workspace-title { gap:25px; }
+  .local-grid { gap:30px; }
+}
+@media (max-width:600px) {
+  .header-actions { gap:8px; }
+  .language-picker { max-width:124px; gap:6px; padding:0 10px; height:38px; }
+  .language-picker select { max-width:72px; font-size:10px; }
+  .header-actions .nav-cta { width:38px; height:38px; padding:0; min-height:38px; }
+  .header-actions .nav-cta-label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  .hero { height:auto; min-height:900px; padding-bottom:80px; }
+  .hero-content { width:100%; }
+  .hero-product { position:relative; top:auto; right:auto; width:107%; margin:42px 0 65px 4%; }
+  .hero h1 { font-size:41px; }
+  html[data-script="latin"] .hero h1 { font-size:clamp(25px,7.2vw,32px); letter-spacing:-.04em; }
+  html:is([lang="zh-CN"],[lang="zh-TW"]) .hero h1 { font-size:clamp(23px,7.1vw,34px); }
+  html:is([lang="ja-JP"],[lang="ko-KR"]) .hero h1 { font-size:clamp(18px,5.5vw,28px); }
+  .hero-actions { align-items:stretch; }
+  .hero-actions .button { white-space:normal; max-width:100%; }
+  .hero-bottom { gap:18px; align-items:center; }
+  .hero-bottom>span:first-child { max-width:57%; line-height:1.6; }
+  .hero-bottom .scroll-cue { white-space:normal; text-align:right; padding-right:0; }
+  .intro-line>span:first-child { max-width:45%; }
+  .intro-line>p { max-width:50%; }
+  .story-heading>p,.workspace-title>p { max-width:none; }
+  .story { height:auto; min-height:0; padding:55px 0 65px; }
+  .story-sticky { position:relative; top:0; height:auto; min-height:0; padding-top:0; }
+  .demo-desktop { height:270px; }
+  .story-controls { justify-content:flex-start; }
+  .edge-switch { max-width:100%; flex-wrap:wrap; border-radius:24px; }
+  .edge-switch button { gap:4px; padding-left:9px; padding-right:9px; }
+  .story-actions { max-width:100%; }
+  .story-actions .story-toggle, .story-actions .restore-button { white-space:normal; text-align:left; }
+  .desktop-hint { max-width:65%; text-align:right; line-height:1.6; }
+  .workspace-caption .next-prev { justify-content:flex-end; }
+  .connection-button { white-space:normal; text-align:left; }
+  .connection-button { max-width:100%; min-width:0; }
+  .connection-button>span { min-width:0; overflow-wrap:break-word; }
+  .local-section h2, .closing h2 { overflow-wrap:break-word; }
+  .connection-scene h3 { overflow-wrap:break-word; }
+  footer { gap:25px; }
+  footer>div { flex-wrap:wrap; row-gap:18px; }
+  .download-dialog .button { white-space:normal; }
+}
+@media (max-width:360px) {
+  .workspace-switch { display:flex; width:100%; }
+  .workspace-switch button { flex:1 1 0; min-width:0; padding:9px 8px; font-size:11px; gap:5px; }
+  .site-header>.brand { gap:7px; font-size:13px; }
+  .site-header>.brand img { width:26px; height:26px; }
+  .header-actions { gap:6px; }
+  .language-picker { max-width:112px; padding:0 8px; gap:5px; }
+  .site-header .header-nav a.nav-link { font-size:10px; padding:7px 4px; }
+  .hero h1 { font-size:35px; }
+  .edge-switch button { font-size:9px; padding-left:7px; padding-right:7px; }
+  .demo-desktop { height:245px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .language-picker { transition:none; }
+}
