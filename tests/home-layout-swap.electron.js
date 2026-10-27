@@ -210,6 +210,7 @@ async function main() {
   win.webContents.on('console-message', (details) => { if (details.level === 'error') errors.push(details.message); });
   try {
     await win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    await js("PomeI18n.setState(PomeI18n.snapshot('zh-CN', ['zh-CN'])); true");
     await js('setMode(true); new Promise(r=>setTimeout(r,550))');
     for (const placements of fixtures) {
       const sizes = Object.fromEntries(Object.entries(placements).map(([id, item]) => [id, domain.sizeNameFromPlacement(item)]));

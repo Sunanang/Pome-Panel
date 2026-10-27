@@ -33,6 +33,7 @@ async function main() {
 
   try {
     await window.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    await window.webContents.executeJavaScript("PomeI18n.setState(PomeI18n.snapshot('zh-CN', ['zh-CN'])); true");
     diagnostic('Renderer test: page loaded');
     const freshProfileClipboardState = await window.webContents.executeJavaScript(`
       (() => ({

@@ -7,7 +7,7 @@ Important features, fixes and release changes. Unreleased changes are archived u
 ## [Unreleased]
 
 - Read release workflow YAML structurally in regression checks, accepting the website CI's null trigger values and dependency lists while preserving manual-build and three-platform release gates.
-- Install NAS test dependencies and correct cross-platform acceptance fixtures: use production navigation splitting, match Windows paths and hook scripts, and close SQLite inspection handles before deleting temporary directories.
+- Install NAS test dependencies and correct cross-platform acceptance fixtures: use production navigation splitting, set an explicit locale for text assertions, match Windows paths and hook scripts, and close SQLite inspection handles before deleting temporary directories.
 
 - Add an independent website under `website/` with rounded capsule controls, scroll-aware navigation, docking and workspace demos, and the same ten languages as the desktop app with localized product screenshots. Adapt the revised brand copy across locales. Source delivery does not deploy the website.
 - Unify deletion confirmation for commands, todos, notes, links, recordings and credentials with previews, counts and scope hints; preserve cancelled actions and guard changes during confirmation. Fix clipboard action spacing and refine wind into faint, gently deforming sheets with local dissipation.
