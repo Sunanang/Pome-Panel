@@ -63,7 +63,7 @@ function Header({ onDownload }) {
     return ()=>observer.disconnect();
   },[current,locale]);
   return <header className="site-header" ref={header}>
-    <a className="brand" href="#top" aria-label={t('nav.homeLabel')}><img src="/assets/pome-icon.png" alt=""/><span>Pome Panel</span></a>
+    <a className="brand" href="#top" aria-label={t('nav.homeLabel')}><img src="/assets/pome-icon.webp" alt=""/><span>Pome Panel</span></a>
     <nav className="header-nav" ref={nav} aria-label={t('nav.label')}>
       <span className="nav-highlight" aria-hidden="true"/>
       {sections.map(s=><a key={s.id} className="nav-link" href={'#'+s.id} aria-current={current===s.id?'location':undefined}>{t(s.label)}</a>)}
@@ -109,10 +109,10 @@ function Story({ reduced }) {
       <div className="section-top"><span className="eyebrow">{t('story.eyebrow')}</span><span className="muted">{t('story.prompt')}</span></div>
       <div className="story-heading"><h2><TextLines value={t('story.title')} title/></h2><p><TextLines value={t('story.description')}/></p></div>
       <div className={`demo-desktop edge-${edge} ${opened?'is-open':''} ${manual!==null?'manual':''}`} ref={surface}>
-        <img className="desktop-scene" src="/assets/edge-scene.png" alt="" loading="lazy"/>
+        <img className="desktop-scene" src="/assets/edge-scene.webp" alt="" loading="lazy"/>
         <span className="desktop-label">{t('story.desktop')}</span>
         <button className="capsule-hit" aria-label={t(opened?'story.closeDemo':'story.openDemo')} aria-expanded={opened} onClick={()=>setManual(!opened)}><span className="capsule"/></button>
-        <div className="unfold-panel" aria-hidden={!opened}><img src={`/assets/product/${locale}/home.png`} alt={t('story.imageAlt')} loading="lazy"/></div>
+        <div className="unfold-panel" aria-hidden={!opened}><img src={`/assets/product/${locale}/home.webp`} alt={t('story.imageAlt')} loading="lazy"/></div>
         <div className="desktop-hint">{t(opened?'story.hintOpen':'story.hintClosed')}</div>
       </div>
       <div className="story-controls">
@@ -138,14 +138,14 @@ export function App(){
     <Header onDownload={()=>setDownload(true)}/>
     <main id="top">
       <section className="hero">
-        <img className="hero-scene" src="/assets/edge-scene.png" alt={t('hero.imageAlt')} fetchPriority="high"/>
+        <img className="hero-scene" src="/assets/edge-scene.webp" alt={t('hero.imageAlt')} fetchPriority="high"/>
         <div className="hero-content"><span className="eyebrow">{t('hero.eyebrow')}</span>
           <h1><TextLines value={t('hero.title')} title/></h1>
           <p className="hero-description"><TextLines value={t('hero.description')}/></p>
           <div className="hero-actions"><button className="button primary" onClick={()=>setDownload(true)}><span>{t('action.get')}</span><ArrowDown size={17} aria-hidden="true"/></button><a className="button quiet" href="#experience"><Play size={15} aria-hidden="true"/><span>{t('action.explore')}</span></a></div>
           <span className="platforms">{t('hero.platforms')}</span>
         </div>
-        <a className="hero-product" href="#workspace" aria-label={t('nav.workspace')}><img src={`/assets/product/${locale}/home.png`} alt={t('story.imageAlt')} fetchPriority="high"/><span>{t('hero.productLabel')}</span></a>
+        <a className="hero-product" href="#workspace" aria-label={t('nav.workspace')}><img src={`/assets/product/${locale}/home.webp`} alt={t('story.imageAlt')} fetchPriority="high"/><span>{t('hero.productLabel')}</span></a>
         <div className="hero-bottom"><span>{t('hero.motto')}</span><a className="scroll-cue" href="#experience"><span>{t('action.scroll')}</span><ArrowDown size={14} aria-hidden="true"/></a><span>{t('hero.bottom')}</span></div>
       </section>
       <div className="intro-line"><span>{t('intro.title')}</span><p><TextLines value={t('intro.description')}/></p><span className="small-label">{t('intro.eyebrow')}</span></div>
@@ -156,13 +156,13 @@ export function App(){
         <div className="workspace-switch" role="tablist" aria-label={t('workspace.tabs')} onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const i=(tab+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;setTab(i);document.getElementById('tab-'+tabs[i].id)?.focus();}}}>
           {tabs.map((page,i)=>{const Icon=tabIcons[page.id];return <button key={page.id} id={'tab-'+page.id} role="tab" aria-selected={tab===i} aria-controls={'panel-'+page.id} tabIndex={tab===i?0:-1} onClick={()=>setTab(i)}><Icon size={17} aria-hidden="true"/><span>{t('tabs.'+page.id+'.name')}</span></button>;})}
         </div>
-        <div className="workspace-stage">{tabs.map((page,i)=><div id={'panel-'+page.id} role="tabpanel" aria-labelledby={'tab-'+page.id} hidden={tab!==i} key={page.id}><img src={'/assets/product/'+locale+'/'+page.id+'.png'} alt={t('workspace.imageAlt',{page:t('tabs.'+page.id+'.name')})} loading="lazy"/></div>)}</div>
+        <div className="workspace-stage">{tabs.map((page,i)=><div id={'panel-'+page.id} role="tabpanel" aria-labelledby={'tab-'+page.id} hidden={tab!==i} key={page.id}><img src={'/assets/product/'+locale+'/'+page.id+'.webp'} alt={t('workspace.imageAlt',{page:t('tabs.'+page.id+'.name')})} loading="lazy"/></div>)}</div>
         <div className="workspace-caption"><div><h3>{t('tabs.'+tabs[tab].id+'.title')}</h3><p>{t('tabs.'+tabs[tab].id+'.copy')}</p></div><div className="next-prev"><button className="icon-button" aria-label={t('action.prev')} title={t('action.prev')} onClick={()=>changeTab(tab-1)}><CaretLeft size={19} aria-hidden="true"/></button><span>0{tab+1} / 03</span><button className="icon-button" aria-label={t('action.next')} title={t('action.next')} onClick={()=>changeTab(tab+1)}><CaretRight size={19} aria-hidden="true"/></button></div></div>
       <p className="product-language-note">{t('workspace.note')}</p></section>
       <section className="local-section" id="local">
         <div className="section-top"><span className="eyebrow">{t('local.eyebrow')}</span><span className="muted">{t('local.kicker')}</span></div>
         <div className="local-grid"><div><h2><TextLines value={t('local.title')} title/></h2><p><TextLines value={t('local.description')}/></p><button className="connection-button" aria-pressed={nas} onClick={()=>setNas(!nas)}><PlugsConnected size={17} aria-hidden="true"/><span>{t(nas?'local.disconnect':'local.connect')}</span><ArrowRight size={15} aria-hidden="true"/></button></div>
-          <div className={'connection-scene '+(nas?'connected':'')} aria-live="polite"><span className="small-label">{t(nas?'local.mode.nas':'local.mode.local')}</span><img src="/assets/pome-icon.png" alt="Pome Panel"/><h3>{t(nas?'local.headline.nas':'local.headline.local')}</h3><p>{t(nas?'local.copy.nas':'local.copy.local')}</p><span className="connection-status">{t(nas?'local.status.nas':'local.status.local')}</span><small>{t('local.demo')}</small></div>
+          <div className={'connection-scene '+(nas?'connected':'')} aria-live="polite"><span className="small-label">{t(nas?'local.mode.nas':'local.mode.local')}</span><img src="/assets/pome-icon.webp" alt="Pome Panel"/><h3>{t(nas?'local.headline.nas':'local.headline.local')}</h3><p>{t(nas?'local.copy.nas':'local.copy.local')}</p><span className="connection-status">{t(nas?'local.status.nas':'local.status.local')}</span><small>{t('local.demo')}</small></div>
         </div>
       </section>
       <section className="closing"><span className="eyebrow">{t('closing.eyebrow')}</span><h2><TextLines value={t('closing.title')} title/></h2><button className="button primary" onClick={()=>setDownload(true)}><span>{t('action.get')}</span><ArrowDown size={17} aria-hidden="true"/></button><p>{t('closing.description')}</p></section>
@@ -172,7 +172,7 @@ export function App(){
         <details><summary><span>{t('faq.demo.question')}</span><CaretDown size={18} aria-hidden="true"/></summary><p>{t('faq.demo.answer')}</p></details>
       </section>
     </main>
-    <footer><a className="brand" href="#top"><img src="/assets/pome-icon.png" alt=""/><span>Pome Panel</span></a><span>{t('footer.tagline')}</span><div><a href={REPO} target="_blank" rel="noreferrer">GitHub</a><a href={REPO+'/blob/dev/LICENSE'} target="_blank" rel="noreferrer">{t('footer.license')}</a><a href="https://github.com/xiaopu-ai/TO-DO-Panel" target="_blank" rel="noreferrer">{t('footer.credit')}</a></div></footer>
-    <dialog ref={dialog} className="download-dialog" onCancel={e=>{e.preventDefault();setDownload(false);}} onClick={e=>{if(e.target===dialog.current)setDownload(false);}} aria-labelledby="download-title"><div className="dialog-heading"><img src="/assets/pome-icon.png" alt=""/><button className="icon-button" aria-label={t('action.closeDownload')} title={t('action.close')} onClick={()=>setDownload(false)}><X size={19} aria-hidden="true"/></button></div><span className="eyebrow">{t('download.eyebrow')}</span><h2 id="download-title">{t('download.title')}</h2><p>{t('download.description')}</p><a className="button primary" href={REPO+'/releases'} target="_blank" rel="noreferrer"><span>{t('download.releases')}</span><ArrowUpRight size={17} aria-hidden="true"/></a><a className="button quiet" href={REPO+'/blob/dev/'+readmeFilename(locale)} target="_blank" rel="noreferrer"><span>{t('download.source')}</span><ArrowUpRight size={16} aria-hidden="true"/></a><small>{t('download.platforms')}</small></dialog>
+    <footer><a className="brand" href="#top"><img src="/assets/pome-icon.webp" alt=""/><span>Pome Panel</span></a><span>{t('footer.tagline')}</span><div><a href={REPO} target="_blank" rel="noreferrer">GitHub</a><a href={REPO+'/blob/dev/LICENSE'} target="_blank" rel="noreferrer">{t('footer.license')}</a><a href="https://github.com/xiaopu-ai/TO-DO-Panel" target="_blank" rel="noreferrer">{t('footer.credit')}</a></div></footer>
+    <dialog ref={dialog} className="download-dialog" onCancel={e=>{e.preventDefault();setDownload(false);}} onClick={e=>{if(e.target===dialog.current)setDownload(false);}} aria-labelledby="download-title"><div className="dialog-heading"><img src="/assets/pome-icon.webp" alt=""/><button className="icon-button" aria-label={t('action.closeDownload')} title={t('action.close')} onClick={()=>setDownload(false)}><X size={19} aria-hidden="true"/></button></div><span className="eyebrow">{t('download.eyebrow')}</span><h2 id="download-title">{t('download.title')}</h2><p>{t('download.description')}</p><a className="button primary" href={REPO+'/releases'} target="_blank" rel="noreferrer"><span>{t('download.releases')}</span><ArrowUpRight size={17} aria-hidden="true"/></a><a className="button quiet" href={REPO+'/blob/dev/'+readmeFilename(locale)} target="_blank" rel="noreferrer"><span>{t('download.source')}</span><ArrowUpRight size={16} aria-hidden="true"/></a><small>{t('download.platforms')}</small></dialog>
   </>;
 }
