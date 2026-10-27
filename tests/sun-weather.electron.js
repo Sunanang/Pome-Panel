@@ -84,7 +84,10 @@ async function run(c) {
         caption:!!t.querySelector('.sun-count .num'),arc:!!t.querySelector('.sun-arc'),
         contentZ:getComputedStyle(head).zIndex,canvas:t.querySelectorAll('.wx-fx').length,
         placeWidth:p.querySelector('span').clientWidth,placeOverflow:p.querySelector('span').scrollWidth>p.querySelector('span').clientWidth,
-        pinOnly:getComputedStyle(p.querySelector('span')).display==='none',label:t.querySelector('.wx').textContent};})()`);
+        pinOnly:getComputedStyle(p.querySelector('span')).display==='none',label:t.querySelector('.wx').textContent,
+        geometry:{size:t.dataset.widgetSize,weather:a.width,text:text.clientWidth,textScroll:text.scrollWidth,
+          reading:w.querySelector('.wx-reading')?.getBoundingClientRect().width,name:w.querySelector('.wx-state')?.clientWidth,
+          right:t.querySelector('.sun-right')?.clientWidth,icon:w.querySelector('.ic')&&getComputedStyle(w.querySelector('.ic')).display}};})()`);
     assert.equal(result.overlap, false, JSON.stringify(result)); assert.equal(result.inside, true, JSON.stringify(result));
     assert.equal(result.textFits, true, JSON.stringify(result)); assert(result.caption && result.arc);
     assert.equal(result.readingFits,true,JSON.stringify(result));
@@ -136,6 +139,11 @@ async function run(c) {
       if(value==='small' && id==='zh-CN') assert.equal(await js('(()=>{const n=document.querySelector("#home-sun .wx-state");return n.scrollWidth<=n.clientWidth+1})()'),true,'Chinese compact weather stays complete beside the ellipsized location');
     }
   }
+  const wideReading = await c.insertCSS('.home-sun[data-widget-size="small"] .wx-reading { font-family:monospace!important;font-size:13px!important; }');
+  await size('small');await assertGeometry('small');
+  assert.equal(await js('(()=>{const n=document.querySelector("#home-sun .wx-state");return n.scrollWidth<=n.clientWidth+1})()'),true,'wide negative temperatures retain the complete Chinese weather name');
+  await capture('small-wide-negative-temperature');
+  await c.removeInsertedCSS(wideReading);
   current.weather_code=82;current.temperature_2m=10.7;await tick();
   await js('document.dispatchEvent(new CustomEvent("notch:modechange",{detail:{expanded:true}}))');await until('PomeSun.getWeather().data?.code===82');
   await size('medium');

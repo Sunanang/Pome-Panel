@@ -8367,7 +8367,7 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
 .home-sun[data-widget-size='mini'] .sun-place-mini > span { display:none; }
 .home-sun[data-widget-size='mini'] .sun-place-mini svg { width:10px;height:10px; }
 .home-sun[data-widget-size='small'] .sun-head { gap:4px; }
-.home-sun[data-widget-size='small'] .sun-head > .tile-label { font-size:10px;max-width:45px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.home-sun[data-widget-size='small'] .sun-head > .tile-label { flex:0 1 auto;font-size:10px;max-width:45px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .home-sun[data-widget-size='small'] .sun-right { gap:3px; }
 .home-sun[data-widget-size='small'] .sun-place { flex:0 1 62px;max-width:62px;min-width:48px;font-size:10px;padding:2px 3px;gap:2px; }
 .home-sun[data-widget-size='small'] .sun-place span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
