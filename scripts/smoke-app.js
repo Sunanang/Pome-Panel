@@ -109,7 +109,7 @@ async function main() {
   assert.equal(await evaluate('window.notchAPI.capabilities.platform'), 'win32');
   assert.equal(await evaluate('document.documentElement.dataset.platform'), 'win32');
   assert.equal(await evaluate('window.notchAPI.capabilities.features.musicControl'), false);
-  assert.deepEqual(await evaluate('window.notchAPI.capabilities.unavailableHomeModules'), ['music', 'windows']);
+  assert.deepEqual(await evaluate('window.notchAPI.capabilities.unavailableHomeModules'), ['music']);
   assert.equal(await evaluate('window.notchAPI.getAppSettings().then(s => s.features.clip)'), false);
   assert.equal(await evaluate('document.getElementById("mirror-video").srcObject === null'), true);
   assert.deepEqual(await evaluate('window.NotchHome.getVisibility().visibleIds'), ['pomodoro', 'cursor', 'recorder', 'inbox', 'mirror', 'note', 'commands', 'sun', 'almanac']);
@@ -210,7 +210,7 @@ async function main() {
   await until(() => evaluate('window.notchAPI.listTaskCompletions().then(r => r.some(i => i.title === "Windows smoke complete"))'), 'notification recorded');
   await evaluate('document.getElementById("tab-button-settings").click()');
   await delay(300);
-  assert.deepEqual(await evaluate('Array.from(document.querySelectorAll("[data-settings-home-module]")).filter(i => !i.closest("label").hidden).map(i => i.dataset.settingsHomeModule)'), ['pomodoro', 'cursor', 'recorder', 'inbox', 'mirror', 'note', 'commands', 'sun', 'almanac']);
+  assert.deepEqual(await evaluate('Array.from(document.querySelectorAll("[data-settings-home-module]")).filter(i => !i.closest("label").hidden).map(i => i.dataset.settingsHomeModule)'), ['pomodoro', 'cursor', 'recorder', 'inbox', 'windows', 'mirror', 'note', 'commands', 'sun', 'almanac']);
   // 「实验功能」这一行只在 Windows 上出现，是用户唯一的原生能力入口（D16）。
   assert.equal(await evaluate('document.getElementById("settings-win-native-row").hidden'), false);
   assert.equal(await evaluate('document.getElementById("settings-win-native").checked'), false);
