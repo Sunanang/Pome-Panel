@@ -21,3 +21,7 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 ## Repository delivery, 2026-10-26
 
 The user explicitly authorized integrating this website into `Pome-Panel/website` and committing all current repository changes to `dev`. This supersedes the earlier standalone-preview scope. Keep website dependencies and build output separate from the desktop app. Do not deploy, publish, tag or push to `main` without separate authorization.
+
+## Image delivery, 2026-10-27
+
+Publish website raster assets as lossless WebP. Preserve original dimensions, alpha, invisible RGB values and embedded ICC profiles; do not resize or use lossy encoding for size savings. Decode each converted file and compare its RGBA pixels and ICC profile with the source before replacing it. Update all references and the locale screenshot check together.
