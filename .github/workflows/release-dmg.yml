@@ -175,6 +175,9 @@ jobs:
           npm run test:sites
       - run: node scripts/release-policy.js
         if: needs.changes.outputs.website_only != 'true'
+      - name: Install NAS test dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        if: needs.changes.outputs.website_only != 'true'
       - name: Test NAS server and packaging
         run: >-
           node --test tests/fnos-*.test.js tests/sync-protocol.test.js tests/schema-version.test.js tests/nas-recovery.test.js tests/fpk-build.test.js

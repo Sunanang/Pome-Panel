@@ -110,7 +110,7 @@ test('Shared forwarder keeps decimal timestamps and Grok uses the same transport
 });
 test('Installed Copilot exec and Antigravity shell commands deliver real payloads and marked tests to loopback', async t => {
   const {files,home}=fixture(t), seen=[],appDir=path.join(home,"Pome Panel's app");fs.mkdirSync(path.join(appDir,'scripts'),{recursive:true});
-  for(const name of ['copilot-notify.js','antigravity-notify.js','completion-forwarder.js'])fs.copyFileSync(path.join(__dirname,'../scripts',name),path.join(appDir,'scripts',name));
+  for(const name of ['copilot-notify.js','antigravity-notify.js','completion-forwarder.js','pome-hook-runtime.ps1'])fs.copyFileSync(path.join(__dirname,'../scripts',name),path.join(appDir,'scripts',name));
   const service=createAiSourceHooks({homeDir:home,env:{},appDir,runtimeCheck:()=>true});
   const server=http.createServer((req,res)=>{let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{seen.push({url:req.url,payload:JSON.parse(body)});res.end('{}');});});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>server.close());

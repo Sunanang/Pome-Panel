@@ -151,7 +151,7 @@ async function main() {
           return false;
         };
         // 生产默认开启超过四个 Tab，会进入左右分栏并让容器横跨整条顶栏。
-        document.getElementById('tabs').classList.add('is-split');
+        applyFeatureSettings({ features: { clip: false } });
         document.getElementById('notch').click();
         const opened = await waitForClass('expanded');
         const topbar = document.querySelector('.topbar').getBoundingClientRect();

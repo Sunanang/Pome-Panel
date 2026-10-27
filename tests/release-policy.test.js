@@ -93,6 +93,11 @@ test('NAS builds use a pinned official tool and join the desktop release gate', 
   const workflow = fs.readFileSync(releaseWorkflowPath, 'utf8');
   const config = yaml.load(workflow);
   const nas = workflow.slice(workflow.indexOf('\n  nas:'), workflow.indexOf('\n  release:'));
+  const nasSteps = config.jobs.nas.steps;
+  const dependencyInstall = nasSteps.findIndex(step => step.name === 'Install NAS test dependencies');
+  const nasTests = nasSteps.findIndex(step => step.name === 'Test NAS server and packaging');
+  assert.ok(dependencyInstall >= 0 && dependencyInstall < nasTests, 'fresh NAS runners must install test dependencies first');
+  assert.match(nasSteps[dependencyInstall].run, /npm ci.*--ignore-scripts/);
   assert.match(nas, /runs-on: ubuntu-24\.04/);
   assert.match(nas, /node scripts\/release-policy\.js/);
   assert.match(nas, /node --test .*tests\/fnos-\*\.test\.js.*tests\/fpk-build\.test\.js/);
