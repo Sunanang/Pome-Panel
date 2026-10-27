@@ -99,6 +99,7 @@ async function main() {
   }
   try {
     await win.loadFile(path.join(__dirname,'../renderer/index.html'));
+    win.showInactive();
     win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
     await js(`setMode(true);PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'));new Promise(r=>setTimeout(r,550))`);

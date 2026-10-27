@@ -344,14 +344,20 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       const font = getComputedStyle(labels[0]);
       const labelWidth = Math.ceil(Math.max(...labels.map(label => textWidth(font, label.textContent))));
       const valueStyle = getComputedStyle(card.querySelector('.q-inline-rows .q-pct'));
-      const valueWidth = Math.ceil(textWidth(valueStyle, '100%') * 10) / 10 + .25;
+      const percent = card.querySelector('.q-inline-rows .q-pct small');
+      const percentStyle = percent ? getComputedStyle(percent) : valueStyle;
+      // The percent sign has a lighter weight than the digits. Measure each
+      // run with its own font so native font metrics do not shift the rows.
+      const percentWidth = textWidth(percentStyle, '%');
+      const percentageWidth = value => textWidth(valueStyle, String(value)) + percentWidth;
+      const valueWidth = Math.ceil(percentageWidth(100) * 10) / 10 + .25;
       card.style.setProperty('--q-window-label-width', `${Math.min(labelWidth, card.clientWidth*.36)}px`);
       card.style.setProperty('--q-window-value-width', `${valueWidth}px`);
       // Keep the 100% column and track widths fixed; center the visible row,
       // excluding its unused numeric reserve. Reuse the value store so a refresh
       // during this adjustment continues from the currently painted transform.
       const visibleWidth = Math.max(...m.inlineRows.map(row => row.kind === 'percent'
-        ? textWidth(valueStyle, `${Math.round(row.value ?? 0)}%`) : valueWidth));
+        ? percentageWidth(Math.round(row.value ?? 0)) : valueWidth));
       const pad = number('--q-cell-pad-x'), inset = Math.min(pad, number('--q-window-end-inset'));
       const offset = (inset + Math.max(0, valueWidth - visibleWidth) - pad) / 2;
       const content = card.querySelector('.q-inline-content');

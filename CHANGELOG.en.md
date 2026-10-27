@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Measure quota digits and percent signs with their actual font weights to keep progress-row margins balanced across system fonts. Show quota acceptance windows so Windows software rendering can continue producing frames.
+
 - Read release workflow YAML structurally in regression checks, accepting the website CI's null trigger values and dependency lists while preserving manual-build and three-platform release gates.
 - Install NAS test dependencies and correct cross-platform acceptance fixtures: use production navigation splitting, set an explicit locale for text assertions, match Windows paths and hook scripts, and close SQLite inspection handles before deleting temporary directories.
 
