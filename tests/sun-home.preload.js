@@ -5,6 +5,7 @@ let collapse;
 let toggle;
 let reminderSchedules = 0;
 contextBridge.exposeInMainWorld('notchAPI', {
+  localization: require('../localization/runtime').snapshot('zh-CN', ['zh-CN']),
   platform: name,
   capabilities: platform.resolveCapabilities(name),
   onCollapseRequest(callback) { collapse = callback; },
