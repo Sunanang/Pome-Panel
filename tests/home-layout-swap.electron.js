@@ -55,7 +55,12 @@ async function auditDragScheduling(win) {
       await new Promise(resolve=>setTimeout(resolve,250));
       const displacedBefore=targetPosition();
       move(a);await frame();
-      await new Promise(resolve=>setTimeout(resolve,40));
+      // Flush the new transform before sampling its transition. Slow software
+      // compositors can otherwise defer transition creation until the read.
+      targetPosition();
+      const returningNode=document.querySelector('[data-home-module="commands"]');
+      const returnAnimation=returningNode.getAnimations().find(a=>a.transitionProperty==='transform');
+      if(returnAnimation){await returnAnimation.ready;returnAnimation.pause();returnAnimation.currentTime=40;}
       const returning=targetPosition();
       const smoothReturn=returning>displacedBefore+1 && returning<c.left-1;
       function targetPosition(){return document.querySelector('[data-home-module="commands"]').getBoundingClientRect().left;}
@@ -68,12 +73,14 @@ async function auditDragScheduling(win) {
       await frame();
       const stable=!homeBento.classList.contains('layout-motion-active') && !homeBento.querySelector('.home-swap-placeholder') && !tile.style.getPropertyValue('--home-drag-x');
       return {beforeFrame,afterFrame,latestPoint,cachedPlans,reusedPlaceholder,smoothReturn,releasedAtB,landing,stable,
-        unsaved:beforeStored===localStorage.getItem(HOME_PLACEMENTS_KEY)};
+        unsaved:beforeStored===localStorage.getItem(HOME_PLACEMENTS_KEY),
+        diagnostic:{displacedBefore,returning,target:c.left,hasReturnTransition:Boolean(returnAnimation)}};
     } finally { NotchDomain.swapHomeWidgetPlacements=original; }
   })()`);
-  assert.deepEqual(scheduled, {beforeFrame:0,afterFrame:1,latestPoint:true,cachedPlans:2,reusedPlaceholder:true,smoothReturn:true,releasedAtB:true,landing:true,stable:true,unsaved:true});
+  const {diagnostic, ...actual} = scheduled;
+  assert.deepEqual(actual, {beforeFrame:0,afterFrame:1,latestPoint:true,cachedPlans:2,reusedPlaceholder:true,smoothReturn:true,releasedAtB:true,landing:true,stable:true,unsaved:true}, JSON.stringify(diagnostic));
 
-  win.webContents.debugger.attach('1.3');
+  if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3');
   for (const reduced of [false, true]) {
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:reduced?'reduce':'no-preference'}]});
     assert.equal(await js(`matchMedia('(prefers-reduced-motion: reduce)').matches`),reduced);
@@ -210,6 +217,10 @@ async function main() {
   win.webContents.on('console-message', (details) => { if (details.level === 'error') errors.push(details.message); });
   try {
     await win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    win.show();
+    win.focus();
+    win.webContents.debugger.attach('1.3');
+    await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
     await js("PomeI18n.setState(PomeI18n.snapshot('zh-CN', ['zh-CN'])); true");
     await js('setMode(true); new Promise(r=>setTimeout(r,550))');
     for (const placements of fixtures) {

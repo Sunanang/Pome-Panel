@@ -33,6 +33,8 @@ async function main() {
   try {
     fs.mkdirSync(shots,{recursive:true});
     await win.loadFile(path.join(__dirname,'../renderer/index.html'));
+    win.show();
+    win.focus();
     win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
     await js(`(async()=>{
