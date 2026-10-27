@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const yaml = require('js-yaml');
 
 const projectRoot = path.join(__dirname, '..');
 const releasePolicyScript = path.join(projectRoot, 'scripts', 'release-policy.js');
@@ -76,8 +77,9 @@ test('a pushed version tag that disagrees with package.json is rejected', (t) =>
 
 test('the release workflow lets manual runs verify artifacts while policy gates publishing', () => {
   const workflow = fs.readFileSync(releaseWorkflowPath, 'utf8');
+  const config = yaml.load(workflow);
 
-  assert.match(workflow, /^\s{2}workflow_dispatch:\s*$/m);
+  assert.ok(Object.hasOwn(config.on, 'workflow_dispatch'), 'manual builds must remain available');
   assert.match(workflow, /id:\s*release[\s\S]*?run:\s*node scripts\/release-policy\.js/);
   assert.match(workflow, /name:\s*Build DMG[\s\S]*?run:\s*npm run build/);
   assert.match(workflow, /name:\s*Verify and checksum DMG/);
@@ -89,6 +91,7 @@ test('the release workflow lets manual runs verify artifacts while policy gates 
 
 test('NAS builds use a pinned official tool and join the desktop release gate', () => {
   const workflow = fs.readFileSync(releaseWorkflowPath, 'utf8');
+  const config = yaml.load(workflow);
   const nas = workflow.slice(workflow.indexOf('\n  nas:'), workflow.indexOf('\n  release:'));
   assert.match(nas, /runs-on: ubuntu-24\.04/);
   assert.match(nas, /node scripts\/release-policy\.js/);
@@ -99,7 +102,9 @@ test('NAS builds use a pinned official tool and join the desktop release gate', 
   assert.match(nas, /run: node scripts\/build-fpk\.js/);
   assert.match(nas, /name: nas-installer/);
   assert.match(nas, /dist\.noindex\/\*-fnos-all\.fpk\.sha256/);
-  assert.match(workflow, /needs: \[mac, windows, nas\]/);
+  for (const platform of ['mac', 'windows', 'nas']) {
+    assert.ok(config.jobs.release.needs.includes(platform), `${platform} must gate release publishing`);
+  }
   assert.match(workflow, /pattern: '\*-installer'/);
   assert.match(workflow, /gh release create .*release-assets\/\*\.fpk/);
   assert.ok(workflow.indexOf('sha256sum --check *.sha256') < workflow.indexOf('gh release create'));
