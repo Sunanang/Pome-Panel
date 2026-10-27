@@ -27,6 +27,12 @@ const errors = [];
 dialog.showErrorBox = (title, message) => errors.push(`${title}: ${message}`);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const watchdog = setTimeout(() => { console.error('Weather acceptance timed out', errors); app.exit(1); }, 110000);
+// Visibility must be enabled before the first page load. Restoring throttling
+// only at the final hide check leaves Chromium's test visibility override set.
+app.on('browser-window-created', (_event, win) => {
+  win.webContents.setBackgroundThrottling(true);
+  win.showInactive();
+});
 let started = false;
 app.on('web-contents-created', (_event, contents) => {
   contents.on('console-message', detail => { if (detail.level === 'error' && !detail.message.includes('ERR_')) errors.push(detail.message); });
@@ -39,6 +45,8 @@ app.on('web-contents-created', (_event, contents) => {
 });
 async function run(c) {
   fs.mkdirSync(shots, { recursive: true });
+  c.debugger.attach('1.3');
+  await c.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   const js = code => c.executeJavaScript(code);
   async function until(expression) {
     for (let i = 0; i < 250; i++) { if (await js(expression).catch(() => false)) return; await sleep(20); }
@@ -191,11 +199,11 @@ async function run(c) {
   await js('setActiveTab("home")');await sleep(120);assert.equal(await js('document.querySelector("#home-sun .wx-fx")'),null);
   assert(await js('!!document.querySelector("#home-sun .wx")'));
   await js('notchAPI.setWeatherEffects(true)');await until('PomeSun.getWeather().effects.active');
-  c.debugger.attach('1.3');
+  if (!c.debugger.isAttached()) c.debugger.attach('1.3');
   await c.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   await until('!PomeSun.getWeather().effects.active');assert.equal(await js('!!document.querySelector("#home-sun .wx-fx")'),false);
   await c.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
-  await until('PomeSun.getWeather().effects.active');c.debugger.detach();
+  await until('PomeSun.getWeather().effects.active');
   await js('setActiveTab("notes")');await until('!PomeSun.getWeather().effects.active');
   await js('setActiveTab("home")');await until('PomeSun.getWeather().effects.active');
   await js('setMode(false)');await until('!PomeSun.getWeather().effects.active');
@@ -215,14 +223,12 @@ async function run(c) {
   await until('!document.querySelector("[data-sun-manual-error]").hidden');
   assert.equal(await js('PomeSun.getLocation().lat'),2);assert.equal(calls,formCalls,'invalid manual input never requests weather');
   await capture('location-validation',false);await js('PomeSun.closeLocation()');
-  // Isolated tests normally disable background throttling to finish startup
-  // behind the real panel. Use production visibility semantics for this check.
   // Hiding also triggers the normal asynchronous blur/collapse workflow.
-  c.setBackgroundThrottling(true);
   BrowserWindow.fromWebContents(c).hide();
   await until('document.hidden && !PomeSun.getWeather().effects.active');
   BrowserWindow.fromWebContents(c).show();
   await until('!document.hidden');
+  c.debugger.detach();
   assert.deepEqual(errors,[]);
 }
 require('../main');
