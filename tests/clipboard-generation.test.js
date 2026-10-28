@@ -86,7 +86,7 @@ test('workspace changes during image writes cannot publish old relative paths or
   f.setRoot('/fixture/two'); oldWrite.resolve(); await task;
   assert.equal(f.events.length, 0); assert.equal(f.context.clipObservationState.imageFingerprint, null); assert(!f.files.has(oldPath));
   f.setWrite(async () => {}); await f.context.pollClipboard();
-  assert.equal(f.events.length, 1); assert(f.writes[1].startsWith('/fixture/two/'));
+  assert.equal(f.events.length, 1); assert.equal(path.dirname(f.writes[1]), path.join('/fixture/two', 'clipboard-images'));
 });
 test('image name collisions never unlink a file that another task already owns', async () => {
   const f = fixture(); f.context.Math.random = () => .5;

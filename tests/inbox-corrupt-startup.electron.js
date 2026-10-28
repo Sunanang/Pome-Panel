@@ -9,6 +9,7 @@ if (process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keycha
 fs.writeFileSync(path.join(profile, 'task-inbox.json'), 'cold-start-corrupt-inbox');
 // Run the normal bootstrap, while preventing host permissions/login changes.
 delete process.env.TODO_TEST_USER_DATA;
+app.getPreferredSystemLanguages = () => ['zh-CN'];
 require('../cursor-usage').readAuthToken = () => ({ ok: false });
 require('../cursor-usage').fetchCursorUsage = async () => ({ ok: false });
 require('../codex-usage').readCodexUsage = async () => ({ ok: true, detected: false });

@@ -2795,7 +2795,12 @@ async function activateActiveTaskNotification(eventId = null) {
     beginTaskNotificationDismiss();
     return { ok: true };
   }
-  // Attention return still needs focus; completion can launch the source app without it.
+  // Without the native focus capability, a completion bubble only dismisses.
+  // Explicit source opening from the inbox remains a separate user action.
+  if (!notification.attentionKey && !platformCapabilities.features.windowFocus) {
+    beginTaskNotificationDismiss();
+    return { ok: true, activated: false };
+  }
   if (notification.attentionKey && !platformCapabilities.features.windowFocus) {
     return { ok: false, message: PomeI18n.t("copy.canTOpenTheSourceAppRight.3c21d3") };
   }

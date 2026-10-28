@@ -14,6 +14,10 @@ async function main() {
   win = new BrowserWindow({ width:1240,height:638,show:Boolean(out),frame:false,webPreferences:{backgroundThrottling:false} });
   const js = source => win.webContents.executeJavaScript(source);
   await win.loadFile(path.join(__dirname,'../renderer/index.html'));
+  win.show();
+  win.focus();
+  win.webContents.debugger.attach('1.3');
+  await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
   await js(`setMode(true);PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'));document.querySelectorAll('.home-bento > [data-home-module]:not(#home-cursor)').forEach(n=>n.style.visibility='hidden')`);
   const future = Date.now()/1000 + 86400 * 3;
   const source = (short, long) => ({ok:true,detected:true,fetchedAt:new Date().toISOString(),primary:{percent:100-short,windowMinutes:300,resetsAt:future-3600},secondary:{percent:100-long,windowMinutes:10080,resetsAt:future}});

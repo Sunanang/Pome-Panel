@@ -94,7 +94,13 @@ async function run(c) {
   for (const tab of ['home', 'todo', 'notes', 'links', 'recordings', 'credentials', 'settings']) {
     await js(`setActiveTab(${JSON.stringify(tab)})`); await sleep(450);
     pageText[tab] = await js('document.body.innerText');
-    assert.doesNotMatch(withoutLanguageNames(pageText[tab]), /[\p{sc=Han}]/u, `untranslated product labels on ${tab}`);
+    // README explicitly preserves traditional almanac content in its original
+    // language. Windows shows this widget by default; keep checking all UI labels.
+    const productText = await js(`document.body.innerText.replace(document.getElementById('home-almanac')?.innerText || '', '')`);
+    assert.doesNotMatch(withoutLanguageNames(productText), /[\p{sc=Han}]/u, `untranslated product labels on ${tab}: ${withoutLanguageNames(productText).match(/[\p{sc=Han}]+/gu)?.join(', ')}`);
+    if (tab === 'home' && await js(`document.getElementById('home-almanac')?.checkVisibility()`)) {
+      assert.match(await js(`document.getElementById('home-almanac').innerText`), /[\p{sc=Han}]/u, 'traditional almanac content retains its original language');
+    }
     fs.writeFileSync(path.join(output, `english-${tab}.png`), (await c.capturePage()).toPNG());
   }
   fs.writeFileSync(path.join(output, 'page-text.json'), JSON.stringify(pageText, null, 2));

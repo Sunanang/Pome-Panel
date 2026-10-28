@@ -44,8 +44,9 @@ function harness(t, { tasks = [task()], delivery = 'queued', budget = 20, pageSi
   const service = createManusCompletionService({ userDataPath: dir, api, store, now: () => clock,
     getToken: () => `fixture-${user}`, setTimeoutFn: (_fn, delay) => { delays.push(delay); return 1; }, clearTimeoutFn: () => {},
     deliverEvent: async event => { delivered.push(event); return delivery; } });
-  t.after(() => { service.close(); fs.rmSync(dir, { recursive: true, force: true }); });
-  return { service, store, tasks, histories, delivered, requests, delays, dir,
+  const resources = [service];
+  t.after(() => { for (const resource of resources.reverse()) resource.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+  return { service, store, tasks, histories, delivered, requests, delays, dir, resources,
     advance(ms) { clock += ms; },
     get details() { return details; }, setUser(value) { user = value; }, setBroken(value) { broken = value; },
     async tick(count = 1) { for (let i = 0; i < count; i++) { clock += 61000; await service.tick(); } },
@@ -110,7 +111,7 @@ test('queued success is acknowledged immediately, and confirmed payloads are rem
   const h = harness(t); await h.service.setListening(true); await h.tick();
   assert.equal(h.delivered.length, 1); assert.equal(h.service.status().backlogCount, 0);
   const { DatabaseSync } = require('node:sqlite'), db = new DatabaseSync(h.store.dbPath);
-  t.after(() => db.close());
+  h.resources.push(db);
   assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='confirmed' AND payload_json != '{}'").get().n, 0);
 });
 
@@ -241,7 +242,7 @@ test('ignored delivery acknowledges the row so later pending events still delive
       return results.get(event.eventId) || 'queued';
     },
   });
-  t.after(() => service.close());
+  h.resources.push(service);
   await service.setListening(true);
   const key = store.getMeta('current_account');
   results.set('poison', 'ignored');
@@ -300,8 +301,10 @@ test('confirmed identities are pruned while cold checkpoints are compacted witho
   const { CONFIRMED_OUTBOX_KEEP, TASK_RETENTION_MS } = require('../manusCompletionStore');
   let clock = 1_700_000_000_000; // Wall-clock-sized so retention subtraction stays positive.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pome-manus-prune-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const resources = [];
+  t.after(() => { for (const resource of resources.reverse()) resource.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   const store = createManusCompletionStore({ dbPath: path.join(dir, 'manus.db'), now: () => clock });
+  resources.push(store);
   store.beginListenPeriod('acc', clock);
   store.runInTransaction(() => {
     for (let i = 0; i < CONFIRMED_OUTBOX_KEEP + 25; i++) {
@@ -311,7 +314,7 @@ test('confirmed identities are pruned while cold checkpoints are compacted witho
   });
   const { DatabaseSync } = require('node:sqlite');
   const db = new DatabaseSync(store.dbPath);
-  t.after(() => db.close());
+  resources.push(db);
   assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='confirmed'").get().n, CONFIRMED_OUTBOX_KEEP);
   assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE event_id='old-0'").get().n, 0);
   assert.equal(db.prepare(`SELECT count(*) n FROM outbox WHERE event_id='old-${CONFIRMED_OUTBOX_KEEP + 24}'`).get().n, 1);

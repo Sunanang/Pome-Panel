@@ -8362,7 +8362,7 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
 
 /* Direction A r2: weather is before the existing location, never in topbar. */
 .sun-right, .mini-right { display:flex;align-items:center;justify-content:flex-end;gap:5px;min-width:0;flex:1; }
-.sun-head > .tile-label { flex:0 0 auto; }
+.sun-head > .tile-label { flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .home-sun[data-widget-size='large'] .sun-head > .tile-label { display:flex;flex-direction:column;gap:3px; }
 .home-sun[data-widget-size='large'] .sun-head .date { margin-left:0; }
 .home-sun .wx-fx { position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;border-radius:inherit; }
@@ -8375,13 +8375,13 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
 .home-sun[data-widget-size='mini'] .sun-place-mini > span { display:none; }
 .home-sun[data-widget-size='mini'] .sun-place-mini svg { width:10px;height:10px; }
 .home-sun[data-widget-size='small'] .sun-head { gap:4px; }
-.home-sun[data-widget-size='small'] .sun-head > .tile-label { font-size:10px;max-width:45px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.home-sun[data-widget-size='small'] .sun-head > .tile-label { flex:0 1 auto;font-size:10px;max-width:45px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .home-sun[data-widget-size='small'] .sun-right { gap:3px; }
-.home-sun[data-widget-size='small'] .sun-place { flex:0 1 62px;max-width:62px;min-width:48px;font-size:10px;padding:2px 3px;gap:2px; }
+.home-sun[data-widget-size='small'] .sun-place { flex:0 1 62px;max-width:62px;min-width:38px;font-size:10px;padding:2px 3px;gap:2px; }
 .home-sun[data-widget-size='small'] .sun-place span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .home-sun[data-widget-size='small'] .sun-place svg { width:10px;height:10px; }
-.home-sun[data-widget-size='small'] .sun-place .chev { width:8px;height:8px; }
-.home-sun[data-widget-size='small'] .wx { max-width:calc(100% - 51px);padding:0 4px; }
+.home-sun[data-widget-size='small'] .sun-place .chev { display:none; }
+.home-sun[data-widget-size='small'] .wx { max-width:calc(100% - 41px);padding:0 4px; }
 /* Chinese fallback glyphs and Latin digits have different normal line boxes.
    Share a text baseline instead of stretching their separate flex items. */
 .home-sun .wx .txt { display:flex;align-items:baseline;flex:1 1 auto;overflow:hidden; }

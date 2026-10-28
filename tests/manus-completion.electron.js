@@ -59,13 +59,18 @@ app.on('web-contents-created', (_event, content) => content.once('did-finish-loa
 }));
 async function run(content) {
   const js = code => content.executeJavaScript(code);
-  async function until(code) { for (let i = 0; i < 350; i++) { if (await js(code)) return; await delay(20); } throw new Error('Timed out: ' + code); }
+  async function until(code) {
+    for (let i = 0; i < 350; i++) { if (await js(code)) return; await delay(20); }
+    const state = await js(`({status:document.getElementById('settings-manus-completion-status')?.textContent,tokenState:document.getElementById('settings-manus-token-status')?.dataset.state,saving:document.querySelector('[data-provider-save="manus"]')?.disabled})`).catch(() => null);
+    throw new Error('Timed out: ' + code + '; ' + JSON.stringify(state));
+  }
   await until('!!window.NotchAiSources?.getState().ready && !!window.NotchTaskInbox');
   await js('setMode(true)');
   await until('!modeBusy');
   await js("setActiveTab('settings')");
   await until("activeTab==='settings' && !tabBusy");
-  assert.equal((await js("notchAPI.setAiProviderToken('manus','fixture-manus-key')")).ok, true);
+  await js(`document.getElementById('settings-manus-token').value='fixture-manus-key';document.querySelector('[data-provider-save="manus"]').click()`);
+  await until(`!document.querySelector('[data-provider-save="manus"]').disabled && document.getElementById('settings-manus-token-status').dataset.state==='saved'`);
   await until("!document.getElementById('settings-manus-completion-enabled').checked");
   await js("document.getElementById('settings-manus-completion-check').click()");
   await until("document.getElementById('settings-manus-completion-status').textContent===PomeI18n.t('providers.manus.connectionOk')");
@@ -98,9 +103,13 @@ async function run(content) {
   }
   assert(notification); await delay(500);
   fs.writeFileSync(path.join(output, 'completed.png'), (await notification.webContents.capturePage()).toPNG());
+  const beforeOpen = opened.length;
+  const canFocus = await js('notchAPI.capabilities.features.windowFocus');
   await notification.webContents.executeJavaScript('activateNotification()');
-  assert.equal(opened.at(-1), 'https://manus.im/app/manus-primary');
+  assert.equal(opened.length, beforeOpen + (canFocus ? 1 : 0), 'a native-disabled completion bubble only dismisses');
+  if (canFocus) assert.equal(opened.at(-1), 'https://manus.im/app/manus-primary');
   await js(`notchAPI.openTaskSource(${JSON.stringify(inbox.items[0].id)})`);
+  assert.equal(opened.length, beforeOpen + (canFocus ? 2 : 1), 'explicit inbox opening works on both platforms');
   assert.equal(opened.at(-1), 'https://manus.im/app/manus-primary');
   const account = controller._store.getMeta('current_account'), period = controller._store.getAccount(account).listenStartedAt;
   await js("notchAPI.setAiProviderToken('manus','fixture-manus-key-rotated')");

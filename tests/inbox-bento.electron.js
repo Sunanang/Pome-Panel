@@ -49,8 +49,9 @@ async function run(c){
  await capture('row-hover-inset');
  await js(`document.querySelector('.home-inbox-row.force-hover')?.classList.remove('force-hover')`);
  const positions=await js(`({inbox:homeWorkingLayout.placements.inbox,windows:homeWorkingLayout.placements.windows,linkMargin:getComputedStyle(document.getElementById('tab-button-links')).marginRight})`);
- const windowsAvailable=await js(`!notchAPI.capabilities.unavailableHomeModules.includes('windows')`);
- assert.deepEqual(positions.inbox,{column:8,row:0,width:4,height:2});assert.deepEqual(positions.windows,windowsAvailable?{column:8,row:2,width:4,height:2}:undefined);assert.equal(positions.linkMargin,'0px');
+ const windowsAvailable=await js(`notchAPI.capabilities.features.windowSwitcher===true`);
+ const windowsDefaults=await js(`notchAPI.capabilities.homeDefaults?.showSun===true`);
+ assert.deepEqual(positions.inbox,{column:windowsDefaults?6:8,row:0,width:4,height:2});assert.deepEqual(positions.windows,windowsAvailable?{column:8,row:2,width:4,height:2}:undefined);assert.equal(positions.linkMargin,'0px');
  assert.equal(await js(`NotchHome.isVisible('windows')`),windowsAvailable,'default layout respects native capability gating');
  assert.equal(await js(`getComputedStyle(document.getElementById('home-inbox')).backgroundImage.includes('radial-gradient')`),true);
  assert.equal(await js(`document.getElementById('home-inbox-badge').hidden`),true,'B3: selected home hides badge');

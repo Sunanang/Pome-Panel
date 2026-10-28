@@ -24,6 +24,6 @@ for(const {id} of catalog){
     assert(messages[key].trim(),id+': nonempty '+key);
     assert.deepEqual(tokens(messages[key]),tokens(base[key]),id+': placeholders '+key);
   }
-  for(const page of ['home','todo','notes'])assert(fs.existsSync(path.join(root,'public/assets/product',id,page+'.png')),id+': real '+page+' capture');
+  for(const page of ['home','todo','notes'])assert(fs.existsSync(path.join(root,'public/assets/product',id,page+'.webp')),id+': real '+page+' capture');
 }
 console.log(`${catalog.length} languages, ${keys.length} keys each, placeholders and ${catalog.length*3} product screenshots verified.`);

@@ -3,6 +3,11 @@
 // Electron profiles must never borrow credentials from the user's real tools.
 // Individual integration tests can still inject their own auth/fetch fixtures.
 if (process.versions.electron && process.env.TODO_TEST_USER_DATA) {
+  // Hosted macOS VMs intermittently lose their GPU/Viz process during captures.
+  // This preload is test-only; packaged applications retain normal rendering.
+  if (process.platform === 'darwin' && process.env.CI) process.once('loaded', () => {
+    if (process.type === 'browser') require('electron').app.disableHardwareAcceleration();
+  });
   const cursor = require('../cursor-usage');
   // Generic UI suites must never unlock the real Cursor Keychain. Credential
   // acceptance tests explicitly inject this reader with a synthetic database.

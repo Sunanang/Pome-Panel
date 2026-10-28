@@ -20,8 +20,8 @@ const platformName = String(capabilities?.platform || api?.platform || 'darwin')
 if (/^[a-z0-9]+$/.test(platformName)) document.documentElement.dataset.platform = platformName;
 const canFocusWindows = () => capabilities?.features?.windowFocus === true;
 function applyShellLabel() {
-  // Completion can still launch Terminal / the source app without windowFocus.
-  openButton.setAttribute('aria-label', pomeLocaleRendererNotification.t("copy.openTheSourceApp.ce1839"));
+  openButton.setAttribute('aria-label', pomeLocaleRendererNotification.t(canFocusWindows()
+    ? "copy.openTheSourceApp.ce1839" : "copy.dismissTaskNotification.30ec6c"));
   if (currentNotification?.attentionKind) renderAttention();
 }
 api?.onCapabilitiesChanged?.(next => { capabilities = next; applyShellLabel(); });
@@ -213,8 +213,7 @@ async function activateNotification() {
   if (!isVisible || isHiding || activating) return;
   const eventId = currentNotification.eventId;
   const isAttention = Boolean(currentNotification.attentionKind);
-  // Attention return needs an existing window focus path; completion can launch.
-  if (isAttention && !canFocusWindows()) {
+  if (!canFocusWindows()) {
     dismissNotification();
     return;
   }

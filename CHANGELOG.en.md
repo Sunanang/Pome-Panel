@@ -12,6 +12,18 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 - Refine the desktop workbench with lighter task categories and summaries, a quiet notes index and writing surface, consistent link/clipboard/settings controls, and reordered settings. Open credential creation on demand and use an integrated audio player while preserving storage, security and media lifecycle rules. Prevent older settings reads from replacing newly saved state.
 
+- Cancel superseded checks for the same pull request while letting main, version-tag and manually requested installer builds finish uninterrupted.
+- When Windows native capabilities are disabled, clicking a completion bubble only dismisses it. Label the action accordingly and enforce the rule in the main process; explicit source opening from the inbox remains separate.
+- Reserve measured temperature and Chinese weather-name widths in weather cards, shorten long headings, and omit the small location button's decorative chevron to prevent Windows clipping or overflow. Cover wide negative readings and long German headings at medium/large sizes, and set an explicit Chinese locale for cold-start inbox recovery acceptance.
+- Show and focus animation acceptance windows, set motion preferences explicitly, and sample layout-return interpolation on its actual CSS animation timeline to avoid software-rendering and background-window timing failures.
+- Enable native window visibility before loading the weather acceptance page and cover both motion preferences, keeping the hidden-window effects suspension check reliable.
+- Align installed Windows acceptance with the current nine default home widgets, including sun and almanac. Distinguish the window-widget enable entry from active native capabilities, and respect platform-specific placement and visible controls.
+- Measure quota digits and percent signs with their actual font weights to keep progress-row margins balanced across system fonts. Show quota acceptance windows so Windows software rendering can continue producing frames.
+- Size quota progress rows to their painted text height, preventing one pixel of overflow from adding a 15px classic scrollbar; more than three pools still scroll. Use software rendering for macOS CI captures to avoid hosted-VM GPU failures.
+
+- Read release workflow YAML structurally in regression checks, accepting the website CI's null trigger values and dependency lists while preserving manual-build and three-platform release gates.
+- Install NAS test dependencies and correct cross-platform acceptance fixtures: use production navigation splitting, set an explicit locale for text assertions, match Windows paths and hook scripts, and close SQLite inspection handles before deleting temporary directories.
+
 - Add an independent website under `website/` with rounded capsule controls, scroll-aware navigation, docking and workspace demos, and the same ten languages as the desktop app with localized product screenshots. Adapt the revised brand copy across locales. Source delivery does not deploy the website.
 - Unify deletion confirmation for commands, todos, notes, links, recordings and credentials with previews, counts and scope hints; preserve cancelled actions and guard changes during confirmation. Fix clipboard action spacing and refine wind into faint, gently deforming sheets with local dissipation.
 

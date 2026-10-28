@@ -33,6 +33,7 @@ async function main() {
 
   try {
     await window.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    await window.webContents.executeJavaScript("PomeI18n.setState(PomeI18n.snapshot('zh-CN', ['zh-CN'])); true");
     diagnostic('Renderer test: page loaded');
     const freshProfileClipboardState = await window.webContents.executeJavaScript(`
       (() => ({
@@ -151,7 +152,7 @@ async function main() {
           return false;
         };
         // 生产默认开启超过四个 Tab，会进入左右分栏并让容器横跨整条顶栏。
-        document.getElementById('tabs').classList.add('is-split');
+        applyFeatureSettings({ features: { clip: false } });
         document.getElementById('notch').click();
         const opened = await waitForClass('expanded');
         const topbar = document.querySelector('.topbar').getBoundingClientRect();

@@ -223,6 +223,8 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
     const right = tile.querySelector('.sun-right'), wx = right?.querySelector('.wx');
     const icon = wx?.querySelector('.ic'), name = wx?.querySelector('.wx-state'), text = wx?.querySelector('.txt');
     if (!text || !name) return;
+    wx.style.minWidth = '';
+    right.style.minWidth = '';
     if (icon) icon.style.display = '';
     const humidity = wx.querySelector('.wx-humidity');
     if (humidity) humidity.hidden = false;
@@ -234,6 +236,25 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
       || text.scrollWidth > text.clientWidth + 1)) icon.style.display = 'none';
     if ((nameClipped() && name.clientWidth < 16) || text.scrollWidth > text.clientWidth + 1) {
       if (humidity) humidity.hidden = true;
+    }
+    {
+      const reading = wx.querySelector('.wx-reading'), separator = wx.querySelector('.wx-separator');
+      const style = getComputedStyle(wx), nameStyle = getComputedStyle(name);
+      const number = value => parseFloat(value) || 0;
+      // Reserve the actual temperature width before ellipsizing the location
+      // or heading. Windows fallback fonts can make negative readings wider.
+      const nameWidth = tile.dataset.widgetSize === 'small' && /^zh(?:-|$)/i.test(document.documentElement.lang)
+        ? name.scrollWidth : Math.min(name.scrollWidth, number(nameStyle.fontSize));
+      const decoration = icon && getComputedStyle(icon).display !== 'none'
+        ? icon.offsetWidth + number(style.columnGap) : 0;
+      const minimum = Math.ceil((reading?.offsetWidth || 0)
+        + (separator?.offsetWidth || 0) + nameWidth + decoration
+        + number(style.paddingLeft) + number(style.paddingRight)
+        + number(style.borderLeftWidth) + number(style.borderRightWidth) + 1);
+      wx.style.minWidth = `${minimum}px`;
+      const place = right.querySelector('.sun-place');
+      right.style.minWidth = `${minimum + number(getComputedStyle(right).columnGap)
+        + number(getComputedStyle(place).minWidth)}px`;
     }
   }
   async function requestWeatherOnWake() {

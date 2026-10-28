@@ -79,6 +79,7 @@ async function run(contents){
     fs.writeFileSync(path.join(output,name+'.png'),capture.toPNG());
     const count=launched.length;await w.webContents.executeJavaScript(`document.getElementById('${open?'notification-open':'notification-close'}').click()`);await delay(550);
     assert.equal(launched.length,count+(open&&process.platform==='darwin'?1:0));
+    await until(()=>w.isDestroyed()||!w.isVisible(),'clicked notification dismissed');
   }
   const transcript=path.join(profile,'copilot-events.jsonl');
   const payload={...C,cwd:profile,transcriptPath:transcript,timestamp:Date.now()};

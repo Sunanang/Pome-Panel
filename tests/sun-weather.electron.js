@@ -27,6 +27,12 @@ const errors = [];
 dialog.showErrorBox = (title, message) => errors.push(`${title}: ${message}`);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const watchdog = setTimeout(() => { console.error('Weather acceptance timed out', errors); app.exit(1); }, 110000);
+// Visibility must be enabled before the first page load. Restoring throttling
+// only at the final hide check leaves Chromium's test visibility override set.
+app.on('browser-window-created', (_event, win) => {
+  win.webContents.setBackgroundThrottling(true);
+  win.showInactive();
+});
 let started = false;
 app.on('web-contents-created', (_event, contents) => {
   contents.on('console-message', detail => { if (detail.level === 'error' && !detail.message.includes('ERR_')) errors.push(detail.message); });
@@ -39,6 +45,8 @@ app.on('web-contents-created', (_event, contents) => {
 });
 async function run(c) {
   fs.mkdirSync(shots, { recursive: true });
+  c.debugger.attach('1.3');
+  await c.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   const js = code => c.executeJavaScript(code);
   async function until(expression) {
     for (let i = 0; i < 250; i++) { if (await js(expression).catch(() => false)) return; await sleep(20); }
@@ -76,7 +84,11 @@ async function run(c) {
         caption:!!t.querySelector('.sun-count .num'),arc:!!t.querySelector('.sun-arc'),
         contentZ:getComputedStyle(head).zIndex,canvas:t.querySelectorAll('.wx-fx').length,
         placeWidth:p.querySelector('span').clientWidth,placeOverflow:p.querySelector('span').scrollWidth>p.querySelector('span').clientWidth,
-        pinOnly:getComputedStyle(p.querySelector('span')).display==='none',label:t.querySelector('.wx').textContent};})()`);
+        pinOnly:getComputedStyle(p.querySelector('span')).display==='none',label:t.querySelector('.wx').textContent,
+        geometry:{size:t.dataset.widgetSize,weather:a.width,text:text.clientWidth,textScroll:text.scrollWidth,
+          reading:w.querySelector('.wx-reading')?.getBoundingClientRect().width,name:w.querySelector('.wx-state')?.clientWidth,
+          right:t.querySelector('.sun-right')?.clientWidth,icon:w.querySelector('.ic')&&getComputedStyle(w.querySelector('.ic')).display,
+          tile:{left:r.left,right:r.right,width:r.width},weatherBounds:{left:a.left,right:a.right},placeBounds:{left:b.left,right:b.right},headWidth:head.clientWidth}};})()`);
     assert.equal(result.overlap, false, JSON.stringify(result)); assert.equal(result.inside, true, JSON.stringify(result));
     assert.equal(result.textFits, true, JSON.stringify(result)); assert(result.caption && result.arc);
     assert.equal(result.readingFits,true,JSON.stringify(result));
@@ -127,7 +139,17 @@ async function run(c) {
       await size(value);await capture(`${value}-${id}`);await assertGeometry(value);
       if(value==='small' && id==='zh-CN') assert.equal(await js('(()=>{const n=document.querySelector("#home-sun .wx-state");return n.scrollWidth<=n.clientWidth+1})()'),true,'Chinese compact weather stays complete beside the ellipsized location');
     }
+    if (id === 'de-DE') {
+      const wideHeading = await c.insertCSS('.home-sun .sun-head > .tile-label { font-family:monospace!important;font-size:17px!important; } .home-sun .wx-reading { font-family:monospace!important;font-size:13px!important; }');
+      for (const value of ['medium','large']) { await size(value);await assertGeometry(value);await capture(`${value}-wide-german-heading`); }
+      await c.removeInsertedCSS(wideHeading);
+    }
   }
+  const wideReading = await c.insertCSS('.home-sun[data-widget-size="small"] .wx-reading { font-family:monospace!important;font-size:13px!important; }');
+  await size('small');await assertGeometry('small');
+  assert.equal(await js('(()=>{const n=document.querySelector("#home-sun .wx-state");return n.scrollWidth<=n.clientWidth+1})()'),true,'wide negative temperatures retain the complete Chinese weather name');
+  await capture('small-wide-negative-temperature');
+  await c.removeInsertedCSS(wideReading);
   current.weather_code=82;current.temperature_2m=10.7;await tick();
   await js('document.dispatchEvent(new CustomEvent("notch:modechange",{detail:{expanded:true}}))');await until('PomeSun.getWeather().data?.code===82');
   await size('medium');
@@ -191,11 +213,11 @@ async function run(c) {
   await js('setActiveTab("home")');await sleep(120);assert.equal(await js('document.querySelector("#home-sun .wx-fx")'),null);
   assert(await js('!!document.querySelector("#home-sun .wx")'));
   await js('notchAPI.setWeatherEffects(true)');await until('PomeSun.getWeather().effects.active');
-  c.debugger.attach('1.3');
+  if (!c.debugger.isAttached()) c.debugger.attach('1.3');
   await c.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   await until('!PomeSun.getWeather().effects.active');assert.equal(await js('!!document.querySelector("#home-sun .wx-fx")'),false);
   await c.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
-  await until('PomeSun.getWeather().effects.active');c.debugger.detach();
+  await until('PomeSun.getWeather().effects.active');
   await js('setActiveTab("notes")');await until('!PomeSun.getWeather().effects.active');
   await js('setActiveTab("home")');await until('PomeSun.getWeather().effects.active');
   await js('setMode(false)');await until('!PomeSun.getWeather().effects.active');
@@ -215,14 +237,12 @@ async function run(c) {
   await until('!document.querySelector("[data-sun-manual-error]").hidden');
   assert.equal(await js('PomeSun.getLocation().lat'),2);assert.equal(calls,formCalls,'invalid manual input never requests weather');
   await capture('location-validation',false);await js('PomeSun.closeLocation()');
-  // Isolated tests normally disable background throttling to finish startup
-  // behind the real panel. Use production visibility semantics for this check.
   // Hiding also triggers the normal asynchronous blur/collapse workflow.
-  c.setBackgroundThrottling(true);
   BrowserWindow.fromWebContents(c).hide();
   await until('document.hidden && !PomeSun.getWeather().effects.active');
   BrowserWindow.fromWebContents(c).show();
   await until('!document.hidden');
+  c.debugger.detach();
   assert.deepEqual(errors,[]);
 }
 require('../main');

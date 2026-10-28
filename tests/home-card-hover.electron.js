@@ -25,14 +25,22 @@ async function main() {
     const target=${JSON.stringify(selector)} ? tile.querySelector(${JSON.stringify(selector)}) : tile;
     target.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerType:${JSON.stringify(type)},clientX:r.left+r.width*${x},clientY:r.top+r.height*${y},buttons:0}));
   })()`);
-  const state = id => js(`(() => {
+  const state = async id => {
+    // Assert the completed CSS state, not a nearly finished matrix sampled
+    // after a wall-clock delay on a slow compositor.
+    await frame();
+    await js(`Promise.allSettled(document.querySelector('[data-home-module="${id}"]').getAnimations().filter(a=>Number.isFinite(a.effect.getComputedTiming().endTime)).map(a=>a.finished))`);
+    return js(`(() => {
     const tile=document.querySelector('[data-home-module="${id}"]'),s=getComputedStyle(tile),m=new DOMMatrixReadOnly(s.transform);
     return {active:tile.classList.contains('is-hover-tilted'),transform:s.transform,
       limit:parseFloat(s.getPropertyValue('--tile-tilt-angle')),x:parseFloat(tile.style.getPropertyValue('--tile-pointer-x')||'0'),y:parseFloat(tile.style.getPropertyValue('--tile-pointer-y')||'0'),m13:m.m13,m23:m.m23,scaleX:Math.hypot(m.m11,m.m12,m.m13)};
   })()`);
+  };
   try {
     fs.mkdirSync(shots,{recursive:true});
     await win.loadFile(path.join(__dirname,'../renderer/index.html'));
+    win.show();
+    win.focus();
     win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
     await js(`(async()=>{

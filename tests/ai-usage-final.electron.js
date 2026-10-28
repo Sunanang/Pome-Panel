@@ -34,6 +34,8 @@ async function main(){
   const js=code=>win.webContents.executeJavaScript(code), errors=[];
   win.webContents.on('console-message',event=>{if(event.level==='error')errors.push(event.message);});
   await win.loadFile(path.join(__dirname,'../renderer/index.html'));
+  win.show();
+  win.focus();
   win.webContents.debugger.attach('1.3');
   await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   await js(`setMode(true);PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'));window.fixture={};window.notchAPI=Object.fromEntries(NotchAiProviders.usageProviders().map(({id,request})=>[request,async()=>fixture[id]||{ok:true,detected:false}]));document.querySelectorAll('.home-bento>[data-home-module]:not(#home-cursor)').forEach(n=>n.style.visibility='hidden')`);
@@ -62,7 +64,8 @@ async function main(){
         assert.equal(await js(`(()=>{return [...document.querySelectorAll('#home-cursor .q-inline-rows')].every(rows=>{const ring=rows.closest('[data-provider]').querySelector('.q-ring').getBoundingClientRect();if(rows.getBoundingClientRect().top<ring.bottom-.6)return false;return [...rows.querySelectorAll('.ai-quota-row')].every(row=>{const label=row.querySelector('.q-window-short').getBoundingClientRect(),bar=row.querySelector('.cursor-usage-track').getBoundingClientRect(),value=row.querySelector('.q-pct'),v=value.getBoundingClientRect();return Math.abs(bar.left-label.right-3)<.6&&Math.abs(v.left-bar.right-2)<.6&&getComputedStyle(value).fontSize===getComputedStyle(value.querySelector('small')).fontSize})})})()`),true,prefix+' progress rows stay below rings with fixed grid columns');
 
         assert.equal(await js(`[...document.querySelectorAll('#home-cursor .q-inline-rows .ai-quota-row')].every(row=>{const range=document.createRange();range.selectNodeContents(row.querySelector('.q-pct'));const glyph=range.getBoundingClientRect(),track=row.querySelector('.cursor-usage-track').getBoundingClientRect();return Math.abs(glyph.left-track.right-2)<.7})`),true,prefix+' visible numbers stay close to the track');
-        assert.equal(await js(`[...document.querySelectorAll('#home-cursor .q-inline-rows')].every(rows=>{const card=rows.closest('[data-provider]').getBoundingClientRect(),bounds=selector=>[...rows.querySelectorAll(selector)].map(n=>{const range=document.createRange();range.selectNodeContents(n);return range.getBoundingClientRect()});const left=Math.min(...bounds('.q-window-short').map(r=>r.left))-card.left,right=card.right-Math.max(...bounds('.q-pct').map(r=>r.right));return Math.abs(left-right)<.7&&left>=0&&right>=0})`),true,prefix+' visible label, track and digits have balanced outer margins');
+        const margins=await js(`[...document.querySelectorAll('#home-cursor .q-inline-rows')].map(rows=>{const provider=rows.closest('[data-provider]'),card=provider.getBoundingClientRect(),bounds=selector=>[...rows.querySelectorAll(selector)].map(n=>{const range=document.createRange();range.selectNodeContents(n);return range.getBoundingClientRect()});return {id:provider.dataset.provider,scrollHeight:rows.scrollHeight,clientHeight:rows.clientHeight,scrollbarWidth:rows.offsetWidth-rows.clientWidth,left:Math.min(...bounds('.q-window-short').map(r=>r.left))-card.left,right:card.right-Math.max(...bounds('.q-pct').map(r=>r.right))}})`);
+        assert(margins.every(({left,right})=>Math.abs(left-right)<.7&&left>=0&&right>=0),prefix+' visible label, track and digits have balanced outer margins: '+JSON.stringify(margins));
         assert(v.cards.every(c=>Math.abs(c.width-v.cards[0].width)<.5&&Math.abs(c.height-v.cards[0].height)<.5),prefix+' equal cells');
         for(const c of v.cards){const middle=v.tall?c.top+c.height/2:(c.headerBottom+(c.hasBars?c.barsTop:c.captionTop))/2;assert(Math.abs(c.ring.y+c.ring.height/2-middle)<.6,prefix+' ring centers in its intended region '+c.id);if(v.tall&&c.hasBars)assert(Math.abs(c.barsTop-c.ring.y-c.ring.height-10)<.6,prefix+' tall rows sit 10px below the ring '+c.id);}
         for(let i=0;i<v.cards.length;i+=v.columns){const row=v.cards.slice(i,i+v.columns),bars=row.filter(c=>c.hasBars);assert(bars.every(c=>Math.abs(c.ring.y-bars[0].ring.y)<.6),prefix+' row rings with bars align');assert(row.every(c=>Math.abs(c.footY-row[0].footY)<.6),prefix+' footnotes align');}
@@ -81,6 +84,21 @@ async function main(){
       if(state==='stale'){assert.equal(await js(`document.getElementById('ai-usage-updated').textContent`),name==='mini'||name==='small'?'已过期 3 小时':'数据已过期 · 3 小时前');assert.equal(await js(`getComputedStyle(document.querySelector('.ai-usage-provider ${name==='mini'?'.q-ring':'.q-gauge-group'}')).opacity`),'0.45');}
     }
   }
+  // Exercise classic 15px scrollbars even on Macs using overlay scrollbars.
+  const classicStyle=await win.webContents.insertCSS('#home-cursor .q-inline-rows::-webkit-scrollbar{width:15px}');
+  try {
+    await supply(fixture(3,'normal'));
+    for(const name of ['small','medium','large']){
+      await size(name,actual);
+      const overflow=await js(`[...document.querySelectorAll('#home-cursor .q-inline-rows')].filter(rows=>rows.scrollHeight>rows.clientHeight).map(rows=>({id:rows.closest('[data-provider]').dataset.provider,height:rows.clientHeight,scroll:rows.scrollHeight}))`);
+      assert.deepEqual(overflow,[],name+' fitting rows must not acquire a classic scrollbar from text ink');
+      await capture(name+'-classic-scrollbars');
+    }
+    const manyPools=fixture(3,'normal');
+    manyPools.copilot={ok:true,configured:true,windows:Array.from({length:5},(_,index)=>({id:'pool-'+index,label:'Pool '+index,percent:20}))};
+    await supply(manyPools);await size('large',actual);
+    assert.equal(await js(`(()=>{const rows=document.querySelector('#ai-provider-copilot .q-inline-rows');rows.scrollTop=rows.scrollHeight;return rows.querySelectorAll('.ai-quota-row').length===5&&rows.scrollHeight>rows.clientHeight&&rows.scrollTop>0})()`),true,'more than three pools retain a usable vertical scroller');
+  } finally {await win.webContents.removeInsertedCSS(classicStyle);}
   // English strings must retain the same geometry and short window labels.
   await js(`PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));window.dispatchEvent(new Event('pome:language-changed'))`);
   for (const [count,state] of [[3,'normal'],[4,'warn'],[5,'multi-out'],[6,'error']]) {

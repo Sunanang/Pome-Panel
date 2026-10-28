@@ -66,7 +66,10 @@ async function run(c){
  }
  // Fixture setup only: arbitrary widget sets replace the removed product presets.
  function seedHomeFixture(ids = HOME_MODULE_REGISTRY.filter(id=>!unavailableHomeModules.includes(id))) {
-  if(ids.includes('windows'))windowsInlineRequested=true;
+  if(ids.includes('windows')){
+   windowsInlineRequested=true;
+   if(homeCapabilities.features.winNativeSetting)localStorage.setItem('pome-windows-inline-v1','1');
+  }
   hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
   homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
   const defaults=Object.fromEntries(ids.map(id=>[id,HOME_SIZE_DEFAULTS[id]]));
@@ -299,7 +302,7 @@ async function run(c){
  assert.doesNotMatch(await js(`document.querySelector('#ui-error-details pre').textContent`),/secret|private-value|user:pass/);await capture('error-bar');
  // Expanded diagnostics occupy their own region; controls can be scrolled into view above it.
  await js(`document.getElementById('ui-error-details').open=true`);
- for(const selector of ['[data-settings-home-module=music]','[data-settings-home-module=pomodoro]']){
+ for(const selector of ['[data-settings-home-module=pomodoro]','[data-settings-home-module=cursor]']){
   const accessible=await js(`(async()=>{const input=document.querySelector(${JSON.stringify(selector)}),control=input.closest('label')||input;control.scrollIntoView({block:'center'});await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const b=control.getBoundingClientRect(),bar=document.getElementById('ui-error-bar').getBoundingClientRect(),panels=document.getElementById('panels').getBoundingClientRect(),hit=document.elementFromPoint(b.left+b.width/2,b.top+b.height/2);return {separate:panels.bottom<=bar.top+1,reachable:hit===control||control.contains(hit),visible:b.top>=panels.top-1&&b.bottom<=panels.bottom+1};})()`);
   assert.equal(accessible.separate,true);assert.equal(accessible.reachable,true,selector);assert.equal(accessible.visible,true,selector);
  }
