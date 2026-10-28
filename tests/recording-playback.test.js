@@ -21,6 +21,9 @@ function harness() {
   vm.createContext(context);
   vm.runInContext('let currentAudioUrl = "", currentAudioElement = null, recordingAudioGeneration = 0;\n'
     + source.slice(source.indexOf('  function pauseRecordingAudio()'), source.indexOf('  function renderRecordingDetail()')), context);
+  // This harness tests media reads and resource lifetime; real controls are
+  // exercised against Chromium in workbench.electron.js.
+  context.createRecordingPlayer = audio => audio;
   const container = () => ({ isConnected: true, textContent: 'loading', replaceChildren(player) { this.player = player; } });
   return { context, requests, revoked, players, container };
 }

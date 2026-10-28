@@ -75,10 +75,17 @@ async function main() {
     })()`);
     assert.equal(scheduling.before,0);assert(scheduling.writes<=6);assert(Math.abs(scheduling.x-.6)<.01);
 
-    // Controls remain stationary and usable; hovering never starts the mirror.
+    // Crossing interactive children must keep tilt continuous; click still flattens.
     assert.equal(await js(`document.querySelector('.home-mirror').classList.contains('live')`),false);
+    await hover('pomodoro');await wait(220);
+    assert.notEqual((await state('pomodoro')).transform,'none');
     await hover('pomodoro',.5,.5,'mouse','#pomodoro-toggle');await wait(220);
-    assert.equal((await state('pomodoro')).transform,'none');
+    assert.notEqual((await state('pomodoro')).transform,'none','tilt must continue over clickable controls');
+    await capture('03b-timer-over-control');
+    await js(`document.getElementById('pomodoro-toggle').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerType:'mouse',buttons:1}))`);
+    await frame();
+    assert.equal((await state('pomodoro')).transform,'none','pointerdown flattens before the click');
+    await hover('pomodoro',.5,.5,'mouse','#pomodoro-toggle');await wait(220);
     await js(`document.getElementById('pomodoro-toggle').click()`);
     assert.equal(await js(`document.getElementById('home-pomodoro').dataset.state`),'running');
     await js(`document.getElementById('pomodoro-toggle').click()`);

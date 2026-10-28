@@ -656,7 +656,7 @@ function todoItemHtml(priority, item) {
   const isEditing = editingTodo?.priority === priority && editingTodo?.id === item.id;
   const contentHtml = isEditing
     ? ("<div class=\"todo-inline-editor\"><input class=\"todo-inline-name\" value=\"" + (safeText) + "\" maxlength=\"80\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.editTaskName.44f8a7")) + "\" data-i18n-aria-label=\"copy.editTaskName.44f8a7\" />" + (batteryHtml) + "<button class=\"todo-inline-deadline\" type=\"button\" data-action=\"edit-deadline\">" + (deadline || pomeLocaleRendererApp.t("copy.date.70d0c1")) + "</button><button class=\"todo-inline-save\" type=\"button\" data-action=\"save-edit\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.saveChanges.991bb7")) + "\" data-i18n-aria-label=\"copy.saveChanges.991bb7\">✓</button></div>")
-    : ("<button class=\"todo-copy\" type=\"button\" data-action=\"edit\" title=\"" + (safeText) + "\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.edit.fe62a2", { arg2: (safeText) })) + "\"><span class=\"todo-text\">" + (safeText) + "</span>" + (batteryHtml) + (deadline ? `<time class="todo-ddl" datetime="${escapeHtml(item.deadline)}">${escapeHtml(deadline)}</time>` : '') + "</button>");
+    : ("<button class=\"todo-copy\" type=\"button\" data-action=\"edit\" title=\"" + (safeText) + "\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.edit.fe62a2", { arg2: (safeText) })) + "\"><span class=\"todo-text\">" + (safeText) + "</span>" + ((batteryHtml || deadline) ? `<span class="todo-meta">${batteryHtml}${deadline ? `<time class="todo-ddl" datetime="${escapeHtml(item.deadline)}">${escapeHtml(deadline)}</time>` : ''}</span>` : '') + "</button>");
   return ("\n    <li class=\"todo-item" + (doneClass) + (selectedClass) + "\" data-id=\"" + (safeId) + "\" data-priority=\"" + (priority) + "\">\n      <button class=\"checkbox\" type=\"button\" data-action=\"toggle\" aria-label=\"" + (toggleLabel) + "\" aria-pressed=\"" + (item.done) + "\">" + (checkSvg()) + "</button>\n      " + (contentHtml) + "\n      <button class=\"delete\" type=\"button\" data-action=\"delete\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.delete.322a6b", { arg9: (safeText) })) + "\">×</button>\n    </li>\n  ");
 }
 
@@ -732,6 +732,20 @@ function updateCount(priority) {
   const items = data[priority] || [];
   const pending = items.filter((t) => !t.done).length;
   countEl.textContent = String(pending);
+  updateTodoBoardSummary();
+}
+
+function updateTodoBoardSummary() {
+  const summary = document.getElementById('todo-board-summary');
+  if (!summary) return;
+  const items = todoCategoryOrder.flatMap(priority => data[priority] || []);
+  const pending = items.filter(item => !item.done).length;
+  pomeLocaleRendererApp.bind(summary, 'textContent', () => {
+    const number = new Intl.NumberFormat(pomeLocaleRendererApp.getState().formatLocale);
+    return pomeLocaleRendererApp.t('wb.todo.summary', {
+      pending: number.format(pending), total: number.format(items.length),
+    });
+  });
 }
 
 function renderAll() {
@@ -1124,7 +1138,7 @@ document.addEventListener('keydown', (event) => {
   if (document.querySelector('dialog[open]')) return;
   const target = event.target instanceof Element ? event.target : null;
   const editable = Boolean(target && target.closest(
-    'input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video'
+    'input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video, .recording-player button'
   ));
   if (!window.NotchDomain.shouldTogglePanelForSpace({
     key: event.key,
@@ -1188,6 +1202,7 @@ document.addEventListener('compositionend', () => {
 if (window.notchAPI && typeof window.notchAPI.onEscape === 'function') {
   window.notchAPI.onEscape(() => {
     if (window.PomeDeleteConfirm?.closeOnEscape()) return;
+    if (window.NotchWorkspace?.closeCredentialCreateOnEscape?.()) return;
     if (window.closeWorkHubOverlay?.()) return;
     const el = document.activeElement;
     if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
@@ -1223,6 +1238,53 @@ if (window.notchAPI && typeof window.notchAPI.onOpenClip === 'function') {
   window.notchAPI.onOpenClip(async () => {
     await setActiveTab('clip');
     if (!isExpanded) await setMode(true);
+  });
+}
+
+let todoReminderFocusTimer = null;
+function focusTodoFromReminder(payload) {
+  const id = String(payload?.id || '');
+  if (!id) return false;
+  const deadline = String(payload?.deadline || '');
+  const matchByDeadline = deadline
+    ? PRIORITIES.some((priority) => (data[priority] || []).some((todo) => (
+      todo.id === id && String(todo.deadline || '') === deadline
+    )))
+    : false;
+  const found = PRIORITIES.some((priority) => (data[priority] || []).some((todo) => todo.id === id));
+  if (!found) return false;
+  if (deadline && !matchByDeadline) {
+    // Deadline drifted (edited); still open by id when the row exists.
+  }
+  const el = document.querySelector(`.todo-item[data-id="${CSS.escape(id)}"]`);
+  if (!el) return false;
+  document.querySelectorAll('.todo-item.is-reminder-focus').forEach((node) => {
+    node.classList.remove('is-reminder-focus');
+  });
+  el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  el.classList.add('is-reminder-focus');
+  el.querySelector('[data-action="toggle"]')?.focus({ preventScroll: true });
+  if (todoReminderFocusTimer) clearTimeout(todoReminderFocusTimer);
+  todoReminderFocusTimer = setTimeout(() => {
+    todoReminderFocusTimer = null;
+    el.classList.remove('is-reminder-focus');
+  }, 2400);
+  return true;
+}
+
+if (window.notchAPI && typeof window.notchAPI.onOpenTodo === 'function') {
+  window.notchAPI.onOpenTodo(async (payload) => {
+    // Expand first: setMode(true) resets to the default launch tab, so Tasks
+    // must be selected after the panel is open.
+    if (!isExpanded) await setMode(true);
+    await setActiveTab('todo');
+    // Wait for expand/tab paint so the row exists before scrolling.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (focusTodoFromReminder(payload)) return;
+        setTimeout(() => focusTodoFromReminder(payload), 280);
+      });
+    });
   });
 }
 
@@ -2869,6 +2931,7 @@ function setNotesDetailMode(mode, focusTarget = true) {
   if (next === 'preview') {
     flushNotesEditorSave();
     preview.replaceChildren(buildMarkdownPreview(editor.value));
+    syncNotesPreviewTitle(preview, notesDetail.querySelector('.notes-detail-title')?.value);
   }
 
   notesDetailMode = next;
@@ -2886,6 +2949,18 @@ function setNotesDetailMode(mode, focusTarget = true) {
 }
 
 let notesDetailOpenedId = '';
+
+function syncNotesPreviewTitle(preview, title) {
+  const heading = preview?.firstElementChild;
+  if (heading?.tagName !== 'H1') return;
+  // The editable document title already represents this heading. Collapse only
+  // that identical first H1 in preview; links and other interactive content
+  // must remain reachable. The stored Markdown and editor stay intact.
+  const normalizedTitle = String(title || '').trim().replace(/\s+/g, ' ');
+  const interactive = heading.querySelector('a, button, input, select, textarea, [role="link"], [role="button"], [tabindex], [contenteditable]:not([contenteditable="false"]), audio, video');
+  heading.hidden = !interactive && Boolean(normalizedTitle)
+    && heading.textContent.trim().replace(/\s+/g, ' ') === normalizedTitle;
+}
 
 function defaultNotesDetailMode(note) {
   return String(note?.content || '').trim() ? 'preview' : 'edit';
@@ -2926,10 +3001,16 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   title.autocomplete = 'off';
   title.spellcheck = false;
   title.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.noteTitleEditDirectly.abb0d0"));
+  const documentHeading = document.createElement('div');
+  documentHeading.className = 'notes-document-heading';
+  documentHeading.setAttribute('role', 'heading');
+  documentHeading.setAttribute('aria-level', '1');
+  documentHeading.setAttribute('aria-label', noteArchiveTitle(note));
+  documentHeading.append(title);
   const time = document.createElement('time');
   time.className = 'notes-detail-time';
   pomeLocaleRendererApp.bind(time, "textContent", () => (pomeLocaleRendererApp.t("copy.updated.7114c0", { arg1: (noteArchiveTime(note.updatedAt)) })));
-  heading.append(title, time);
+  heading.append(documentHeading, time);
   const actions = document.createElement('div');
   actions.className = 'notes-detail-actions';
 
@@ -2978,6 +3059,7 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   preview.tabIndex = 0;
   preview.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.previewNote.aa5b1d", { arg1: (noteArchiveTitle(note)) }));
   preview.replaceChildren(buildMarkdownPreview(note.content));
+  syncNotesPreviewTitle(preview, note.title);
 
   const isPreview = notesDetailMode === 'preview';
   editor.hidden = isPreview;
@@ -3032,8 +3114,11 @@ function updateSavedNotePresentation(note) {
   const title = noteArchiveTitle(note);
   const detailTitle = notesDetail?.querySelector('.notes-detail-title');
   const detailTime = notesDetail?.querySelector('.notes-detail-time');
+  const documentHeading = notesDetail?.querySelector('.notes-document-heading');
+  if (documentHeading && selectedNoteId === note.id) documentHeading.setAttribute('aria-label', title);
   if (detailTitle?.dataset.noteId === note.id && document.activeElement !== detailTitle) detailTitle.value = note.title || '';
   if (detailTime && selectedNoteId === note.id) pomeLocaleRendererApp.bind(detailTime, "textContent", () => (pomeLocaleRendererApp.t("copy.saved.983d08", { arg1: (noteArchiveTime(note.updatedAt)) })));
+  if (selectedNoteId === note.id) syncNotesPreviewTitle(notesDetail?.querySelector('#notes-preview'), note.title);
   const row = notesList?.querySelector(`[data-note-id="${CSS.escape(note.id)}"]`);
   if (!row) return;
   const rowTitle = row.querySelector('strong');
@@ -3383,21 +3468,21 @@ function bindHomeTilePointerGlow(bento) {
     active = null;
     bounds = null;
   };
-  const eligible = (tile, target) => {
+  const eligible = (tile) => {
+    // Keep tilt while crossing buttons/links inside the card. Resetting on every
+    // interactive child caused the 3D motion to snap flat mid-hover. Click and
+    // focus still flatten via pointerdown / focusin / :focus-within.
     if (!tile || tile.hidden || !isExpanded || activeTab !== 'home' || modeBusy || reducedMotion.matches
       || bento.dataset.layoutEditing === 'true' || bento.classList.contains('layout-motion-active')
       || bento.classList.contains('layout-dragging') || tile.contains(document.activeElement)) return false;
-    const control = target.closest?.('input, textarea, select, button, a, [role="button"], [contenteditable]');
-    // The mirror cover is the whole card. Other controls keep a stationary hit
-    // target, including command tooltips, timer inputs and nested popovers.
-    return !control || control.id === 'mirror-stage';
+    return true;
   };
   const paint = () => {
     frame = null;
     const point = pending;
     pending = null;
     const tile = point?.target.closest?.('.home-bento > .tile');
-    if (!point || !eligible(tile, point.target)) { reset(); return; }
+    if (!point || !eligible(tile)) { reset(); return; }
     if (active !== tile) {
       if (active) clearTile(active);
       clearTile(tile, true);
@@ -3416,7 +3501,7 @@ function bindHomeTilePointerGlow(bento) {
   };
   bento.addEventListener('pointermove', (event) => {
     const tile = event.target.closest?.('.home-bento > .tile');
-    if (event.pointerType === 'touch' || event.buttons || !eligible(tile, event.target)) { reset(); return; }
+    if (event.pointerType === 'touch' || event.buttons || !eligible(tile)) { reset(); return; }
     pending = { target: event.target, x: event.clientX, y: event.clientY };
     if (frame === null) frame = requestAnimationFrame(paint);
   });

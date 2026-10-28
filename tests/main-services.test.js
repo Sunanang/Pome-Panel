@@ -426,7 +426,7 @@ test('WIN_NATIVE_DEFAULT stays off until the antivirus gate (D16) passes', () =>
   assert.equal(appSettingsLayoutPreferences({ taskNotifications: true }).taskNotifications, true);
 });
 
-test('todoReminderState fires once within the final hour and expires after the DDL', () => {
+test('todoReminderState fires once within the final hour and catch-up once after the DDL', () => {
   const deadline = Date.parse('2026-08-22T10:00:00.000Z');
   const todo = { id: 't1', text: '发布新版', deadline: new Date(deadline).toISOString(), done: false, remindedAt: 0 };
   assert.deepEqual(todoReminderState(todo, deadline - 2 * 60 * 60 * 1000), {
@@ -438,7 +438,12 @@ test('todoReminderState fires once within the final hour and expires after the D
     delayMs: 0,
   });
   assert.equal(todoReminderState({ ...todo, remindedAt: deadline - 60 * 60 * 1000 }, deadline - 30 * 60 * 1000).state, 'notified');
-  assert.equal(todoReminderState(todo, deadline + 1).state, 'expired');
+  assert.deepEqual(todoReminderState(todo, deadline + 1), { state: 'expired-missed', delayMs: 0 });
+  assert.equal(
+    todoReminderState({ ...todo, remindedAt: deadline - 60 * 60 * 1000 }, deadline + 1).state,
+    'notified',
+    'already reminded before DDL must not overdue-catch-up again'
+  );
 });
 
 test('todo reminder timers checkpoint far-future deadlines without overflowing Node timers', () => {

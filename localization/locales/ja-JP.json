@@ -25,6 +25,8 @@
   "copy.moreTasksCompleted.1ac38a": "{arg1} 個以上のタスクが完了しました",
   "copy.taskDueSoon.52facb": "もうすぐ期限のタスク",
   "copy.dueWithin1Hour.955b14": "期限は 1 時間以内",
+  "copy.taskOverdue.d31df8": "期限切れのタスク",
+  "copy.deadlineHasPassed.37e6a6": "期限を過ぎています",
   "copy.focusTimer.e7d0e7": "フォーカスタイマー",
   "copy.focusSessionComplete.66ee96": "フォーカスセッションが完了しました",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "{arg1} 分の集中セッションが終了しました",
@@ -1338,7 +1340,7 @@
   "settings.display.title": "ディスプレイ",
   "settings.display.allQuotas": "プロバイダーの割り当て",
   "settings.notifications.topBubble": "トップバブルリマインダー",
-  "settings.notifications.topBubbleHint": "AI の完了、待機中のプロンプト、および期限の ToDo を上部に表示します",
+  "settings.notifications.topBubbleHint": "AI の完了・待機、タスク期限前と期限後の補足を上部に表示",
   "settings.notifications.topBubbleEnabled": "トップバブルリマインダーが有効になっています。",
   "settings.notifications.topBubbleDisabled": "上部のバブルリマインダーが無効になっています。",
   "settings.notifications.topBubbleFailed": "上部のバブル設定を変更できませんでした。",
@@ -1537,5 +1539,12 @@
   "ui.delete.categoryHint": "このカテゴリと、その中の {count} 件のタスクを削除します。",
   "ui.delete.todoTitle": "タスクを削除",
   "ui.delete.credentialTitle": "認証情報を削除",
-  "ui.delete.groupTitle": "リンクグループを削除"
+  "ui.delete.groupTitle": "リンクグループを削除",
+  "wb.todo.summary": "未完了 {pending} 件 · 全 {total} 件",
+  "workbench.recordings.seek": "再生位置",
+  "workbench.recordings.mute": "ミュート",
+  "workbench.recordings.unmute": "ミュート解除",
+  "workbench.recordings.volume": "音量",
+  "workbench.recordings.speed": "再生速度",
+  "workbench.recordings.deleteRepair": "音声ファイルの使用状況とフォルダーの権限を確認してから、再試行してください。"
 }

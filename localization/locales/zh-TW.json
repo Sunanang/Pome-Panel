@@ -19,6 +19,8 @@
   "copy.moreTasksCompleted.1ac38a": "另有 {arg1} 個任務已完成",
   "copy.taskDueSoon.52facb": "待辦即將截止",
   "copy.dueWithin1Hour.955b14": "將在 1 小時內截止",
+  "copy.taskOverdue.d31df8": "待辦已過期",
+  "copy.deadlineHasPassed.37e6a6": "截止時間已過",
   "copy.focusTimer.e7d0e7": "番茄鍾",
   "copy.focusSessionComplete.66ee96": "專注完成",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "{arg1} 分鐘專注計時已結束",
@@ -1305,7 +1307,7 @@
   "settings.display.title": "顯示",
   "settings.display.allQuotas": "各家額度",
   "settings.notifications.topBubble": "頂部氣泡提醒",
-  "settings.notifications.topBubbleHint": "AI 完成、等待與待辦到期時在頂部顯示",
+  "settings.notifications.topBubbleHint": "AI 完成、等待、待辦即將到期與過期補提時在頂部顯示",
   "settings.notifications.topBubbleEnabled": "已開啟頂部氣泡提醒。",
   "settings.notifications.topBubbleDisabled": "已關閉頂部氣泡提醒。",
   "settings.notifications.topBubbleFailed": "頂部氣泡設定失敗。",
@@ -1504,5 +1506,12 @@
   "ui.delete.categoryHint": "將刪除此分類及其中的 {count} 項待辦。",
   "ui.delete.todoTitle": "刪除待辦",
   "ui.delete.credentialTitle": "刪除金鑰",
-  "ui.delete.groupTitle": "刪除連結群組"
+  "ui.delete.groupTitle": "刪除連結群組",
+  "wb.todo.summary": "{pending} 項未完成 · 共 {total} 項",
+  "workbench.recordings.seek": "播放位置",
+  "workbench.recordings.mute": "靜音",
+  "workbench.recordings.unmute": "取消靜音",
+  "workbench.recordings.volume": "音量",
+  "workbench.recordings.speed": "播放速度",
+  "workbench.recordings.deleteRepair": "請檢查錄音檔案是否被佔用及資料夾權限，然後重試。"
 }

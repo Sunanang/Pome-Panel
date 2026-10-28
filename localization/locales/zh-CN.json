@@ -19,6 +19,8 @@
   "copy.moreTasksCompleted.1ac38a": "另有 {arg1} 个任务已完成",
   "copy.taskDueSoon.52facb": "待办即将截止",
   "copy.dueWithin1Hour.955b14": "将在 1 小时内截止",
+  "copy.taskOverdue.d31df8": "待办已过期",
+  "copy.deadlineHasPassed.37e6a6": "截止时间已过",
   "copy.focusTimer.e7d0e7": "番茄钟",
   "copy.focusSessionComplete.66ee96": "专注完成",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "{arg1} 分钟专注计时已结束",
@@ -1305,7 +1307,7 @@
   "settings.display.title": "显示",
   "settings.display.allQuotas": "各家额度",
   "settings.notifications.topBubble": "顶部气泡提醒",
-  "settings.notifications.topBubbleHint": "AI 完成、等待与待办到期时在顶部显示",
+  "settings.notifications.topBubbleHint": "AI 完成、等待、待办即将到期与过期补提时在顶部显示",
   "settings.notifications.topBubbleEnabled": "已开启顶部气泡提醒。",
   "settings.notifications.topBubbleDisabled": "已关闭顶部气泡提醒。",
   "settings.notifications.topBubbleFailed": "顶部气泡设置失败。",
@@ -1504,5 +1506,12 @@
   "ui.delete.categoryHint": "将删除此分类及其中的 {count} 条待办。",
   "ui.delete.todoTitle": "删除待办",
   "ui.delete.credentialTitle": "删除密钥",
-  "ui.delete.groupTitle": "删除链接分组"
+  "ui.delete.groupTitle": "删除链接分组",
+  "wb.todo.summary": "{pending} 项未完成 · 共 {total} 项",
+  "workbench.recordings.seek": "播放位置",
+  "workbench.recordings.mute": "静音",
+  "workbench.recordings.unmute": "取消静音",
+  "workbench.recordings.volume": "音量",
+  "workbench.recordings.speed": "播放速度",
+  "workbench.recordings.deleteRepair": "请检查录音文件是否被占用及文件夹权限，然后重试。"
 }

@@ -883,6 +883,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     llmModel: 'deepseek-v4-flash',
   };
   let settingsAppSettings = null;
+  let settingsAppSettingsRevision = 0;
+  let settingsRefreshGeneration = 0;
   let settingsWorkspace = null;
   let transcriptionStatus = 'idle';
   let transcriptionAudioGap = false;
@@ -1227,6 +1229,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
 
   async function refreshSettingsPanel() {
     if (!window.notchAPI) return;
+    const generation = ++settingsRefreshGeneration;
+    const revision = settingsAppSettingsRevision;
     const [appSettings, workspace, config, mirrorImage, cursorToken, codexUsage, codexToken] = await Promise.all([
       window.notchAPI.getAppSettings?.().catch(() => null),
       window.notchAPI.getWorkspace?.().catch(() => null),
@@ -1236,7 +1240,9 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       window.notchAPI.getCodexUsage?.().catch(() => null),
       window.notchAPI.getCodexTokenStatus?.().catch(() => null),
     ]);
-    if (appSettings) settingsAppSettings = appSettings;
+    if (generation !== settingsRefreshGeneration) return;
+    // A settings broadcast is newer than reads already in flight.
+    if (appSettings && revision === settingsAppSettingsRevision) settingsAppSettings = appSettings;
     if (workspace) settingsWorkspace = workspace;
     if (config) {
       transcriptionConfig = config;
@@ -3036,6 +3042,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }
   });
   window.notchAPI?.onAppSettingsChanged?.((settings) => {
+    settingsAppSettingsRevision += 1;
     settingsAppSettings = settings;
     renderSettingsPanel();
   });
@@ -3075,7 +3082,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }
     currentAudioUrl = URL.createObjectURL(new Blob([result.bytes], { type: result.mimeType }));
     const audio = document.createElement('audio');
-    audio.controls = true;
+    audio.controls = false;
     audio.preload = 'metadata';
     audio.addEventListener('error', () => {
       if (generation !== recordingAudioGeneration || currentAudioElement !== audio || !container.isConnected) return;
@@ -3084,7 +3091,124 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }, { once: true });
     audio.src = currentAudioUrl;
     currentAudioElement = audio;
-    container.replaceChildren(audio);
+    container.replaceChildren(createRecordingPlayer(audio, generation, recording.id, container));
+  }
+
+  function createRecordingPlayer(audio, generation, recordingId, container) {
+    const player = document.createElement('div');
+    player.className = 'recording-player';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'recording-player-toggle';
+    toggle.dataset.playerAction = 'toggle';
+    const current = document.createElement('time');
+    current.className = 'recording-player-current';
+    const seek = document.createElement('input');
+    seek.type = 'range';
+    seek.className = 'recording-player-seek';
+    seek.min = '0'; seek.max = '0'; seek.step = '.1'; seek.value = '0'; seek.disabled = true;
+    pomeLocaleRendererWorkspace.bind(seek, 'ariaLabel', () => pomeLocaleRendererWorkspace.t('workbench.recordings.seek'));
+    const duration = document.createElement('time');
+    duration.className = 'recording-player-duration';
+    const rate = document.createElement('select');
+    rate.className = 'recording-player-rate';
+    pomeLocaleRendererWorkspace.bind(rate, 'ariaLabel', () => pomeLocaleRendererWorkspace.t('workbench.recordings.speed'));
+    for (const value of [.75, 1, 1.25, 1.5, 2]) {
+      const option = document.createElement('option');
+      option.value = String(value); option.textContent = `${value}×`;
+      rate.append(option);
+    }
+    rate.value = String(audio.playbackRate);
+    const mute = document.createElement('button');
+    mute.type = 'button';
+    mute.className = 'recording-player-mute';
+    mute.dataset.playerAction = 'mute';
+    const volume = document.createElement('input');
+    volume.type = 'range';
+    volume.className = 'recording-player-volume';
+    volume.min = '0'; volume.max = '1'; volume.step = '.05'; volume.value = String(audio.volume);
+    pomeLocaleRendererWorkspace.bind(volume, 'ariaLabel', () => pomeLocaleRendererWorkspace.t('workbench.recordings.volume'));
+    const feedback = document.createElement('span');
+    feedback.className = 'recording-player-feedback';
+    feedback.setAttribute('role', 'status');
+    feedback.hidden = true;
+    // Keep the real media element for decoding and the existing pause/release
+    // lifecycle. The controls are a view of its state, never a second clock.
+    audio.hidden = true;
+    player.append(toggle, current, seek, duration, rate, mute, volume, feedback, audio);
+    player.addEventListener('keydown', event => {
+      // Native buttons activate on Space keyup. Keep that default while
+      // preventing the panel's Space-to-collapse shortcut from intercepting it.
+      if ((event.key === ' ' || event.code === 'Space') && event.target.closest('button')) event.stopPropagation();
+    });
+    let scrubbing = false;
+    const isCurrent = () => generation === recordingAudioGeneration && currentAudioElement === audio
+      && selectedRecordingId === recordingId && container.isConnected;
+    const mediaClock = seconds => formatClock((Number.isFinite(seconds) ? Math.max(0, seconds) : 0) * 1000);
+    const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m9 6 9 6-9 6z"/></svg>';
+    const pauseIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6h4v12H7zM14 6h4v12h-4z"/></svg>';
+    function update() {
+      const playableDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+      current.textContent = mediaClock(audio.currentTime);
+      duration.textContent = playableDuration ? mediaClock(playableDuration) : '—:—';
+      seek.disabled = !playableDuration;
+      seek.max = String(playableDuration);
+      if (!scrubbing) seek.value = String(Math.min(playableDuration, audio.currentTime || 0));
+      seek.style.setProperty('--player-progress', `${playableDuration ? Math.min(100, (Number(seek.value) / playableDuration) * 100) : 0}%`);
+      seek.setAttribute('aria-valuetext', `${mediaClock(Number(seek.value))} / ${duration.textContent}`);
+      const playing = !audio.paused && !audio.ended;
+      toggle.innerHTML = playing ? pauseIcon : playIcon;
+      toggle.setAttribute('aria-pressed', String(playing));
+      pomeLocaleRendererWorkspace.bind(toggle, 'ariaLabel', () => pomeLocaleRendererWorkspace.t(playing ? 'copy.pause.8d12fc' : 'copy.play.c33961'));
+      const muted = audio.muted || audio.volume === 0;
+      mute.innerHTML = muted
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 5-5 4H3v6h3l5 4zM16 9l5 6M21 9l-5 6"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 5-5 4H3v6h3l5 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg>';
+      mute.setAttribute('aria-pressed', String(muted));
+      pomeLocaleRendererWorkspace.bind(mute, 'ariaLabel', () => pomeLocaleRendererWorkspace.t(muted ? 'workbench.recordings.unmute' : 'workbench.recordings.mute'));
+      volume.value = String(audio.muted ? 0 : audio.volume);
+      volume.style.setProperty('--player-progress', `${Number(volume.value) * 100}%`);
+      rate.value = String(audio.playbackRate);
+    }
+    toggle.addEventListener('click', async () => {
+      if (!isCurrent()) return;
+      if (!audio.paused) { audio.pause(); return; }
+      feedback.hidden = true;
+      try { await audio.play(); }
+      catch (error) {
+        if (!isCurrent() || error?.name === 'AbortError') return;
+        pomeLocaleRendererWorkspace.bind(feedback, 'textContent', () => pomeLocaleRendererWorkspace.t('copy.audioFileUnavailable.d7ce80'));
+        feedback.hidden = false;
+      }
+      if (isCurrent()) update();
+    });
+    seek.addEventListener('pointerdown', () => { scrubbing = true; });
+    seek.addEventListener('pointerup', () => { scrubbing = false; update(); });
+    seek.addEventListener('pointercancel', () => { scrubbing = false; update(); });
+    seek.addEventListener('blur', () => { scrubbing = false; update(); });
+    seek.addEventListener('input', () => {
+      if (!isCurrent() || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      audio.currentTime = Math.min(audio.duration, Math.max(0, Number(seek.value) || 0));
+      update();
+    });
+    mute.addEventListener('click', () => {
+      if (!isCurrent()) return;
+      if (audio.volume === 0) { audio.volume = 1; audio.muted = false; }
+      else audio.muted = !audio.muted;
+      update();
+    });
+    volume.addEventListener('input', () => {
+      if (!isCurrent()) return;
+      audio.volume = Math.min(1, Math.max(0, Number(volume.value) || 0));
+      audio.muted = audio.volume === 0;
+      update();
+    });
+    rate.addEventListener('change', () => {
+      if (isCurrent() && [.75, 1, 1.25, 1.5, 2].includes(Number(rate.value))) audio.playbackRate = Number(rate.value);
+    });
+    for (const event of ['loadedmetadata', 'durationchange', 'timeupdate', 'play', 'pause', 'ended', 'volumechange', 'ratechange']) audio.addEventListener(event, update);
+    update();
+    return player;
   }
 
   function renderRecordingDetail() {
@@ -3233,9 +3357,11 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     if (!await window.PomeDeleteConfirm.open({titleKey:'copy.deleteRecording.56133d',items:[recording.title],messageKey:'ui.delete.recordingHint'})) return;
     recording = recordings.find(item => item.id === recordingId);
     if (!recording || recording.isDraft || recording.audioPath !== expectedPath) return;
-    if (window.notchAPI && recording.audioPath) {
-      await window.notchAPI.deleteRecording(recording.audioPath).catch(() => false);
+    if (recording.audioPath) {
+      const deleted = await window.notchAPI?.deleteRecording?.(recording.audioPath)?.catch(() => false);
+      if (deleted !== true) { reportRecordingDeleteFailure(() => deleteSingleRecording(recordingId)); return; }
     }
+    if (!recordings.some(item => item.id === recordingId && item.audioPath === expectedPath && !item.isDraft)) return;
     const next = Domain.removeRecordingState(
       recordings,
       recording.id,
@@ -3248,6 +3374,12 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     recordingSelectionAnchor = selectedRecordingId || null;
     persistRecordings();
     renderRecordings();
+    window.NotchUi?.clearError?.('recordings:delete');
+  }
+
+  function reportRecordingDeleteFailure(onRepair = renderRecordings) {
+    window.NotchUi?.showError?.({ messageKey: 'copy.deleteFailedTryAgainLater.782a6b', repairKey: 'workbench.recordings.deleteRepair',
+      diagnostic: 'Recordings: delete_failed', scope: 'recordings:delete', onRepair });
   }
 
   function renderRecordingList() {
@@ -3344,18 +3476,21 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       const current = recordings.find(item => item.id === target.id);
       return current && (current.isDraft || current.audioPath !== target.audioPath);
     })) return;
-    if (window.notchAPI) {
-      await Promise.all(targets.map((recording) => recording.audioPath
-        ? window.notchAPI.deleteRecording(recording.audioPath).catch(() => false)
-        : Promise.resolve(true)));
-    }
-    const targetIds = new Set(targets.map((recording) => recording.id));
-    recordings = recordings.filter((recording) => !targetIds.has(recording.id));
-    recordingSelection.clear();
-    selectedRecordingId = recordings[0] && recordings[0].id;
+    const results = await Promise.all(targets.map(async recording => ({
+      id: recording.id, path: recording.audioPath,
+      ok: !recording.audioPath || (await window.notchAPI?.deleteRecording?.(recording.audioPath)?.catch(() => false)) === true,
+    })));
+    const deleted = new Map(results.filter(result => result.ok).map(result => [result.id, result.path]));
+    const removed = new Set(recordings.filter(recording => deleted.has(recording.id)
+      && deleted.get(recording.id) === recording.audioPath && !recording.isDraft).map(recording => recording.id));
+    recordings = recordings.filter(recording => !removed.has(recording.id));
+    removed.forEach(id => recordingSelection.delete(id));
+    if (removed.has(selectedRecordingId)) selectedRecordingId = recordings[0]?.id || '';
+    if (results.some(result => !result.ok)) reportRecordingDeleteFailure(() => recordingBulkDelete?.click());
     recordingSelectionAnchor = selectedRecordingId || null;
     persistRecordings();
     renderRecordings();
+    if (results.every(result => result.ok)) window.NotchUi?.clearError?.('recordings:delete');
   });
 
   // ============ 当前窗口 ============
@@ -3715,6 +3850,111 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   let pendingCredentialEditId = '';
   let credentialsLoadGeneration = 0;
   const credentialSavesInFlight = new Set();
+  let credentialCreateOrigin = null;
+  let credentialCreateEscapeAt = -Infinity;
+  let credentialCreateGeneration = 0;
+  const credentialCreateDialog = initializeCredentialCreate();
+
+  function initializeCredentialCreate() {
+    const form = credentialService?.closest('.credentials-form-card');
+    const page = form?.closest('.credentials-page');
+    const library = page?.querySelector('.credentials-library');
+    const toolbar = library?.querySelector('.credentials-library-actions');
+    if (!form || !page || !library || !toolbar || !credentialSave) return null;
+    const dialog = document.createElement('dialog');
+    dialog.id = 'credential-create-dialog';
+    dialog.className = 'credential-create-dialog';
+    pomeLocaleRendererWorkspace.bind(dialog, 'ariaLabel', () => pomeLocaleRendererWorkspace.t('copy.addCredential.54aa0a'));
+    const trigger = document.createElement('button');
+    trigger.id = 'credential-new';
+    trigger.className = 'workspace-button compact primary';
+    trigger.type = 'button';
+    trigger.setAttribute('aria-haspopup', 'dialog');
+    trigger.setAttribute('aria-controls', dialog.id);
+    trigger.innerHTML = ADD_ICON;
+    const label = document.createElement('span');
+    pomeLocaleRendererWorkspace.bind(label, 'textContent', () => pomeLocaleRendererWorkspace.t('copy.addCredential.54aa0a'));
+    trigger.append(label);
+    const cancel = document.createElement('button');
+    cancel.id = 'credential-create-cancel';
+    cancel.type = 'button';
+    cancel.className = 'workspace-button';
+    pomeLocaleRendererWorkspace.bind(cancel, 'textContent', () => pomeLocaleRendererWorkspace.t('copy.cancel.2cd0f3'));
+    const actions = document.createElement('div');
+    actions.className = 'credential-create-actions';
+    credentialSave.before(actions);
+    actions.append(cancel, credentialSave);
+    dialog.append(form);
+    page.append(dialog);
+    toolbar.append(trigger);
+    // Existing feedback continues to own its localized message. Mirror only
+    // that safe status text so copying/deleting stays visible with the form closed.
+    if (credentialsNote) {
+      const feedback = document.createElement('p');
+      feedback.className = 'credentials-library-feedback';
+      feedback.id = 'credential-library-feedback';
+      feedback.setAttribute('role', 'status');
+      library.append(feedback);
+      const syncFeedback = () => {
+        feedback.textContent = credentialsNote.textContent;
+        feedback.classList.toggle('error', credentialsNote.classList.contains('error'));
+      };
+      new MutationObserver(syncFeedback).observe(credentialsNote, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+      syncFeedback();
+    }
+    trigger.addEventListener('click', () => {
+      if (dialog.open || document.querySelector('dialog[open]')) return;
+      credentialCreateOrigin = document.activeElement;
+      credentialCreateGeneration += 1;
+      invalidateCredentialEdit();
+      dialog.showModal();
+      credentialService?.focus({ preventScroll: true });
+    });
+    cancel.addEventListener('click', () => closeCredentialCreate());
+    dialog.addEventListener('cancel', event => { event.preventDefault(); closeCredentialCreateOnEscape(); });
+    dialog.addEventListener('close', () => {
+      // Also handle an external/native close without leaving revealed text.
+      if (!dialog.open) { maskCredentialCreate(); credentialCreateGeneration += 1; }
+    });
+    let backdropPressed = false;
+    const onBackdrop = event => {
+      const rect = dialog.getBoundingClientRect();
+      return event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom);
+    };
+    dialog.addEventListener('pointerdown', event => { backdropPressed = onBackdrop(event); });
+    dialog.addEventListener('click', event => { if (backdropPressed && onBackdrop(event)) closeCredentialCreate(); backdropPressed = false; });
+    return dialog;
+  }
+
+  function maskCredentialCreate() {
+    if (!credentialPassword) return;
+    credentialPassword.type = 'password';
+    const reveal = credentialPassword.parentElement?.querySelector('[data-credential-reveal]');
+    if (reveal) {
+      pomeLocaleRendererWorkspace.bind(reveal, 'textContent', () => pomeLocaleRendererWorkspace.t('copy.show.4e1449'));
+      reveal.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  function closeCredentialCreate({ restoreFocus = true } = {}) {
+    if (!credentialCreateDialog?.open) return false;
+    const origin = credentialCreateOrigin;
+    credentialCreateOrigin = null;
+    credentialCreateGeneration += 1;
+    maskCredentialCreate();
+    credentialCreateDialog.close();
+    if (restoreFocus && origin?.isConnected && !origin.closest('[inert]')) origin.focus({ preventScroll: true });
+    return true;
+  }
+
+  function closeCredentialCreateOnEscape() {
+    if (credentialCreateDialog?.open) {
+      credentialCreateEscapeAt = performance.now();
+      return closeCredentialCreate();
+    }
+    // One physical Escape may arrive from both Chromium and main-process IPC.
+    return performance.now() - credentialCreateEscapeAt < 150;
+  }
 
   function invalidateCredentialEdit({ clear = false } = {}) {
     credentialEditGeneration += 1;
@@ -3887,6 +4127,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       account: credentialAccount?.value || '',
       password: credentialPassword?.value || '',
     };
+    const createGeneration = credentialCreateGeneration;
     if (!payload.service.trim() || !payload.account.trim() || !payload.password) {
       if (credentialsNote) {
         pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.enterTheServiceAccountAndPassword.7e80f6")));
@@ -3899,26 +4140,32 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     credentialSave.disabled = false;
     if (!result || !result.ok) {
       if (['credentials_unreadable', 'secure_storage_unavailable'].includes(result?.error)) { await loadCredentials(); return; }
-      if (credentialsNote) {
-        pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.couldnTEncryptAndSaveCheckThat.deaa02")));
-        credentialsNote.classList.add('error');
-      }
+      if (createGeneration === credentialCreateGeneration) reportCredentialFailure(result);
+      else window.NotchUi?.showError?.({ messageKey: 'ui.error.storage',
+        diagnostic: `Credentials: ${result?.error || 'save_failed'}`, scope: 'credentials' });
       return;
     }
-    if (credentialService) credentialService.value = '';
-    if (credentialAccount) credentialAccount.value = '';
-    if (credentialPassword) {
+    const unchangedDraft = createGeneration === credentialCreateGeneration && credentialService?.value === payload.service
+      && credentialAccount?.value === payload.account && credentialPassword?.value === payload.password;
+    if (unchangedDraft && credentialService) credentialService.value = '';
+    if (unchangedDraft && credentialAccount) credentialAccount.value = '';
+    if (unchangedDraft && credentialPassword) {
       credentialPassword.value = '';
       credentialPassword.type = 'password';
       const reveal = credentialPassword.parentElement?.querySelector('[data-credential-reveal]'); if (reveal) { pomeLocaleRendererWorkspace.bind(reveal, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.show.4e1449"))); reveal.setAttribute('aria-pressed','false'); }
       pomeLocaleRendererWorkspace.bind(credentialPassword, "placeholder", () => (pomeLocaleRendererWorkspace.t("copy.encryptedAfterSaving.61e9e1")));
     }
-    if (credentialsNote) {
-      pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.encryptedAndSavedUsingSystemSecureStorage.2208fb")));
+    if (credentialsNote && createGeneration === credentialCreateGeneration) {
+      pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (pomeLocaleRendererWorkspace.t(unchangedDraft
+        ? "copy.encryptedAndSavedUsingSystemSecureStorage.2208fb" : "copy.pressEnterToSave.c1c0ad")));
       credentialsNote.classList.remove('error');
     }
     await loadCredentials();
-    credentialService?.focus();
+    if (createGeneration === credentialCreateGeneration && unchangedDraft) {
+      if (!credentialService?.value && !credentialAccount?.value && !credentialPassword?.value) closeCredentialCreate();
+      else if (credentialsNote) pomeLocaleRendererWorkspace.bind(credentialsNote, 'textContent',
+        () => pomeLocaleRendererWorkspace.t('copy.pressEnterToSave.c1c0ad'));
+    }
   }
 
   credentialSave?.addEventListener('click', saveCredential);
@@ -3931,12 +4178,13 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     input.type = visible ? 'text' : 'password';
     pomeLocaleRendererWorkspace.bind(reveal, "textContent", () => (visible ? pomeLocaleRendererWorkspace.t("copy.hide.145219") : pomeLocaleRendererWorkspace.t("copy.show.4e1449")));
     reveal.setAttribute('aria-pressed', String(visible));
-  });
+  }, true);
   credentialSearch?.addEventListener('input', renderCredentials);
   function pauseCredentialEditing() {
     // Keep an established draft, but late reads/saves may no longer open or
     // clear its editor after the user leaves this page or collapses the panel.
     invalidateCredentialEdit();
+    closeCredentialCreate({ restoreFocus: false });
     document.querySelectorAll('.credential-password-field input').forEach((input) => { input.type = 'password'; });
     document.querySelectorAll('[data-credential-reveal]').forEach((button) => {
       pomeLocaleRendererWorkspace.bind(button, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.show.4e1449")));
@@ -4205,5 +4453,6 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     refreshWindows,
     startRecording,
     isRecordingActive: isRecordingBusy,
+    closeCredentialCreateOnEscape,
   };
 })();

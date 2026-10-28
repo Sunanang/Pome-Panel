@@ -10,6 +10,9 @@
     <title>Pome Panel</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="ai-usage-final.css" />
+    <link rel="stylesheet" href="workbench.css" />
+    <link rel="stylesheet" href="workbench-content.css" />
+    <link rel="stylesheet" href="workbench-tools.css" />
   </head>
   <body>
     <div id="app" class="collapsed" data-dock="top">
@@ -265,10 +268,14 @@
 
           <section id="tab-todo" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-todo" aria-hidden="true" inert>
             <div class="settings-nas-migration-banner" id="todo-migration-banner" data-control-id="migration.state-banner" hidden role="status"><span data-i18n="copy.migratingPleaseWait.7aed12">迁移中，稍候</span></div>
+            <div class="workbench-page-heading todo-page-heading">
+              <div class="todo-page-title"><h2 data-i18n="copy.tasks.52fdbb">待办</h2><span id="todo-board-summary" role="status"></span></div>
+              <button type="button" class="todo-add-fab" id="todo-add-category" aria-label="添加分类" title="添加分类" data-i18n-aria-label="todo.addCategory" data-i18n-title="todo.addCategory" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                <span data-i18n="todo.addCategory">添加分类</span>
+              </button>
+            </div>
             <div class="sections" id="todo-sections"></div>
-            <button type="button" class="todo-add-fab" id="todo-add-category" aria-label="添加分类" title="添加分类" data-i18n-aria-label="todo.addCategory" data-i18n-title="todo.addCategory" hidden>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            </button>
           </section>
 
           <section id="tab-notes" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-notes" aria-hidden="true" inert>
@@ -302,7 +309,8 @@
 
           <section id="tab-links" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-links" aria-hidden="true" inert>
             <div class="links-page">
-              <div class="links-toolbar">
+              <div class="links-toolbar workbench-page-heading">
+                <h2 data-i18n="copy.links.305378">链接</h2>
                 <div class="link-add-wrap">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M9 12h6M12 9v6" /></svg>
                   <input id="link-add" type="text" placeholder="粘贴网址并回车，自动读取标题与分类…" autocomplete="off" spellcheck="false"  data-i18n-placeholder="copy.pasteAUrlAndPressEnterTo.2664d4"/>
@@ -374,28 +382,6 @@
           <section id="tab-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-settings" aria-hidden="true" inert>
             <div class="settings-page" id="settings-page" aria-label="Pome Panel 设置" data-i18n-aria-label="copy.pomePanelSettings.e4a017">
               <div class="settings-column settings-column-primary">
-                <section class="tile settings-card settings-mirror-card">
-                  <img id="settings-mirror-preview" src="assets/mirror-portrait.jpg" alt="当前首页镜子配图" draggable="false"  data-i18n-alt="copy.currentHomeMirrorCover.f642b6"/>
-                  <div>
-                    <span class="tile-label"><span data-i18n="copy.homeMirror.fb5ca2">首页镜子</span></span>
-                    <strong><span data-i18n="copy.coverImage.eab4f8">封面图片</span></strong>
-                    <p><span data-i18n="copy.supportsPngJpgWebpAndHeicChanges.98d93a">支持 PNG、JPG、WebP 与 HEIC，替换后首页立即同步。</span></p>
-                    <button class="workspace-button compact" id="settings-mirror-choose" type="button"><span data-i18n="copy.chooseImage.79b21b">选择图片…</span></button>
-                  </div>
-                </section>
-
-                <section class="tile settings-card settings-api-card">
-                  <div class="settings-card-heading">
-                    <div><strong><span data-i18n="copy.apiConfiguration.0313d1">API 配置</span></strong></div>
-                    <button class="workspace-button compact" id="settings-api-configure" type="button"><span data-i18n="copy.configureOrReplace.d307ca">配置或替换</span></button>
-                  </div>
-                  <div class="settings-status-list">
-                    <div><span><span data-i18n="copy.modelStudioLiveTranscription.c513a8">通义百炼实时转写</span></span><small id="settings-transcription-status" data-state="empty"><span data-i18n="copy.notConfigured.80a57e">未配置</span></small></div>
-                    <div><span><span data-i18n="copy.deepseekSmartNaming.e9f01c">DeepSeek 智能命名</span></span><small id="settings-llm-status" data-state="empty"><span data-i18n="copy.notConfigured.80a57e">未配置</span></small></div>
-                  </div>
-                  <p><span data-i18n="copy.keysAreEncryptedInSystemSecureStorage.54c537">密钥由系统安全存储加密，仅在你主动查看或复制时解密。</span></p>
-                </section>
-
                 <section class="tile settings-card settings-ai-sources-card" id="settings-ai-sources" aria-labelledby="settings-ai-sources-title">
                   <div class="settings-card-heading">
                     <div><strong id="settings-ai-sources-title" data-i18n="settings.ai.title">AI 配置</strong></div>
@@ -433,6 +419,33 @@
                   <p id="ai-sources-status" role="status" aria-live="polite"></p>
                 </section>
 
+                <section class="tile settings-card settings-api-card">
+                  <div class="settings-card-heading">
+                    <div><strong><span data-i18n="copy.apiConfiguration.0313d1">API 配置</span></strong></div>
+                    <button class="workspace-button compact" id="settings-api-configure" type="button"><span data-i18n="copy.configureOrReplace.d307ca">配置或替换</span></button>
+                  </div>
+                  <div class="settings-status-list">
+                    <div><span><span data-i18n="copy.modelStudioLiveTranscription.c513a8">通义百炼实时转写</span></span><small id="settings-transcription-status" data-state="empty"><span data-i18n="copy.notConfigured.80a57e">未配置</span></small></div>
+                    <div><span><span data-i18n="copy.deepseekSmartNaming.e9f01c">DeepSeek 智能命名</span></span><small id="settings-llm-status" data-state="empty"><span data-i18n="copy.notConfigured.80a57e">未配置</span></small></div>
+                  </div>
+                  <p><span data-i18n="copy.keysAreEncryptedInSystemSecureStorage.54c537">密钥由系统安全存储加密，仅在你主动查看或复制时解密。</span></p>
+                </section>
+
+                <section class="tile settings-card settings-mirror-card">
+                  <img id="settings-mirror-preview" src="assets/mirror-portrait.jpg" alt="当前首页镜子配图" draggable="false"  data-i18n-alt="copy.currentHomeMirrorCover.f642b6"/>
+                  <div>
+                    <span class="tile-label"><span data-i18n="copy.homeMirror.fb5ca2">首页镜子</span></span>
+                    <strong><span data-i18n="copy.coverImage.eab4f8">封面图片</span></strong>
+                    <p><span data-i18n="copy.supportsPngJpgWebpAndHeicChanges.98d93a">支持 PNG、JPG、WebP 与 HEIC，替换后首页立即同步。</span></p>
+                    <button class="workspace-button compact" id="settings-mirror-choose" type="button"><span data-i18n="copy.chooseImage.79b21b">选择图片…</span></button>
+                  </div>
+                </section>
+
+
+
+
+
+
                 <div class="settings-nas-dialog-root" id="settings-nas-sync-options" hidden>
                   <section class="transcription-settings-card settings-nas-dialog" id="settings-nas-sync-options-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-nas-sync-options-title" data-control-id="settings.nas-sync.options">
                     <div class="transcription-settings-heading">
@@ -461,98 +474,10 @@
                 </div>
 
 
+
               </div>
 
               <div class="settings-column settings-column-secondary">
-
-
-
-                <section class="tile settings-card settings-nas-sync-card" id="settings-nas-sync-card" data-control-root="nas-sync-settings" data-control-id="settings.nas-sync.tab" aria-labelledby="settings-nas-status-title">
-                  <div class="settings-card-heading">
-                    <div><strong id="settings-nas-status-title"><span data-i18n="copy.nasSync.deb3d4">NAS 同步</span></strong></div>
-                  </div>
-                  <label class="settings-nas-field">
-                    <span><span data-i18n="copy.syncAddress.afea64">同步地址</span></span>
-                    <input id="settings-nas-sync-base-url" type="url" placeholder="https://" autocomplete="off" spellcheck="false" aria-label="NAS 同步地址"  data-i18n-aria-label="copy.nasSyncAddress.2736d6"/>
-                  </label>
-                  <div id="settings-nas-pair-fields">
-                    <p class="settings-nas-lead"><span data-i18n="copy.generateA6DigitPairingCodeOn.da6483">在飞牛网页生成 6 位配对码后绑定。</span></p>
-                    <div class="settings-nas-pair-compose">
-                      <label class="settings-nas-field"><span><span data-i18n="copy.pairingCode.5cfc08">配对码</span></span><input id="settings-nas-pair-code" type="text" inputmode="numeric" maxlength="8" placeholder="6 位数字" autocomplete="off" spellcheck="false" aria-label="配对码" data-control-id="pair.code-input"  data-i18n-placeholder="copy.6Digits.7ce696" data-i18n-aria-label="copy.pairingCode.5cfc08"/></label>
-                      <button class="workspace-button compact primary" id="settings-nas-pair-submit" type="button" data-control-id="pair.submit"><span data-i18n="copy.pair.7c5cc4">配对</span></button>
-                    </div>
-                  </div>
-                  <button class="workspace-button compact settings-nas-quiet settings-nas-reauth" id="settings-nas-pair-reauth" type="button" data-control-id="pair.reauth" hidden><span data-i18n="copy.revokeTokenAndPairAgain.0f6062">吊销令牌并重新配对</span></button>
-                  <p class="settings-nas-sync-hint" id="settings-nas-sync-hint" role="status"></p>
-                  <details class="settings-nas-disclosure" id="settings-nas-advanced">
-                    <summary><span data-i18n="copy.advanced.d6e618">高级</span></summary>
-                    <label class="settings-nas-field"><span><span data-i18n="copy.backupRemoteAddressOptional.dbde5d">备用外网地址（可选）</span></span><input id="settings-nas-endpoint-url" type="url" placeholder="https://" autocomplete="off" spellcheck="false" aria-label="备用外网地址" data-control-id="endpoint.baseUrl"  data-i18n-aria-label="copy.backupRemoteAddress.9a0b0d"/></label>
-                    <div class="settings-nas-backup-actions"><button class="workspace-button compact" id="settings-nas-endpoint-add" type="button"><span data-i18n="copy.save.a3030b">保存</span></button></div>
-                    <div id="settings-nas-connection-policies"></div>
-                    <p class="settings-nas-sync-hint" id="settings-nas-endpoint-hint" role="status"></p>
-                  </details>
-                  <p class="settings-nas-sync-hint settings-nas-device-port-guide" id="settings-nas-device-port-guide" role="status" data-kind="warning" hidden><span data-i18n="copy.ifGatewayBearerAccessIsUnavailableAdd.f7bdd3">统一网关 Bearer 不可用时，可添加「设备同步端口」endpoint（与网关可并存）。端口不写死，请填写 FPK 展示的完整 URL。</span></p>
-                  <p class="settings-nas-sync-hint settings-nas-http-warning" id="settings-nas-http-warning" role="status" data-control-id="settings.nas-sync.http-warning" data-kind="warning" hidden><span data-i18n="copy.insecureConnectionHttpEndpointEnabledDeviceTokens.90ac8c">不安全连接：已启用明文 HTTP endpoint，设备令牌与待办可能被窃听或篡改</span></p>
-                  <div class="settings-nas-sync-line">
-                    <small id="settings-nas-sync-status" data-state="empty" data-control-id="settings.nas-sync.status-bar"><span data-i18n="copy.notPaired.af18b2">未配对</span></small>
-                    <div class="settings-nas-status-meta" id="settings-nas-status-meta" aria-live="polite" hidden>
-                      <span id="settings-nas-last-sync-wrap" hidden><span data-i18n="copy.lastSync.7a5058">上次同步</span> <time id="settings-nas-last-sync">—</time></span>
-                      <span id="settings-nas-pending-wrap" hidden><span data-i18n="copy.pending.9dac30">待传</span> <strong id="settings-nas-outbox-count">0</strong></span>
-                    </div>
-                    <button class="workspace-button compact primary" id="settings-nas-sync-open" type="button" data-control-id="settings.nas-sync.open" disabled><span data-i18n="copy.sync.dcfe51">同步</span></button>
-                  </div>
-                  <p class="settings-nas-sync-hint" id="settings-nas-status-hint" role="status"></p>
-                  <div class="settings-nas-migration-banner" id="settings-nas-migration-banner" hidden role="status"><span data-i18n="copy.migratingPleaseWait.7aed12">迁移中，稍候</span></div>
-                  <div class="settings-nas-migration-actions" id="settings-nas-migration-actions" hidden>
-                    <button class="workspace-button compact" id="settings-nas-migration-start" type="button" hidden><span data-i18n="copy.startMigration.9440e0">开始迁移</span></button>
-                    <button class="workspace-button compact" id="settings-nas-migration-retry" type="button" data-control-id="migration.failed.retry" hidden><span data-i18n="copy.retryMigration.41c0ab">重试迁移</span></button>
-                    <button class="workspace-button compact settings-nas-quiet" id="settings-nas-migration-restore" type="button" data-control-id="migration.failed.restore" hidden><span data-i18n="copy.restoreDataBackup.8838f6">恢复资料备份</span></button>
-                  </div>
-                  <div class="settings-nas-recovery-actions">
-                    <button id="settings-nas-recovery" class="workspace-button compact" type="button" hidden><span data-i18n="copy.syncPausedPreviewReplacingNasDataWith.8a18cb">同步已暂停 · 预览本机覆盖 NAS</span></button>
-                    <button id="settings-nas-rollback" class="workspace-button compact" type="button" hidden><span data-i18n="copy.restoreTheLatestNasSnapshot.01090d">回退最近 NAS 快照</span></button>
-                  </div>
-                  <p id="settings-nas-secret-hint" class="settings-nas-sync-hint" hidden><span data-i18n="copy.encryptedOnThisDeviceNasSyncPaused.386405">本机加密保存；NAS 同步已暂停。普通资料备份不包含密钥。</span></p>
-                  <details class="settings-nas-disclosure" id="settings-nas-details">
-                    <summary><span data-i18n="copy.details.979a33">详情</span></summary>
-                    <div id="settings-nas-content-results" aria-live="polite"></div>
-                    <div class="settings-nas-sync-actions" id="settings-nas-sync-actions">
-                      <button class="workspace-button compact" id="settings-nas-sync-retry" type="button" data-control-id="settings.nas-sync.retry" hidden><span data-i18n="copy.retrySync.87d53f">重试同步</span></button>
-                      <button class="workspace-button compact settings-nas-quiet" id="settings-nas-export-backup" type="button" data-control-id="settings.nas-sync.export-backup"><span data-i18n="copy.exportDataBackup.652e8a">导出资料备份</span></button>
-                      <button class="workspace-button compact settings-nas-quiet" id="settings-nas-restore-backup" type="button" data-control-id="settings.nas-sync.restore-backup"><span data-i18n="copy.restoreDataBackup.8838f6">恢复资料备份</span></button>
-                    </div>
-                  </details>
-                </section>
-
-                <section class="tile settings-card settings-display-card settings-features-card settings-home-modules-card">
-                  <div class="settings-card-heading">
-                    <div><strong data-i18n="settings.display.title">显示</strong></div>
-                  </div>
-                  <div class="settings-display-section-heading"><strong data-i18n="copy.workspace.379798">工作区</strong><small data-i18n="copy.homeAndSettingsAreAlwaysVisible.708298">首页与设置始终显示</small></div>
-                  <div class="settings-feature-grid" id="settings-feature-list">
-                    <label><span><b><span data-i18n="copy.tasks.52fdbb">待办</span></b><small><span data-i18n="copy.fourTaskGroups.0cde21">四象限任务</span></small></span><input type="checkbox" data-settings-feature="todo" aria-label="显示待办"  data-i18n-aria-label="copy.showTasks.c9c242"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.notes.b778e3">笔记</span></b><small><span data-i18n="copy.quickNotesLibrary.4e60a6">随笔与资料库</span></small></span><input type="checkbox" data-settings-feature="notes" aria-label="显示笔记"  data-i18n-aria-label="copy.showNotes.b9bb29"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.links.305378">链接</span></b><small><span data-i18n="copy.savedLinksGroups.2e6794">收藏与分组</span></small></span><input type="checkbox" data-settings-feature="links" aria-label="显示链接"  data-i18n-aria-label="copy.showLinks.2c6364"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.recordings.4b6ef7">录制</span></b><small><span data-i18n="copy.recordingTranscription.376486">录音与转写</span></small></span><input type="checkbox" data-settings-feature="recordings" aria-label="显示录制"  data-i18n-aria-label="copy.showRecordings.6788bf"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.credentials.f67bca">密钥</span></b><small><span data-i18n="copy.localSecureStorage.fabbb7">本机安全存储</span></small></span><input type="checkbox" data-settings-feature="credentials" aria-label="显示密钥"  data-i18n-aria-label="copy.showCredentials.6b88fb"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.clipboard.8c10e2">剪贴板</span></b><small><span data-i18n="copy.offByDefault.0ab592">默认关闭</span></small></span><input type="checkbox" data-settings-feature="clip" aria-label="显示剪贴板"  data-i18n-aria-label="copy.showClipboard.a9e466"/><i aria-hidden="true"></i></label>
-                  </div>
-                  <div class="settings-display-section-heading settings-display-home-heading"><strong data-i18n="copy.home.203c08">首页</strong><small id="settings-home-module-status" data-i18n="copy.hiddenSpacesRefillAutomaticallyKeepAtLeast.be4674">隐藏后自动填充 · 至少保留一个</small></div>
-                  <div class="settings-home-module-grid" id="settings-home-module-list">
-                    <label><span><b><span data-i18n="copy.music.db9514">音乐</span></b><small><span data-i18n="copy.playbackStatusControls.848fd3">播放状态与控制</span></small></span><input type="checkbox" data-settings-home-module="music" aria-label="显示音乐"  data-i18n-aria-label="copy.showMusic.ca02c9"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.focusTimer.e7d0e7">番茄钟</span></b><small><span data-i18n="copy.focusTimer.9a86da">专注计时</span></small></span><input type="checkbox" data-settings-home-module="pomodoro" aria-label="显示番茄钟"  data-i18n-aria-label="copy.showFocusTimer.982b66"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.aiQuota.faa20c">AI 额度</span></b><small data-i18n="settings.display.allQuotas">各家额度</small></span><input type="checkbox" data-settings-home-module="cursor" aria-label="显示 AI 额度"  data-i18n-aria-label="copy.showAiQuota.95ec9f"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.quickRecording.bd31b8">快速录音</span></b><small data-home-module-setting-note="recorder"><span data-i18n="copy.recordingTranscription.376486">录音与转写</span></small></span><input type="checkbox" data-settings-home-module="recorder" aria-label="显示快速录音"  data-i18n-aria-label="copy.showQuickRecording.5e357a"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.aiActivity.d6dcbe">AI 完成</span></b><small><span data-i18n="copy.taskEventsUnreadReminders.d7445e">完成记录与未读提醒</span></small></span><input type="checkbox" data-settings-home-module="inbox" aria-label="显示 AI 完成"  data-i18n-aria-label="copy.showAiActivity.4cf809"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.currentWindows.8dfcdd">当前窗口</span></b><small><span data-i18n="copy.quickWindowSwitching.87a581">窗口快速切换</span></small></span><input type="checkbox" data-settings-home-module="windows" aria-label="显示当前窗口"  data-i18n-aria-label="copy.showCurrentWindows.bf8373"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.mirror.e1a4f5">镜子</span></b><small><span data-i18n="copy.cameraCover.9f7a35">相机与封面</span></small></span><input type="checkbox" data-settings-home-module="mirror" aria-label="显示镜子"  data-i18n-aria-label="copy.showMirror.c3a2f9"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.quickNote.990572">随笔记</span></b><small><span data-i18n="copy.writeQuicklyOnHome.500789">首页快速记录</span></small></span><input type="checkbox" data-settings-home-module="note" aria-label="显示随笔记"  data-i18n-aria-label="copy.showQuickNote.d789a7"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.commands.b85789">常用指令</span></b><small><span data-i18n="copy.quickAccessToPrompts.4b0162">提示词快捷入口</span></small></span><input type="checkbox" data-settings-home-module="commands" aria-label="显示常用指令"  data-i18n-aria-label="copy.showCommands.b9dc81"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.sunriseSunset.224064">日出日落</span></b><small><span data-i18n="copy.dawnGoldenHourSunset.622918">天亮、黄金时刻与日落</span></small></span><input type="checkbox" data-settings-home-module="sun" aria-label="显示日出日落"  data-i18n-aria-label="copy.showSunriseSunset.6b970f"/><i aria-hidden="true"></i></label>
-                    <label><span><b><span data-i18n="copy.almanac.7c2e11">黄历</span></b><small><span data-i18n="copy.lunarYiJiJieQi.3a91d0">农历、宜忌与节气</span></small></span><input type="checkbox" data-settings-home-module="almanac" aria-label="显示黄历" data-i18n-aria-label="copy.showAlmanac.6f4b2c"/><i aria-hidden="true"></i></label>
-                  </div>
-                </section>
-
                 <section class="tile settings-card settings-device-card">
                   <div class="settings-card-heading">
                     <div><strong><span data-i18n="copy.deviceActivation.d32e63">本机与唤出</span></strong></div>
@@ -624,6 +549,101 @@
                   </label>
                   <p class="settings-inline-note" id="settings-inline-note" role="status" aria-live="polite"></p>
                 </section>
+
+                <section class="tile settings-card settings-display-card settings-features-card settings-home-modules-card">
+                  <div class="settings-card-heading">
+                    <div><strong data-i18n="settings.display.title">显示</strong></div>
+                  </div>
+                  <div class="settings-display-section-heading"><strong data-i18n="copy.workspace.379798">工作区</strong><small data-i18n="copy.homeAndSettingsAreAlwaysVisible.708298">首页与设置始终显示</small></div>
+                  <div class="settings-feature-grid" id="settings-feature-list">
+                    <label><span><b><span data-i18n="copy.tasks.52fdbb">待办</span></b><small><span data-i18n="copy.fourTaskGroups.0cde21">四象限任务</span></small></span><input type="checkbox" data-settings-feature="todo" aria-label="显示待办"  data-i18n-aria-label="copy.showTasks.c9c242"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.notes.b778e3">笔记</span></b><small><span data-i18n="copy.quickNotesLibrary.4e60a6">随笔与资料库</span></small></span><input type="checkbox" data-settings-feature="notes" aria-label="显示笔记"  data-i18n-aria-label="copy.showNotes.b9bb29"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.links.305378">链接</span></b><small><span data-i18n="copy.savedLinksGroups.2e6794">收藏与分组</span></small></span><input type="checkbox" data-settings-feature="links" aria-label="显示链接"  data-i18n-aria-label="copy.showLinks.2c6364"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.recordings.4b6ef7">录制</span></b><small><span data-i18n="copy.recordingTranscription.376486">录音与转写</span></small></span><input type="checkbox" data-settings-feature="recordings" aria-label="显示录制"  data-i18n-aria-label="copy.showRecordings.6788bf"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.credentials.f67bca">密钥</span></b><small><span data-i18n="copy.localSecureStorage.fabbb7">本机安全存储</span></small></span><input type="checkbox" data-settings-feature="credentials" aria-label="显示密钥"  data-i18n-aria-label="copy.showCredentials.6b88fb"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.clipboard.8c10e2">剪贴板</span></b><small><span data-i18n="copy.offByDefault.0ab592">默认关闭</span></small></span><input type="checkbox" data-settings-feature="clip" aria-label="显示剪贴板"  data-i18n-aria-label="copy.showClipboard.a9e466"/><i aria-hidden="true"></i></label>
+                  </div>
+                  <div class="settings-display-section-heading settings-display-home-heading"><strong data-i18n="copy.home.203c08">首页</strong><small id="settings-home-module-status" data-i18n="copy.hiddenSpacesRefillAutomaticallyKeepAtLeast.be4674">隐藏后自动填充 · 至少保留一个</small></div>
+                  <div class="settings-home-module-grid" id="settings-home-module-list">
+                    <label><span><b><span data-i18n="copy.music.db9514">音乐</span></b><small><span data-i18n="copy.playbackStatusControls.848fd3">播放状态与控制</span></small></span><input type="checkbox" data-settings-home-module="music" aria-label="显示音乐"  data-i18n-aria-label="copy.showMusic.ca02c9"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.focusTimer.e7d0e7">番茄钟</span></b><small><span data-i18n="copy.focusTimer.9a86da">专注计时</span></small></span><input type="checkbox" data-settings-home-module="pomodoro" aria-label="显示番茄钟"  data-i18n-aria-label="copy.showFocusTimer.982b66"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.aiQuota.faa20c">AI 额度</span></b><small data-i18n="settings.display.allQuotas">各家额度</small></span><input type="checkbox" data-settings-home-module="cursor" aria-label="显示 AI 额度"  data-i18n-aria-label="copy.showAiQuota.95ec9f"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.quickRecording.bd31b8">快速录音</span></b><small data-home-module-setting-note="recorder"><span data-i18n="copy.recordingTranscription.376486">录音与转写</span></small></span><input type="checkbox" data-settings-home-module="recorder" aria-label="显示快速录音"  data-i18n-aria-label="copy.showQuickRecording.5e357a"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.aiActivity.d6dcbe">AI 完成</span></b><small><span data-i18n="copy.taskEventsUnreadReminders.d7445e">完成记录与未读提醒</span></small></span><input type="checkbox" data-settings-home-module="inbox" aria-label="显示 AI 完成"  data-i18n-aria-label="copy.showAiActivity.4cf809"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.currentWindows.8dfcdd">当前窗口</span></b><small><span data-i18n="copy.quickWindowSwitching.87a581">窗口快速切换</span></small></span><input type="checkbox" data-settings-home-module="windows" aria-label="显示当前窗口"  data-i18n-aria-label="copy.showCurrentWindows.bf8373"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.mirror.e1a4f5">镜子</span></b><small><span data-i18n="copy.cameraCover.9f7a35">相机与封面</span></small></span><input type="checkbox" data-settings-home-module="mirror" aria-label="显示镜子"  data-i18n-aria-label="copy.showMirror.c3a2f9"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.quickNote.990572">随笔记</span></b><small><span data-i18n="copy.writeQuicklyOnHome.500789">首页快速记录</span></small></span><input type="checkbox" data-settings-home-module="note" aria-label="显示随笔记"  data-i18n-aria-label="copy.showQuickNote.d789a7"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.commands.b85789">常用指令</span></b><small><span data-i18n="copy.quickAccessToPrompts.4b0162">提示词快捷入口</span></small></span><input type="checkbox" data-settings-home-module="commands" aria-label="显示常用指令"  data-i18n-aria-label="copy.showCommands.b9dc81"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.sunriseSunset.224064">日出日落</span></b><small><span data-i18n="copy.dawnGoldenHourSunset.622918">天亮、黄金时刻与日落</span></small></span><input type="checkbox" data-settings-home-module="sun" aria-label="显示日出日落"  data-i18n-aria-label="copy.showSunriseSunset.6b970f"/><i aria-hidden="true"></i></label>
+                    <label><span><b><span data-i18n="copy.almanac.7c2e11">黄历</span></b><small><span data-i18n="copy.lunarYiJiJieQi.3a91d0">农历、宜忌与节气</span></small></span><input type="checkbox" data-settings-home-module="almanac" aria-label="显示黄历" data-i18n-aria-label="copy.showAlmanac.6f4b2c"/><i aria-hidden="true"></i></label>
+                  </div>
+                </section>
+
+                <section class="tile settings-card settings-nas-sync-card" id="settings-nas-sync-card" data-control-root="nas-sync-settings" data-control-id="settings.nas-sync.tab" aria-labelledby="settings-nas-status-title">
+                  <div class="settings-card-heading">
+                    <div><strong id="settings-nas-status-title"><span data-i18n="copy.nasSync.deb3d4">NAS 同步</span></strong></div>
+                  </div>
+                  <label class="settings-nas-field">
+                    <span><span data-i18n="copy.syncAddress.afea64">同步地址</span></span>
+                    <input id="settings-nas-sync-base-url" type="url" placeholder="https://" autocomplete="off" spellcheck="false" aria-label="NAS 同步地址"  data-i18n-aria-label="copy.nasSyncAddress.2736d6"/>
+                  </label>
+                  <div id="settings-nas-pair-fields">
+                    <p class="settings-nas-lead"><span data-i18n="copy.generateA6DigitPairingCodeOn.da6483">在飞牛网页生成 6 位配对码后绑定。</span></p>
+                    <div class="settings-nas-pair-compose">
+                      <label class="settings-nas-field"><span><span data-i18n="copy.pairingCode.5cfc08">配对码</span></span><input id="settings-nas-pair-code" type="text" inputmode="numeric" maxlength="8" placeholder="6 位数字" autocomplete="off" spellcheck="false" aria-label="配对码" data-control-id="pair.code-input"  data-i18n-placeholder="copy.6Digits.7ce696" data-i18n-aria-label="copy.pairingCode.5cfc08"/></label>
+                      <button class="workspace-button compact primary" id="settings-nas-pair-submit" type="button" data-control-id="pair.submit"><span data-i18n="copy.pair.7c5cc4">配对</span></button>
+                    </div>
+                  </div>
+                  <button class="workspace-button compact settings-nas-quiet settings-nas-reauth" id="settings-nas-pair-reauth" type="button" data-control-id="pair.reauth" hidden><span data-i18n="copy.revokeTokenAndPairAgain.0f6062">吊销令牌并重新配对</span></button>
+                  <p class="settings-nas-sync-hint" id="settings-nas-sync-hint" role="status"></p>
+                  <details class="settings-nas-disclosure" id="settings-nas-advanced">
+                    <summary><span data-i18n="copy.advanced.d6e618">高级</span></summary>
+                    <label class="settings-nas-field"><span><span data-i18n="copy.backupRemoteAddressOptional.dbde5d">备用外网地址（可选）</span></span><input id="settings-nas-endpoint-url" type="url" placeholder="https://" autocomplete="off" spellcheck="false" aria-label="备用外网地址" data-control-id="endpoint.baseUrl"  data-i18n-aria-label="copy.backupRemoteAddress.9a0b0d"/></label>
+                    <div class="settings-nas-backup-actions"><button class="workspace-button compact" id="settings-nas-endpoint-add" type="button"><span data-i18n="copy.save.a3030b">保存</span></button></div>
+                    <div id="settings-nas-connection-policies"></div>
+                    <p class="settings-nas-sync-hint" id="settings-nas-endpoint-hint" role="status"></p>
+                  </details>
+                  <p class="settings-nas-sync-hint settings-nas-device-port-guide" id="settings-nas-device-port-guide" role="status" data-kind="warning" hidden><span data-i18n="copy.ifGatewayBearerAccessIsUnavailableAdd.f7bdd3">统一网关 Bearer 不可用时，可添加「设备同步端口」endpoint（与网关可并存）。端口不写死，请填写 FPK 展示的完整 URL。</span></p>
+                  <p class="settings-nas-sync-hint settings-nas-http-warning" id="settings-nas-http-warning" role="status" data-control-id="settings.nas-sync.http-warning" data-kind="warning" hidden><span data-i18n="copy.insecureConnectionHttpEndpointEnabledDeviceTokens.90ac8c">不安全连接：已启用明文 HTTP endpoint，设备令牌与待办可能被窃听或篡改</span></p>
+                  <div class="settings-nas-sync-line">
+                    <small id="settings-nas-sync-status" data-state="empty" data-control-id="settings.nas-sync.status-bar"><span data-i18n="copy.notPaired.af18b2">未配对</span></small>
+                    <div class="settings-nas-status-meta" id="settings-nas-status-meta" aria-live="polite" hidden>
+                      <span id="settings-nas-last-sync-wrap" hidden><span data-i18n="copy.lastSync.7a5058">上次同步</span> <time id="settings-nas-last-sync">—</time></span>
+                      <span id="settings-nas-pending-wrap" hidden><span data-i18n="copy.pending.9dac30">待传</span> <strong id="settings-nas-outbox-count">0</strong></span>
+                    </div>
+                    <button class="workspace-button compact primary" id="settings-nas-sync-open" type="button" data-control-id="settings.nas-sync.open" disabled><span data-i18n="copy.sync.dcfe51">同步</span></button>
+                  </div>
+                  <p class="settings-nas-sync-hint" id="settings-nas-status-hint" role="status"></p>
+                  <div class="settings-nas-migration-banner" id="settings-nas-migration-banner" hidden role="status"><span data-i18n="copy.migratingPleaseWait.7aed12">迁移中，稍候</span></div>
+                  <div class="settings-nas-migration-actions" id="settings-nas-migration-actions" hidden>
+                    <button class="workspace-button compact" id="settings-nas-migration-start" type="button" hidden><span data-i18n="copy.startMigration.9440e0">开始迁移</span></button>
+                    <button class="workspace-button compact" id="settings-nas-migration-retry" type="button" data-control-id="migration.failed.retry" hidden><span data-i18n="copy.retryMigration.41c0ab">重试迁移</span></button>
+                    <button class="workspace-button compact settings-nas-quiet" id="settings-nas-migration-restore" type="button" data-control-id="migration.failed.restore" hidden><span data-i18n="copy.restoreDataBackup.8838f6">恢复资料备份</span></button>
+                  </div>
+                  <div class="settings-nas-recovery-actions">
+                    <button id="settings-nas-recovery" class="workspace-button compact" type="button" hidden><span data-i18n="copy.syncPausedPreviewReplacingNasDataWith.8a18cb">同步已暂停 · 预览本机覆盖 NAS</span></button>
+                    <button id="settings-nas-rollback" class="workspace-button compact" type="button" hidden><span data-i18n="copy.restoreTheLatestNasSnapshot.01090d">回退最近 NAS 快照</span></button>
+                  </div>
+                  <p id="settings-nas-secret-hint" class="settings-nas-sync-hint" hidden><span data-i18n="copy.encryptedOnThisDeviceNasSyncPaused.386405">本机加密保存；NAS 同步已暂停。普通资料备份不包含密钥。</span></p>
+                  <details class="settings-nas-disclosure" id="settings-nas-details">
+                    <summary><span data-i18n="copy.details.979a33">详情</span></summary>
+                    <div id="settings-nas-content-results" aria-live="polite"></div>
+                    <div class="settings-nas-sync-actions" id="settings-nas-sync-actions">
+                      <button class="workspace-button compact" id="settings-nas-sync-retry" type="button" data-control-id="settings.nas-sync.retry" hidden><span data-i18n="copy.retrySync.87d53f">重试同步</span></button>
+                      <button class="workspace-button compact settings-nas-quiet" id="settings-nas-export-backup" type="button" data-control-id="settings.nas-sync.export-backup"><span data-i18n="copy.exportDataBackup.652e8a">导出资料备份</span></button>
+                      <button class="workspace-button compact settings-nas-quiet" id="settings-nas-restore-backup" type="button" data-control-id="settings.nas-sync.restore-backup"><span data-i18n="copy.restoreDataBackup.8838f6">恢复资料备份</span></button>
+                    </div>
+                  </details>
+                </section>
+
+
+
+
+
+
+
+
+
               </div>
             </div>
           </section>

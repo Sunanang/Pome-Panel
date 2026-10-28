@@ -4017,6 +4017,14 @@ body.panel-dragging #app.collapsed .notch {
   0%, 100% { box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 0 0 2px rgba(255,95,87,.16); }
   50% { box-shadow: inset 0 0 0 1px rgba(255,255,255,.3), 0 0 0 3px rgba(255,95,87,.3); }
 }
+.todo-item.is-reminder-focus {
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 2px rgba(67, 140, 255, .55),
+    0 10px 28px rgba(0, 0, 0, .28);
+  background: rgba(67, 140, 255, .08);
+  transition: box-shadow 180ms var(--ease), background 180ms var(--ease);
+}
 .todo-item.done .todo-battery { opacity: .35; }
 .multi-selected { box-shadow: inset 0 0 0 1.5px rgba(126,169,255,.78), 0 8px 22px rgba(39,76,150,.15) !important; background: rgba(95,139,230,.13) !important; }
 .bulk-delete {

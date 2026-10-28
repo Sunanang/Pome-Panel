@@ -25,6 +25,8 @@
   "copy.moreTasksCompleted.1ac38a": "{arg1}개 이상의 작업이 완료되었습니다.",
   "copy.taskDueSoon.52facb": "작업이 곧 마감됩니다",
   "copy.dueWithin1Hour.955b14": "1시간 이내 마감",
+  "copy.taskOverdue.d31df8": "기한이 지난 할 일",
+  "copy.deadlineHasPassed.37e6a6": "마감 시간이 지났습니다",
   "copy.focusTimer.e7d0e7": "포커스 타이머",
   "copy.focusSessionComplete.66ee96": "집중 세션 완료",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "{arg1}분 집중 세션이 종료되었습니다",
@@ -1338,7 +1340,7 @@
   "settings.display.title": "디스플레이",
   "settings.display.allQuotas": "공급자 할당량",
   "settings.notifications.topBubble": "인기 풍선 알림",
-  "settings.notifications.topBubbleHint": "AI 완료, 대기 메시지, 예정된 할 일을 상단에 표시",
+  "settings.notifications.topBubbleHint": "AI 완료·대기, 할 일 마감 임박 및 기한 후 보완 알림을 상단에 표시",
   "settings.notifications.topBubbleEnabled": "인기 풍선 알림이 활성화되었습니다.",
   "settings.notifications.topBubbleDisabled": "주요 풍선 알림이 비활성화되었습니다.",
   "settings.notifications.topBubbleFailed": "상단 풍선 설정을 변경할 수 없습니다.",
@@ -1537,5 +1539,12 @@
   "ui.delete.categoryHint": "이 카테고리와 카테고리 안의 할 일 {count}개가 삭제됩니다.",
   "ui.delete.todoTitle": "할 일 삭제",
   "ui.delete.credentialTitle": "자격 증명 삭제",
-  "ui.delete.groupTitle": "링크 그룹 삭제"
+  "ui.delete.groupTitle": "링크 그룹 삭제",
+  "wb.todo.summary": "미완료 {pending}개 · 전체 {total}개",
+  "workbench.recordings.seek": "재생 위치",
+  "workbench.recordings.mute": "음소거",
+  "workbench.recordings.unmute": "음소거 해제",
+  "workbench.recordings.volume": "음량",
+  "workbench.recordings.speed": "재생 속도",
+  "workbench.recordings.deleteRepair": "오디오 파일이 사용 중인지와 폴더 권한을 확인한 후 다시 시도하세요."
 }

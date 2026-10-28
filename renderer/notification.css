@@ -121,6 +121,7 @@ button { font: inherit; color: inherit; border: 0; padding: 0; cursor: pointer; 
 }
 .is-visible .notification-status { transform: scale(1); opacity: 1; }
 [data-status="due"] .notification-status { background: var(--nb-accent-todo); }
+[data-status="overdue"] .notification-status { background: #FF5F57; }
 [data-status="failed"] .notification-status { background: var(--nb-accent-error); color: #fff; }
 [data-status="awaiting"] .notification-status { background: var(--nb-accent-ask); color: #fff; }
 .notification-status svg { width: var(--nb-badge-glyph); height: var(--nb-badge-glyph); }

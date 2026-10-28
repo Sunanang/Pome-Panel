@@ -955,16 +955,20 @@ function clearTodoReminderTimer() {
   todoReminderTimer = null;
 }
 
-function fireTodoReminder(todo) {
+function fireTodoReminder(todo, kind = 'due') {
   const deadline = Date.parse(String(todo.deadline || ''));
+  const overdue = kind === 'expired-missed';
   const notification = {
-    eventId: `todo-${todo.id}-${deadline}`,
+    eventId: `todo-${todo.id}-${deadline}-${overdue ? 'overdue' : 'due'}`,
     source: 'todo',
-    status: 'due',
+    status: overdue ? 'overdue' : 'due',
     taskId: String(todo.id || ''),
-    title: String(todo.text || '').trim() || PomeI18n.t("copy.taskDueSoon.52facb"),
+    title: String(todo.text || '').trim()
+      || (overdue ? PomeI18n.t('copy.taskOverdue.d31df8') : PomeI18n.t('copy.taskDueSoon.52facb')),
     project: '',
-    detail: PomeI18n.t("copy.dueWithin1Hour.955b14"),
+    detail: overdue
+      ? PomeI18n.t('copy.deadlineHasPassed.37e6a6')
+      : PomeI18n.t('copy.dueWithin1Hour.955b14'),
     deadline,
     completedAt: Date.now(),
   };
@@ -984,9 +988,9 @@ function scheduleNextTodoReminder() {
   let nextDelay = Infinity;
   for (const todo of scheduledTodoReminders) {
     const status = todoReminderState(todo, now, TODO_REMINDER_LEAD_MS);
-    if (status.state === 'due') {
+    if (status.state === 'due' || status.state === 'expired-missed') {
       todo.remindedAt = now;
-      fireTodoReminder(todo);
+      fireTodoReminder(todo, status.state);
       continue;
     }
     if (status.state === 'scheduled') nextDelay = Math.min(nextDelay, status.delayMs);
@@ -1086,7 +1090,9 @@ function createTaskNotificationWindow() {
   installLocalWebContentsGuards(notificationWindow.webContents);
 
   const targetWindow = notificationWindow;
-  notificationWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+  // floating 与主窗同级；relativeLevel 1 让气泡仍叠在面板之上。
+  // 不用 screen-saver：该级会压住系统截图选区，且常被截图工具排除。
+  notificationWindow.setAlwaysOnTop(true, 'floating', 1);
   if (process.platform === 'darwin') notificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   notificationWindow.setIgnoreMouseEvents(false);
   notificationWindow.loadFile(path.join(__dirname, 'renderer', 'notification.html'));
@@ -2768,7 +2774,27 @@ async function openManusTaskRecord(record) {
 
 async function activateActiveTaskNotification(eventId = null) {
   const notification = activeTaskNotification;
-  if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return { ok: false, message: PomeI18n.t("copy.thisTaskReminderIsNoLongerAvailable.f287da") };
+  if (!notification || (eventId && notification.eventId !== eventId)) {
+    return { ok: false, message: PomeI18n.t('copy.thisTaskReminderIsNoLongerAvailable.f287da') };
+  }
+  // Todo due/overdue bubbles open the Tasks tab instead of an external app.
+  if (notification.source === 'todo') {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return { ok: false, message: PomeI18n.t('copy.thisTaskReminderIsNoLongerAvailable.f287da') };
+    }
+    notification.activationPending = true;
+    setTaskNotificationPaused(true);
+    const deadlineMs = Number(notification.deadline);
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.webContents.send('app:open-todo', {
+      id: String(notification.taskId || ''),
+      deadline: Number.isFinite(deadlineMs) && deadlineMs > 0
+        ? new Date(deadlineMs).toISOString()
+        : '',
+    });
+    beginTaskNotificationDismiss();
+    return { ok: true };
+  }
   // Attention return still needs focus; completion can launch the source app without it.
   if (notification.attentionKey && !platformCapabilities.features.windowFocus) {
     return { ok: false, message: PomeI18n.t("copy.canTOpenTheSourceAppRight.3c21d3") };
@@ -5544,7 +5570,7 @@ function ensureRecordingsDir() {
   }
 }
 
-function getSafeRecordingPath(value) {
+function getSafeRecordingPath(value, { allowMissing = false } = {}) {
   if (typeof value !== 'string' || !value.trim()) return null;
   const directory = path.resolve(getRecordingsDir());
   const resolvedPath = path.isAbsolute(value)
@@ -5556,8 +5582,10 @@ function getSafeRecordingPath(value) {
   }
   try {
     const directoryStat = fs.lstatSync(directory);
-    const fileStat = fs.lstatSync(resolvedPath);
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return null;
+    let fileStat;
+    try { fileStat = fs.lstatSync(resolvedPath); }
+    catch (error) { return allowMissing && error.code === 'ENOENT' ? resolvedPath : null; }
     if (fileStat.isSymbolicLink() || !fileStat.isFile()) return null;
     return resolvedPath;
   } catch (error) {
@@ -5603,13 +5631,13 @@ ipcMain.handle('recordings:read', async (event, audioPath) => {
 });
 
 ipcMain.handle('recordings:delete', async (event, audioPath) => {
-  const safePath = getSafeRecordingPath(audioPath);
+  const safePath = getSafeRecordingPath(audioPath, { allowMissing: true });
   if (!safePath) return false;
   try {
     await fs.promises.unlink(safePath);
     return true;
   } catch (error) {
-    return false;
+    return error?.code === 'ENOENT';
   }
 });
 

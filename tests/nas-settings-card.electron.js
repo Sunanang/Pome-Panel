@@ -66,8 +66,8 @@ async function run(c) {
   async function capture(name) { await js(`document.getElementById('settings-nas-sync-card').scrollIntoView({block:'start'})`); await sleep(300); fs.writeFileSync(path.join(artifacts, name + '.png'), (await c.capturePage()).toPNG()); }
   await until('!!window.NotchWorkspace'); await js(`setMode(true)`); await sleep(650); await js(`setActiveTab('settings')`);
   await until(`document.getElementById('settings-nas-content-results').children.length===10`);
-  const placement = await js(`(()=>({left:!!document.querySelector('.settings-column-primary #settings-nas-sync-card'),right:!!document.querySelector('.settings-column-secondary #settings-nas-sync-card'),cards:document.querySelectorAll('#settings-nas-sync-card').length,first:document.getElementById('settings-nas-sync-card').previousElementSibling===null,after:document.getElementById('settings-nas-sync-card').nextElementSibling.classList.contains('settings-display-card')}))()`);
-  assert.deepEqual(placement, { left: false, right: true, cards: 1, first: true, after: true });
+  const placement = await js(`(()=>({left:!!document.querySelector('.settings-column-primary #settings-nas-sync-card'),right:!!document.querySelector('.settings-column-secondary #settings-nas-sync-card'),cards:document.querySelectorAll('#settings-nas-sync-card').length,last:document.getElementById('settings-nas-sync-card').nextElementSibling===null,before:document.getElementById('settings-nas-sync-card').previousElementSibling.classList.contains('settings-display-card')}))()`);
+  assert.deepEqual(placement, { left: false, right: true, cards: 1, last: true, before: true });
   assert.equal(await js(`document.getElementById('settings-nas-advanced').open || document.getElementById('settings-nas-details').open`), false);
   assert.equal(await js(`document.getElementById('settings-nas-sync-open').disabled`), true);
   await capture('unpaired');

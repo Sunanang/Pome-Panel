@@ -25,6 +25,8 @@
   "copy.moreTasksCompleted.1ac38a": "{arg1} más tareas completadas",
   "copy.taskDueSoon.52facb": "Tarea pendiente pronto",
   "copy.dueWithin1Hour.955b14": "Vencimiento dentro de 1 hora",
+  "copy.taskOverdue.d31df8": "Tarea vencida",
+  "copy.deadlineHasPassed.37e6a6": "La fecha límite ha pasado",
   "copy.focusTimer.e7d0e7": "Temporizador de enfoque",
   "copy.focusSessionComplete.66ee96": "Sesión de enfoque completa",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "Tu sesión de concentración de {arg1} minutos ha finalizado",
@@ -1338,7 +1340,7 @@
   "settings.display.title": "Pantalla",
   "settings.display.allQuotas": "Cuotas de proveedores",
   "settings.notifications.topBubble": "Recordatorios de burbujas principales",
-  "settings.notifications.topBubbleHint": "Muestra las terminaciones de IA, las indicaciones de espera y las tareas pendientes en la parte superior",
+  "settings.notifications.topBubbleHint": "Muestra arriba avisos de IA, espera y tareas próximas o vencidas",
   "settings.notifications.topBubbleEnabled": "Recordatorios de burbujas superiores habilitados.",
   "settings.notifications.topBubbleDisabled": "Recordatorios de burbujas superiores desactivados.",
   "settings.notifications.topBubbleFailed": "No se pudo cambiar la configuración de las burbujas superiores.",
@@ -1537,5 +1539,12 @@
   "ui.delete.categoryHint": "Se eliminarán esta categoría y sus {count} tareas.",
   "ui.delete.todoTitle": "Eliminar tarea",
   "ui.delete.credentialTitle": "Eliminar credencial",
-  "ui.delete.groupTitle": "Eliminar grupo de enlaces"
+  "ui.delete.groupTitle": "Eliminar grupo de enlaces",
+  "wb.todo.summary": "{pending} pendientes · {total} en total",
+  "workbench.recordings.seek": "Posición de reproducción",
+  "workbench.recordings.mute": "Silenciar",
+  "workbench.recordings.unmute": "Activar sonido",
+  "workbench.recordings.volume": "Volumen",
+  "workbench.recordings.speed": "Velocidad de reproducción",
+  "workbench.recordings.deleteRepair": "Comprueba si el audio está en uso y los permisos de la carpeta; después, inténtalo de nuevo."
 }

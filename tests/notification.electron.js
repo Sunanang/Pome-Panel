@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const profile = process.env.TODO_TEST_USER_DATA;
+fs.mkdirSync(profile, { recursive: true });
+// Skip first-run welcome so todo focus screenshots are not covered by the dialog.
+fs.writeFileSync(path.join(profile, '.ui-welcome-done'), '1');
 app.commandLine.appendSwitch('user-data-dir', profile);
 if (process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain');
 require('../cursor-usage').readAuthToken = () => ({ ok: false });
@@ -94,6 +97,9 @@ async function run(mainContents) {
     await send(source, payload);
     const title = require('../main-services').taskNotificationIdentity(payload, source).title;
     const win = await shown(title);
+    assert.equal(win.isAlwaysOnTop(), true);
+    // Keep floating (not screen-saver) so macOS screenshot tools can capture the bubble.
+    assert.match(fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8'), /notificationWindow\.setAlwaysOnTop\(true, 'floating', 1\)/);
     assert.equal(win.getBounds().width, 400);
     assert.equal(win.hasShadow(), false, 'native window cannot add a second outer shadow');
     const edge = await evaluate(win, `({shadow:getComputedStyle(shell.querySelector('.notification-shape')).boxShadow,
@@ -247,8 +253,43 @@ async function run(mainContents) {
   assert.equal(await evaluate(win, 'currentNotification.status'), 'due');
   assert.equal(await evaluate(win, 'detailElement.textContent'), '将在 1 小时内截止');
   assert.equal(await evaluate(win, `document.getElementById('attention-brand').decode().then(()=>document.getElementById('attention-brand').naturalWidth>0).catch(()=>false)`),true,'real todo reminder loads its source icon');
-  await capture(win, 'todo-due-soon'); await dismiss(win);
+  await capture(win, 'todo-due-soon');
+  // Clicking a todo bubble expands Tasks and focuses the matching row.
+  await mainContents.executeJavaScript(`(() => {
+    data.P0 = [{
+      id: 'notification-due',
+      text: '提交 Pome Panel 1.4 发布说明',
+      done: false,
+      createdAt: Date.now(),
+      deadline: new Date(Date.now()+1800000).toISOString(),
+      remindedAt: 0,
+    }];
+    if (typeof renderTodoBoard === 'function') renderTodoBoard();
+    if (typeof saveData === 'function') saveData(data);
+  })()`);
+  await evaluate(win, 'void activateNotification()');
+  await until(async () => mainContents.executeJavaScript(`isExpanded === true && !modeBusy && activeTab === 'todo'`), 'todo bubble opens Tasks');
+  await until(async () => mainContents.executeJavaScript(`!!document.querySelector('.todo-item[data-id="notification-due"].is-reminder-focus')`), 'todo row highlighted');
+  await mainContents.executeJavaScript(`(() => {
+    const welcome = document.getElementById('ui-welcome');
+    if (welcome?.open) welcome.close();
+    document.querySelector('#ui-capsule-hint button')?.click();
+    const hint = document.getElementById('ui-capsule-hint');
+    if (hint) hint.hidden = true;
+    document.querySelector('.todo-item.is-reminder-focus')?.scrollIntoView({ block: 'center' });
+  })()`);
+  await delay(200);
+  const panel = BrowserWindow.fromWebContents(mainContents);
+  fs.mkdirSync(output, { recursive: true });
+  fs.writeFileSync(path.join(output, 'todo-open-focus.png'), (await panel.capturePage()).toPNG());
+  await until(() => !notificationWindow() || !notificationWindow().isVisible(), 'todo bubble dismisses after open');
   assert.equal(JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length, before);
+  // Overdue catch-up when the lead window was missed and remindedAt is still 0.
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-overdue',text:'补交上周周报',deadline:new Date(Date.now()-60000).toISOString(),done:false,remindedAt:0}])`);
+  win = await shown('补交上周周报');
+  assert.equal(await evaluate(win, 'currentNotification.status'), 'overdue');
+  assert.equal(await evaluate(win, 'detailElement.textContent'), '截止时间已过');
+  await capture(win, 'todo-overdue'); await dismiss(win);
   // Two deadlines in the same turn retain FIFO order through AI bursts and a
   // notification-window crash. No reminder is marked then silently dropped.
   await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders(['a','b'].map(id=>({id:'batch-'+id,text:'批量待办 '+id,deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0})))`);

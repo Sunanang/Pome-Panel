@@ -25,6 +25,8 @@
   "copy.moreTasksCompleted.1ac38a": "{arg1} weitere Aufgaben abgeschlossen",
   "copy.taskDueSoon.52facb": "Aufgabe bald fällig",
   "copy.dueWithin1Hour.955b14": "Fällig innerhalb 1 Stunde",
+  "copy.taskOverdue.d31df8": "Aufgabe überfällig",
+  "copy.deadlineHasPassed.37e6a6": "Frist überschritten",
   "copy.focusTimer.e7d0e7": "Fokus-Timer",
   "copy.focusSessionComplete.66ee96": "Fokussitzung abgeschlossen",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "Ihre {arg1}-minütige Fokussitzung ist beendet",
@@ -1338,7 +1340,7 @@
   "settings.display.title": "Anzeige",
   "settings.display.allQuotas": "Anbieterkontingente",
   "settings.notifications.topBubble": "Top-Blasen-Erinnerungen",
-  "settings.notifications.topBubbleHint": "Zeigen Sie oben KI-Abschlüsse, Warteaufforderungen und fällige Aufgaben an",
+  "settings.notifications.topBubbleHint": "Zeigt oben KI-Fertigstellungen, Wartehinweise sowie fällige und überfällige Aufgaben",
   "settings.notifications.topBubbleEnabled": "Top-Blasen-Erinnerungen aktiviert.",
   "settings.notifications.topBubbleDisabled": "Top-Blasen-Erinnerungen deaktiviert.",
   "settings.notifications.topBubbleFailed": "Die Einstellungen für die obere Blase konnten nicht geändert werden.",
@@ -1537,5 +1539,12 @@
   "ui.delete.categoryHint": "Diese Kategorie und ihre {count} Aufgaben werden gelöscht.",
   "ui.delete.todoTitle": "Aufgabe löschen",
   "ui.delete.credentialTitle": "Zugangsdaten löschen",
-  "ui.delete.groupTitle": "Linkgruppe löschen"
+  "ui.delete.groupTitle": "Linkgruppe löschen",
+  "wb.todo.summary": "{pending} offen · {total} insgesamt",
+  "workbench.recordings.seek": "Wiedergabeposition",
+  "workbench.recordings.mute": "Stummschalten",
+  "workbench.recordings.unmute": "Ton einschalten",
+  "workbench.recordings.volume": "Lautstärke",
+  "workbench.recordings.speed": "Wiedergabegeschwindigkeit",
+  "workbench.recordings.deleteRepair": "Prüfen Sie, ob die Audiodatei verwendet wird und ob der Ordner Änderungen erlaubt. Versuchen Sie es erneut."
 }

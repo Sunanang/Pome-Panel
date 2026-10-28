@@ -6,6 +6,12 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Remind tasks one hour before their deadline, with an overdue catch-up only when no reminder was sent. Send at most one reminder per deadline; clicking the bubble expands Tasks and locates the item.
+
+- Preserve new credential drafts across delayed saves and list refreshes, and report save failures persistently. Retain recordings and transcripts after failed audio deletion, remove only successful bulk items, guard incoming versions, and require confirmation when retrying.
+
+- Refine the desktop workbench with lighter task categories and summaries, a quiet notes index and writing surface, consistent link/clipboard/settings controls, and reordered settings. Open credential creation on demand and use an integrated audio player while preserving storage, security and media lifecycle rules. Prevent older settings reads from replacing newly saved state.
+
 - Add an independent website under `website/` with rounded capsule controls, scroll-aware navigation, docking and workspace demos, and the same ten languages as the desktop app with localized product screenshots. Adapt the revised brand copy across locales. Source delivery does not deploy the website.
 - Unify deletion confirmation for commands, todos, notes, links, recordings and credentials with previews, counts and scope hints; preserve cancelled actions and guard changes during confirmation. Fix clipboard action spacing and refine wind into faint, gently deforming sheets with local dissipation.
 

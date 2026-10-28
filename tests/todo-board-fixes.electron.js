@@ -155,44 +155,49 @@ async function main() {
     '02 shot must be on todo tab'
   );
 
-  assert.equal(await js(`!!document.querySelector('.todo-board-toolbar')`), false, 'top toolbar row must be gone');
+  assert.equal(await js(`!!document.querySelector('.todo-page-heading')`), true, 'todo heading provides a stable title and category action');
   const fill = await js(`(() => {
     const tab = document.getElementById('tab-todo').getBoundingClientRect();
     const sections = document.getElementById('todo-sections').getBoundingClientRect();
+    const heading = document.querySelector('.todo-page-heading').getBoundingClientRect();
     const cards = [...document.querySelectorAll('#todo-sections .quadrant')].map((el) => el.getBoundingClientRect());
     const bottom = Math.max(...cards.map((r) => r.bottom));
     const right = Math.max(...cards.map((r) => r.right));
     return {
-      heightFill: sections.height / tab.height,
+      heightFill: sections.height / Math.max(1, tab.bottom - sections.top),
+      belowHeading: sections.top >= heading.bottom - 1,
       widthFill: sections.width / tab.width,
       cardsReachBottom: (tab.bottom - bottom) <= 16,
       cardsReachRight: (tab.right - right) <= 16,
       cardCount: cards.length,
     };
   })()`);
-  assert.ok(fill.heightFill >= 0.92, `todo grid must fill tab height: ${JSON.stringify(fill)}`);
+  assert.ok(fill.heightFill >= 0.92, `todo grid must fill remaining content height: ${JSON.stringify(fill)}`);
+  assert.equal(fill.belowHeading, true, 'todo categories follow their page heading');
   assert.ok(fill.widthFill >= 0.92, `todo grid must fill tab width: ${JSON.stringify(fill)}`);
   assert.equal(fill.cardsReachBottom, true, `4 cards must reach panel bottom: ${JSON.stringify(fill)}`);
   assert.equal(fill.cardsReachRight, true, `4 cards must reach panel right: ${JSON.stringify(fill)}`);
-  const fab = await js(`(() => {
+  const categoryAction = await js(`(() => {
     const b = document.getElementById('todo-add-category');
     if (!b) return null;
     const r = b.getBoundingClientRect();
-    const tab = document.getElementById('tab-todo').getBoundingClientRect();
+    const heading = document.querySelector('.todo-page-heading').getBoundingClientRect();
     return {
       hidden: b.hidden,
       aria: b.getAttribute('aria-label'),
-      rightGap: tab.right - r.right,
-      bottomGap: tab.bottom - r.bottom,
+      inHeading: b.closest('.todo-page-heading') !== null,
+      visible: r.left >= heading.left && r.right <= heading.right + 1 && r.top >= heading.top && r.bottom <= heading.bottom + 1,
+      hittable: document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('#todo-add-category') === b,
       w: r.width,
       h: r.height,
     };
   })()`);
-  assert.equal(fab.hidden, false);
-  assert.equal(fab.aria, '添加分类');
-  assert.ok(fab.w >= 36 && fab.w <= 44, `fab size ${fab.w}`);
-  assert.ok(fab.rightGap >= 18 && fab.rightGap <= 30, `fab right ${fab.rightGap}`);
-  assert.ok(fab.bottomGap >= 60 && fab.bottomGap <= 90, `fab bottom ${fab.bottomGap}`);
+  assert.equal(categoryAction.hidden, false);
+  assert.equal(categoryAction.aria, '添加分类');
+  assert.equal(categoryAction.inHeading, true);
+  assert.equal(categoryAction.visible, true, JSON.stringify(categoryAction));
+  assert.equal(categoryAction.hittable, true, 'category action is directly clickable in the heading');
+  assert.ok(categoryAction.w >= 28 && categoryAction.h >= 28, 'category action keeps a usable pointer target');
   await js(`document.getElementById('todo-add-category').click()`);
   await until(`document.querySelectorAll('#todo-sections .quadrant').length === 5`);
   assert.equal(await js(`document.querySelectorAll('#todo-sections .quadrant').length`), 5);

@@ -25,6 +25,8 @@
   "copy.moreTasksCompleted.1ac38a": "{arg1} mais tarefas concluídas",
   "copy.taskDueSoon.52facb": "Tarefa prevista para breve",
   "copy.dueWithin1Hour.955b14": "Vencimento dentro de 1 hora",
+  "copy.taskOverdue.d31df8": "Tarefa atrasada",
+  "copy.deadlineHasPassed.37e6a6": "O prazo já passou",
   "copy.focusTimer.e7d0e7": "Temporizador de foco",
   "copy.focusSessionComplete.66ee96": "Sessão de foco concluída",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "Sua sessão de foco de {arg1} minutos terminou",
@@ -1338,7 +1340,7 @@
   "settings.display.title": "Exibição",
   "settings.display.allQuotas": "Cotas de provedor",
   "settings.notifications.topBubble": "Principais lembretes de bolha",
-  "settings.notifications.topBubbleHint": "Mostrar conclusões de IA, avisos de espera e tarefas pendentes na parte superior",
+  "settings.notifications.topBubbleHint": "Mostra no topo conclusões de IA, espera e alertas de tarefas a vencer ou atrasadas",
   "settings.notifications.topBubbleEnabled": "Principais lembretes de balão ativados.",
   "settings.notifications.topBubbleDisabled": "Principais lembretes de balão desativados.",
   "settings.notifications.topBubbleFailed": "Não foi possível alterar as configurações do balão superior.",
@@ -1537,5 +1539,12 @@
   "ui.delete.categoryHint": "Esta categoria e suas {count} tarefas serão excluídas.",
   "ui.delete.todoTitle": "Excluir tarefa",
   "ui.delete.credentialTitle": "Excluir credencial",
-  "ui.delete.groupTitle": "Excluir grupo de links"
+  "ui.delete.groupTitle": "Excluir grupo de links",
+  "wb.todo.summary": "{pending} pendentes · {total} no total",
+  "workbench.recordings.seek": "Posição de reprodução",
+  "workbench.recordings.mute": "Silenciar",
+  "workbench.recordings.unmute": "Ativar som",
+  "workbench.recordings.volume": "Volume",
+  "workbench.recordings.speed": "Velocidade de reprodução",
+  "workbench.recordings.deleteRepair": "Verifique se o áudio está em uso e as permissões da pasta. Depois, tente novamente."
 }

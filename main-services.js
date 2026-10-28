@@ -288,11 +288,13 @@ function pasteResultToIpc(result) {
 function todoReminderState(todo, now = Date.now(), leadMs = 60 * 60 * 1000) {
   if (!todo || typeof todo !== 'object') return { state: 'invalid', delayMs: 0 };
   if (todo.done === true) return { state: 'done', delayMs: 0 };
+  // One consumption mark covers both the 1-hour warning and the overdue catch-up.
   if (Number(todo.remindedAt) > 0) return { state: 'notified', delayMs: 0 };
   const deadline = Date.parse(String(todo.deadline || ''));
   const current = Number(now);
   if (!Number.isFinite(deadline) || !Number.isFinite(current)) return { state: 'invalid', delayMs: 0 };
-  if (current > deadline) return { state: 'expired', delayMs: 0 };
+  // Missed the lead window (app was closed): fire one overdue catch-up.
+  if (current > deadline) return { state: 'expired-missed', delayMs: 0 };
   const triggerAt = deadline - Math.max(0, Number(leadMs) || 0);
   if (current >= triggerAt) return { state: 'due', delayMs: 0 };
   return { state: 'scheduled', delayMs: triggerAt - current };

@@ -28,10 +28,12 @@ test('old events retain timed completion and todo defaults, while status is expl
   assert.equal(domain.normalize({ source: 'codex' }).status, 'completed');
   assert.equal(domain.normalize({ source: 'todo' }).status, 'due');
   assert.equal(domain.normalize({ source: 'cursor', status: 'invalid' }).status, 'completed');
-  for (const status of ['completed','due','failed','awaiting']) {
+  for (const status of ['completed','due','overdue','failed','awaiting']) {
     assert.equal(domain.normalize({ source: 'claude', status }).status, status);
   }
   assert.equal(domain.normalize({ source: 'todo' }).detail, '将在 1 小时内截止');
+  assert.equal(domain.normalize({ source: 'todo', status: 'overdue' }).detail, '截止时间已过');
+  assert.equal(domain.normalize({ source: 'todo', status: 'overdue', title: '  ' }).title, '待办已过期');
 });
 
 test('notification copy shows actual work, falls back by source, and has no repeated completion subtitle', () => {

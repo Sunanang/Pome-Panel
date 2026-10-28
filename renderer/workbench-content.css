@@ -1,0 +1,203 @@
+/* Task and writing surfaces share the workbench, rather than nested glass tiles. */
+#tab-todo {
+  --wb-task-row-min: 39px;
+  --wb-task-meta-width: 94px;
+  gap: 8px;
+}
+#tab-todo .todo-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  flex: 0 0 36px;
+  padding: 0 3px;
+}
+#tab-todo .todo-page-title { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+#tab-todo .todo-page-title h2 { margin: 0; color: var(--text-1); font: 600 var(--fs-heading-3) / 1.25 var(--font); }
+#todo-board-summary { min-width: 0; color: var(--wb-text-muted, #a5a4ac); font-size: var(--fs-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tab-todo #todo-add-category {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: auto;
+  height: 30px;
+  min-width: 30px;
+  gap: 5px;
+  padding: 0 11px;
+  border: 1px solid var(--wb-line, rgba(255,255,255,.075));
+  border-radius: var(--r-pill);
+  background: rgba(255,255,255,.04);
+  color: var(--text-2);
+  box-shadow: none;
+  backdrop-filter: none;
+  font: 500 var(--fs-small) var(--font);
+  transform: none;
+}
+#tab-todo #todo-add-category svg { width: 13px; height: 13px; }
+#tab-todo #todo-add-category:hover { background: rgba(255,255,255,.09); color: var(--text-1); }
+#tab-todo > .sections {
+  height: auto;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--wb-line, rgba(255,255,255,.075));
+  border-radius: var(--wb-radius, 16px);
+  background: var(--wb-surface, #1a1a1d);
+  scrollbar-gutter: stable;
+}
+html[data-liquid-glass='1'] #tab-todo .quadrant,
+#tab-todo .quadrant {
+  padding: 13px 13px 11px;
+  border: 0 !important;
+  border-radius: 12px;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  transition: background var(--d-fast) var(--ease);
+}
+#tab-todo .quadrant::before,
+#tab-todo .quadrant::after { display: none; }
+#tab-todo .quadrant:focus-within { background: rgba(255,255,255,.018) !important; }
+#tab-todo .quadrant + .quadrant { box-shadow: inset 1px 0 var(--wb-line, rgba(255,255,255,.075)) !important; }
+#tab-todo .quadrant:nth-child(2n + 1) { box-shadow: none !important; }
+#tab-todo .quadrant:nth-child(n + 3) { border-top: 1px solid var(--wb-line, rgba(255,255,255,.075)) !important; }
+#tab-todo .quadrant-header { min-height: 25px; gap: 7px; margin-bottom: 9px; }
+#tab-todo .quadrant-header .dot { width: 5px; height: 5px; opacity: .9; }
+#tab-todo .todo-category-name { padding: 3px 2px; color: var(--text-2); font-size: var(--fs-ui); font-weight: 600; }
+#tab-todo .quadrant-header .count { order: 1; margin-left: 1px; padding: 1px 5px; background: transparent; color: var(--wb-text-muted, #a5a4ac); font-size: var(--fs-caption); }
+#tab-todo .todo-remove-category { order: 2; color: var(--wb-text-muted, #a5a4ac); opacity: .35; transition: opacity var(--d-fast) var(--ease), background var(--d-fast) var(--ease); }
+#tab-todo .quadrant-header:hover .todo-remove-category,
+#tab-todo .quadrant-header:focus-within .todo-remove-category { opacity: 1; }
+#tab-todo .todo-list.line-sidebar-list { padding: 1px 2px; scroll-behavior: auto; }
+#tab-todo .todo-list .todo-item {
+  min-height: var(--wb-task-row-min);
+  margin: 1px 0;
+  padding: 5px 4px;
+  grid-template-columns: 24px minmax(0, 1fr) 24px;
+  gap: 6px;
+  border-radius: 9px;
+  background: transparent;
+  border: 0;
+  transform: none;
+  transition: background var(--d-fast) var(--ease);
+}
+#tab-todo .todo-list .todo-item::before,
+#tab-todo .todo-list .todo-item::after { display: none; }
+#tab-todo .todo-list .todo-item:hover,
+#tab-todo .todo-list .todo-item:focus-within { background: rgba(255,255,255,.045); }
+#tab-todo .todo-list .todo-item.multi-selected { background: rgba(255,255,255,.075); box-shadow: inset 2px 0 var(--wb-accent, #e5b6ae); }
+#tab-todo .todo-list .checkbox { width: 18px; height: 18px; border-width: 1.5px; border-color: rgba(255,255,255,.27); }
+#tab-todo .todo-copy { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 2px 0; min-height: 29px; }
+#tab-todo .todo-copy .todo-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: normal; overflow-wrap: anywhere; color: var(--text-1); font-size: var(--fs-body); line-height: 1.5; }
+#tab-todo .todo-meta { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 3px; flex: 0 0 auto; max-width: var(--wb-task-meta-width); }
+#tab-todo .todo-meta .todo-ddl { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--wb-text-muted, #a5a4ac); font: 400 var(--fs-micro) / 1.25 var(--font-mono); font-variant-numeric: tabular-nums; }
+#tab-todo .todo-copy .todo-battery { width: 45px; height: 13px; background: rgba(255,255,255,.045); border-color: rgba(255,255,255,.05); }
+#tab-todo .todo-copy .todo-battery i { opacity: .38; }
+#tab-todo .todo-copy .todo-battery[data-tone='orange'] i,
+#tab-todo .todo-copy .todo-battery[data-tone='red'] i { opacity: .7; }
+#tab-todo .todo-copy .todo-battery b { font: 500 8px / 12px var(--font-mono); color: rgba(255,255,255,.9); }
+#tab-todo .todo-copy .todo-battery[data-overdue='true'] i { opacity: 1; }
+#tab-todo .todo-list .todo-item.done .todo-text { color: var(--wb-text-muted, #a5a4ac); opacity: .65; }
+#tab-todo .todo-item .delete { width: 24px; height: 26px; font-size: 18px; color: var(--wb-text-muted, #a5a4ac); opacity: .28; }
+#tab-todo .todo-item:hover .delete,
+#tab-todo .todo-item:focus-within .delete { opacity: 1; }
+#tab-todo .todo-item .delete:hover { color: var(--p0); background: rgba(255,95,87,.1); }
+#tab-todo .add-row { grid-template-columns: minmax(0, 1fr) minmax(96px, 122px); gap: 6px; padding-top: 9px; margin-top: 6px; border-top: 1px solid var(--wb-line, rgba(255,255,255,.075)); }
+#tab-todo .add-row input,
+#tab-todo .add-row .todo-deadline-trigger { height: 31px; min-width: 0; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; background: rgba(255,255,255,.035); box-shadow: none; font-size: var(--fs-small); }
+#tab-todo .add-row input::placeholder { color: var(--wb-text-muted, #a5a4ac); }
+#tab-todo .add-row input:focus { border-color: var(--wb-line, rgba(255,255,255,.075)); background: rgba(255,255,255,.065); }
+#tab-todo .add-row .todo-deadline-trigger { color: var(--wb-text-muted, #a5a4ac); font-variant-numeric: tabular-nums; }
+#tab-todo .add-row .todo-deadline-trigger:hover,
+#tab-todo .add-row .todo-deadline-trigger:focus-visible { background: rgba(255,255,255,.075); color: var(--text-1); }
+#tab-todo .todo-inline-editor { min-width: 0; gap: 5px; }
+#tab-todo .todo-inline-name { min-width: 0; font-size: var(--fs-body); }
+#tab-todo .todo-inline-deadline { max-width: 106px; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-micro); }
+#tab-todo .todo-inline-save { flex: 0 0 26px; width: 26px; }
+
+/* One quiet writing surface. The sidebar is an index, not another card grid. */
+#tab-notes .notes-page { grid-template-columns: var(--wb-sidebar-width, 264px) minmax(0, 1fr); gap: 0; border: 1px solid var(--wb-line, rgba(255,255,255,.075)); border-radius: var(--wb-radius, 16px); overflow: hidden; background: var(--wb-surface, #1a1a1d); }
+html[data-liquid-glass='1'] #tab-notes .notes-library,
+html[data-liquid-glass='1'] #tab-notes .notes-detail,
+#tab-notes .notes-library,
+#tab-notes .notes-detail { border: 0 !important; border-radius: 0; background: transparent !important; background-image: none !important; box-shadow: none !important; backdrop-filter: none; }
+#tab-notes .notes-library::after,
+#tab-notes .notes-detail::after { display: none; }
+#tab-notes .notes-library { padding: 18px 14px 14px; }
+#tab-notes .notes-library-head { min-height: 28px; margin: 0 2px 16px; align-items: center; gap: 8px; }
+#tab-notes .notes-library-title { flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
+#tab-notes .notes-library-title .tile-label { font-size: var(--fs-ui); color: var(--text-1); font-weight: 600; }
+#tab-notes .notes-library-head strong { color: var(--wb-text-muted, #a5a4ac); font-size: var(--fs-caption); font-weight: 400; letter-spacing: normal; white-space: nowrap; }
+#tab-notes .notes-new-btn { align-self: center; min-height: 28px; height: 28px; gap: 4px; padding: 0 9px; font-size: var(--fs-small); }
+#tab-notes .notes-new-btn svg { width: 12px; height: 12px; }
+#tab-notes .notes-search-wrap { height: 32px; margin-bottom: 14px; padding: 0 9px; border: 1px solid var(--wb-line, rgba(255,255,255,.075)); border-radius: 8px; color: var(--wb-text-muted, #a5a4ac); background: transparent; box-shadow: none; }
+#tab-notes .notes-search-wrap input { font-size: var(--fs-small); }
+#tab-notes .notes-search-wrap input::placeholder { color: var(--wb-text-muted, #a5a4ac); }
+#tab-notes .notes-search-wrap:focus-within { border-color: rgba(229,182,174,.45); box-shadow: 0 0 0 2px rgba(229,182,174,.07); }
+#tab-notes .notes-list { gap: 3px; padding: 0; --line-accent: var(--wb-accent, #e5b6ae); }
+#tab-notes .notes-list-item { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; min-height: 81px; flex: 0 0 auto; gap: 5px; padding: 12px 13px; border-radius: 8px; background: transparent; box-shadow: none; transform: none; transition: background var(--d-fast) var(--ease); }
+#tab-notes .notes-list-item::before,
+#tab-notes .notes-list-item::after { display: none; }
+#tab-notes .notes-list-item:hover { background: rgba(255,255,255,.035); }
+#tab-notes .notes-list-item.active { background: rgba(255,255,255,.065); box-shadow: inset 2px 0 var(--wb-accent, #e5b6ae); }
+#tab-notes .notes-list-item strong { font-size: var(--fs-ui); font-weight: 600; line-height: 1.4; }
+#tab-notes .notes-list-item span { grid-column: 1; font-size: var(--fs-small); line-height: 1.45; color: var(--wb-text-muted, #a5a4ac); }
+#tab-notes .notes-list-item time { grid-column: 1; color: var(--wb-text-muted, #a5a4ac); opacity: .75; font-size: var(--fs-micro); line-height: 1.3; }
+html[data-liquid-glass='1'] #tab-notes .notes-detail,
+#tab-notes .notes-detail { border-left: 1px solid var(--wb-line, rgba(255,255,255,.075)) !important; padding: 22px 30px 16px; }
+#tab-notes .notes-detail-head { flex: 0 0 auto; align-items: flex-start; padding-bottom: 20px; border-bottom: 1px solid var(--wb-line, rgba(255,255,255,.075)); }
+#tab-notes .notes-detail-head > div:first-child { flex: 1 1 auto; min-width: 0; gap: 7px; }
+#tab-notes .notes-detail-title { width: 100%; min-width: 0; max-width: 100%; color: var(--text-1); font-size: 20px; line-height: 1.3; font-weight: 600; letter-spacing: -.35px; }
+#tab-notes .notes-detail-title:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 3px; }
+#tab-notes .notes-detail-head time { color: var(--wb-text-muted, #a5a4ac); font-size: var(--fs-micro); }
+#tab-notes .notes-detail-actions { gap: 8px; padding-top: 1px; }
+#tab-notes .notes-detail-mode-switch { width: auto; min-width: 88px; flex: 0 1 auto; background: rgba(255,255,255,.035); }
+#tab-notes .notes-detail-mode-switch .note-mode { min-width: 38px; padding: 0 8px; }
+#tab-notes .notes-delete { width: 28px; height: 28px; background: transparent; color: var(--wb-text-muted, #a5a4ac); }
+#tab-notes .notes-delete:hover { color: var(--p0); background: rgba(255,95,87,.1); }
+#tab-notes .notes-preview,
+#tab-notes .notes-editor { padding: 22px 0 12px; font-size: var(--fs-body-lg); line-height: 1.85; }
+#tab-notes .notes-editor { caret-color: var(--wb-accent, #e5b6ae); }
+#tab-notes .notes-preview > :not([hidden]):first-child { margin-top: 0; }
+#tab-notes .notes-preview > [hidden]:first-child + :not([hidden]) { margin-top: 0; }
+#tab-notes .notes-preview h1 { font-size: 23px; }
+#tab-notes .notes-preview h2 { font-size: 18px; line-height: 1.5; margin-top: 1.5em; }
+#tab-notes .notes-preview h3 { font-size: 15px; line-height: 1.5; margin-top: 1.35em; }
+#tab-notes .notes-preview p,
+#tab-notes .notes-preview ul,
+#tab-notes .notes-preview ol { max-width: 72ch; }
+#tab-notes .notes-detail-empty { padding: 20px; color: var(--wb-text-muted, #a5a4ac); }
+#tab-notes .notes-detail-empty p { color: var(--wb-text-muted, #a5a4ac); }
+#tab-notes .notes-empty-mark { border: 1px solid var(--wb-line, rgba(255,255,255,.075)); background: transparent; }
+
+@media (max-width: 1000px) {
+  #tab-notes .notes-page { grid-template-columns: minmax(190px, 25%) minmax(0, 1fr); }
+  #tab-notes .notes-detail { padding: 19px 22px 14px; }
+  #tab-notes .notes-detail-head { gap: 12px; }
+  #tab-notes .notes-detail-mode-switch .note-mode { padding: 0 6px; }
+}
+@media (max-width: 740px) {
+  #tab-todo .todo-page-title { gap: 9px; }
+  #todo-board-summary { font-size: var(--fs-caption); }
+  #tab-todo .quadrant { padding: 10px; }
+  #tab-todo .todo-copy { gap: 7px; }
+  #tab-todo .todo-meta { max-width: 76px; }
+  #tab-todo .add-row { grid-template-columns: minmax(0, 1fr) 100px; }
+  #tab-notes .notes-page { grid-template-columns: minmax(160px, 29%) minmax(0, 1fr); }
+  #tab-notes .notes-library { padding: 15px 10px 12px; }
+  #tab-notes .notes-library-head { margin-bottom: 12px; flex-wrap: wrap; }
+  #tab-notes .notes-detail { padding: 18px 17px 12px; }
+  #tab-notes .notes-detail-head { flex-wrap: wrap; gap: 12px; padding-bottom: 14px; }
+  #tab-notes .notes-detail-head > div:first-child { flex-basis: 100%; }
+  #tab-notes .notes-detail-title { font-size: 18px; }
+  #tab-notes .notes-detail-actions { margin-left: auto; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tab-todo .quadrant,
+  #tab-todo .todo-item,
+  #tab-todo .todo-remove-category,
+  #tab-notes .notes-list-item { transition: none; }
+}

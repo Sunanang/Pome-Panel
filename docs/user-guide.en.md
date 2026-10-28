@@ -27,7 +27,7 @@ Use the menu bar or tray to show the panel, configure the summon shortcut, enabl
 | Page | Purpose |
 | --- | --- |
 | Home | Resizable Bento modules. Keep at least one module; the others fill available space when a module is hidden. |
-| Tasks | Four renameable categories by default: Courses, Media & writing, Vibe coding and Daily life. Add or remove categories to keep 1–8, using internal keys `P0`–`P7`; visible order stays local. New tasks default to 23:30 today, sort by deadline and remind you one hour before they are due. Opening an existing task's date picker does not save. Tasks without a deadline show a selection prompt and save only after you choose a valid time. Sync preserves unsaved drafts and manually selected dates. The date picker closes when leaving Tasks or collapsing the panel. Backup, restore and NAS overwrite include tasks and names from all eight categories. |
+| Tasks | Four renameable categories by default: Courses, Media & writing, Vibe coding and Daily life. Add or remove categories to keep 1–8, using internal keys `P0`–`P7`; visible order stays local. New tasks default to 23:30 today and sort by deadline. The top bubble reminds once one hour before the deadline; if the app was closed and no reminder was sent, startup shows one overdue catch-up. At most one bubble per deadline: an earlier reminder prevents an overdue catch-up. Editing the deadline resets the reminder. Clicking the bubble expands Tasks and highlights the row when possible. Opening an existing task's date picker does not save. Tasks without a deadline show a selection prompt and save only after you choose a valid time. Sync preserves unsaved drafts and manually selected dates. The date picker closes when leaving Tasks or collapsing the panel. Backup, restore and NAS overwrite include tasks and names from all eight categories. |
 | Notes | Save Home notes to a searchable library; rename, edit or delete them. |
 | Links | Save public HTTP/HTTPS URLs. Title fetching rejects local addresses, private networks and unsafe redirects. |
 | Recordings | Audio stays in the local `recordings/` directory. Optional Model Studio Qwen3-ASR live transcription uses an encrypted API key or an environment variable. |
@@ -158,3 +158,11 @@ The weather capsule uses the sunrise/sunset widget's existing location and shows
 Weather data is provided by [Open-Meteo](https://open-meteo.com/). There is no background polling: a visible-panel wake can request current data only after 30 minutes since the previous attempt for that location. Keeping the panel open does not refresh it automatically. Failures silently retain the last successful reading; attempts are throttled even after a failure or app restart. This cache stays on the local device.
 
 Device and activation contains a default-on Weather effects switch. Only medium and large cards show particles. Mini/small, collapsed, off-page, hidden or reduced-motion states stop animations. Turning effects off keeps weather text visible. There is no audio.
+
+## Workbench interface
+
+Tasks show open and total counts above the existing categories; Add category is at the top right. Categories, deadline editing and reminder rules are unchanged. Notes use a searchable index and a focused writing surface. Preview hides an initial H1 that exactly repeats the note title; editing and stored Markdown retain the original text.
+
+Credentials opens to the library. Select Add credential to open the form. Cancel, Escape, the backdrop, changing tabs or collapsing the panel closes it and masks the password again; unsaved input remains only in the current session. Successful saves close the form; failures retain the draft and show error feedback.
+
+Recordings provide play/pause, seeking, volume/mute and playback speed. Leaving the page or collapsing pauses playback; switching recordings releases the previous player. Settings first shows AI and device/activation controls, with transcription, mirror cover, visibility and NAS options available by scrolling their columns.

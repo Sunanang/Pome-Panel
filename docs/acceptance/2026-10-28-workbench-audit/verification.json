@@ -1,0 +1,22 @@
+{
+  "node": {
+    "total": 990,
+    "pass": 989,
+    "skip": 1,
+    "fail": 0
+  },
+  "finalRelatedNode": 28,
+  "electron": [
+    "workbench",
+    "content-delete",
+    "workspace-lifecycle",
+    "security-recovery",
+    "settings-slim",
+    "localization"
+  ],
+  "finalWorkbenchRerun": "passed",
+  "syntax": "passed",
+  "localization": "passed",
+  "windowsHardware": "not tested",
+  "productionNAS": "not tested"
+}

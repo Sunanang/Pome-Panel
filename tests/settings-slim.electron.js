@@ -57,13 +57,14 @@ async function run(c) {
     columns:getComputedStyle(document.getElementById('settings-feature-list')).gridTemplateColumns.split(' ').length,
     homeColumns:getComputedStyle(document.getElementById('settings-home-module-list')).gridTemplateColumns.split(' ').length,
     primaryColor:getComputedStyle(document.querySelector('[data-source=codex] .ai-source-actions button')).color,
+    primaryBackground:getComputedStyle(document.querySelector('[data-source=codex] .ai-source-actions button')).backgroundColor,
     quotaOnly:getComputedStyle(document.querySelector('[data-source=grokbot] .ai-source-state')).borderTopStyle,
     quotaAction:document.querySelector('[data-source=grokbot] .ai-source-actions').textContent,
     claudeButton:!!document.querySelector('[data-source=claude] .ai-source-actions button')
   }))()`);
   assert.equal(structure.primary.length,3);
-  for (const [i,name] of ['mirror','api','ai-sources'].entries()) assert(structure.primary[i].includes(`settings-${name}-card`));
-  for (const [i,name] of ['nas-sync','display','device'].entries()) assert(structure.secondary[i].includes(`settings-${name}-card`));
+  for (const [i,name] of ['ai-sources','api','mirror'].entries()) assert(structure.primary[i].includes(`settings-${name}-card`));
+  for (const [i,name] of ['device','display','nas-sync'].entries()) assert(structure.secondary[i].includes(`settings-${name}-card`));
   assert.equal(await js(`document.querySelectorAll('.settings-page .tile-label').length`),1,'only mirror cover keeps its eyebrow');
   assert.equal(await js(`!!document.querySelector('.settings-mirror-card .tile-label')`),true);
   assert.equal(await js(`!!document.querySelector('.settings-device-card .settings-language-row #settings-language')`),true,'language is a device setting');
@@ -93,7 +94,12 @@ async function run(c) {
   for (const token of structure.tokens) { assert(token.provider && token.id.includes(token.provider)); assert.equal(token.visible,false); }
   assert.equal(structure.features,6); assert.equal(structure.modules,11);
   assert.equal(structure.columns,2); assert.equal(structure.homeColumns,2);
-  assert.equal(structure.primaryColor,'rgb(18, 19, 24)');
+  const luminance = color => {
+    const rgb = color.match(/[\d.]+/g).slice(0,3).map(Number).map(n => n/255).map(n => n<=.04045 ? n/12.92 : ((n+.055)/1.055)**2.4);
+    return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;
+  };
+  const contrast = [luminance(structure.primaryColor),luminance(structure.primaryBackground)].sort((a,b)=>b-a);
+  assert((contrast[0]+.05)/(contrast[1]+.05)>=4.5,'primary action retains readable text contrast');
   assert.equal(structure.quotaOnly,'solid'); assert.equal(structure.quotaAction,'无需接入'); assert.equal(structure.claudeButton,true);
   assert.equal(await js(`document.querySelector('[data-source=manus] .ai-source-state').textContent`),'API');
   assert.equal(await js(`document.querySelector('[data-source=manus] .ai-source-actions').textContent`),'下方配置 Token 与完成提醒');

@@ -25,6 +25,8 @@
   "copy.moreTasksCompleted.1ac38a": "{arg1} more tasks completed",
   "copy.taskDueSoon.52facb": "Task due soon",
   "copy.dueWithin1Hour.955b14": "Due within 1 hour",
+  "copy.taskOverdue.d31df8": "Task overdue",
+  "copy.deadlineHasPassed.37e6a6": "Deadline has passed",
   "copy.focusTimer.e7d0e7": "Focus timer",
   "copy.focusSessionComplete.66ee96": "Focus session complete",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "Your {arg1}-minute focus session has ended",
@@ -1338,7 +1340,7 @@
   "settings.display.title": "Display",
   "settings.display.allQuotas": "Provider quotas",
   "settings.notifications.topBubble": "Top bubble reminders",
-  "settings.notifications.topBubbleHint": "Show AI completions, waiting prompts, and due todos at the top",
+  "settings.notifications.topBubbleHint": "Show AI completions, waiting prompts, and task due or overdue alerts at the top",
   "settings.notifications.topBubbleEnabled": "Top bubble reminders enabled.",
   "settings.notifications.topBubbleDisabled": "Top bubble reminders disabled.",
   "settings.notifications.topBubbleFailed": "Could not change top bubble settings.",
@@ -1543,5 +1545,12 @@
   },
   "ui.delete.todoTitle": "Delete task",
   "ui.delete.credentialTitle": "Delete credential",
-  "ui.delete.groupTitle": "Delete link group"
+  "ui.delete.groupTitle": "Delete link group",
+  "wb.todo.summary": "{pending} open · {total} total",
+  "workbench.recordings.seek": "Playback position",
+  "workbench.recordings.mute": "Mute",
+  "workbench.recordings.unmute": "Unmute",
+  "workbench.recordings.volume": "Volume",
+  "workbench.recordings.speed": "Playback speed",
+  "workbench.recordings.deleteRepair": "Check whether the audio file is in use and whether the folder allows changes, then retry."
 }

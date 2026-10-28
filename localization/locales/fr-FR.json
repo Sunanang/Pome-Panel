@@ -25,6 +25,8 @@
   "copy.moreTasksCompleted.1ac38a": "{arg1} plus de tâches terminées",
   "copy.taskDueSoon.52facb": "Tâche à rendre prochainement",
   "copy.dueWithin1Hour.955b14": "À payer dans 1 heure",
+  "copy.taskOverdue.d31df8": "Tâche en retard",
+  "copy.deadlineHasPassed.37e6a6": "La date limite est dépassée",
   "copy.focusTimer.e7d0e7": "Minuterie de mise au point",
   "copy.focusSessionComplete.66ee96": "Séance de concentration terminée",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "Votre session de mise au point {arg1} minute est terminée",
@@ -1338,7 +1340,7 @@
   "settings.display.title": "Affichage",
   "settings.display.allQuotas": "Quotas de fournisseurs",
   "settings.notifications.topBubble": "Principaux rappels de bulles",
-  "settings.notifications.topBubbleHint": "Afficher les achèvements de l'IA, les invites d'attente et les tâches à accomplir en haut",
+  "settings.notifications.topBubbleHint": "Affiche en haut les fins d’IA, les attentes et les tâches bientôt dues ou en retard",
   "settings.notifications.topBubbleEnabled": "Principaux rappels de bulles activés.",
   "settings.notifications.topBubbleDisabled": "Rappels de bulles supérieures désactivés.",
   "settings.notifications.topBubbleFailed": "Impossible de modifier les paramètres des bulles supérieures.",
@@ -1537,5 +1539,12 @@
   "ui.delete.categoryHint": "Cette catégorie et ses {count} tâches seront supprimées.",
   "ui.delete.todoTitle": "Supprimer la tâche",
   "ui.delete.credentialTitle": "Supprimer les identifiants",
-  "ui.delete.groupTitle": "Supprimer le groupe de liens"
+  "ui.delete.groupTitle": "Supprimer le groupe de liens",
+  "wb.todo.summary": "{pending} à faire · {total} au total",
+  "workbench.recordings.seek": "Position de lecture",
+  "workbench.recordings.mute": "Couper le son",
+  "workbench.recordings.unmute": "Rétablir le son",
+  "workbench.recordings.volume": "Volume",
+  "workbench.recordings.speed": "Vitesse de lecture",
+  "workbench.recordings.deleteRepair": "Vérifiez si le fichier audio est utilisé et les autorisations du dossier, puis réessayez."
 }

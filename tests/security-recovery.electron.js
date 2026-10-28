@@ -110,7 +110,7 @@ async function run(contents) {
   await until(contents, '!modeBusy');
   await js(`setActiveTab('credentials')`);
   await until(contents, `document.getElementById('tab-credentials').classList.contains('active') && !tabBusy`);
-  await js(`document.getElementById('credential-service').value='Unsaved draft';document.getElementById('credential-account').value='fixture';document.getElementById('credential-password').value='fixture-draft';document.getElementById('credential-save').click()`);
+  await js(`document.getElementById('credential-new').click();document.getElementById('credential-service').value='Unsaved draft';document.getElementById('credential-account').value='fixture';document.getElementById('credential-password').value='fixture-draft';document.getElementById('credential-save').click()`);
   await until(contents, `document.getElementById('credential-save').disabled && !document.getElementById('ui-error-bar').hidden`);
   assert.equal(await js(`document.getElementById('credential-service').value`), 'Unsaved draft');
   const capture = async name => {

@@ -198,6 +198,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   deleteClipImages: (paths) => ipcRenderer.invoke('clipboard:deleteImages', paths),
   onNewClipEntry: (cb) => subscribe('clipboard:new-entry', (evt, entry) => cb(entry)),
   onOpenClip: (cb) => subscribe('app:open-clip', () => cb()),
+  onOpenTodo: (cb) => subscribe('app:open-todo', (event, payload) => cb(payload || {})),
   onOpenApiSettings: (cb) => subscribe('app:open-api-settings', () => cb()),
   getMirrorImage: () => ipcRenderer.invoke('mirror:get-image'),
   chooseMirrorImage: () => ipcRenderer.invoke('mirror:choose-image'),

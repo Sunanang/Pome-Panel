@@ -29,6 +29,8 @@
   "copy.moreTasksCompleted.1ac38a": "{arg1} выполнено больше задач",
   "copy.taskDueSoon.52facb": "Задача скоро будет выполнена",
   "copy.dueWithin1Hour.955b14": "Срок оплаты в течение 1 часа",
+  "copy.taskOverdue.d31df8": "Задача просрочена",
+  "copy.deadlineHasPassed.37e6a6": "Срок уже прошёл",
   "copy.focusTimer.e7d0e7": "Таймер фокусировки",
   "copy.focusSessionComplete.66ee96": "Фокус-сессия завершена",
   "copy.yourMinuteFocusSessionHasEnded.7f7746": "Ваша фокус-сессия продолжительностью {arg1} завершилась.",
@@ -1360,7 +1362,7 @@
   "settings.display.title": "Дисплей",
   "settings.display.allQuotas": "Квоты провайдера",
   "settings.notifications.topBubble": "Лучшие всплывающие напоминания",
-  "settings.notifications.topBubbleHint": "Показывать завершенные действия ИИ, подсказки об ожидании и текущие дела вверху.",
+  "settings.notifications.topBubbleHint": "Показывает сверху завершение ИИ, ожидание и напоминания о сроках и просрочке",
   "settings.notifications.topBubbleEnabled": "Включены верхние всплывающие напоминания.",
   "settings.notifications.topBubbleDisabled": "Напоминания о верхних всплывающих окнах отключены.",
   "settings.notifications.topBubbleFailed": "Не удалось изменить настройки верхнего пузырька.",
@@ -1559,5 +1561,12 @@
   "ui.delete.categoryHint": "Будет удалена эта категория и задачи в ней: {count}.",
   "ui.delete.todoTitle": "Удалить задачу",
   "ui.delete.credentialTitle": "Удалить учётные данные",
-  "ui.delete.groupTitle": "Удалить группу ссылок"
+  "ui.delete.groupTitle": "Удалить группу ссылок",
+  "wb.todo.summary": "Не завершено: {pending} · Всего: {total}",
+  "workbench.recordings.seek": "Позиция воспроизведения",
+  "workbench.recordings.mute": "Выключить звук",
+  "workbench.recordings.unmute": "Включить звук",
+  "workbench.recordings.volume": "Громкость",
+  "workbench.recordings.speed": "Скорость воспроизведения",
+  "workbench.recordings.deleteRepair": "Проверьте, не используется ли аудиофайл, и права доступа к папке, затем повторите попытку."
 }
