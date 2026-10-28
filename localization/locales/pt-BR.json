@@ -1546,5 +1546,10 @@
   "workbench.recordings.unmute": "Ativar som",
   "workbench.recordings.volume": "Volume",
   "workbench.recordings.speed": "Velocidade de reprodução",
-  "workbench.recordings.deleteRepair": "Verifique se o áudio está em uso e as permissões da pasta. Depois, tente novamente."
+  "workbench.recordings.deleteRepair": "Verifique se o áudio está em uso e as permissões da pasta. Depois, tente novamente.",
+  "todo.overdueSummary": "{count} tarefas vencidas",
+  "todo.overdueSummaryDetail": "Abra Tarefas para revisar todas",
+  "todo.reminderStorageError": "Não foi possível salvar o estado dos lembretes. Verifique o espaço livre e as permissões da pasta de dados. Se o arquivo estiver corrompido, restaure-o de um backup e tente novamente.",
+  "todo.reminderSyncError": "O estado foi salvo localmente, mas não na fila de sincronização do NAS. Restabeleça a conexão e tente novamente.",
+  "todo.reminderRetry": "Corrija o problema e tente salvar o estado dos lembretes novamente."
 }

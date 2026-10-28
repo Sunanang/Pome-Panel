@@ -13,7 +13,7 @@ const {
   isTokenExpired,
   publicDeviceRow,
 } = require('./pairing');
-const { normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory } = require('../packages/sync-protocol');
+const { normalizeSyncedCompletion, mergeSyncedCompletions, trimCompletionHistory, mergeReminderMark } = require('../packages/sync-protocol');
 const SYNC_COLLECTIONS = ['todos', 'notes', 'links', 'commands', 'clipboardHistory', 'aiCompletions', 'recordings', 'aiSettings', 'secrets'];
 const DAY = 86400000;
 const { createCsrfStore } = require('./csrf');
@@ -400,6 +400,7 @@ function createMemoryStore(options = {}) {
         applied.push({ clientMutationId: m.clientMutationId, status: 'conflict', serverRev: existing.serverRev }); continue;
       }
       let payload = m.payload || {};
+      if (m.collection === 'todos' && m.op !== 'delete' && existing) payload = mergeReminderMark(existing.payload, payload);
       if (m.collection === 'aiCompletions' && m.op !== 'delete') {
         payload = existing ? mergeSyncedCompletions(existing.payload, payload) : normalizeSyncedCompletion(payload);
         if (!payload || m.entityId !== `completion:${payload.id}`) throw new Error('invalid_ai_completion');

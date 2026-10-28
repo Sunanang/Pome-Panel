@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Persist workspace reminder receipts atomically only after display; recover unseen queued tasks after re-enabling or restarting. Deduplicate by task and deadline so quick edits remain eligible. Preserve matching reminder marks across desktop/NAS sync with persistent retryable failures, batched receipts and sync transactions, and migration/recovery guards. Group at least three overdue tasks into a localized summary that opens and highlights its members; translate active summaries without replaying them. Label the injected AI storage warning in tests while preserving production errors.
+
 - Remind tasks one hour before their deadline, with an overdue catch-up only when no reminder was sent. Send at most one reminder per deadline; clicking the bubble expands Tasks and locates the item.
 
 - Preserve new credential drafts across delayed saves and list refreshes, and report save failures persistently. Retain recordings and transcripts after failed audio deletion, remove only successful bulk items, guard incoming versions, and require confirmation when retrying.

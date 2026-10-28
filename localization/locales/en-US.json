@@ -1552,5 +1552,10 @@
   "workbench.recordings.unmute": "Unmute",
   "workbench.recordings.volume": "Volume",
   "workbench.recordings.speed": "Playback speed",
-  "workbench.recordings.deleteRepair": "Check whether the audio file is in use and whether the folder allows changes, then retry."
+  "workbench.recordings.deleteRepair": "Check whether the audio file is in use and whether the folder allows changes, then retry.",
+  "todo.overdueSummary": "{count} overdue tasks",
+  "todo.overdueSummaryDetail": "Open Tasks to review them together",
+  "todo.reminderStorageError": "Could not save reminder status. Check free disk space and data folder permissions. If the reminder file is damaged, restore it from a backup and retry.",
+  "todo.reminderSyncError": "Reminder status is saved locally but could not enter the NAS sync queue. Retry after restoring the connection.",
+  "todo.reminderRetry": "Fix the issue, then retry saving the reminder status."
 }

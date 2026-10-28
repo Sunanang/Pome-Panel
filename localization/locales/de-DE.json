@@ -1546,5 +1546,10 @@
   "workbench.recordings.unmute": "Ton einschalten",
   "workbench.recordings.volume": "Lautstärke",
   "workbench.recordings.speed": "Wiedergabegeschwindigkeit",
-  "workbench.recordings.deleteRepair": "Prüfen Sie, ob die Audiodatei verwendet wird und ob der Ordner Änderungen erlaubt. Versuchen Sie es erneut."
+  "workbench.recordings.deleteRepair": "Prüfen Sie, ob die Audiodatei verwendet wird und ob der Ordner Änderungen erlaubt. Versuchen Sie es erneut.",
+  "todo.overdueSummary": "{count} überfällige Aufgaben",
+  "todo.overdueSummaryDetail": "Aufgaben öffnen und gemeinsam prüfen",
+  "todo.reminderStorageError": "Der Erinnerungsstatus konnte nicht gespeichert werden. Prüfe freien Speicherplatz und Ordnerrechte. Ist die Erinnerungsdatei beschädigt, stelle sie aus einer Sicherung wieder her und versuche es erneut.",
+  "todo.reminderSyncError": "Der Erinnerungsstatus ist lokal gespeichert, konnte aber nicht in die NAS-Synchronisierungswarteschlange geschrieben werden. Stelle die Verbindung wieder her und versuche es erneut.",
+  "todo.reminderRetry": "Behebe das Problem und versuche dann, den Erinnerungsstatus erneut zu speichern."
 }

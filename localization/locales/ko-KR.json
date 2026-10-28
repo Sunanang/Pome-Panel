@@ -1546,5 +1546,10 @@
   "workbench.recordings.unmute": "음소거 해제",
   "workbench.recordings.volume": "음량",
   "workbench.recordings.speed": "재생 속도",
-  "workbench.recordings.deleteRepair": "오디오 파일이 사용 중인지와 폴더 권한을 확인한 후 다시 시도하세요."
+  "workbench.recordings.deleteRepair": "오디오 파일이 사용 중인지와 폴더 권한을 확인한 후 다시 시도하세요.",
+  "todo.overdueSummary": "기한이 지난 할 일 {count}개",
+  "todo.overdueSummaryDetail": "할 일을 열어 함께 확인하세요",
+  "todo.reminderStorageError": "알림 상태를 저장하지 못했습니다. 디스크 여유 공간과 데이터 폴더 권한을 확인하세요. 알림 파일이 손상된 경우 백업에서 복원한 후 다시 시도하세요.",
+  "todo.reminderSyncError": "알림 상태는 기기에 저장되었지만 NAS 동기화 대기열에 기록하지 못했습니다. 연결을 복구한 후 다시 시도하세요.",
+  "todo.reminderRetry": "문제를 해결한 후 알림 상태 저장을 다시 시도하세요."
 }

@@ -248,7 +248,8 @@ async function run(mainContents) {
   await until(() => !notificationWindow() || !notificationWindow().isVisible(), 'normal countdown resumes and closes');
   // Exercise the real todo IPC rather than creating a completion record for a reminder.
   const before = JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length;
-  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-due',text:'提交 Pome Panel 1.4 发布说明',deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0}])`);
+  const todoDeadline = new Date(Date.now()+1800000).toISOString();
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-due',text:'提交 Pome Panel 1.4 发布说明',deadline:${JSON.stringify(todoDeadline)},done:false,remindedAt:0}])`);
   win = await shown('提交 Pome Panel 1.4 发布说明');
   assert.equal(await evaluate(win, 'currentNotification.status'), 'due');
   assert.equal(await evaluate(win, 'detailElement.textContent'), '将在 1 小时内截止');
@@ -261,13 +262,18 @@ async function run(mainContents) {
       text: '提交 Pome Panel 1.4 发布说明',
       done: false,
       createdAt: Date.now(),
-      deadline: new Date(Date.now()+1800000).toISOString(),
+      deadline: ${JSON.stringify(todoDeadline)},
       remindedAt: 0,
     }];
     if (typeof renderTodoBoard === 'function') renderTodoBoard();
     if (typeof saveData === 'function') saveData(data);
   })()`);
+  const canFocusTodo = await mainContents.executeJavaScript('notchAPI.capabilities.features.windowFocus');
   await evaluate(win, 'void activateNotification()');
+  if (!canFocusTodo) {
+    await until(() => !notificationWindow() || !notificationWindow().isVisible(), 'native-off todo bubble only dismisses');
+    mainContents.send('app:open-todo', { id: 'notification-due', deadline: todoDeadline });
+  }
   await until(async () => mainContents.executeJavaScript(`isExpanded === true && !modeBusy && activeTab === 'todo'`), 'todo bubble opens Tasks');
   await until(async () => mainContents.executeJavaScript(`!!document.querySelector('.todo-item[data-id="notification-due"].is-reminder-focus')`), 'todo row highlighted');
   await mainContents.executeJavaScript(`(() => {
@@ -384,13 +390,18 @@ async function verifyMcpAuthorization(mainContents) {
     if (to === filePath) { writes++; throw Object.assign(new Error('fixture ENOSPC'), { code: 'ENOSPC' }); }
     return rename(from, to);
   };
+  const expectedWarnings = [], warn = console.warn;
+  console.warn = (...args) => expectedWarnings.push(args.join(' '));
   try {
     const response = await fetch(`http://127.0.0.1:${port}/notify/cursor`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(done),
     });
     assert.equal(response.status, 503);
     assert.equal((await response.json()).error, 'ENOSPC');
-  } finally { fs.renameSync = rename; }
+  } finally { fs.renameSync = rename; console.warn = warn; }
+  assert.equal(expectedWarnings.length, 1, 'only the injected storage failure warns');
+  assert.match(expectedWarnings[0], /AI|待处理/);
+  console.log('[expected fixture: ENOSPC] AI attention write rejected; preserved bytes and retry checked');
   assert.equal(writes, 1);
   assert.equal(fs.readFileSync(filePath, 'utf8'), beforeFailure);
   assert.equal((await pending()).items.some(row => row.event.requestId === retryAuth.requestId), true);

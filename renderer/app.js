@@ -77,6 +77,7 @@ function applyTodosSyncProjectionPayload(projection) {
   } finally {
     applyingSyncTodosProjection = false;
   }
+  rescheduleTodoReminders();
   return true;
 }
 
@@ -352,7 +353,7 @@ function saveData(data) {
   }
   if (window.notchAPI && typeof window.notchAPI.scheduleTodoReminders === 'function') {
     const reminders = PRIORITIES.flatMap((priority) => data[priority] || []);
-    window.notchAPI.scheduleTodoReminders(reminders).catch(() => {});
+    rescheduleTodoReminders(reminders);
   }
   return true;
 }
@@ -587,27 +588,34 @@ async function removeTodoCategory(priority) {
   });
   renderTodoBoard();
 }
-if (window.notchAPI && typeof window.notchAPI.scheduleTodoReminders === 'function') {
-  window.notchAPI
-    .scheduleTodoReminders(PRIORITIES.flatMap((priority) => data[priority] || []))
-    .catch(() => {});
+function applyTodoReminderReceipts(receipts) {
+  let changed = false;
+  const byId = new Map(PRIORITIES.flatMap(priority => data[priority] || []).map(item => [item.id, item]));
+  for (const payload of receipts || []) {
+    const item = byId.get(payload?.id), stamp = Number(payload?.remindedAt);
+    if (!item || Date.parse(item.deadline) !== Date.parse(payload.deadline)
+      || !Number.isFinite(stamp) || stamp <= Number(item.remindedAt || 0)) continue;
+    item.remindedAt = stamp;
+    changed = true;
+  }
+  if (changed) saveData(data);
 }
 
-if (window.notchAPI && typeof window.notchAPI.onTodoReminder === 'function') {
-  window.notchAPI.onTodoReminder((payload) => {
-    if (!payload || !payload.id) return;
-    let changed = false;
-    PRIORITIES.forEach((priority) => {
-      const item = (data[priority] || []).find((todo) => (
-        todo.id === payload.id && String(todo.deadline || '') === String(payload.deadline || '')
-      ));
-      if (!item) return;
-      item.remindedAt = Math.max(0, Number(payload.remindedAt) || Date.now());
-      changed = true;
-    });
-    if (changed) saveData(data);
-  });
+function rescheduleTodoReminders(items = PRIORITIES.flatMap(priority => data[priority] || [])) {
+  window.notchAPI?.scheduleTodoReminders?.(items, workspacePersistenceRoot)
+    .then(result => { if (result?.ok) applyTodoReminderReceipts(result.reminded); })
+    .catch(() => {});
 }
+rescheduleTodoReminders();
+window.notchAPI?.onTodoReminder?.(payload => applyTodoReminderReceipts(payload?.items || [payload]));
+window.notchAPI?.onTodoReminderError?.(payload => {
+  if (payload?.cleared) { window.NotchUi?.clearError('todo-reminders'); return; }
+  showStatusToast(payload?.diagnostic || payload?.message || pomeLocaleRendererApp.t('todo.reminderStorageError'), {
+    kind: 'error', scope: 'todo-reminders',
+    messageKey: ['todo.reminderStorageError', 'todo.reminderSyncError'].includes(payload?.messageKey) ? payload.messageKey : 'todo.reminderStorageError',
+    repairKey: 'todo.reminderRetry', onRepair: () => rescheduleTodoReminders(),
+  });
+});
 
 if (window.notchAPI && typeof window.notchAPI.onSyncTodosProjection === 'function') {
   window.notchAPI.onSyncTodosProjection((projection) => {
@@ -1236,38 +1244,27 @@ if (window.notchAPI && typeof window.notchAPI.onCollapseRequest === 'function') 
 // 全局快捷键召唤也走同一套 Tab 与展开状态机，避免出现另一种突兀的入场路径。
 if (window.notchAPI && typeof window.notchAPI.onOpenClip === 'function') {
   window.notchAPI.onOpenClip(async () => {
-    await setActiveTab('clip');
+    // Expand first: setMode(true) resets to the default launch tab.
     if (!isExpanded) await setMode(true);
+    await setActiveTab('clip');
   });
 }
 
 let todoReminderFocusTimer = null;
 function focusTodoFromReminder(payload) {
-  const id = String(payload?.id || '');
-  if (!id) return false;
-  const deadline = String(payload?.deadline || '');
-  const matchByDeadline = deadline
-    ? PRIORITIES.some((priority) => (data[priority] || []).some((todo) => (
-      todo.id === id && String(todo.deadline || '') === deadline
-    )))
-    : false;
-  const found = PRIORITIES.some((priority) => (data[priority] || []).some((todo) => todo.id === id));
-  if (!found) return false;
-  if (deadline && !matchByDeadline) {
-    // Deadline drifted (edited); still open by id when the row exists.
-  }
-  const el = document.querySelector(`.todo-item[data-id="${CSS.escape(id)}"]`);
-  if (!el) return false;
-  document.querySelectorAll('.todo-item.is-reminder-focus').forEach((node) => {
-    node.classList.remove('is-reminder-focus');
-  });
-  el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  el.classList.add('is-reminder-focus');
-  el.querySelector('[data-action="toggle"]')?.focus({ preventScroll: true });
+  const ids = new Set((Array.isArray(payload?.ids) ? payload.ids : [payload?.id]).map(String));
+  const rows = [...document.querySelectorAll('.todo-item[data-id]')].filter(el => ids.has(el.dataset.id));
+  const target = rows.find(el => el.getBoundingClientRect().width > 0);
+  if (!target) return false;
+  document.querySelectorAll('.todo-item.is-reminder-focus').forEach(el => el.classList.remove('is-reminder-focus'));
+  rows.forEach(el => el.classList.add('is-reminder-focus'));
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  target.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+  target.querySelector('[data-action="toggle"]')?.focus({ preventScroll: true });
   if (todoReminderFocusTimer) clearTimeout(todoReminderFocusTimer);
   todoReminderFocusTimer = setTimeout(() => {
     todoReminderFocusTimer = null;
-    el.classList.remove('is-reminder-focus');
+    rows.forEach(el => el.classList.remove('is-reminder-focus'));
   }, 2400);
   return true;
 }
@@ -1278,13 +1275,11 @@ if (window.notchAPI && typeof window.notchAPI.onOpenTodo === 'function') {
     // must be selected after the panel is open.
     if (!isExpanded) await setMode(true);
     await setActiveTab('todo');
-    // Wait for expand/tab paint so the row exists before scrolling.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (focusTodoFromReminder(payload)) return;
-        setTimeout(() => focusTodoFromReminder(payload), 280);
-      });
-    });
+    const tryFocus = (attempt = 0) => {
+      if (!isExpanded || activeTab !== 'todo' || focusTodoFromReminder(payload) || attempt >= 4) return;
+      setTimeout(() => tryFocus(attempt + 1), 120 + attempt * 80);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(() => tryFocus(0)));
   });
 }
 
@@ -5688,6 +5683,7 @@ document.addEventListener('nas-sync:todos-projection', (event) => {
   data = loadData();
   reconcileTodoCategoryOrderFromData();
   renderTodoBoard();
+  rescheduleTodoReminders();
 });
 renderClipList(); // 首屏确保 clip-list DOM 就绪时渲染一次（幂等）
 renderClipFavs(); // 首屏渲染收藏剪贴块

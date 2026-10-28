@@ -24,6 +24,7 @@ const http = require('http');
 const { validatePublicHttpUrl, fetchPublicHttp, readLimitedBody } = require('./public-http');
 const zlib = require('zlib');
 const crypto = require('crypto');
+const { createTodoReminderReceipts, reminderKey } = require('./todoReminders');
 const { createTaskInbox, completionEventId, rebuildTaskInbox } = require('./taskInbox');
 const { createAiSourceHooks } = require('./aiSourceHooks');
 const { classifyAiEvent, MANUS_TRUSTED_ADAPTER } = require('./aiEventPolicy');
@@ -81,6 +82,7 @@ const {
   recordingExtension,
   todoReminderState,
   todoReminderTimerDelay,
+  mergeTodoReminderSchedule,
   taskNotificationContent,
   normalizeTaskNotificationWindow,
   normalizeCredentialInput,
@@ -144,6 +146,7 @@ const {
   writeCategoryUpsert,
   runTodosSyncCycle,
   gateSchemaCompatibility,
+  buildTodoEntityPayload,
 } = require('./todos-sync');
 const {
   countWorkspaceContent,
@@ -389,7 +392,6 @@ const TASK_NOTIFICATION_ENTER_MS = process.platform === 'win32' ? 220 : 300;
 const TASK_NOTIFICATION_SCREEN_MARGIN = 12;
 const TASK_NOTIFICATION_VISIBLE_MS = 6000;
 const TASK_NOTIFICATION_LEAVE_MS = 420;
-const TASK_NOTIFICATION_DEDUPE_MS = 2000;
 // AI bubbles keep only the newest completion/awaiting item. Todo deadline
 // reminders retain their own FIFO and cannot be discarded by AI arrivals.
 const TASK_NOTIFICATION_BODY_LIMIT = 64 * 1024;
@@ -513,7 +515,6 @@ function replaceAiTaskNotification() {
   }
   showNextTaskNotification();
 }
-const recentTaskNotifications = new Map();
 let taskInboxStore = null;
 let taskInboxFailure = null;
 function reportTaskInboxFailure(error) {
@@ -537,6 +538,8 @@ function getTaskInbox() {
 }
 let todoReminderTimer = null;
 let scheduledTodoReminders = [];
+let todoReminderRoot = null;
+let todoReminderReceipts = null;
 
 let clipPollTimer = null;
 let clipBaselineTimer = null;
@@ -928,18 +931,14 @@ function enqueueTaskNotification(notification) {
       return 'save_failed';
     }
   }
-  const now = Date.now();
-  for (const [key, seenAt] of recentTaskNotifications) {
-    if (now - seenAt > TASK_NOTIFICATION_DEDUPE_MS) recentTaskNotifications.delete(key);
+  if (!taskNotificationsEnabled()) return 'suppressed';
+
+  if (notification.source === 'todo') {
+    const keys = new Set(todoNotificationItems(notification).map(reminderKey));
+    if ([activeTaskNotification, ...taskNotificationQueue].filter(Boolean).some(row =>
+      row.source === 'todo' && todoNotificationItems(row).some(item => keys.has(reminderKey(item))))) return 'duplicate';
   }
 
-  const identity = notification.taskId || `${notification.title}:${notification.project}`;
-  const dedupeKey = `${notification.source}:${identity}`;
-  const lastSeenAt = recentTaskNotifications.get(dedupeKey);
-  if (notification.source === 'todo' && lastSeenAt && now - lastSeenAt <= TASK_NOTIFICATION_DEDUPE_MS) return 'duplicate';
-  recentTaskNotifications.set(dedupeKey, now);
-
-  if (!taskNotificationsEnabled()) return 'suppressed';
   notificationScheduler.enqueue(notification);
   if (notification.source === 'todo') {
     if (!activeTaskNotification) showNextTaskNotification();
@@ -955,66 +954,129 @@ function clearTodoReminderTimer() {
   todoReminderTimer = null;
 }
 
-function fireTodoReminder(todo, kind = 'due') {
-  const deadline = Date.parse(String(todo.deadline || ''));
-  const overdue = kind === 'expired-missed';
-  const notification = {
-    eventId: `todo-${todo.id}-${deadline}-${overdue ? 'overdue' : 'due'}`,
-    source: 'todo',
-    status: overdue ? 'overdue' : 'due',
-    taskId: String(todo.id || ''),
-    title: String(todo.text || '').trim()
-      || (overdue ? PomeI18n.t('copy.taskOverdue.d31df8') : PomeI18n.t('copy.taskDueSoon.52facb')),
-    project: '',
-    detail: overdue
-      ? PomeI18n.t('copy.deadlineHasPassed.37e6a6')
-      : PomeI18n.t('copy.dueWithin1Hour.955b14'),
-    deadline,
-    completedAt: Date.now(),
-  };
-  enqueueTaskNotification(notification);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('todo:reminded', {
-      id: notification.taskId,
-      deadline: String(todo.deadline || ''),
-      remindedAt: notification.completedAt,
-    });
-  }
+function todoNotificationItems(notification) {
+  return notification?.todoItems || (notification?.source === 'todo'
+    ? [{ id: notification.taskId, deadline: new Date(notification.deadline).toISOString() }] : []);
+}
+
+function reportTodoReminderError(key = 'todo.reminderStorageError', error = null) {
+  const message = PomeI18n.t(key);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('todo:reminder-error', {
+    message, messageKey: key, diagnostic: [message, error?.code || error?.message].filter(Boolean).join('\n'),
+  });
+}
+
+function syncTodoReminderReceipts(items) {
+  const ctx = readBoundSyncContext();
+  if (!ctx.ok) { if (ctx.error !== 'not_bound') throw new Error(ctx.error); return; }
+  if (workspaceSwitching || migrationSession.readonly || recoveryStore().read().paused) return;
+  let written = false;
+  ctx.store._runInTransaction(() => {
+    for (const item of items) {
+      const entity = ctx.store.getEntity(ctx.accountId, 'todos', item.id);
+      if (!entity || entity.deletedAt != null || reminderKey(entity.payload) !== reminderKey(item)
+        || Number(entity.payload.remindedAt) >= item.remindedAt) continue;
+      const result = ctx.store.writeLocalMutation({
+        accountId: ctx.accountId, deviceId: ctx.deviceId, collection: 'todos', entityId: item.id, op: 'upsert',
+        payload: buildTodoEntityPayload({ ...entity.payload, remindedAt: item.remindedAt }, entity.payload.categoryId),
+        clientMutationId: crypto.randomUUID(), baseServerRev: ctx.store.getPullCursor(ctx.accountId, 'todos').serverRev,
+        clientTime: Date.now(),
+      });
+      if (!result.ok) throw new Error(result.reason || 'todo_reminder_sync_failed');
+      written = true;
+    }
+  });
+  if (written) runBoundTodosSyncCycle().catch(() => {});
+}
+
+function acknowledgeTodoReminder(notification) {
+  if (notification?.source !== 'todo' || notification.todoReceiptSaved || notification.todoRoot !== workspaceRoot()) return true;
+  const keys = new Set(todoNotificationItems(notification).map(reminderKey));
+  const current = scheduledTodoReminders.filter(item => !item.done && keys.has(reminderKey(item)));
+  try {
+    const receipts = todoReminderReceipts.markShown(current);
+    const byKey = new Map(scheduledTodoReminders.map(row => [reminderKey(row), row]));
+    for (const receipt of receipts) {
+      const item = byKey.get(reminderKey(receipt));
+      if (item) item.remindedAt = receipt.remindedAt;
+    }
+    if (receipts.length && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('todo:reminded', receipts.length === 1 ? receipts[0] : { items: receipts });
+    }
+    notification.todoReceiptSaved = true;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('todo:reminder-error', { cleared: true });
+    try { syncTodoReminderReceipts(receipts); } catch (error) { reportTodoReminderError('todo.reminderSyncError', error); }
+    return true;
+  } catch (error) { reportTodoReminderError('todo.reminderStorageError', error); return false; }
+}
+
+function fireTodoReminder(items, overdue = false) {
+  const first = items[0], summary = items.length > 1;
+  return enqueueTaskNotification({
+    eventId: `todo-${crypto.createHash('sha256').update(items.map(reminderKey).join()).digest('hex')}`,
+    source: 'todo', status: overdue ? 'overdue' : 'due', taskId: first.id,
+    title: summary ? PomeI18n.t('todo.overdueSummary', { count: items.length }) : first.text,
+    detail: summary ? PomeI18n.t('todo.overdueSummaryDetail') : '',
+    todoSummary: summary, todoCount: items.length,
+    todoItems: items.map(item => ({ id: item.id, deadline: item.deadline })),
+    todoRoot: todoReminderRoot, deadline: Date.parse(first.deadline), completedAt: Date.now(),
+  });
 }
 
 function scheduleNextTodoReminder() {
   clearTodoReminderTimer();
-  const now = Date.now();
+  if (todoReminderRoot !== workspaceRoot()) return;
+  // Rebuild only unshown shells. Unseen tasks remain eligible after disabling,
+  // quitting, editing, deleting or receiving a newer sync projection.
+  for (let i = taskNotificationQueue.length - 1; i >= 0; i--) {
+    if (taskNotificationQueue[i].source === 'todo') taskNotificationQueue.splice(i, 1);
+  }
+  const activeKeys = new Set(todoNotificationItems(activeTaskNotification).map(reminderKey));
+  const now = Date.now(), due = [], overdue = [];
   let nextDelay = Infinity;
   for (const todo of scheduledTodoReminders) {
     const status = todoReminderState(todo, now, TODO_REMINDER_LEAD_MS);
-    if (status.state === 'due' || status.state === 'expired-missed') {
-      todo.remindedAt = now;
-      fireTodoReminder(todo, status.state);
-      continue;
-    }
-    if (status.state === 'scheduled') nextDelay = Math.min(nextDelay, status.delayMs);
+    if (activeKeys.has(reminderKey(todo))) continue;
+    if (status.state === 'due') due.push(todo);
+    else if (status.state === 'expired-missed') overdue.push(todo);
+    else if (status.state === 'scheduled') nextDelay = Math.min(nextDelay, status.delayMs);
   }
-  if (Number.isFinite(nextDelay)) {
-    todoReminderTimer = setTimeout(scheduleNextTodoReminder, todoReminderTimerDelay(nextDelay));
-  }
+  overdue.sort((a, b) => Date.parse(a.deadline) - Date.parse(b.deadline));
+  if (overdue.length >= 3) fireTodoReminder(overdue, true);
+  else overdue.forEach(todo => fireTodoReminder([todo], true));
+  due.forEach(todo => fireTodoReminder([todo]));
+  if (Number.isFinite(nextDelay)) todoReminderTimer = setTimeout(scheduleNextTodoReminder, todoReminderTimerDelay(nextDelay));
+  sendTaskNotificationQueueCount();
 }
 
-ipcMain.handle('todos:schedule-reminders', (event, items) => {
-  scheduledTodoReminders = Array.isArray(items)
-    ? items
-      .filter((item) => item && typeof item === 'object')
-      .map((item) => ({
-        id: String(item.id || '').slice(0, 160),
-        text: String(item.text || '').trim().slice(0, 160),
-        deadline: String(item.deadline || ''),
-        done: item.done === true,
-        remindedAt: Math.max(0, Number(item.remindedAt) || 0),
-      }))
-      .filter((item) => item.id && item.text)
-    : [];
-  scheduleNextTodoReminder();
-  return { ok: true, count: scheduledTodoReminders.length };
+ipcMain.handle('todos:schedule-reminders', (event, items, expectedRoot) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return { ok: false, error: 'invalid_sender' };
+  if (workspaceSwitching) return { ok: false, error: 'workspace_switching' };
+  const root = workspaceRoot();
+  if (expectedRoot && path.resolve(expectedRoot) !== path.resolve(root)) return { ok: false, error: 'stale_workspace' };
+  if (todoReminderRoot !== root) {
+    scheduledTodoReminders = [];
+    todoReminderRoot = root;
+    todoReminderReceipts = createTodoReminderReceipts({ filePath: path.join(root, 'todo-reminders.json') });
+    if (activeTaskNotification?.source === 'todo') dismissActiveTaskNotificationShell();
+  }
+  try {
+    if (activeTaskNotification?.todoShown && !acknowledgeTodoReminder(activeTaskNotification)) {
+      return { ok: false, error: 'todo_reminder_storage_failed' };
+    }
+    scheduledTodoReminders = todoReminderReceipts.merge(mergeTodoReminderSchedule(scheduledTodoReminders, items));
+    try {
+      syncTodoReminderReceipts(scheduledTodoReminders.filter(row => row.remindedAt > 0));
+      mainWindow.webContents.send('todo:reminder-error', { cleared: true });
+    }
+    catch (error) { reportTodoReminderError('todo.reminderSyncError', error); }
+    scheduleNextTodoReminder();
+    return { ok: true, count: scheduledTodoReminders.length, reminded: scheduledTodoReminders.filter(row => row.remindedAt > 0).map(({ id, deadline, remindedAt }) => ({ id, deadline, remindedAt })) };
+  } catch (error) {
+    clearTodoReminderTimer();
+    reportTodoReminderError('todo.reminderStorageError', error);
+    return { ok: false, error: 'todo_reminder_storage_failed' };
+  }
 });
 
 ipcMain.handle('pomodoro:notify', (event, minutes) => {
@@ -1430,11 +1492,16 @@ function isActiveTaskNotificationSender(event, eventId) {
     && activeTaskNotification.eventId === eventId;
 }
 ipcMain.on('task-notification:shown', (event, eventId) => {
-  if (isActiveTaskNotificationSender(event, eventId)) startTaskNotificationCountdown();
+  if (isActiveTaskNotificationSender(event, eventId)) {
+    activeTaskNotification.todoShown = true;
+    acknowledgeTodoReminder(activeTaskNotification);
+    startTaskNotificationCountdown();
+  }
 });
 ipcMain.on('task-notification:close', (event, eventId) => {
   if (!isActiveTaskNotificationSender(event, eventId)) return;
   try {
+    if (activeTaskNotification.source === 'todo') acknowledgeTodoReminder(activeTaskNotification);
     if (activeTaskNotification.attentionKey) { getAiAttention().display(activeTaskNotification.attentionKey, true); refreshAttentionNotifications(); }
     else beginTaskNotificationDismiss();
   } catch { reportTaskEventFailure(PomeI18n.t('attention.storageError')); }
@@ -2209,6 +2276,10 @@ ipcMain.handle('settings:set-task-notifications', (event, enabled) => {
   if (!enabled) {
     notificationScheduler.clearDisplay();
     dismissActiveTaskNotificationShell();
+  } else {
+    // Reminders suppressed while the switch was off were not consumed; retry now.
+    scheduleNextTodoReminder();
+    showNextTaskNotification();
   }
   const settings = publicAppSettings();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', settings);
@@ -2782,12 +2853,15 @@ async function activateActiveTaskNotification(eventId = null) {
     if (!mainWindow || mainWindow.isDestroyed()) {
       return { ok: false, message: PomeI18n.t('copy.thisTaskReminderIsNoLongerAvailable.f287da') };
     }
+    notification.todoShown = true;
+    acknowledgeTodoReminder(notification);
     notification.activationPending = true;
     setTaskNotificationPaused(true);
     const deadlineMs = Number(notification.deadline);
     if (!mainWindow.isVisible()) mainWindow.show();
     mainWindow.webContents.send('app:open-todo', {
       id: String(notification.taskId || ''),
+      ids: todoNotificationItems(notification).map(item => item.id),
       deadline: Number.isFinite(deadlineMs) && deadlineMs > 0
         ? new Date(deadlineMs).toISOString()
         : '',

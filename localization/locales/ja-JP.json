@@ -1546,5 +1546,10 @@
   "workbench.recordings.unmute": "ミュート解除",
   "workbench.recordings.volume": "音量",
   "workbench.recordings.speed": "再生速度",
-  "workbench.recordings.deleteRepair": "音声ファイルの使用状況とフォルダーの権限を確認してから、再試行してください。"
+  "workbench.recordings.deleteRepair": "音声ファイルの使用状況とフォルダーの権限を確認してから、再試行してください。",
+  "todo.overdueSummary": "期限切れのタスクが {count} 件",
+  "todo.overdueSummaryDetail": "タスクを開いてまとめて確認",
+  "todo.reminderStorageError": "通知状態を保存できませんでした。ディスクの空き容量とデータフォルダーの権限を確認してください。通知ファイルが破損している場合は、バックアップから復元して再試行してください。",
+  "todo.reminderSyncError": "通知状態は端末に保存されましたが、NAS 同期キューに書き込めませんでした。接続を復旧して再試行してください。",
+  "todo.reminderRetry": "問題を修正してから、通知状態の保存を再試行してください。"
 }

@@ -1513,5 +1513,10 @@
   "workbench.recordings.unmute": "取消静音",
   "workbench.recordings.volume": "音量",
   "workbench.recordings.speed": "播放速度",
-  "workbench.recordings.deleteRepair": "请检查录音文件是否被占用及文件夹权限，然后重试。"
+  "workbench.recordings.deleteRepair": "请检查录音文件是否被占用及文件夹权限，然后重试。",
+  "todo.overdueSummary": "{count} 项待办已过期",
+  "todo.overdueSummaryDetail": "打开待办，一起查看并处理",
+  "todo.reminderStorageError": "提醒状态未能保存。请检查剩余磁盘空间与数据文件夹权限；提醒文件损坏时，从备份恢复后重试。",
+  "todo.reminderSyncError": "提醒状态已保存在本机，但未能写入 NAS 同步队列。恢复连接后请重试。",
+  "todo.reminderRetry": "修复问题后，可重试保存提醒状态。"
 }

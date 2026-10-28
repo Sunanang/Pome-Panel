@@ -1546,5 +1546,10 @@
   "workbench.recordings.unmute": "Activar sonido",
   "workbench.recordings.volume": "Volumen",
   "workbench.recordings.speed": "Velocidad de reproducción",
-  "workbench.recordings.deleteRepair": "Comprueba si el audio está en uso y los permisos de la carpeta; después, inténtalo de nuevo."
+  "workbench.recordings.deleteRepair": "Comprueba si el audio está en uso y los permisos de la carpeta; después, inténtalo de nuevo.",
+  "todo.overdueSummary": "{count} tareas vencidas",
+  "todo.overdueSummaryDetail": "Abre Tareas para revisarlas juntas",
+  "todo.reminderStorageError": "No se pudo guardar el estado de los recordatorios. Revisa el espacio libre y los permisos de la carpeta de datos. Si el archivo está dañado, restáuralo desde una copia de seguridad y vuelve a intentarlo.",
+  "todo.reminderSyncError": "El estado se guardó localmente, pero no en la cola de sincronización del NAS. Restablece la conexión y vuelve a intentarlo.",
+  "todo.reminderRetry": "Soluciona el problema y vuelve a intentar guardar el estado de los recordatorios."
 }

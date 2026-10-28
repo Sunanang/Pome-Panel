@@ -65,17 +65,21 @@ const pomeNotificationProviders = typeof module === 'object' && module.exports ?
     const status = statusKey(data.status, source);
     const text = values => values.find(value => typeof value === 'string' && value.trim())?.trim() || '';
     const project = text([data.project, data.projectName, data.workspace]);
+    const todoSummary = source === 'todo' && data.todoSummary === true;
+    const todoCount = Number.isSafeInteger(data.todoCount) && data.todoCount > 0 ? data.todoCount : 1;
     return {
-      sourceKey: source, source: sources[source], status, project,
+      sourceKey: source, source: sources[source], status, project, todoSummary, todoCount,
       attentionKind: status === 'awaiting' ? attentionKind(data.attentionKind) : null,
       manualResolution: data.manualResolution === true,
       commandPreview: data.commandPreview === 'npm install' ? data.commandPreview : null,
       attentionTitleKey: ['attention.commandMasked', 'attention.sensitive', 'attention.generic'].includes(data.attentionTitleKey) ? data.attentionTitleKey : null,
       titleIsFallback: data.titleIsFallback === true || !concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])),
-      title: data.titleIsFallback === true ? fallbackTitle(source, status) : concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])) || fallbackTitle(source, status),
+      title: todoSummary ? pomeLocaleRendererNotificationDomain.t('todo.overdueSummary', { count: todoCount }) : data.titleIsFallback === true ? fallbackTitle(source, status) : concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])) || fallbackTitle(source, status),
       completionSummary: text([data.completionSummary, data.completion_summary, data.title]).slice(0, 4096),
       sessionTitle: text([data.sessionTitle, data.session_title]).slice(0, 256),
-      detail: status === 'due'
+      detail: todoSummary
+        ? pomeLocaleRendererNotificationDomain.t('todo.overdueSummaryDetail')
+        : status === 'due'
         ? pomeLocaleRendererNotificationDomain.t('copy.dueWithin1Hour.955b14')
         : status === 'overdue'
           ? pomeLocaleRendererNotificationDomain.t('copy.deadlineHasPassed.37e6a6')

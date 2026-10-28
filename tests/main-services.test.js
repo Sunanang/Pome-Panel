@@ -15,6 +15,7 @@ const {
   pasteResultToIpc,
   todoReminderState,
   todoReminderTimerDelay,
+  mergeTodoReminderSchedule,
   taskNotificationIdentity,
   normalizeTaskNotificationWindow,
   normalizeCredentialInput,
@@ -444,6 +445,25 @@ test('todoReminderState fires once within the final hour and catch-up once after
     'notified',
     'already reminded before DDL must not overdue-catch-up again'
   );
+  assert.equal(todoReminderState({ ...todo, done: true }, deadline - 1).state, 'done');
+  assert.equal(todoReminderState({ ...todo, deadline: '' }, deadline).state, 'invalid');
+  assert.equal(todoReminderState(todo, deadline).state, 'due', 'exact deadline is still the lead window');
+  assert.equal(todoReminderState(todo, deadline - 3600000).state, 'due', 'exact lead boundary is due');
+  assert.equal(todoReminderState(todo, deadline - 3600000 - 1).state, 'scheduled');
+});
+
+test('mergeTodoReminderSchedule keeps in-memory remindedAt ahead of stale renderer payloads', () => {
+  const deadline = '2026-08-22T10:00:00.000Z';
+  const previous = [{ id: 't1', text: '发布新版', deadline, done: false, remindedAt: 1700000001000 }];
+  const incoming = [
+    { id: 't1', text: '发布新版', deadline, done: false, remindedAt: 0 },
+    { id: 't2', text: '新任务', deadline, done: false, remindedAt: 0 },
+    { id: '', text: '丢弃', deadline, done: false, remindedAt: 0 },
+  ];
+  const merged = mergeTodoReminderSchedule(previous, incoming);
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].remindedAt, 1700000001000);
+  assert.equal(merged[1].remindedAt, 0);
 });
 
 test('todo reminder timers checkpoint far-future deadlines without overflowing Node timers', () => {

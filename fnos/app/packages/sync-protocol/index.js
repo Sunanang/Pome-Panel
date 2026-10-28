@@ -20,6 +20,7 @@ const pairing = require('./pairing');
 const migration = require('./migration');
 const endpoints = require('./endpoints');
 const secretBox = require('./secret-box');
+const todoReminders = require('./todo-reminders');
 const aiCompletions = require('./ai-completions');
 
 module.exports = {
@@ -32,4 +33,5 @@ module.exports = {
   ...endpoints,
   ...secretBox,
   ...aiCompletions,
+  ...todoReminders,
 };

@@ -1513,5 +1513,10 @@
   "workbench.recordings.unmute": "取消靜音",
   "workbench.recordings.volume": "音量",
   "workbench.recordings.speed": "播放速度",
-  "workbench.recordings.deleteRepair": "請檢查錄音檔案是否被佔用及資料夾權限，然後重試。"
+  "workbench.recordings.deleteRepair": "請檢查錄音檔案是否被佔用及資料夾權限，然後重試。",
+  "todo.overdueSummary": "{count} 項待辦已逾期",
+  "todo.overdueSummaryDetail": "開啟待辦，一起查看並處理",
+  "todo.reminderStorageError": "提醒狀態無法儲存。請檢查剩餘磁碟空間與資料夾權限；提醒檔案損壞時，從備份還原後重試。",
+  "todo.reminderSyncError": "提醒狀態已儲存在本機，但無法寫入 NAS 同步佇列。恢復連線後請重試。",
+  "todo.reminderRetry": "修復問題後，可重試儲存提醒狀態。"
 }

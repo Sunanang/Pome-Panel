@@ -2,6 +2,7 @@ const pomeLocaleMainServices = typeof module === 'object' && module.exports ? re
 const net = require('net');
 const path = require('path');
 const crypto = require('crypto');
+const { reminderKey, reminderStamp } = require('./packages/sync-protocol');
 const notificationDomain = require('./renderer/notification-domain');
 
 function isPrivateAddress(address) {
@@ -298,6 +299,40 @@ function todoReminderState(todo, now = Date.now(), leadMs = 60 * 60 * 1000) {
   const triggerAt = deadline - Math.max(0, Number(leadMs) || 0);
   if (current >= triggerAt) return { state: 'due', delayMs: 0 };
   return { state: 'scheduled', delayMs: triggerAt - current };
+}
+
+function todoReminderScheduleKey(todo) {
+  return reminderKey(todo);
+}
+
+/**
+ * Rebuild the in-memory reminder list from renderer payloads without losing a
+ * remindedAt that was just consumed but not yet flushed back through IPC.
+ */
+function mergeTodoReminderSchedule(previous, items) {
+  const remembered = new Map();
+  for (const row of Array.isArray(previous) ? previous : []) {
+    const key = todoReminderScheduleKey(row);
+    if (!key) continue;
+    remembered.set(key, Math.max(remembered.get(key) || 0, reminderStamp(row.remindedAt)));
+  }
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const id = String(item.id || '').slice(0, 160);
+      const text = String(item.text || '').trim().slice(0, 160);
+      const deadline = String(item.deadline || '');
+      const key = todoReminderScheduleKey({ id, deadline });
+      const incoming = reminderStamp(item.remindedAt);
+      return {
+        id,
+        text,
+        deadline,
+        done: item.done === true,
+        remindedAt: Math.max(incoming, remembered.get(key) || 0),
+      };
+    })
+    .filter((item) => item.id && item.text);
 }
 
 const MAX_NODE_TIMER_DELAY_MS = (2 ** 31) - 1;
@@ -1119,6 +1154,8 @@ module.exports = {
   normalizeWindowRows,
   todoReminderState,
   todoReminderTimerDelay,
+  todoReminderScheduleKey,
+  mergeTodoReminderSchedule,
   taskNotificationIdentity,
   taskNotificationContent,
   normalizeTaskNotificationWindow,

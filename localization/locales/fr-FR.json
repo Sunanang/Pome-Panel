@@ -1546,5 +1546,10 @@
   "workbench.recordings.unmute": "Rétablir le son",
   "workbench.recordings.volume": "Volume",
   "workbench.recordings.speed": "Vitesse de lecture",
-  "workbench.recordings.deleteRepair": "Vérifiez si le fichier audio est utilisé et les autorisations du dossier, puis réessayez."
+  "workbench.recordings.deleteRepair": "Vérifiez si le fichier audio est utilisé et les autorisations du dossier, puis réessayez.",
+  "todo.overdueSummary": "{count} tâches en retard",
+  "todo.overdueSummaryDetail": "Ouvrir les tâches pour les consulter ensemble",
+  "todo.reminderStorageError": "Impossible d’enregistrer l’état des rappels. Vérifiez l’espace disque et les droits du dossier de données. Si le fichier des rappels est endommagé, restaurez-le depuis une sauvegarde et réessayez.",
+  "todo.reminderSyncError": "L’état des rappels est enregistré localement, mais pas dans la file de synchronisation NAS. Rétablissez la connexion, puis réessayez.",
+  "todo.reminderRetry": "Corrigez le problème, puis réessayez d’enregistrer l’état des rappels."
 }

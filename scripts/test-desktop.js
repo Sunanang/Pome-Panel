@@ -20,11 +20,16 @@ env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-t
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
 env.NODE_OPTIONS = `${env.NODE_OPTIONS || ''} --require=${JSON.stringify(path.join(root, 'tests/provider-usage-fixtures.cjs'))}`.trim();
-for (const file of ['notch-focus', 'retained-workspace', 'workspace-lifecycle', 'metadata-races', 'migration-integrity', 'clipboard-generation', 'content-delete', 'workbench', 'startup', 'cursor-credentials', 'user-data-directory', 'todo-board-fixes', 'ai-usage', 'ai-usage-final', 'quota-refresh', 'codex-usage-accuracy', 'provider-credentials', 'home-layout-swap', 'home-card-hover', 'sun-home', 'sun-weather', 'almanac-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'settings-slim', 'ui-simplify', 'nas-settings-card', 'localization', 'normal-startup']) {
+for (const file of ['notch-focus', 'retained-workspace', 'workspace-lifecycle', 'metadata-races', 'migration-integrity', 'clipboard-generation', 'content-delete', 'workbench', 'startup', 'cursor-credentials', 'user-data-directory', 'todo-board-fixes', 'ai-usage', 'ai-usage-final', 'quota-refresh', 'codex-usage-accuracy', 'provider-credentials', 'home-layout-swap', 'home-card-hover', 'sun-home', 'sun-weather', 'almanac-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'todo-reminders', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'settings-slim', 'ui-simplify', 'nas-settings-card', 'localization', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   if (file === 'ui-simplify') env.POME_TEST_WELCOME = '1';
   run(require('electron'), [`tests/${file}.electron.js`]);
+  if (file === 'todo-reminders') {
+    env.POME_TODO_RESTART = '1';
+    run(require('electron'), ['tests/todo-reminders.electron.js']);
+    delete env.POME_TODO_RESTART;
+  }
   if (file === 'user-data-directory') {
     for (const phase of ['migrate', 'restart', 'switch', 'switched-restart', 'custom', 'fresh']) {
       env.POME_PROFILE_PHASE = phase;
@@ -60,6 +65,7 @@ for (const file of [
   'tests/work-hub-baseline.electron.js',
   'panelTiming.js',
   'atomicStorage.js',
+  'todoReminders.js',
   'taskInbox.js',
   'aiSourceHooks.js',
   'aiEventPolicy.js',
@@ -119,6 +125,7 @@ for (const file of [
   'sync-settings.js',
   'sync-tls-trust.js',
   'packages/sync-protocol/index.js',
+  'packages/sync-protocol/todo-reminders.js',
   'packages/sync-protocol/schema.js',
   'packages/sync-protocol/collections.js',
   'packages/sync-protocol/ai-completions.js',

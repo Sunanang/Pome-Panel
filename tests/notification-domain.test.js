@@ -70,3 +70,20 @@ test('queue indicator is hidden for zero and bounded for invalid or excessive co
   assert.equal(domain.queueCount({pendingCount: 3}), 3);
   assert.equal(domain.queueCount(999), 99);
 });
+
+
+test('overdue summary count and review action are localized in all ten languages', () => {
+  const i18n = require('../localization/runtime'), previous = i18n.getState();
+  try {
+    for (const { id } of require('../localization/languages.json')) {
+      i18n.setState(i18n.snapshot(id, [id]));
+      const summary = domain.normalize({ source: 'todo', status: 'overdue', todoSummary: true, todoCount: 12, eventId: 'summary-id' });
+      assert.equal(summary.title, i18n.t('todo.overdueSummary', { count: 12 }));
+      assert(summary.title.includes('12')); assert(!summary.title.includes('{count}'));
+      assert.equal(summary.detail, i18n.t('todo.overdueSummaryDetail'));
+      assert.equal(summary.eventId, 'summary-id');
+      assert.equal(summary.todoCount, 12);
+      assert.equal(domain.normalize({ source: 'todo', todoSummary: true, todoCount: Infinity }).todoCount, 1);
+    }
+  } finally { i18n.setState(previous); }
+});

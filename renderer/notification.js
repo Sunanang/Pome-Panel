@@ -262,8 +262,15 @@ window.addEventListener('pome:language-changed', () => {
   applyShellLabel();
   if (!currentNotification) return;
   if (currentNotification.attentionKind) renderAttention();
+  if (currentNotification.sourceKey === 'todo') sourceElement.textContent = pomeLocaleRendererNotification.t('copy.tasks.52fdbb');
+  if (currentNotification.todoSummary) {
+    currentNotification.title = pomeLocaleRendererNotification.t('todo.overdueSummary', { count: currentNotification.todoCount });
+    titleElement.textContent = currentNotification.title; titleElement.title = currentNotification.title;
+  }
   if (currentNotification.titleIsFallback) { titleElement.textContent = domain.fallbackTitle(currentNotification.sourceKey, currentNotification.status); titleElement.title = [currentNotification.sessionTitle, titleElement.textContent].filter(Boolean).join('\n'); }
-  if (!activationError && currentNotification.status === 'due') {
+  if (!activationError && currentNotification.todoSummary) {
+    detailElement.textContent = pomeLocaleRendererNotification.t('todo.overdueSummaryDetail');
+  } else if (!activationError && currentNotification.status === 'due') {
     detailElement.textContent = pomeLocaleRendererNotification.t('copy.dueWithin1Hour.955b14');
   } else if (!activationError && currentNotification.status === 'overdue') {
     detailElement.textContent = pomeLocaleRendererNotification.t('copy.deadlineHasPassed.37e6a6');

@@ -43,6 +43,8 @@
 | **Clipboard and credentials** | Enable clipboard history when needed; encrypt accounts and keys with system secure storage |
 | **NAS sync** | Optionally pair a fnOS NAS to sync workspace content across devices |
 
+Tasks remind one hour before their deadline and catch up if no reminder was displayed. A batch of at least three overdue tasks becomes one summary that opens Tasks and highlights its members. Only a displayed reminder consumes its state; unseen tasks recover after re-enabling or restarting. Receipts persist in the workspace’s `todo-reminders.json` and sync with task state. Older values cannot reset a mark for the same task and deadline; changing the deadline starts a new reminder. Two devices running offline can each remind before their states synchronize. With Windows native features disabled, clicking a bubble only dismisses it; open Tasks to review its contents.
+
 ## Get started
 
 1. Check [Releases](https://github.com/Sunanang/Pome-Panel/releases) for installers: `arm64.dmg` for Mac or `windows-x64-setup.exe` for Windows.

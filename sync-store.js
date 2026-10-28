@@ -14,6 +14,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { mergeReminderMark } = require('./todoReminders');
 const { probeSqliteSupport } = require('./sqliteProbe');
 const {
   SCHEMA_VERSION,
@@ -462,6 +463,10 @@ function createSyncStore(db, meta = {}) {
             updated_at: now,
           });
         } else {
+          if (mutation.collection === COLLECTIONS.TODOS) {
+            const prior = statements.getEntity.get(input.accountId, mutation.collection, mutation.entityId);
+            if (prior && prior.deleted_at == null) mutation.payload = mergeReminderMark(JSON.parse(prior.payload_json), mutation.payload);
+          }
           statements.upsertEntity.run({
             account_id: input.accountId,
             collection: mutation.collection,
@@ -595,10 +600,13 @@ function createSyncStore(db, meta = {}) {
               updated_at: now,
             });
           } else {
-            const payload =
+            let payload =
               change.payload && typeof change.payload === 'object' && !Array.isArray(change.payload)
                 ? change.payload
                 : {};
+            if (collection === COLLECTIONS.TODOS && existing && existing.deleted_at == null) {
+              payload = mergeReminderMark(JSON.parse(existing.payload_json), payload);
+            }
             statements.upsertEntity.run({
               account_id: args.accountId,
               collection,
