@@ -1,6 +1,14 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../renderer/workspace.js'),'utf8');
+test('one Escape masks the visible create password without its duplicate collapsing the panel',()=>{
+ let now=1000;const c={credentialCreateEscapeAt:-Infinity,credentialPassword:{type:'text'},
+  performance:{now:()=>now},maskCredentialCreate:()=>{c.credentialPassword.type='password';}};
+ vm.createContext(c);vm.runInContext(source.slice(source.indexOf('  function closeCredentialCreateOnEscape()'),source.indexOf('  function invalidateCredentialEdit(')),c);
+ assert.equal(c.closeCredentialCreateOnEscape(),true);assert.equal(c.credentialPassword.type,'password');
+ now+=10;assert.equal(c.closeCredentialCreateOnEscape(),true);
+ now+=200;assert.equal(c.closeCredentialCreateOnEscape(),false);
+});
 function harness(){
  let resolveSave,resolveLoad;const events=[];
  const field=value=>({value,type:'password',parentElement:{querySelector:()=>null}});

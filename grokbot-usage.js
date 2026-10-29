@@ -80,17 +80,22 @@ function buildSnapshot(sand, auth) {
 
 function createGrokbotUsageService({ fetchImpl = (...args) => fetch(...args), readAuth = readAuthToken, now = Date.now } = {}) {
   let key = '', generation = 0, pending = null, lastAttempt = null, lastSuccess = null, manualInvalid = false;
-  function reset() {
+  let authRevision = 0, authReads = 0, latestAuthRead = 0;
+  function reset({ identityOnly = false } = {}) {
+    if (!identityOnly) authRevision++;
     generation++; pending?.controller.abort();
     pending = null; lastAttempt = null; lastSuccess = null; key = ''; manualInvalid = false;
   }
   async function getUsage({ force = false, manualToken = '' } = {}) {
     const savedManual = String(manualToken || '').trim();
     const manual = isCursorEncryptedToken(savedManual) ? '' : savedManual;
+    const beforeAuth = authRevision, authRead = ++authReads;
     let auth;
-    try { auth = readAuth(); } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
+    try { const value = readAuth(); auth = value?.then ? await value : value; } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
+    if (beforeAuth !== authRevision || authRead < latestAuthRead) return { superseded: true };
+    latestAuthRead = authRead;
     const identity = createHash('sha256').update(JSON.stringify([manual, auth.ok ? auth.token : null, auth.email || null])).digest('hex');
-    if (key !== identity) { reset(); key = identity; }
+    if (key !== identity) { reset({ identityOnly: true }); key = identity; }
     const revision = generation;
     if (!force && lastAttempt && now() - lastAttempt.at < CACHE_TTL_MS) return { ...lastAttempt.result, cached: true };
     if (!pending) {

@@ -451,8 +451,10 @@ async function run(c){
  await js(`notchAPI.setFeature('notes',false)`);await until(`document.getElementById('tab-button-notes').hidden`);
  await js(`notchAPI.setFeature('notes',true);setActiveTab('home')`);await until(`!document.getElementById('tab-button-notes').hidden`);
  assert.equal(await js(`document.getElementById('ui-open-notes')`),null,'reenabling Notes does not recreate the removed button');
- await js(`document.getElementById('ui-open-recordings').click()`);await until(`activeTab==='recordings'`);
- await js(`notchAPI.setFeature('recordings',false)`);await until(`document.getElementById('tab-button-recordings').hidden`);assert.equal(await js(`document.getElementById('ui-open-recordings').hidden`),true);await js(`notchAPI.setFeature('recordings',true);setActiveTab('home')`);
+ assert.equal(await js(`document.getElementById('ui-open-recordings')`),null,'home recorder has no library shortcut button');
+ await js(`document.getElementById('tab-button-recordings').click()`);await until(`activeTab==='recordings'`);
+ await js(`notchAPI.setFeature('recordings',false)`);await until(`document.getElementById('tab-button-recordings').hidden`);
+ await js(`notchAPI.setFeature('recordings',true);setActiveTab('home')`);
  // A second renderer simulates Windows capability branches without enabling native code on this Mac.
  const win=new BrowserWindow({width:1240,height:638,show:false,frame:false,webPreferences:{backgroundThrottling:false}});
  await win.loadFile(path.join(__dirname,'../renderer/index.html'));

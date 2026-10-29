@@ -156,16 +156,6 @@
     setErrorVisible(el('app').classList.contains('expanded'));
   }
 
-  const recordingOpen = button('ui.openRecordings', () => setActiveTab('recordings'));
-  recordingOpen.id = 'ui-open-recordings'; recordingOpen.classList.add('ui-quick-entry');
-  // Park on the tile itself (bottom-right). Grid placement spans the full card so
-  // absolute coords are not trapped in a tiny auto-placed cell beside the title.
-  el('home-recorder')?.append(recordingOpen);
-  function quickEntries(settings) {
-    recordingOpen.hidden = settings?.features?.recordings === false;
-  }
-  api?.onAppSettingsChanged?.(quickEntries);
-
   const welcome = document.createElement('dialog'); welcome.id = 'ui-welcome'; welcome.className = 'ui-welcome';
   welcome.setAttribute('aria-labelledby', 'ui-welcome-title');
   const progress = document.createElement('small'); const title = document.createElement('h2'); title.id = 'ui-welcome-title';
@@ -250,8 +240,11 @@
     }
   }
   welcome.addEventListener('cancel', e => { e.preventDefault(); if (!finishing) welcome.close(); });
+  let welcomeSettingsRevision = 0;
+  api?.onAppSettingsChanged?.(value => { welcomeSettingsRevision++; settings = value || settings; });
+  const initialWelcomeSettingsRevision = welcomeSettingsRevision;
   api?.getAppSettings?.().then(value => {
-    settings = value || {}; quickEntries(settings);
+    if (welcomeSettingsRevision === initialWelcomeSettingsRevision) settings = value || {};
     firstWelcome = settings.onboardingPending === true;
     if (firstWelcome) {
       renderWelcome();

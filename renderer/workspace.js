@@ -1761,6 +1761,20 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
           : pomeLocaleRendererWorkspace.t("copy.recordingSavedConfigureTheTranscriptionApi.cd1e4e"))));
         liveTranscript.hidden = false;
       }
+      if (typeof showStatusToast === 'function') {
+        showStatusToast(pomeLocaleRendererWorkspace.t('copy.recordingSaved.7e91c2'), {
+          messageKey: 'copy.recordingSaved.7e91c2',
+          actionLabelKey: 'ux.recordings.view',
+          onAction: () => {
+            if (recordings.some(item => item.id === recording.id)) {
+              selectedRecordingId = recording.id;
+              renderRecordings();
+            }
+            void setActiveTab('recordings');
+          },
+          duration: 4200,
+        });
+      }
     } else {
       discardRecordingDraft();
       if (liveTranscript) {
@@ -1783,9 +1797,12 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   // 用户必须自己去「隐私和安全性 → 麦克风」把「允许应用访问麦克风」打开。
   // 这段文案与按钮标题由能力层给，渲染层不判断平台。
   async function showMicrophonePermissionHint() {
-    if (!liveTranscript) return;
-    const prompt = (await window.notchAPI?.getMediaAccessStatus?.('microphone').catch(() => null))
+    const prompt = (await window.notchAPI?.getMediaAccessStatus?.('microphone')?.catch(() => null))
       || { message: pomeLocaleRendererWorkspace.t("copy.canTAccessTheMicrophoneAllowAccess.9be108"), canOpenSettings: false };
+    window.NotchUi?.showError?.({ message: prompt.message, messageKey: 'copy.canTAccessTheMicrophoneAllowAccess.9be108',
+      diagnostic: `Recording: microphone_${prompt.status || 'denied'}`, scope: 'recording:capture',
+      ...(prompt.canOpenSettings ? { repairActionKey: 'copy.openSettings.93112c', onRepair: () => window.notchAPI?.openPrivacySettings?.(prompt.pane) } : { onRepair: startRecording }) });
+    if (!liveTranscript) return;
     liveTranscript.replaceChildren();
     liveTranscript.append(prompt.message);
     if (prompt.canOpenSettings) {
@@ -1799,20 +1816,78 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     liveTranscript.hidden = false;
   }
 
+  async function requestRecordingStream() {
+    const preferred = {
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false,
+    };
+    try {
+      return await navigator.mediaDevices.getUserMedia(preferred);
+    } catch (error) {
+      // Some devices reject processing constraints as NotFound/Overconstrained.
+      // Retry once with a plain audio track before treating it as a missing mic.
+      if (!['NotFoundError', 'DevicesNotFoundError', 'OverconstrainedError'].includes(error?.name)) throw error;
+      return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    }
+  }
+
+  function recordingCaptureFailure(error) {
+    const name = String(error?.name || error?.message || 'capture_failed');
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'audio_track_unavailable') {
+      return {
+        messageKey: 'copy.noMicrophoneDeviceFound.a4c8e1',
+        diagnostic: 'Recording: no_microphone_device',
+        openSettings: true,
+      };
+    }
+    if (name === 'NotReadableError' || name === 'AbortError' || name === 'TrackStartError') {
+      return {
+        messageKey: 'copy.noMicrophoneInputCheckTheSystemAudio.ef1c9a',
+        diagnostic: `Recording: microphone_busy (${name})`,
+        openSettings: true,
+      };
+    }
+    return {
+      messageKey: 'copy.couldnTStartRecordingCheckTheMicrophone.8c52b6',
+      diagnostic: `Recording: ${name}`,
+      openSettings: false,
+    };
+  }
+
+  async function reportRecordingCaptureFailure(error) {
+    const failure = recordingCaptureFailure(error);
+    const prompt = failure.openSettings
+      ? (await window.notchAPI?.getMediaAccessStatus?.('microphone')?.catch(() => null))
+      : null;
+    window.NotchUi?.showError?.({
+      messageKey: failure.messageKey,
+      diagnostic: failure.diagnostic,
+      scope: 'recording:capture',
+      ...(prompt?.canOpenSettings
+        ? { repairActionKey: 'copy.openSettings.93112c', onRepair: () => window.notchAPI?.openPrivacySettings?.(prompt.pane || 'microphone') }
+        : { onRepair: startRecording }),
+    });
+    if (liveTranscript) {
+      pomeLocaleRendererWorkspace.bind(liveTranscript, 'textContent', () => pomeLocaleRendererWorkspace.t(failure.messageKey));
+      liveTranscript.hidden = false;
+    }
+  }
+
   async function startRecordingAttempt() {
-    if (recordingStatus !== 'idle' || !navigator.mediaDevices || !window.MediaRecorder) return;
+    if (recordingStatus !== 'idle') return;
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      await reportRecordingCaptureFailure({ name: 'media_capture_unavailable' });
+      return;
+    }
     activeRecognitionLanguage = transcriptionConfig.transcriptionLanguage === 'en' ? 'en-US' : 'zh-CN';
     try {
-      if (window.notchAPI && !(await window.notchAPI.ensureMicrophone())) {
+      if (window.notchAPI?.ensureMicrophone && !(await window.notchAPI.ensureMicrophone())) {
         await showMicrophonePermissionHint();
         return;
       }
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: false,
-      });
+      mediaStream = await requestRecordingStream();
       const audioTrack = mediaStream.getAudioTracks()[0];
-      if (!audioTrack || audioTrack.readyState !== 'live') throw new Error('audio_track_unavailable');
+      if (!audioTrack || audioTrack.readyState !== 'live') throw Object.assign(new Error('audio_track_unavailable'), { name: 'audio_track_unavailable' });
       recordingCaptureIssue = '';
       audioTrack.addEventListener('mute', () => {
         if (!['recording', 'paused'].includes(recordingStatus)) return;
@@ -1852,6 +1927,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         finalizeRecording(blob, durationMs);
       };
       mediaRecorder.start(1000);
+      window.NotchUi?.clearError?.('recording:capture');
       recordingStatus = 'recording';
       transcriptionStatus = 'idle';
       transcriptionAudioGap = false;
@@ -1873,11 +1949,9 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       discardRecordingDraft();
       const denied = error && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
       if (denied) await showMicrophonePermissionHint();
-      else if (liveTranscript) {
-        pomeLocaleRendererWorkspace.bind(liveTranscript, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.couldnTStartRecordingCheckTheMicrophone.8c52b6")));
-        liveTranscript.hidden = false;
-      }
-      updateRecordingUi();
+      else await reportRecordingCaptureFailure(error);
+      // The exclusive task refreshes controls after clearing its pending flag.
+      // Refreshing here would overwrite this error with "waiting for permission".
     }
   }
 
@@ -3939,81 +4013,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   let pendingCredentialEditId = '';
   let credentialsLoadGeneration = 0;
   const credentialSavesInFlight = new Set();
-  let credentialCreateOrigin = null;
-  let credentialCreateEscapeAt = -Infinity;
   let credentialCreateGeneration = 0;
-  const credentialCreateDialog = initializeCredentialCreate();
-
-  function initializeCredentialCreate() {
-    const form = credentialService?.closest('.credentials-form-card');
-    const page = form?.closest('.credentials-page');
-    const library = page?.querySelector('.credentials-library');
-    const toolbar = library?.querySelector('.credentials-library-actions');
-    if (!form || !page || !library || !toolbar || !credentialSave) return null;
-    const dialog = document.createElement('dialog');
-    dialog.id = 'credential-create-dialog';
-    dialog.className = 'credential-create-dialog';
-    pomeLocaleRendererWorkspace.bind(dialog, 'ariaLabel', () => pomeLocaleRendererWorkspace.t('copy.addCredential.54aa0a'));
-    const trigger = document.createElement('button');
-    trigger.id = 'credential-new';
-    trigger.className = 'workspace-button compact primary';
-    trigger.type = 'button';
-    trigger.setAttribute('aria-haspopup', 'dialog');
-    trigger.setAttribute('aria-controls', dialog.id);
-    trigger.innerHTML = ADD_ICON;
-    const label = document.createElement('span');
-    pomeLocaleRendererWorkspace.bind(label, 'textContent', () => pomeLocaleRendererWorkspace.t('copy.addCredential.54aa0a'));
-    trigger.append(label);
-    const cancel = document.createElement('button');
-    cancel.id = 'credential-create-cancel';
-    cancel.type = 'button';
-    cancel.className = 'workspace-button';
-    pomeLocaleRendererWorkspace.bind(cancel, 'textContent', () => pomeLocaleRendererWorkspace.t('copy.cancel.2cd0f3'));
-    const actions = document.createElement('div');
-    actions.className = 'credential-create-actions';
-    credentialSave.before(actions);
-    actions.append(cancel, credentialSave);
-    dialog.append(form);
-    page.append(dialog);
-    toolbar.append(trigger);
-    // Existing feedback continues to own its localized message. Mirror only
-    // that safe status text so copying/deleting stays visible with the form closed.
-    if (credentialsNote) {
-      const feedback = document.createElement('p');
-      feedback.className = 'credentials-library-feedback';
-      feedback.id = 'credential-library-feedback';
-      feedback.setAttribute('role', 'status');
-      library.append(feedback);
-      const syncFeedback = () => {
-        feedback.textContent = credentialsNote.textContent;
-        feedback.classList.toggle('error', credentialsNote.classList.contains('error'));
-      };
-      new MutationObserver(syncFeedback).observe(credentialsNote, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-      syncFeedback();
-    }
-    trigger.addEventListener('click', () => {
-      if (dialog.open || document.querySelector('dialog[open]')) return;
-      credentialCreateOrigin = document.activeElement;
-      credentialCreateGeneration += 1;
-      invalidateCredentialEdit();
-      dialog.showModal();
-      credentialService?.focus({ preventScroll: true });
-    });
-    cancel.addEventListener('click', () => closeCredentialCreate());
-    dialog.addEventListener('cancel', event => { event.preventDefault(); closeCredentialCreateOnEscape(); });
-    dialog.addEventListener('close', () => {
-      // Also handle an external/native close without leaving revealed text.
-      if (!dialog.open) { maskCredentialCreate(); credentialCreateGeneration += 1; }
-    });
-    let backdropPressed = false;
-    const onBackdrop = event => {
-      const rect = dialog.getBoundingClientRect();
-      return event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom);
-    };
-    dialog.addEventListener('pointerdown', event => { backdropPressed = onBackdrop(event); });
-    dialog.addEventListener('click', event => { if (backdropPressed && onBackdrop(event)) closeCredentialCreate(); backdropPressed = false; });
-    return dialog;
-  }
+  let credentialCreateEscapeAt = -Infinity;
 
   function maskCredentialCreate() {
     if (!credentialPassword) return;
@@ -4025,24 +4026,18 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }
   }
 
-  function closeCredentialCreate({ restoreFocus = true } = {}) {
-    if (!credentialCreateDialog?.open) return false;
-    const origin = credentialCreateOrigin;
-    credentialCreateOrigin = null;
+  function closeCredentialCreate() {
     credentialCreateGeneration += 1;
     maskCredentialCreate();
-    credentialCreateDialog.close();
-    if (restoreFocus && origin?.isConnected && !origin.closest('[inert]')) origin.focus({ preventScroll: true });
-    return true;
   }
 
   function closeCredentialCreateOnEscape() {
-    if (credentialCreateDialog?.open) {
-      credentialCreateEscapeAt = performance.now();
-      return closeCredentialCreate();
-    }
-    // One physical Escape may arrive from both Chromium and main-process IPC.
-    return performance.now() - credentialCreateEscapeAt < 150;
+    // Chromium and main-process IPC can deliver the same physical Escape twice.
+    if (performance.now() - credentialCreateEscapeAt < 150) return true;
+    if (credentialPassword?.type !== 'text') return false;
+    credentialCreateEscapeAt = performance.now();
+    maskCredentialCreate();
+    return true;
   }
 
   function invalidateCredentialEdit({ clear = false } = {}) {

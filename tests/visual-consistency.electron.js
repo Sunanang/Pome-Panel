@@ -85,7 +85,7 @@ async function run(c) {
   const task=await js(`(()=>{const q=document.querySelector('.quadrant'),e=q.querySelector('.todo-item');return {quadrant:getComputedStyle(q).backgroundColor,row:getComputedStyle(e).backgroundColor,border:getComputedStyle(e).borderTopWidth,gap:parseFloat(getComputedStyle(document.querySelector('#todo-sections')).gap)}})()`);
   assert(task.quadrant==='rgb(26, 26, 29)'&&task.row!=='rgba(0, 0, 0, 0)'&&task.border==='1px'&&task.gap>=10,JSON.stringify(task));
   await shot('todo-cards');
-  for(const [id,selector] of [['links','.links-page'],['recordings','.recordings-page'],['credentials','.credentials-page'],['settings','.settings-card']]) {
+  for(const [id,selector] of [['links','.link-group'],['recordings','.recording-detail'],['credentials','.credentials-library'],['settings','.settings-card']]) {
     await tab(id); assert.equal(await js(`getComputedStyle(document.querySelector('#tab-${id} ${selector}')).backgroundColor`),'rgb(26, 26, 29)',id+' has a solid reading background'); await shot(id+'-solid');
   }
   await tab('clip');

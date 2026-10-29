@@ -1597,5 +1597,8 @@
   "windows.focusFailed": "Dieses Fenster konnte nicht geöffnet werden. Liste aktualisieren und erneut versuchen.",
   "windows.minimized": "Minimiert",
   "windows.count": "Fenster: {count}",
-  "windows.restoreHidden": "Anzeigen {count}"
+  "windows.restoreHidden": "Anzeigen {count}",
+  "copy.recordingSaved.7e91c2": "Aufnahme gespeichert",
+  "ux.recordings.view": "In Aufzeichnungen ansehen",
+  "copy.noMicrophoneDeviceFound.a4c8e1": "Kein Mikrofon gefunden · Schließen Sie eines an und versuchen Sie es erneut"
 }

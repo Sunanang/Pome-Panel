@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, execFile } = require('node:child_process');
 const { pbkdf2Sync, createDecipheriv } = require('node:crypto');
 
 const PREFIX = 'cursor-safe-storage:v1:';
@@ -96,3 +96,44 @@ function createCursorTokenDecoder({ platform = process.platform, readPassword = 
 
 module.exports = { PREFIX, isCursorEncryptedToken, createCursorTokenDecoder,
   decodeCursorToken: createCursorTokenDecoder() };
+
+// Keychain may wait for a human response. Never block Electron's main thread
+// (including microphone IPC) while that system prompt is open.
+function readMacPasswordAsync() {
+  return new Promise((resolve, reject) => {
+    execFile('/usr/bin/security', ['find-generic-password', '-s', 'Cursor Safe Storage', '-w'], {
+      encoding: 'utf8', timeout: 120000, maxBuffer: 16384,
+    }, (error, stdout) => error ? reject(failure()) : resolve(stdout.replace(/\r?\n$/, '')));
+  });
+}
+
+function createAsyncCursorTokenDecoder({ platform = process.platform, readPassword = readMacPasswordAsync, ...options } = {}) {
+  const fallback = createCursorTokenDecoder({ platform, ...options });
+  let decoder = null, pending = null, denied = false;
+  return async function decode(value, context = {}) {
+    if (!isCursorEncryptedToken(value) || platform !== 'darwin' || !value.startsWith(PREFIX)) return fallback(value, context);
+    // Explicit Get local login retries a denial; background quota polling does not.
+    if (context.force && !pending) { decoder = null; denied = false; }
+    if (!decoder) {
+      if (denied) throw failure();
+      if (!pending) {
+        pending = (async () => {
+          try {
+            let password = await readPassword();
+            if (!password) throw failure();
+            const candidate = createCursorTokenDecoder({ platform, readPassword: () => password });
+            // Validate and derive the key before keeping the decoder in memory.
+            candidate(value, { ...context, force: false });
+            password = null;
+            decoder = candidate;
+          } catch { denied = true; throw failure(); }
+          finally { pending = null; }
+        })();
+      }
+      await pending;
+    }
+    return decoder(value, { ...context, force: false });
+  };
+}
+module.exports.createAsyncCursorTokenDecoder = createAsyncCursorTokenDecoder;
+module.exports.decodeCursorTokenAsync = createAsyncCursorTokenDecoder();

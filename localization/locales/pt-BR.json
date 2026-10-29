@@ -1597,5 +1597,8 @@
   "windows.focusFailed": "Não foi possível alternar para esta janela. Atualize a lista e tente novamente.",
   "windows.minimized": "Minimizada",
   "windows.count": "Janelas: {count}",
-  "windows.restoreHidden": "Mostrar {count}"
+  "windows.restoreHidden": "Mostrar {count}",
+  "copy.recordingSaved.7e91c2": "Gravação salva",
+  "ux.recordings.view": "Ver em Gravações",
+  "copy.noMicrophoneDeviceFound.a4c8e1": "Nenhum microfone encontrado · Conecte um e tente de novo"
 }

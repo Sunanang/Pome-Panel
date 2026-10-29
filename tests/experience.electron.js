@@ -53,8 +53,9 @@ async function run(c){
  // Native button hit testing is necessary: a visible icon can still be covered.
  await click('#record-start');await until('NotchWorkspace.isRecordingActive()');await sleep(2200);await click('#record-pause');
  await tab('recordings');assert.match(await js("document.querySelector('.recording-detail').innerText"),/已暂停/);assert.doesNotMatch(await js("document.querySelector('.recording-detail').innerText"),/仍在录制/);
- await shot('recording-paused-zh');await tab('home');await click('#record-stop');await until('!NotchWorkspace.isRecordingActive()');assert.equal(await js('activeTab'),'home','stop does not navigate to the library');
- await click('#ui-open-recordings');await until('activeTab==="recordings"&&!tabBusy');await until('!!document.querySelector(".recording-player audio") && document.querySelector("audio").readyState>=2');
+ await shot('recording-paused-zh');await tab('home'); await click('#record-stop');await until('!NotchWorkspace.isRecordingActive()');assert.equal(await js('activeTab'),'home','stop does not navigate to the library');
+ await until(`!document.getElementById('status-toast')?.hidden && document.getElementById('status-toast').textContent.includes('录音已保存')`);
+ await click('#status-toast-action');await until('activeTab==="recordings"&&!tabBusy');await until('!!document.querySelector(".recording-player audio") && document.querySelector("audio").readyState>=2');
  assert.equal(await js('document.querySelector(".recording-player-seek").disabled'),false,'native WebM can seek before playback');
  assert.notEqual(await js('document.querySelector(".recording-player-duration").textContent'),'—:—');
  await click('.recording-player-toggle');await sleep(120);await js(`{const r=document.querySelector('.recording-player-seek');r.value='1.5';r.dispatchEvent(new Event('input',{bubbles:true}));}`);

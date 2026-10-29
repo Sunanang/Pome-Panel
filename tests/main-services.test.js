@@ -80,6 +80,7 @@ test('first-run auto-launch only fires for a genuinely fresh install', () => {
 test('media permission prompts temporarily lower the panel and restore its normal floating layer', async () => {
   const events = [];
   let alwaysOnTop = true;
+  const expectedLevel = process.platform === 'darwin' ? 'status' : 'floating';
   const owner = {
     isDestroyed: () => false,
     isVisible: () => true,
@@ -111,7 +112,7 @@ test('media permission prompts temporarily lower the panel and restore its norma
     ['activate'],
     ['focus'],
     ['request', false],
-    ['top', true, 'floating'],
+    ['top', true, expectedLevel],
     ['track', -1],
   ]);
 });
@@ -120,6 +121,7 @@ test('media permission prompts restore the window layer when the system request 
   let alwaysOnTop = true;
   let restoredLevel;
   const deltas = [];
+  const expectedLevel = process.platform === 'darwin' ? 'status' : 'floating';
   const owner = {
     isDestroyed: () => false,
     isVisible: () => true,
@@ -138,7 +140,7 @@ test('media permission prompts restore the window layer when the system request 
   }), /permission service failed/);
 
   assert.equal(alwaysOnTop, true);
-  assert.equal(restoredLevel, 'floating');
+  assert.equal(restoredLevel, expectedLevel);
   assert.deepEqual(deltas, [1, -1]);
 });
 
@@ -147,6 +149,7 @@ test('overlapping media prompts stay below system UI until every request settles
   const restoredLevels = [];
   const deltas = [];
   const releases = [];
+  const expectedLevel = process.platform === 'darwin' ? 'status' : 'floating';
   const owner = {
     isDestroyed: () => false,
     isAlwaysOnTop: () => alwaysOnTop,
@@ -173,7 +176,7 @@ test('overlapping media prompts stay below system UI until every request settles
   releases[1](false);
   assert.equal(await microphone, false);
   assert.equal(alwaysOnTop, true);
-  assert.deepEqual(restoredLevels, ['floating']);
+  assert.deepEqual(restoredLevels, [expectedLevel]);
   assert.deepEqual(deltas, [1, 1, -1, -1]);
 });
 

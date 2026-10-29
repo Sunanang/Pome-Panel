@@ -1597,5 +1597,8 @@
   "windows.focusFailed": "Impossible de passer à cette fenêtre. Actualisez la liste et réessayez.",
   "windows.minimized": "Réduite",
   "windows.count": "Fenêtres : {count}",
-  "windows.restoreHidden": "Afficher {count}"
+  "windows.restoreHidden": "Afficher {count}",
+  "copy.recordingSaved.7e91c2": "Enregistrement enregistré",
+  "ux.recordings.view": "Voir dans Enregistrements",
+  "copy.noMicrophoneDeviceFound.a4c8e1": "Aucun microphone trouvé · Branchez-en un puis réessayez"
 }

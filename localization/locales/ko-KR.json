@@ -1597,5 +1597,8 @@
   "windows.focusFailed": "이 창으로 전환할 수 없습니다. 목록을 새로 고친 후 다시 시도하세요.",
   "windows.minimized": "최소화됨",
   "windows.count": "창 수: {count}",
-  "windows.restoreHidden": "복원 {count}"
+  "windows.restoreHidden": "복원 {count}",
+  "copy.recordingSaved.7e91c2": "녹음이 저장되었습니다",
+  "ux.recordings.view": "녹음에서 보기",
+  "copy.noMicrophoneDeviceFound.a4c8e1": "마이크를 찾을 수 없습니다 · 연결한 뒤 다시 시도하세요"
 }

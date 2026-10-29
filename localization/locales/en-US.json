@@ -1603,5 +1603,8 @@
   "windows.focusFailed": "Could not switch to this window. Refresh the list and try again.",
   "windows.minimized": "Minimized",
   "windows.count": "Windows: {count}",
-  "windows.restoreHidden": "Restore {count}"
+  "windows.restoreHidden": "Restore {count}",
+  "copy.recordingSaved.7e91c2": "Recording saved",
+  "ux.recordings.view": "View in Recordings",
+  "copy.noMicrophoneDeviceFound.a4c8e1": "No microphone found · Plug one in and try again"
 }

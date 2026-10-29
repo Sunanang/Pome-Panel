@@ -89,6 +89,7 @@ async function run(c) {
   assert.equal((await js('notchAPI.getAppSettings()')).taskNotifications,true);
   assert.equal(await js(`document.querySelector('.settings-language-card')`),null);
   assert.equal(await js(`(()=>{const props=['height','minWidth','paddingLeft','paddingRight','backgroundColor','borderColor','borderRadius','fontSize','fontFamily','color','appearance','colorScheme'];const [a,b]=['settings-language','settings-default-tab'].map(id=>getComputedStyle(document.getElementById(id)));return props.every(p=>a[p]===b[p])})()`),true,'language and default-page selects share the same appearance');
+  assert.equal(await js(`(()=>{const props=['height','backgroundColor','borderRadius','color','colorScheme','appearance'];const base=getComputedStyle(document.getElementById('settings-language'));return ['pome-weather-unit','pome-interface-motion'].every(id=>{const s=getComputedStyle(document.getElementById(id));return props.every(p=>s[p]===base[p])})})()`),true,'weather and motion selects match device select chrome');
 
   assert.equal(structure.secondary.length,4);
   assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI');

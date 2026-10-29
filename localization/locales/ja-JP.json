@@ -1597,5 +1597,8 @@
   "windows.focusFailed": "このウィンドウに切り替えられません。リストを更新して再試行してください。",
   "windows.minimized": "最小化",
   "windows.count": "ウィンドウ数：{count}",
-  "windows.restoreHidden": "再表示 {count}"
+  "windows.restoreHidden": "再表示 {count}",
+  "copy.recordingSaved.7e91c2": "録音を保存しました",
+  "ux.recordings.view": "録音で見る",
+  "copy.noMicrophoneDeviceFound.a4c8e1": "マイクが見つかりません · 接続してから再試行してください"
 }

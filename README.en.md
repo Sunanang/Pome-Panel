@@ -45,6 +45,8 @@
 
 Home quick notes remain recoverable editable drafts. Save collects the text into the Notes library and clears Home. The entire quick-note widget, including its background, title, controls and text, narrows into a curved funnel and is absorbed into the Notes tab; a fresh empty widget appears in place, and you can type the next draft during the flight. Reduced motion uses brief feedback. In Notes, click the body to edit; Save or Ctrl/Cmd+S returns to preview at the current reading position. Background autosave keeps editing active. Links and text selection retain their usual behavior; failed saves retain the text and offer retry in the error bar.
 
+Notes and Recordings use a narrow library on the left and a larger detail card on the right. Credentials keeps its creation form on the left and search and management on the right. Recording playback supports seeking, volume and speed controls.
+
 Tasks remind one hour before their deadline and catch up if no reminder was displayed. A batch of at least three overdue tasks becomes one summary that opens Tasks and highlights its members. Only a displayed reminder consumes its state; unseen tasks recover after re-enabling or restarting. Receipts persist in the workspace’s `todo-reminders.json` and sync with task state. Older values cannot reset a mark for the same task and deadline; changing the deadline starts a new reminder. Two devices running offline can each remind before their states synchronize. With Windows native features disabled, clicking a bubble only dismisses it; open Tasks to review its contents.
 
 On macOS, Current windows enumerates and focuses standard windows exposed through Accessibility. Real same-title windows remain separate. Closed or unavailable targets offer refresh instead of opening a different window; minimized targets can be restored. Rows prioritize the window title and show the application underneath. Narrow widgets use one scrollable column, and every entry remains reachable. Hold and drag a row out to hide that window; Restore reveals hidden rows. Existing hidden preferences are retained. Reading window titles requires Accessibility, without requesting screen-recording access.
@@ -52,6 +54,8 @@ On macOS, Current windows enumerates and focuses standard windows exposed throug
 The Mac app uses the distinct `com.pomepanel.app` identity and can coexist with legacy TO-DO Panel. After first updating to this identity, authorize the installed Pome Panel in System Settings → Privacy & Security → Accessibility; the old app's permission does not transfer automatically. The data directory remains Pome Panel. After source changes reach `dev`, rebuild that branch and replace the installed app; pulling source alone does not update a running installation.
 
 ## Get started
+
+The current source development version is **0.11.0**. No formal Release installers are published yet; run the source with the development commands below. Published installers will be available from Releases.
 
 1. Check [Releases](https://github.com/Sunanang/Pome-Panel/releases) for installers: `arm64.dmg` for Mac or `windows-x64-setup.exe` for Windows.
 2. Open the app and click the capsule at the screen edge. Drag it while collapsed to change its position.

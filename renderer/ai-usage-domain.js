@@ -155,7 +155,7 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     return { text, severity };
   }
   function isStale(data, id, now = Date.now()) {
-    if (!available(data) || invalidToken(data) || data?.ok === false) return false;
+    if (!available(data) || data?.ok === false || invalidToken(data) && !usableLocalQuota(data, id)) return false;
     const stamp = timestamp(data);
     return Boolean(data?.stale || expired(bottleneck(data, id)?.windowUsage, now) || stamp != null && now - stamp > 86400000);
   }
@@ -168,10 +168,17 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
   }
   function status(data, id, now = Date.now()) {
     if (!available(data)) return 'undetected';
-    if (invalidToken(data) || data?.ok === false) return 'error';
+    if (data?.ok === false || invalidToken(data) && !usableLocalQuota(data, id)) return 'error';
     const rem = urgencyRemaining(data, id);
     if (rem != null && rem <= 20) return rem === 0 ? 'depleted' : level(rem);
     return isStale(data, id, now) ? 'stale' : 'ok';
+  }
+  function usableLocalQuota(data, id) {
+    // Manual token may be stale while a local CLI/app session still has quota.
+    return data?.ok === true
+      && ['local', 'file', 'keychain', 'gh', 'hosts.yml'].includes(data.authSource)
+      && quotaRows(data, id).some(row =>
+        percent(row.windowUsage?.percent) != null || Number.isFinite(row.windowUsage?.balance) || row.windowUsage?.unlimited === true);
   }
   function dashboard(snapshots, size = 'small', now = Date.now()) {
     const ids = providers(snapshots);

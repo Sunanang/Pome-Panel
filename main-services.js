@@ -123,9 +123,9 @@ function createForegroundMediaPermissionCoordinator(defaults = {}) {
             layerOwner = null;
             restoreAlwaysOnTop = false;
             if (shouldRestore && targetToRestore && !targetToRestore.isDestroyed()) {
-              // Match the main panel's normal layer: permission requests must
-              // not leave it above screenshots or input-method candidates.
-              targetToRestore.setAlwaysOnTop(true, 'floating');
+              // Match the main panel's normal layer (status on macOS, floating elsewhere).
+              const level = process.platform === 'darwin' ? 'status' : 'floating';
+              targetToRestore.setAlwaysOnTop(true, level);
             }
           }
         } finally {

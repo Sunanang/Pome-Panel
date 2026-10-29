@@ -156,51 +156,44 @@ async function run(c) {
   steps.push('note title deduplication is preview-only and distinct content headings remain visible');
 
   await tab('credentials');
-  const library = await js(`(() => {const p=document.querySelector('.credentials-page').getBoundingClientRect(),l=document.querySelector('.credentials-library').getBoundingClientRect();return {ratio:l.width/p.width,closed:!document.getElementById('credential-create-dialog').open};})()`);
-  assert.equal(library.closed, true); assert(library.ratio >= .94, 'credential lookup uses the available page width');
-  const open = async () => { await click('#credential-new'); await until('document.getElementById("credential-create-dialog").open'); assert.equal(await js('document.activeElement.id'), 'credential-service'); };
+  const library = await js(`(() => {const f=document.querySelector('.credentials-form-card').getBoundingClientRect(),l=document.querySelector('.credentials-library').getBoundingClientRect();return {form:f.width,library:l.width,gap:l.left-f.right};})()`);
+  assert(library.form > 200 && library.form < library.library && library.gap >= 10, 'credential form and library use separate narrow/wide cards');
+  const open = async () => { await click('#credential-service'); assert.equal(await js('document.activeElement.id'), 'credential-service'); };
   const fillAndReveal = async () => {
     await js(`document.getElementById('credential-service').value='Unsaved workbench draft';document.getElementById('credential-account').value='demo@example.invalid';document.getElementById('credential-password').value='fixture-only-secret';`);
-    await click('#credential-create-dialog [data-credential-reveal]');
+    await click('.credentials-form-card [data-credential-reveal]');
     assert.equal(await js('document.getElementById("credential-password").type'), 'text');
   };
   const masked = async label => {
-    await until('!document.getElementById("credential-create-dialog").open');
     assert.equal(await js('document.getElementById("credential-password").type'), 'password', label + ' re-masks the password');
-    assert.equal(await js('document.querySelector("#credential-create-dialog [data-credential-reveal]").getAttribute("aria-pressed")'), 'false');
+    assert.equal(await js('document.querySelector(".credentials-form-card [data-credential-reveal]").getAttribute("aria-pressed")'), 'false');
     assert.equal(await js('document.getElementById("credential-service").value'), 'Unsaved workbench draft', label + ' preserves the unsaved draft');
     assert.equal(saveCalls, 0, label + ' never saves');
   };
-  await open(); await fillAndReveal(); await capture('credential-create'); await click('#credential-create-cancel'); await masked('Cancel');
-  assert.equal(await js('document.activeElement.id'), 'credential-new', 'cancel restores focus to its opener');
   await open(); await fillAndReveal(); await key('Escape'); c.send('key:escape'); await masked('Escape');
-  assert.equal(await js('isExpanded'), true, 'one Escape closes the dialog without collapsing the panel');
-  assert.equal(await js('document.activeElement.id'), 'credential-new', 'Escape restores focus to its opener');
-  await open(); await fillAndReveal();
-  const backdrop = await js(`(() => {const r=document.getElementById('credential-create-dialog').getBoundingClientRect();return {x:Math.max(2,r.left-12),y:r.top+r.height/2};})()`);
-  await pointer(backdrop.x, backdrop.y); await masked('Backdrop');
+  assert.equal(await js('isExpanded'), true, 'duplicate Escape masks the password without collapsing the panel');
   await open(); await fillAndReveal(); await tab('notes'); await masked('Tab change');
   await tab('credentials'); await open(); await fillAndReveal(); await js('setMode(false)'); await until('!modeBusy'); await masked('Collapse');
   await js('setMode(true)'); await until('!modeBusy'); await tab('credentials');
-  steps.push('credential create opens on demand; cancel, Escape, backdrop, navigation and collapse preserve drafts without saving or leaving a revealed password');
+  steps.push('credential form stays in the left card; navigation and collapse preserve drafts and re-mask passwords');
   await open(); await click('#credential-save'); await until('!document.getElementById("credential-save").disabled');
-  assert.equal(saveCalls, 1); assert.equal(await js('document.getElementById("credential-create-dialog").open'), true, 'failed save keeps the form open');
+  assert.equal(saveCalls, 1); assert.equal(await js('document.querySelector(".credentials-form-card").isConnected'), true, 'failed save keeps the form available');
   assert.equal(await js('document.getElementById("credential-password").value'), 'fixture-only-secret', 'failed save preserves the submitted password');
   failSave = false;
-  await click('#credential-save'); await until('!document.getElementById("credential-create-dialog").open');
+  await click('#credential-save'); await until('!document.getElementById("credential-save").disabled');
   assert.equal(saveCalls, 2); await until('document.querySelectorAll(".credential-item").length===3');
   assert.equal(await js('document.getElementById("credential-password").type'), 'password');
   assert.equal(await js('document.getElementById("credential-password").value'), '', 'successful save clears the secret draft');
   await js('window.NotchUi?.clearError?.("credentials")');
-  steps.push('failed create stays editable; successful create closes the form and clears its secret');
+  steps.push('failed create stays editable; successful create clears its secret while keeping the left form available');
   await open(); await fillAndReveal(); holdCredentialList = true;
   await click('#credential-save'); await until('document.getElementById("credential-password").value === ""');
   assert(releaseCredentialList,'post-save list read is held');
   await js(`document.getElementById('credential-service').value='New draft during refresh';document.getElementById('credential-password').value='new-fixture-secret'`);
   releaseCredentialList(); await sleep(100);
-  assert.equal(await js('document.getElementById("credential-create-dialog").open'),true,'list refresh cannot close a newly typed draft');
+  assert.equal(await js('document.querySelector(".credentials-form-card").isConnected'),true,'list refresh preserves the form');
   assert.equal(await js('document.getElementById("credential-password").value'),'new-fixture-secret');
-  await capture('audit-fresh-draft');await click('#credential-create-cancel');
+  await capture('audit-fresh-draft');await js('document.getElementById("credential-password").type="password"');
 
 
   await tab('recordings');
@@ -253,11 +246,11 @@ async function run(c) {
   c.debugger.attach('1.3');
   await c.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   assert.equal(await js('matchMedia("(prefers-reduced-motion: reduce)").matches'), true);
-  await tab('credentials'); await open(); await click('#credential-create-cancel');
-  await until('!document.getElementById("credential-create-dialog").open');
+  await tab('credentials'); await open(); await js('document.getElementById("credential-password").type="password"');
+  await until('!document.getElementById("credential-save").disabled');
   await tab('notes'); await capture('reduced-motion');
   assert.equal(await js('document.getAnimations().some(a=>a.playState==="running" && a.effect?.target?.closest?.(".tab-panel.active"))'), false, 'the active workbench page does not keep animating under reduced motion');
-  steps.push('reduced motion retains usable navigation and dialog controls without persistent page animations');
+  steps.push('reduced motion retains usable navigation and form controls without persistent page animations');
   const contentBeforeResize = await js('JSON.stringify({todos:data,workspace:getWorkspaceSnapshotForSync()})');
   const responsive = [];
   for (const [width,height] of [[900,638],[740,638],[740,500]]) {
@@ -266,7 +259,7 @@ async function run(c) {
       await tab(name);
       const result = await js(`(() => {
         const panel=document.getElementById('tab-${name}');
-        const selectors={todo:'#todo-add-category',notes:'#notes-search',links:'#link-add',recordings:'#recording-new',credentials:'#credential-new',settings:'.settings-auto-launch-row'};
+        const selectors={todo:'#todo-add-category',notes:'#notes-search',links:'#link-add',recordings:'#recording-new',credentials:'#credential-save',settings:'.settings-auto-launch-row'};
         const target=panel.querySelector(selectors['${name}']);target?.scrollIntoView({block:'nearest',inline:'nearest'});
         const r=target?.getBoundingClientRect(),hit=r&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
         const cards=[...panel.querySelectorAll('.settings-column > .settings-card')].map(e=>e.getBoundingClientRect()).filter(r=>r.width>0&&r.height>0);

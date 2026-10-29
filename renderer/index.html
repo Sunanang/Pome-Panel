@@ -216,7 +216,7 @@
               <!-- 镜子：静态人像封面；点击切换实时镜头 -->
               <section class="tile home-mirror" data-home-module="mirror" data-widget-size="medium">
                 <button class="mirror-stage" id="mirror-stage" type="button" aria-label="打开实时镜子" aria-pressed="false" data-i18n-aria-label="copy.openLiveMirror.108daa">
-                  <img class="mirror-photo" src="assets/mirror-portrait.jpg" alt="" draggable="false" />
+                  <img class="mirror-photo" src="assets/mirror-portrait.webp" alt="" draggable="false" />
                   <video class="mirror-video" id="mirror-video" muted playsinline aria-hidden="true"></video>
                 </button>
               </section>
@@ -438,7 +438,7 @@
                 </section>
 
                 <section class="tile settings-card settings-mirror-card">
-                  <img id="settings-mirror-preview" src="assets/mirror-portrait.jpg" alt="当前首页镜子配图" draggable="false"  data-i18n-alt="copy.currentHomeMirrorCover.f642b6"/>
+                  <img id="settings-mirror-preview" src="assets/mirror-portrait.webp" alt="当前首页镜子配图" draggable="false"  data-i18n-alt="copy.currentHomeMirrorCover.f642b6"/>
                   <div>
                     <span class="tile-label"><span data-i18n="copy.homeMirror.fb5ca2">首页镜子</span></span>
                     <strong><span data-i18n="copy.coverImage.eab4f8">封面图片</span></strong>
@@ -488,7 +488,7 @@
                   <div class="settings-card-heading">
                     <div><strong><span data-i18n="copy.deviceActivation.d32e63">本机与唤出</span></strong></div>
                   </div>
-                  <label class="settings-device-row settings-language-row" for="settings-language">
+                  <label class="settings-device-row settings-language-row settings-select-row" for="settings-language">
                     <span data-i18n="settings.language">语言</span>
                     <select id="settings-language" data-language-preference>
                       <option value="system" data-i18n="settings.system">跟随系统</option>
@@ -512,7 +512,7 @@
                     <div><span><span data-i18n="copy.panelPosition.f71d2a">面板位置</span></span><strong><span data-i18n="copy.dragWhileCollapsedClickToExpand.d4d144">收起时可拖动；点一下展开</span></strong></div>
                     <button id="settings-reset-panel-position" type="button"><span data-i18n="copy.resetToTop.700e4b">重置到顶部</span></button>
                   </div>
-                  <label class="settings-device-row settings-default-tab-row">
+                  <label class="settings-device-row settings-default-tab-row settings-select-row">
                     <div><span><span data-i18n="copy.defaultPage.2ce591">默认展开页</span></span><strong><span data-i18n="copy.shownWheneverThePanelOpens.a3c1cd">每次唤出面板时显示</span></strong></div>
                     <select id="settings-default-tab" aria-label="默认展开页" data-i18n-aria-label="copy.defaultPage.2ce591">
                       <option value="home" data-i18n="copy.home.203c08">首页</option>

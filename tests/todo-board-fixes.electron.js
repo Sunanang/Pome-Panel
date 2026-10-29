@@ -1,8 +1,7 @@
 'use strict';
 
 /**
- * Acceptance: sun default city, recorder quick-entry placement,
- * custom todo time pickers, and dynamic todo categories.
+ * Acceptance: sun default city, custom todo time pickers, and dynamic todo categories.
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -100,8 +99,6 @@ async function main() {
   await until(`document.getElementById('app').classList.contains('expanded')`);
   await js(`setActiveTab('home')`);
   await until(`!!document.querySelector('#home-sun [data-sun-place]')`);
-  await until(`!!document.getElementById('ui-open-recordings')`);
-
   const sunPlace = await js(`document.querySelector('#home-sun [data-sun-place]')?.textContent || ''`);
   assert.match(sunPlace, /上海|Shanghai|北京|Beijing|[\\u4e00-\\u9fff]/, `sun place: ${sunPlace}`);
   assert.equal(
@@ -109,35 +106,8 @@ async function main() {
     false,
     'sun must not show empty set-location card after seed'
   );
-
-  const recorder = await js(`(() => {
-    const btn = document.getElementById('ui-open-recordings');
-    const tile = document.getElementById('home-recorder');
-    const head = document.querySelector('#home-recorder .recorder-head');
-    const title = document.getElementById('home-recording-state');
-    const time = document.getElementById('home-recording-time');
-    if (!btn || !tile || !head || !title || !time) return { ok: false };
-    const br = btn.getBoundingClientRect();
-    const tr = title.getBoundingClientRect();
-    const timeR = time.getBoundingClientRect();
-    const headR = head.getBoundingClientRect();
-    const overlaps = (a, b) => !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
-    return {
-      ok: true,
-      inTile: tile.contains(btn),
-      inHead: head.contains(btn),
-      overlapTitle: overlaps(br, tr),
-      overlapTime: overlaps(br, timeR),
-      belowHead: br.top >= headR.bottom - 1,
-      btnBottom: br.bottom,
-      tileBottom: tile.getBoundingClientRect().bottom,
-    };
-  })()`);
-  assert.equal(recorder.inTile, true, 'quick-entry must be on the recorder tile');
-  assert.equal(recorder.inHead, false, 'quick-entry must not crowd the title row');
-  assert.equal(recorder.overlapTitle, false, `quick-entry overlaps title: ${JSON.stringify(recorder)}`);
-  assert.equal(recorder.overlapTime, false, `quick-entry overlaps time: ${JSON.stringify(recorder)}`);
-  assert.equal(recorder.belowHead, true, `quick-entry should sit below the head: ${JSON.stringify(recorder)}`);
+  assert.equal(await js(`document.getElementById('ui-open-recordings')`), null, 'home recorder has no open-in-recordings button');
+  assert.equal(await js(`document.querySelectorAll('#home-recorder .recorder-controls .record-control').length`), 3);
   await capture('01-home-sun-recorder');
 
   await js(`document.querySelector('.ui-capsule-hint button')?.click()`);
@@ -270,7 +240,14 @@ async function main() {
   const minutes = await js(`document.querySelectorAll('#todo-editor-minute button[data-value]').length`);
   assert.equal(hours, 24);
   assert.equal(minutes, 12);
-  // Pick a late-evening time so "must be later than now" validation still passes.
+  // Pick a future calendar day first: 23:45 today is already past in late runs.
+  await js(`(() => {
+    const future = new Date(); future.setDate(future.getDate() + 2);
+    const targetMonth = future.getFullYear() * 12 + future.getMonth();
+    while (todoEditorYear * 12 + todoEditorMonthIndex < targetMonth) document.getElementById('todo-calendar-next').click();
+    while (todoEditorYear * 12 + todoEditorMonthIndex > targetMonth) document.getElementById('todo-calendar-previous').click();
+    document.querySelector('#todo-calendar-grid button[data-day="' + future.getDate() + '"]').click();
+  })()`);
   await js(`document.querySelector('#todo-editor-hour button[data-value="23"]').click()`);
   await js(`document.querySelector('#todo-editor-minute button[data-value="45"]').click()`);
   const picked = await js(`({

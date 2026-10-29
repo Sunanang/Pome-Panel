@@ -1619,5 +1619,8 @@
   "windows.focusFailed": "Не удалось переключиться на это окно. Обновите список и повторите попытку.",
   "windows.minimized": "Свёрнуто",
   "windows.count": "Окон: {count}",
-  "windows.restoreHidden": "Вернуть {count}"
+  "windows.restoreHidden": "Вернуть {count}",
+  "copy.recordingSaved.7e91c2": "Запись сохранена",
+  "ux.recordings.view": "Открыть в записях",
+  "copy.noMicrophoneDeviceFound.a4c8e1": "Микрофон не найден · Подключите его и попробуйте снова"
 }

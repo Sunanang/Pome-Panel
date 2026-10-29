@@ -330,18 +330,20 @@ function createNotchTrayIcon() {
   }
   const trayPng = path.join(__dirname, 'build', 'pome-trayTemplate.png');
   const trayPng2x = path.join(__dirname, 'build', 'pome-trayTemplate@2x.png');
-  let icon;
+  let icon = nativeImage.createEmpty();
+  // Keep the @2x bitmap as a scaleFactor:2 representation (16pt logical).
+  // Avoid resize(): it can drop the Retina representation and yield an empty Tray on macOS.
   if (fs.existsSync(trayPng2x)) {
     const hi = nativeImage.createFromPath(trayPng2x);
-    icon = nativeImage.createFromBuffer(hi.toPNG(), { scaleFactor: 2 });
-  } else {
+    if (!hi.isEmpty()) icon = nativeImage.createFromBuffer(hi.toPNG(), { scaleFactor: 2.0 });
+  }
+  if (icon.isEmpty() && fs.existsSync(trayPng)) {
     icon = nativeImage.createFromPath(trayPng);
   }
   if (icon.isEmpty()) {
-    const png2x = makeNotchPng(2);
-    icon = nativeImage.createFromBuffer(png2x, { scaleFactor: 2 });
+    icon = nativeImage.createFromBuffer(makeNotchPng(2), { scaleFactor: 2.0 });
   }
-  icon.setTemplateImage(true);
+  if (!icon.isEmpty()) icon.setTemplateImage(true);
   return icon;
 }
 
@@ -411,6 +413,7 @@ let currentTab = 'home';
 let collapseWatchdog = null;
 let collapseGeneration = 0;
 let hideWhenCollapsed = false;
+let startupRecoveryDismissed = false;
 let isQuitting = false;
 let mediaPermissionRequests = 0;
 let mediaPermissionBatchHadCamera = false;
@@ -783,8 +786,17 @@ function activateMainWindow() {
   if (plan.focusWindow) mainWindow.focus();
 }
 
+function recoverStartupPanelVisibility() {
+  if (!mainWindow || mainWindow.isDestroyed() || isQuitting || startupRecoveryDismissed
+    || process.env.TODO_TEST_USER_DATA || mediaPermissionRequests > 0 || mainWindow.isVisible()) return;
+  // Recover an ordered-out capsule without stealing focus from the user's app.
+  mainWindow.showInactive();
+  applyMainWindowLayer();
+}
+
 function hideWindowAfterCollapse() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  startupRecoveryDismissed = true;
   if (currentMode === 'expanded') {
     hideWhenCollapsed = true;
     requestRendererCollapse();
@@ -1163,9 +1175,9 @@ function createTaskNotificationWindow() {
   installLocalWebContentsGuards(notificationWindow.webContents);
 
   const targetWindow = notificationWindow;
-  // floating 与主窗同级；relativeLevel 1 让气泡仍叠在面板之上。
+  // 与主窗同级；relativeLevel 1 让气泡仍叠在面板之上。
   // 不用 screen-saver：该级会压住系统截图选区，且常被截图工具排除。
-  notificationWindow.setAlwaysOnTop(true, 'floating', 1);
+  notificationWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'status' : 'floating', 1);
   if (process.platform === 'darwin') notificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   notificationWindow.setIgnoreMouseEvents(false);
   notificationWindow.loadFile(path.join(__dirname, 'renderer', 'notification.html'));
@@ -1588,12 +1600,16 @@ function createWindow() {
 
   installLocalWebContentsGuards(mainWindow.webContents);
 
-  // floating：仍在普通窗口之上，但不压住截图选区 / 输入法候选框（screen-saver 太高）。
-  mainWindow.setAlwaysOnTop(true, 'floating');
+  // status：盖住普通全屏应用（Cursor 全屏时 floating 会被挡住，表现为「安装后看不到」）。
+  // 仍低于 screen-saver，避免压住系统截图选区。
+  mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'status' : 'floating');
   if (process.platform === 'darwin') {
     try { mainWindow.setVibrancy(null); } catch (e) {}
   }
-  if (process.platform === 'darwin') mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  if (process.platform === 'darwin') {
+    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    try { mainWindow.setHiddenInMissionControl(true); } catch (e) {}
+  }
   if (process.platform === 'win32') mainWindow.setMenu(null);
 
   // Escape 在到达页面前会被 Chromium 浏览器层吞掉（实测 document keydown 收不到），
@@ -1628,7 +1644,12 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     applyMode('collapsed');
-    if (!process.env.TODO_TEST_USER_DATA) mainWindow.show();
+    if (!process.env.TODO_TEST_USER_DATA) {
+      mainWindow.show();
+      // Keychain / permission prompts during first paint can leave the floating
+      // capsule ordered out (CGWindow onScreen=false). Re-assert visibility.
+      setTimeout(recoverStartupPanelVisibility, 400);
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -2105,17 +2126,25 @@ function refreshTrayMenu() {
 }
 
 function createTray() {
-  tray = new Tray(createNotchTrayIcon());
-  tray.setToolTip('Pome Panel');
-  tray.on('click', () => {
-    if (!mainWindow) return;
-    if (!mainWindow.isVisible()) {
-      repositionWindow(getTargetDisplay());
-      activateMainWindow();
-      refreshTrayMenu();
+  try {
+    const icon = createNotchTrayIcon();
+    if (!icon || icon.isEmpty()) {
+      throw new Error('tray_icon_empty');
     }
-  });
-  refreshTrayMenu();
+    tray = new Tray(icon);
+    tray.setToolTip('Pome Panel');
+    tray.on('click', () => {
+      if (!mainWindow) return;
+      // Always surface the panel: a hidden floating window is easy to miss, and a
+      // visible collapsed capsule may still sit under the menu bar after auth dialogs.
+      showMainPanelFromTray();
+    });
+    refreshTrayMenu();
+  } catch (error) {
+    // Tray failure must not abort whenReady (notification server / permission prompts).
+    console.error('[pome] createTray failed', error);
+    tray = null;
+  }
 }
 
 ipcMain.handle('window:begin-open', (event) => { requireWorkspaceOwner(event); return require('./panelTiming').begin(); });
@@ -2218,11 +2247,12 @@ ipcMain.handle('window:reset-panel-position', () => {
   return true;
 });
 
-// 默认用 floating，避免压住系统截图选区与输入法候选框。
+// macOS 用 status：盖住普通全屏应用；仍低于 screen-saver，不压系统截图选区。
+// 其它平台保持 floating。打字焦点开关会回调这里，不可再写回 floating 冲掉 createWindow 的层级。
 function applyMainWindowLayer() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mediaPermissionRequests > 0) return;
-  mainWindow.setAlwaysOnTop(true, 'floating');
+  mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'status' : 'floating');
   if (process.platform === 'darwin') {
     try { mainWindow.setVibrancy(null); } catch (e) {}
   }
@@ -4928,8 +4958,8 @@ ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
   return { ...result, projectionJson: applied };
 });
 
-function cursorLoginDetected() {
-  const auth = readCursorAuthToken();
+async function cursorLoginDetected() {
+  const auth = await readCursorAuthToken();
   return auth.ok === true || auth.detected === true;
 }
 
@@ -4938,9 +4968,9 @@ ipcMain.handle('cursor:usage', async (_event, options = {}) => {
     let data;
     do { data = await fetchCursorUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
     while (data.superseded);
-    return { ...data, detected: cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
+    return { ...data, detected: await cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
   } catch {
-    return { ok: false, error: 'cursor_usage_failed', detected: cursorLoginDetected(),
+    return { ok: false, error: 'cursor_usage_failed', detected: await cursorLoginDetected(),
       configured: Boolean(readAppSettings().encryptedCursorToken) };
   }
 });
@@ -4961,9 +4991,9 @@ ipcMain.handle('grokbot:usage', async (_event, options = {}) => {
     let data;
     do { data = await grokbotUsageService.getUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
     while (data.superseded);
-    return { ...data, detected: cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
+    return { ...data, detected: await cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
   } catch {
-    return { ok: false, error: 'grokbot_usage_failed', detected: cursorLoginDetected(),
+    return { ok: false, error: 'grokbot_usage_failed', detected: await cursorLoginDetected(),
       configured: Boolean(readAppSettings().encryptedCursorToken) };
   }
 });
@@ -5058,13 +5088,13 @@ ipcMain.handle('codex:clear-token', () => writeCodexManualToken(''));
 
 ipcMain.handle('cursor:token-status', () => cursorTokenStatus());
 
-ipcMain.handle('cursor:read-local-token', (event) => {
+ipcMain.handle('cursor:read-local-token', async (event) => {
   // Return a local credential only to the main panel, never the notification window.
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
     || event.senderFrame !== mainWindow.webContents.mainFrame) {
     return { ok: false, error: 'forbidden' };
   }
-  const result = readCursorAuthToken(undefined, { force: true });
+  const result = await readCursorAuthToken(undefined, { force: true });
   // Keep database paths, account metadata and raw errors out of this response.
   return result.ok ? { ok: true, token: result.token } : { ok: false, error: result.error };
 });
@@ -6214,16 +6244,27 @@ app.whenReady().then(() => {
   refreshRuntimeCapabilities();
   backup.recoverWorkspaceRestore(workspaceRoot());
   createWindow();
-  if (!process.env.TODO_TEST_USER_DATA) {
-    createTray();
-    startTaskNotificationServer();
-    void promptForMissingPermissions();
+  // An explicit test profile stays isolated in both source and packaged runs.
+  // Match createWindow/activateMainWindow and the notification port policy.
+  const testUserData = Boolean(process.env.TODO_TEST_USER_DATA);
+  const enableDesktopChrome = !testUserData;
+  if (enableDesktopChrome) {
+    // Notify server first. Tray construction can stall on a crowded macOS menu bar;
+    // never let it block the rest of boot (otherwise 43821 stays closed and there is
+    // no status item / no way back into a hidden LSUIElement panel).
+    try { startTaskNotificationServer(); } catch (error) { console.error('[pome] notify server failed', error); }
+    setImmediate(() => {
+      try { createTray(); } catch (error) { console.error('[pome] createTray aborted', error); }
+    });
+    void promptForMissingPermissions()
+      .catch(() => console.error('[pome] permission self-check failed'))
+      .finally(recoverStartupPanelVisibility);
     try {
       const manus = getManusCompletionService();
       if (manus.status().enabled) void manus.start();
     } catch { /* Manus listener is optional at boot. */ }
   }
-  if (process.env.TODO_TEST_USER_DATA && process.env.POME_TEST_NOTIFICATIONS === '1') startTaskNotificationServer();
+  if (testUserData && process.env.POME_TEST_NOTIFICATIONS === '1') startTaskNotificationServer();
   watchDisplayChanges();
   watchActiveSpaceChanges();
   ensureClipImagesDir();

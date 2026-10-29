@@ -553,6 +553,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
           if (revisions[id] === revision) state[id] = state[id]?.ok ? { ...state[id], stale: true, refreshError: 'ipc_failed' }
             : { detected: state[id]?.detected, configured: state[id]?.configured, ok: false };
         }
+        // One provider's login prompt must not hold back other providers' quotas.
+        render();
       }));
       render();
     })();

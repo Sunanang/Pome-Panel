@@ -1564,5 +1564,8 @@
   "windows.focusFailed": "無法切換至這個視窗，請重新整理列表後再試。",
   "windows.minimized": "已最小化",
   "windows.count": "{count} 個視窗",
-  "windows.restoreHidden": "恢復 {count}"
+  "windows.restoreHidden": "恢復 {count}",
+  "copy.recordingSaved.7e91c2": "錄音已儲存",
+  "ux.recordings.view": "前往錄音查看",
+  "copy.noMicrophoneDeviceFound.a4c8e1": "未偵測到麥克風 · 請接上麥克風後再試"
 }

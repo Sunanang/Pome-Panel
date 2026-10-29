@@ -10,11 +10,9 @@
     I.bind(input,'placeholder',()=>I.t(key));I.bind(input,'ariaLabel',()=>I.t(key));
     input.addEventListener('input',()=>onInput(input.value));parent.insertBefore(input,before||null);return input;
   }
-  const mirrorLabel=label(document.createElement('span'),'copy.openLiveMirror.108daa');mirrorLabel.className='mirror-action-label';$('mirror-stage').append(mirrorLabel);
-  new MutationObserver(()=>{mirrorLabel.textContent=I.t($('mirror-stage').getAttribute('aria-pressed')==='true'?'copy.closeLiveMirror.a64be7':'copy.openLiveMirror.108daa');}).observe($('mirror-stage'),{attributes:true,attributeFilter:['aria-pressed']});
   const aiHint=help(null,'ux.ai.capabilities');$('settings-ai-sources-list').before(aiHint);
   help(document.querySelector('.settings-api-card'),'ux.record.configHint');
-  help($('credential-create-dialog'),'ux.credentials.hint');
+  help(document.querySelector('.credentials-form-card'),'ux.credentials.hint');
   const todoHint=help(null,'ux.todo.hint');
   I.bind(todoHint,'title',()=>I.t('ux.todo.hint'));
   $('todo-add-category').before(todoHint);
@@ -50,7 +48,7 @@
   const preference=(key,fallback)=>{try{return localStorage.getItem(key)||fallback;}catch{return fallback;}};
   function savePreference(key,value){try{localStorage.setItem(key,value);return true;}catch{return false;}}
   function selectPreference(key,title,options,fallback,onChange){
-    const row=document.createElement('label');row.className='settings-device-row';row.append(label(document.createElement('span'),title));
+    const row=document.createElement('label');row.className='settings-device-row settings-select-row';row.append(label(document.createElement('span'),title));
     const select=document.createElement('select');select.id=key;
     for(const [value,textKey] of options){const option=document.createElement('option');option.value=value;label(option,textKey);select.append(option);}
     select.value=preference(key,fallback);row.append(select);document.querySelector('.settings-device-card').append(row);

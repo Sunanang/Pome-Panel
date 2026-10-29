@@ -333,7 +333,6 @@ async function main() {
           copyCredential: async () => true,
         };
         document.getElementById('tab-button-credentials').click();
-        document.getElementById('credential-new').click();
         document.getElementById('credential-service').value = item.service;
         document.getElementById('credential-account').value = item.account;
         document.getElementById('credential-password').value = item.password;

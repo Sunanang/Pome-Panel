@@ -75,40 +75,61 @@ html[data-liquid-glass='1'] #panel .topbar .tab-indicator {
   outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
+/* Search fields: click/focus must not use the blue ring. */
+:is(#tab-todo,#tab-notes,#tab-links,#tab-recordings,#tab-credentials,#tab-settings,#tab-clip) :is(input[type='search'], .experience-search):is(:focus, :focus-visible) {
+  outline: none;
+  outline-offset: 0;
+}
+#tab-settings .settings-select-row select:is(:focus, :focus-visible) {
+  outline: none;
+  outline-offset: 0;
+  border-color: rgba(229,182,174,.45);
+  box-shadow: 0 0 0 2px rgba(229,182,174,.07);
+}
 :is(#tab-todo,#tab-notes,#tab-links,#tab-recordings,#tab-credentials,#tab-settings,#tab-clip) button:disabled { cursor: default; }
 :is(#tab-todo,#tab-notes,#tab-links,#tab-recordings,#tab-credentials,#tab-settings,#tab-clip) :is(input,textarea)::placeholder { color: #85848e; }
 .workbench-page-heading { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 16px; min-height: 36px; }
 .workbench-page-heading h2 { flex: 0 0 auto; margin: 0; color: #f2eee8; font-size: 19px; font-weight: 620; line-height: 1.35; letter-spacing: -.3px; }
 
-/* Links become a compact shelf, grouped by spacing and fine separators. */
-#tab-links .links-page { gap: 12px; padding: 18px; border: 1px solid var(--wb-line); border-radius: var(--wb-radius); background: var(--wb-surface); overflow: hidden; }
+/* Links keep separate group cards on the panel background (pre-redesign). */
+#tab-links .links-page { gap: 12px; padding: 4px 8px 0; border: 0; border-radius: 0; background: none; overflow: visible; }
 #tab-links .links-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; min-height: 36px; }
 #tab-links .link-add-wrap { flex: 1 1 260px; max-width: 540px; margin-left: auto; }
 #tab-links .link-add-wrap input { height: 36px; padding-top: 8px; padding-bottom: 8px; border: 1px solid var(--wb-line); border-radius: var(--r-pill); background: var(--wb-control); box-shadow: none; font-size: 12px; }
 #tab-links .link-add-wrap input:focus { background: var(--wb-surface-raised); border-color: rgba(229,182,174,.35); }
 #tab-links .link-add-wrap svg { color: var(--wb-text-muted); }
-#tab-links .link-groups { gap: 20px 28px; padding: 2px 6px 12px 0; }
-#tab-links .link-group { border: 0 !important; border-radius: 0; background: none; box-shadow: none; overflow: hidden; }
-#tab-links .link-group-head { gap: 4px; min-height: 39px; padding: 0 2px 7px; border-bottom: 1px solid var(--wb-line); }
-#tab-links .group-name-input { padding: 5px 4px; color: #c9c6ce; font-size: 12px; font-weight: 580; }
-#tab-links .group-count { color: var(--wb-text-muted); font-size: 10px; }
-#tab-links .link-group-body { gap: 0; padding: 7px 0 0; }
-#tab-links .link-group.collapsed .link-group-body { padding: 0; }
-#tab-links .link-list { gap: 1px; min-width: 0; overflow-x: hidden; padding: 0 5px 4px 0; scrollbar-gutter: stable; }
-#tab-links .link-item { min-width: 0; width: 100%; flex-shrink: 0; min-height: 58px; padding: 9px 8px; gap: 11px; border-radius: 12px; transform: none; }
+#tab-links .link-groups { gap: var(--s-3); padding: 2px 2px 12px 0; }
+#tab-links .link-group {
+  border: 1px solid var(--wb-line) !important;
+  border-radius: var(--wb-radius);
+  background: var(--wb-surface) !important;
+  box-shadow: none;
+  overflow: hidden;
+}
+#tab-links .link-group-head { gap: 6px; min-height: 42px; padding: 7px 9px; border-bottom: 0; }
+#tab-links .group-name-input { padding: 5px 6px; color: var(--text-1); font-size: var(--fs-body); font-weight: 600; }
+#tab-links .group-count { color: var(--wb-text-muted); font-size: var(--fs-caption); }
+#tab-links .link-group-body { gap: 6px; padding: 0 9px 9px; }
+#tab-links .link-group.collapsed .link-group-body { padding-bottom: 0; }
+#tab-links .link-list { gap: 4px; min-width: 0; overflow-x: hidden; padding: 0; scrollbar-gutter: stable; }
+#tab-links .link-item { min-width: 0; width: 100%; flex-shrink: 0; min-height: 47px; padding: 5px 6px; gap: var(--s-2); border-radius: var(--r-input); transform: none; }
 #tab-links .link-item:hover,
 #tab-links .link-item:focus-within { background: rgba(255,255,255,.045); }
-#tab-links .link-favicon { width: 30px; height: 30px; border: 1px solid var(--wb-line); border-radius: 10px; background: var(--wb-control); color: #cec9c8; }
-#tab-links .link-open { gap: 4px; }
-#tab-links .link-open strong { font-size: 13px; font-weight: 520; }
-#tab-links .link-open span { color: var(--wb-text-muted); font-size: 10.5px; }
-#tab-links .link-actions { opacity: .6; }
+#tab-links .link-favicon { width: 30px; height: 30px; border: 0; border-radius: 9px; background: var(--wb-control); color: #cec9c8; }
+#tab-links .link-open { gap: 2px; }
+#tab-links .link-open strong { font-size: var(--fs-small); font-weight: 550; }
+#tab-links .link-open span { color: var(--wb-text-muted); font-size: var(--fs-micro); }
+#tab-links .link-actions { opacity: 0; }
 #tab-links :is(.link-item:hover,.link-item:focus-within) .link-actions { opacity: 1; }
 #tab-links .link-item::before { display: none; }
-#tab-links .link-group.drop-target { border-radius: var(--wb-radius); background: var(--wb-selected); box-shadow: inset 0 0 0 1px rgba(229,182,174,.28); }
-#tab-links .group-link-add { border-radius: 12px; background: var(--wb-control); box-shadow: none; }
+#tab-links .link-group.drop-target {
+  border-color: rgba(255,255,255,.30) !important;
+  background: var(--wb-surface) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+}
+#tab-links .group-link-add { border-radius: var(--r-input); background: var(--wb-control); box-shadow: none; }
 #tab-links .links-empty { min-height: 220px; height: auto; }
-#tab-links :is(.group-toggle,.link-group-head .icon-button) { border-radius: var(--r-pill); }
+#tab-links :is(.group-toggle,.link-group-head .icon-button) { border-radius: 7px; }
 
 /* Settings are reading surfaces rather than a wall of embossed cards.
    The HTML order matches the visual/focus order: AI/API/cover, device/display/NAS. */

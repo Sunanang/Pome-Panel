@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { createHash } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
-const { decodeCursorToken, isCursorEncryptedToken } = require('./platform-adapters/cursor-secrets');
+const { decodeCursorTokenAsync, isCursorEncryptedToken } = require('./platform-adapters/cursor-secrets');
 
 const API_BASE = 'https://api2.cursor.sh';
 const PERIOD_PATH = '/aiserver.v1.DashboardService/GetCurrentPeriodUsage';
@@ -22,7 +22,7 @@ function cursorStateDbPath() {
   return path.join(os.homedir(), '.config', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
 }
 
-function readAuthToken(dbPath = cursorStateDbPath(), { decryptToken = decodeCursorToken, force = false } = {}) {
+async function readAuthToken(dbPath = cursorStateDbPath(), { decryptToken = decodeCursorTokenAsync, force = false } = {}) {
   if (!fs.existsSync(dbPath)) {
     return { ok: false, error: 'cursor_db_missing', path: dbPath };
   }
@@ -36,7 +36,7 @@ function readAuthToken(dbPath = cursorStateDbPath(), { decryptToken = decodeCurs
     if (!stored) return { ok: false, error: 'cursor_token_missing', path: dbPath };
     let token;
     try {
-      token = decryptToken(stored, { dbPath, force });
+      token = await decryptToken(stored, { dbPath, force });
       if (!token || isCursorEncryptedToken(token)) throw new Error();
     } catch (error) {
       return { ok: false, detected: true, error: error.code === 'cursor_token_encrypted_unsupported'
@@ -136,7 +136,9 @@ function buildSnapshot(period, auth) {
 // credentials (or response bodies) in IPC, errors or cache keys sent to the UI.
 function createCursorUsageService({ fetchImpl = (...args) => fetch(...args), readAuth = readAuthToken, now = Date.now } = {}) {
   let key = '', generation = 0, pending = null, lastAttempt = null, lastSuccess = null, manualInvalid = false;
-  function reset() {
+  let authRevision = 0, authReads = 0, latestAuthRead = 0;
+  function reset({ identityOnly = false } = {}) {
+    if (!identityOnly) authRevision++;
     generation++; pending?.controller.abort();
     pending = null; lastAttempt = null; lastSuccess = null; key = ''; manualInvalid = false;
   }
@@ -145,12 +147,15 @@ function createCursorUsageService({ fetchImpl = (...args) => fetch(...args), rea
     // token. Ignore that device-bound copy and use the current local sign-in.
     const savedManual = String(manualToken || '').trim();
     const manual = isCursorEncryptedToken(savedManual) ? '' : savedManual;
+    const beforeAuth = authRevision, authRead = ++authReads;
     let auth;
-    try { auth = readAuth(); } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
+    try { const value = readAuth(); auth = value?.then ? await value : value; } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
+    if (beforeAuth !== authRevision || authRead < latestAuthRead) return { superseded: true };
+    latestAuthRead = authRead;
     // Re-read the owner's login before cache lookup: local sign-out/account switch
     // must invalidate snapshots even when a request is in flight.
     const identity = createHash('sha256').update(JSON.stringify([manual, auth.ok ? auth.token : null, auth.email || null])).digest('hex');
-    if (key !== identity) { reset(); key = identity; }
+    if (key !== identity) { reset({ identityOnly: true }); key = identity; }
     const revision = generation;
     if (!force && lastAttempt && now() - lastAttempt.at < CACHE_TTL_MS) return { ...lastAttempt.result, cached: true };
     if (!pending) {

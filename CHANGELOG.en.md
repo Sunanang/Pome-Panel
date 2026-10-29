@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Keep three quick-recording controls and use a saved-recording toast for navigation. Report missing microphones and retry unsupported audio constraints. Restore split panes for Notes, Recordings and Credentials, refine shared controls and update the default mirror cover. Read Cursor system credentials asynchronously and reveal provider quotas independently; retain valid local quotas when a manual token expires.
+- Preserve recording failure feedback after permission cleanup, open the correct saved recording from its toast, and consume duplicate Escape events while masking a credential. Recover startup visibility without stealing focus or reopening an explicitly hidden panel; keep notifications above the panel, preserve packaged test isolation, handle permission self-check failures, and ignore outdated initial settings reads.
 - Edit note titles directly and remove the redundant Rename button.
 - Keep Home layout editing in the context menu and remove its permanent toolbar. Remove the duplicate Tasks heading and combine statistics, help and Add category into one row with full help on hover.
 - Use the same thin scrollbar across all views; fix clipped link highlights and unwanted horizontal bars. Restore opaque reading surfaces for links, recordings and credentials, solid settings cards and separate task/category cards. Animate clipboard filter selection and results while respecting reduced motion.

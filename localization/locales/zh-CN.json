@@ -1564,5 +1564,8 @@
   "windows.focusFailed": "无法切换到这个窗口，请刷新列表后重试。",
   "windows.minimized": "已最小化",
   "windows.count": "{count} 个窗口",
-  "windows.restoreHidden": "恢复 {count}"
+  "windows.restoreHidden": "恢复 {count}",
+  "copy.recordingSaved.7e91c2": "录音已保存",
+  "ux.recordings.view": "前往录制查看",
+  "copy.noMicrophoneDeviceFound.a4c8e1": "未检测到麦克风 · 请接入麦克风后再试"
 }
