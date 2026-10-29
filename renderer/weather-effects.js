@@ -216,7 +216,7 @@
     }
     function frame(timestamp) {
       raf = 0;
-      if (!isVisible() || document.hidden || reduced()) { stop(); return; }
+      if (!isVisible() || document.hidden || document.documentElement.dataset.windowVisible === 'false' || reduced()) { stop(); return; }
       const dt = last === null ? 0 : Math.min(.05, Math.max(0, (timestamp - last) / 1000)); last = timestamp;
       step(state, dt);
       const ctx = canvas.getContext('2d');
@@ -228,7 +228,7 @@
       const changed = config.family !== next.family || config.size !== next.size;
       config = { ...next };
       const active = config.enabled && ['medium', 'large'].includes(config.size) && config.family !== 'none'
-        && !document.hidden && !reduced() && isVisible();
+        && !document.hidden && document.documentElement.dataset.windowVisible !== 'false' && !reduced() && isVisible();
       if (!active || changed || (canvas && !canvas.isConnected)) stop();
       if (!active || canvas) return;
       canvas = document.createElement('canvas'); canvas.className = 'wx-fx'; canvas.setAttribute('aria-hidden', 'true');

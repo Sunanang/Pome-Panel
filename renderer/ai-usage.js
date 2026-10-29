@@ -575,9 +575,9 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   tile.querySelector('.ai-open-settings')?.addEventListener('click', () => openSettings());
   new MutationObserver(render).observe(tile, { attributes: true, attributeFilter: ['data-widget-size'] });
   new ResizeObserver(() => syncGeometry()).observe(tile);
-  const usageVisible = () => document.visibilityState === 'visible' && document.getElementById('app')?.classList.contains('expanded')
+  const usageVisible = () => document.visibilityState === 'visible' && document.documentElement.dataset.windowVisible !== 'false' && document.getElementById('app')?.classList.contains('expanded')
     && document.getElementById('tab-button-home')?.classList.contains('active') && !tile.hidden;
-  for (const event of ['visibilitychange', 'notch:modechange', 'notch:tabchange', 'notch:home-modules-changed']) {
+  for (const event of ['visibilitychange', 'notch:window-visibility', 'notch:modechange', 'notch:tabchange', 'notch:home-modules-changed']) {
     document.addEventListener(event, () => {
       syncTick();
       if (usageVisible()) {

@@ -26,6 +26,14 @@ const statusToast = document.getElementById('status-toast');
 const statusToastMessage = document.getElementById('status-toast-message');
 const statusToastAction = document.getElementById('status-toast-action');
 
+// macOS can keep Chromium's page visibility "visible" after a native hide.
+// Preserve that browser state and separately track the actual panel window.
+window.notchAPI?.onWindowVisibilityChanged?.(visible => {
+  document.documentElement.dataset.windowVisible = String(visible);
+  if (!visible) stopMirror();
+  document.dispatchEvent(new CustomEvent('notch:window-visibility', { detail: { visible } }));
+});
+
 function collectLocalStorageSnapshot() {
   const result = {};
   for (let index = 0; index < localStorage.length; index += 1) {
@@ -1219,7 +1227,7 @@ document.addEventListener('compositionend', () => {
 if (window.notchAPI && typeof window.notchAPI.onEscape === 'function') {
   window.notchAPI.onEscape(() => {
     if (window.PomeDeleteConfirm?.closeOnEscape()) return;
-    if (shortcutRecorderActive) { closeShortcutRecorder(); return; }
+    if (closeShortcutRecorderOnEscape()) return;
     if (todoEditorContext) { closeTodoEditor(); return; }
     if (window.NotchWorkspace?.closeTranscriptionOnEscape?.()) return;
     if (window.PomeExperience?.closeOverlayOnEscape?.()) return;
@@ -1571,6 +1579,7 @@ const shortcutRecorder = document.getElementById('shortcut-recorder');
 const shortcutRecorderValue = document.getElementById('shortcut-recorder-value');
 const shortcutRecorderCancel = document.getElementById('shortcut-recorder-cancel');
 let shortcutRecorderActive = false;
+let shortcutRecorderEscapeAt = -Infinity;
 
 document.addEventListener('notch:will-collapse', () => closeShortcutRecorder());
 document.addEventListener('notch:tabchange', () => closeShortcutRecorder());
@@ -1578,6 +1587,13 @@ document.addEventListener('notch:tabchange', () => closeShortcutRecorder());
 function closeShortcutRecorder() {
   shortcutRecorderActive = false;
   if (shortcutRecorder) shortcutRecorder.hidden = true;
+}
+
+function closeShortcutRecorderOnEscape() {
+  if (!shortcutRecorderActive) return performance.now() - shortcutRecorderEscapeAt < 150;
+  shortcutRecorderEscapeAt = performance.now();
+  closeShortcutRecorder();
+  return true;
 }
 
 function keyEventToAccelerator(event) {
@@ -1616,7 +1632,7 @@ shortcutRecorder?.addEventListener('keydown', async (event) => {
   event.preventDefault();
   event.stopPropagation();
   if (event.key === 'Escape') {
-    closeShortcutRecorder();
+    closeShortcutRecorderOnEscape();
     return;
   }
   const accelerator = keyEventToAccelerator(event);
@@ -4907,10 +4923,11 @@ async function showMediaPermissionToast(kind, isCurrent = () => true) {
 }
 
 async function startMirror() {
-  if (mirrorStarting || mirrorStream || !mirrorVideo) return;
+  if (mirrorStarting || mirrorStream || !mirrorVideo || document.documentElement.dataset.windowVisible === 'false') return;
   const generation = ++mirrorGeneration;
   const isCurrent = () => generation === mirrorGeneration;
-  const canContinue = () => isCurrent() && mirrorStarting && isExpanded && activeTab === 'home' && !homeMirror?.hidden;
+  const canContinue = () => isCurrent() && mirrorStarting && isExpanded && activeTab === 'home' && !homeMirror?.hidden
+    && document.documentElement.dataset.windowVisible !== 'false';
   mirrorStarting = true;
   homeMirror?.classList.add('camera-starting');
   mirrorStage?.setAttribute('aria-busy', 'true');

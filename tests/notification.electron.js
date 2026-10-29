@@ -98,8 +98,9 @@ async function run(mainContents) {
     const title = require('../main-services').taskNotificationIdentity(payload, source).title;
     const win = await shown(title);
     assert.equal(win.isAlwaysOnTop(), true);
-    // Keep floating (not screen-saver) so macOS screenshot tools can capture the bubble.
-    assert.match(fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8'), /notificationWindow\.setAlwaysOnTop\(true, 'floating', 1\)/);
+    // Match the panel's platform layer, with notifications one relative level above.
+    // Keep both below screen-saver so system capture UI can still appear above them.
+    assert.match(fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8'), /notificationWindow\.setAlwaysOnTop\(true, process\.platform === 'darwin' \? 'status' : 'floating', 1\)/);
     assert.equal(win.getBounds().width, 400);
     assert.equal(win.hasShadow(), false, 'native window cannot add a second outer shadow');
     const edge = await evaluate(win, `({shadow:getComputedStyle(shell.querySelector('.notification-shape')).boxShadow,

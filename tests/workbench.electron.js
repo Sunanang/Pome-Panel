@@ -172,6 +172,10 @@ async function run(c) {
   };
   await open(); await fillAndReveal(); await key('Escape'); c.send('key:escape'); await masked('Escape');
   assert.equal(await js('isExpanded'), true, 'duplicate Escape masks the password without collapsing the panel');
+  await open(); await fillAndReveal(); BrowserWindow.fromWebContents(c).hide();
+  await until('document.documentElement.dataset.windowVisible === "false" && document.getElementById("credential-password").type === "password"');
+  await masked('Native hide'); BrowserWindow.fromWebContents(c).show();
+  await until('document.documentElement.dataset.windowVisible === "true"');
   await open(); await fillAndReveal(); await tab('notes'); await masked('Tab change');
   await tab('credentials'); await open(); await fillAndReveal(); await js('setMode(false)'); await until('!modeBusy'); await masked('Collapse');
   await js('setMode(true)'); await until('!modeBusy'); await tab('credentials');

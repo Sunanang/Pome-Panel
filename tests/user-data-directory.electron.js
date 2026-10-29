@@ -42,7 +42,8 @@ if (phase === 'switch') {
   dialog.showMessageBox = async () => ({ response: 0 });
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const watchdog = setTimeout(() => { console.error('Profile migration timed out:', phase); app.exit(1); }, 30000);
+let milestone = 'loading';
+const watchdog = setTimeout(() => { console.error('Profile migration timed out:', phase, milestone); app.exit(1); }, 30000);
 let started = false;
 app.on('web-contents-created', (_event, contents) => contents.once('did-finish-load', () => {
   if (started || !contents.getURL().endsWith('/renderer/index.html')) return;
@@ -50,21 +51,26 @@ app.on('web-contents-created', (_event, contents) => contents.once('did-finish-l
   run(contents).then(() => { clearTimeout(watchdog); console.log('Profile directory passed:', phase); app.exit(0); })
     .catch(error => { console.error(error); app.exit(1); });
 }));
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('did-fail-load', (_event, code, description) => console.error('Profile load failed:', phase, milestone, code, description));
+  contents.on('render-process-gone', (_event, details) => console.error('Profile renderer exited:', phase, milestone, details.reason));
+  contents.on('console-message', details => { if (details.level === 'error') console.error('Profile renderer:', details.message); });
+});
 
 async function run(contents) {
   const js = code => contents.executeJavaScript(code);
   async function until(expression) {
-    for (let i = 0; i < 300; i++) {
-      try { if (await js(expression)) return; } catch {}
+    const deadline = Date.now() + 12000;
+    while (Date.now() < deadline) {
+      // A workspace change can navigate twice. An evaluation sent to the old
+      // frame may never resolve, so it cannot be the only progress clock.
+      try { if (await Promise.race([js(expression), sleep(300).then(() => false)])) return; } catch {}
       await sleep(30);
     }
     throw new Error(`Timed out: ${expression}`);
   }
   const expected = phase === 'seed' ? 'older disk snapshot' : phase === 'custom' ? 'custom data retained' : 'latest browser note';
-  for (let i = 0; i < 300; i++) {
-    try { if (await js(`!!window.NotchWorkspace && ${phase === 'fresh' ? 'true' : `document.getElementById('home-note').value===${JSON.stringify(expected)}`}`)) break; } catch {}
-    await sleep(30);
-  }
+  await until(`!!window.NotchWorkspace && ${phase === 'fresh' ? 'true' : `document.getElementById('home-note').value===${JSON.stringify(expected)}`}`);
   if (phase === 'seed') {
     assert.equal(app.getPath('userData'), legacy);
     await js(`clearInterval(workspacePersistenceTimer);localStorage.setItem('notch-home-note','latest browser note');
@@ -99,7 +105,9 @@ async function run(contents) {
     } }));
     async function choose(folder, note) {
       selectedFolders.push(folder);
-      await js('notchAPI.chooseWorkspace()').catch(() => {});
+      milestone = `choose ${path.basename(folder)}: invoke`;
+      await Promise.race([js('notchAPI.chooseWorkspace()').catch(() => {}), sleep(300)]);
+      milestone = `choose ${path.basename(folder)}: projection`;
       await until(`!!workspacePersistenceTimer && !workspaceReloadPending
         && localStorage.getItem('notch-workspace-root')===${JSON.stringify(folder)}
         && document.getElementById('home-note').value===${JSON.stringify(note)}`);
@@ -114,9 +122,11 @@ async function run(contents) {
     assert.equal(fs.existsSync(path.join(target, '.pome-profile-migration.json')), false);
     assert.equal((await js('notchAPI.getWorkspace()')).previousDefaultPath, undefined);
     // Recover even if a crash lost the renderer's explicit-switch event.
-    await js(`clearInterval(workspacePersistenceTimer); sessionStorage.clear();
+    milestone = 'reload: dispatch';
+    await Promise.race([js(`clearInterval(workspacePersistenceTimer); sessionStorage.clear();
       localStorage.setItem('notch-workspace-root',${JSON.stringify(legacy)});
-      localStorage.setItem('notch-home-note','stale old workspace after crash'); location.reload()`);
+      localStorage.setItem('notch-home-note','stale old workspace after crash'); location.reload()`).catch(() => {}), sleep(300)]);
+    milestone = 'reload: recovered projection';
     await until('!!workspacePersistenceTimer && !workspaceReloadPending && document.getElementById("home-note").value==="latest browser note"');
     await sleep(2200);
     assert.equal(JSON.parse(fs.readFileSync(targetFile)).localStorage['notch-home-note'], 'latest browser note');

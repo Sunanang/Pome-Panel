@@ -1,0 +1,344 @@
+{
+  "schemaVersion": 1,
+  "documentVersion": "1.0",
+  "definition": "Main monotonic trigger → visible page opacity ≥0.9 and navigation hit test → verified input and IPC acknowledgement",
+  "samples": [
+    {
+      "group": "normal",
+      "index": 0,
+      "ms": 208.265167,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 1,
+      "ms": 182.609291,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 2,
+      "ms": 183.955333,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 3,
+      "ms": 176.591417,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 4,
+      "ms": 190.410625,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 5,
+      "ms": 191.41425,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 6,
+      "ms": 183.633083,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 7,
+      "ms": 177.063542,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 8,
+      "ms": 179.630875,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 9,
+      "ms": 190.887041,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 10,
+      "ms": 191.994542,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 11,
+      "ms": 176.837,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 12,
+      "ms": 183.619541,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 13,
+      "ms": 179.554084,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 14,
+      "ms": 180.486709,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 15,
+      "ms": 188.228083,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 16,
+      "ms": 188.364,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 17,
+      "ms": 189.817458,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 18,
+      "ms": 187.271792,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "normal",
+      "index": 19,
+      "ms": 191.26025,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 0,
+      "ms": 200.1685,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 1,
+      "ms": 204.0165,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 2,
+      "ms": 176.199875,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 3,
+      "ms": 196.485584,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 4,
+      "ms": 202.09225,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 5,
+      "ms": 202.999542,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 6,
+      "ms": 207.420041,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 7,
+      "ms": 185.3145,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 8,
+      "ms": 208.364875,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 9,
+      "ms": 186.135167,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 10,
+      "ms": 209.874041,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 11,
+      "ms": 186.449333,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 12,
+      "ms": 204.343166,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 13,
+      "ms": 186.087583,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 14,
+      "ms": 205.991625,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 15,
+      "ms": 184.183,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 16,
+      "ms": 208.525542,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 17,
+      "ms": 203.5315,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 18,
+      "ms": 199.183666,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    },
+    {
+      "group": "background-sync",
+      "index": 19,
+      "ms": 180.013583,
+      "success": true,
+      "error": null,
+      "thresholdMs": 300
+    }
+  ],
+  "groups": {
+    "normal": {
+      "samples": 20,
+      "p95": 191.994542,
+      "passed": true
+    },
+    "background-sync": {
+      "samples": 20,
+      "p95": 208.525542,
+      "passed": true
+    }
+  },
+  "diagnostics": [],
+  "unverified": [
+    "Windows 真机",
+    "实体屏幕切换与 DPI"
+  ]
+}

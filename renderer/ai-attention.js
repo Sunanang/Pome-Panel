@@ -41,6 +41,7 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') dismissDialog();
   });
+  document.addEventListener('notch:window-visibility', event => { if (!event.detail?.visible) dismissDialog(); });
   let busy = false, queued = false, actionError = '';
   const t = (key, params) => locale.t(`attention.${key}`, params);
   function button(key, action) {

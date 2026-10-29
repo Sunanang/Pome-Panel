@@ -19,7 +19,7 @@ app.whenReady().then(async()=>{
    const w=new BrowserWindow({width:450,height:280,x:120+i*12,y:140+i*10,title,show:false});await w.loadURL('data:text/html,'+encodeURIComponent(`<title>${title}</title><body style="background:#1e2025;color:#f3eee7;font:20px system-ui;padding:24px"><h1>${title}</h1><p>Native window identity fixture ${i}</p></body>`));w.showInactive();windows.push(w);
   }
   if(terminalRole){const panel=new BrowserWindow({width:180,height:100,type:'panel',show:false});await panel.loadURL('data:text/html,<title>Pome utility panel</title>');panel.showInactive();panel.hide();windows.push(panel);}windows[terminalRole?0:1].focus();
-  write('ready.json',{pid:process.pid,count:windows.length});let busy=false;
+  write('ready.json',{pid:process.pid,count:windows.length,visibleCount:windows.filter(w=>w.isVisible()).length,appHidden:app.isHidden()});let busy=false;
   setInterval(async()=>{
    write('state.json',{focused:windows.findIndex(w=>!w.isDestroyed()&&w.isFocused()),titles:windows.map(w=>w.isDestroyed()?null:w.getTitle())});
    const file=path.join(root,'command.json');if(busy||!fs.existsSync(file))return;busy=true;const command=JSON.parse(fs.readFileSync(file));fs.unlinkSync(file);

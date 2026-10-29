@@ -68,7 +68,7 @@ jobs:
           npm run i18n:check
           npm run test:i18n
           npm run build
-          npm run test:sites
+          npm test
       - run: node scripts/release-policy.js
         if: needs.changes.outputs.website_only != 'true'
       - run: npm ci
@@ -126,7 +126,7 @@ jobs:
           npm run i18n:check
           npm run test:i18n
           npm run build
-          npm run test:sites
+          npm test
       - run: node scripts/release-policy.js
         if: needs.changes.outputs.website_only != 'true'
       - run: npm ci
@@ -172,7 +172,7 @@ jobs:
           npm run i18n:check
           npm run test:i18n
           npm run build
-          npm run test:sites
+          npm test
       - run: node scripts/release-policy.js
         if: needs.changes.outputs.website_only != 'true'
       - name: Install NAS test dependencies

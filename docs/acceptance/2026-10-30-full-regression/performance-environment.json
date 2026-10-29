@@ -1,0 +1,66 @@
+{
+  "runAt": "2026-10-29T17:21:57.048Z",
+  "machineModel": "Mac18,5",
+  "cpu": "Apple M6",
+  "memoryBytes": 17179869184,
+  "os": {
+    "platform": "darwin",
+    "release": "27.0.0",
+    "version": "Darwin Kernel Version 27.0.0: Tue Aug 11 21:06:15 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T8152",
+    "arch": "arm64"
+  },
+  "appVersion": "0.11.0",
+  "electronVersion": "44.0.0",
+  "commit": "a69a5e8fc1697e241b60d8867ffb49d340769963",
+  "dirty": true,
+  "display": [
+    {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "workArea": {
+        "x": 0,
+        "y": 30,
+        "width": 1920,
+        "height": 976
+      },
+      "scaleFactor": 2,
+      "refreshRate": 60.000003814697266
+    }
+  ],
+  "reducedMotion": false,
+  "coldStartupMs": 431.789584,
+  "definition": "Main monotonic begin-open → visible default page (opacity ≥0.9), navigation hit test + verified input → main IPC acknowledgement",
+  "sourceHash": "71579e69940c88e5ec39a424be8bb1d724eec42704b91151f4ee4b335238e833",
+  "sourceFiles": {
+    "main.js": "668ebe1c49906fad67ebf5bd4411094b0b43ac48152ee705286630d367555df2",
+    "preload.js": "a50572775e8768371f03e06fdd061e48ac59fd6dda1814d608c8c63327097017",
+    "renderer/app.js": "7e3155089ed6c095d7604f231d425f832a884a3110540ca3848c2ce58d57e050",
+    "renderer/styles.css": "04fee28726bcb733a9ecd70435feb8701626c0b7b2ea137f1f475a6c4408a018",
+    "renderer/task-inbox.js": "a22818cc00e4bf33e9174b91f992a42ff4e585f08e6f28c9e19cc1cc9cb17bd4",
+    "renderer/ai-sources.js": "0f628f357a101effeb3a1afaf501af64a7a6669073983cf201251a17548b26dc",
+    "aiSourceHooks.js": "6313c3a1f9c3dea82c49f5ec389e67926103c235861500d67f41faec7886eb91",
+    "scripts/codex-notify.js": "4de056acaae793c7af07ec171eddb2ba383efcb7b351f5b7d007209532ecf253",
+    "scripts/claude-notify.js": "0bd574b927f70baa21d6a00882a52d5e85df6f2f5bfa3879121a33f2a86ae528",
+    "scripts/cursor-notify.js": "666e1196a52487b6f0b66536d47164e9403ad678f3c096ce59b97ebdad8e4c6b",
+    "renderer/domain.js": "930c3a28d8f9a6075aa6ead10fe9257fb9426f1bdf432d0a0c86459097343a89",
+    "renderer/workspace.js": "862cd4109d28475fb2978014577e69f71496015938b204fd95a27e5af3fb0860",
+    "workspace-sync.js": "a3e777e0a8bbb5ad5e7c32b93b70cbaf1b55c380c713091f9038dc3c3dafa456",
+    "platform.js": "f05182131991a1a6566e35e6964a4d37062d82b261992e14be15ecc1bba075db",
+    "taskInbox.js": "72cf040c4103e72f7b24ff2901290d2c53cfecc116439d4f0e87bd34e4d3f88d",
+    "workspaceBackup.js": "55f6ce3da01956a9dbf0830302142cca863b135eb7c08842204fa405e3fe3b0e",
+    "syncRecovery.js": "0b9380a84140d79786776093424b7ef015f32934b5443ec66501257b614aad4e"
+  },
+  "syncLoad": {
+    "isolatedPersistentNas": true,
+    "artificialResponseDelayMs": 20,
+    "reason": "确保同步请求覆盖唤出测量时段"
+  },
+  "unverified": [
+    "Windows 真机",
+    "切换实体显示器与 DPI"
+  ]
+}

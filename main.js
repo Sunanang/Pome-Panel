@@ -1608,7 +1608,6 @@ function createWindow() {
   }
   if (process.platform === 'darwin') {
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    try { mainWindow.setHiddenInMissionControl(true); } catch (e) {}
   }
   if (process.platform === 'win32') mainWindow.setMenu(null);
 
@@ -1639,6 +1638,23 @@ function createWindow() {
   });
   mainWindow.on('show', syncHoverSpacePolling);
   mainWindow.on('hide', syncHoverSpacePolling);
+  const visibilityOwner = mainWindow;
+  let lastWindowVisibility;
+  const publishVisibility = () => {
+    if (visibilityOwner.isDestroyed() || visibilityOwner.webContents.isDestroyed()) return;
+    const visible = visibilityOwner.isVisible();
+    if (visible === lastWindowVisibility) return;
+    lastWindowVisibility = visible;
+    visibilityOwner.webContents.send('window:visibility-changed', visible);
+  };
+  visibilityOwner.on('show', publishVisibility);
+  visibilityOwner.on('hide', publishVisibility);
+  visibilityOwner.webContents.on('did-finish-load', () => { lastWindowVisibility = undefined; publishVisibility(); });
+  // Some macOS floating/status windows change visibility without emitting show/hide.
+  // A cheap native-state check backs up those events; IPC is sent only on changes.
+  const visibilityWatch = setInterval(publishVisibility, 200);
+  visibilityWatch.unref();
+  visibilityOwner.once('closed', () => clearInterval(visibilityWatch));
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 

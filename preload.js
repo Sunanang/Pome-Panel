@@ -191,6 +191,9 @@ contextBridge.exposeInMainWorld('notchAPI', {
   chooseWorkspace: () => ipcRenderer.invoke('workspace:choose'),
   onWorkspaceChanged: (cb) => subscribe('workspace:changed', (event, info) => cb(info)),
   onCollapseRequest: (cb) => subscribe('window:request-collapse', () => cb()),
+  onWindowVisibilityChanged: cb => subscribe('window:visibility-changed', (_event, visible) => {
+    if (typeof visible === 'boolean') cb(visible);
+  }),
   getMetrics: () => ipcRenderer.invoke('window:metrics'),
   onMetricsChanged: (cb) =>
     subscribe('window:metrics-changed', (event, metrics) => cb(metrics)),

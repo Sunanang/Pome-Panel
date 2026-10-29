@@ -109,6 +109,7 @@
     document.addEventListener('notch:will-collapse',stop);
     document.addEventListener('notch:tabchange',event=>{if(event.detail?.tab!=='home')stop();});
     document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+    document.addEventListener('notch:window-visibility',event=>{if(!event.detail?.visible)stop();});
     document.addEventListener('notch:motion-preference',()=>{if(reduced())stop();});
     matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',()=>{if(reduced())stop();});
     window.addEventListener('resize',stop);window.addEventListener('pagehide',stop);

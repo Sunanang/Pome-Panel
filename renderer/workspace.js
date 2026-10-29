@@ -3917,6 +3917,9 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pauseRecordingAudio();
   });
+  document.addEventListener('notch:window-visibility', event => {
+    if (!event.detail?.visible) { clearWindowDragVisuals(); pauseRecordingAudio(); }
+  });
 
   // ============ 本地汽水音乐 ============
   const homeMusic = document.getElementById('home-music');
@@ -4281,6 +4284,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   document.addEventListener('notch:will-collapse', pauseCredentialEditing);
   document.addEventListener('notch:tabchange', event => { if (event.detail?.tab !== 'credentials') pauseCredentialEditing(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pauseCredentialEditing(); });
+  document.addEventListener('notch:window-visibility', event => { if (!event.detail?.visible) pauseCredentialEditing(); });
   credentialList?.addEventListener('input', event => {
     const form = event.target.closest('.credential-item.editing[data-id]');
     if (form?.dataset.id !== editingCredentialId || !editingCredential) return;

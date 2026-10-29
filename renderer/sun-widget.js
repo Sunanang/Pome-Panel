@@ -452,7 +452,8 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
 
   function canShowPanel() {
     const surface = document.getElementById('app');
-    return surface?.classList.contains('expanded') && !surface.classList.contains('closing')
+    return document.documentElement.dataset.windowVisible !== 'false'
+      && surface?.classList.contains('expanded') && !surface.classList.contains('closing')
       && !tile.hidden && document.getElementById('tab-home')?.classList.contains('active');
   }
 
@@ -613,10 +614,12 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
     }, Math.max(500, wait));
   }
 
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { closePanel(); weatherEffects.stop(); }
+  function syncWindowVisibility() {
+    if (document.hidden || document.documentElement.dataset.windowVisible === 'false') { closePanel(); weatherEffects.stop(); }
     else { render(); requestWeatherOnWake(); }
-  });
+  }
+  document.addEventListener('visibilitychange', syncWindowVisibility);
+  document.addEventListener('notch:window-visibility', syncWindowVisibility);
   document.addEventListener('notch:will-collapse', () => { closePanel(); weatherEffects.stop(); });
   document.addEventListener('notch:modechange', (event) => {
     if (!event.detail?.expanded) closePanel();

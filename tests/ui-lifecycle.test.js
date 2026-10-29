@@ -14,6 +14,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 function mirrorHarness() {
   const requests = [], plays = [], attributes = new Map(), classes = new Set(), messages = [];
   const context = {
+    document: { documentElement: { dataset: {} } },
     isExpanded: true, activeTab: 'home', setMirrorZoom() {},
     homeMirror: { hidden: false, classList: { add: value => classes.add(value), remove: (...values) => values.forEach(value => classes.delete(value)) } },
     mirrorStage: { setAttribute: (key, value) => attributes.set(key, value), removeAttribute: key => attributes.delete(key) },
@@ -49,6 +50,22 @@ test('cancel then restart cannot adopt an old camera stream or leak it behind th
   h.context.stopMirror();
   assert.equal(next.track.stops, 1);
   assert.equal(h.context.mirrorVideo.srcObject, null);
+});
+
+test('native hiding cancels pending camera capture and showing never restarts it automatically', async () => {
+  const h = mirrorHarness(); let visibility;
+  h.context.window.notchAPI.onWindowVisibilityChanged = callback => { visibility = callback; };
+  h.context.document.dispatchEvent = () => {};
+  h.context.CustomEvent = class { constructor(type, options) { this.type = type; this.detail = options.detail; } };
+  vm.runInContext(section('window.notchAPI?.onWindowVisibilityChanged?.(', '\nfunction collectLocalStorageSnapshot()'), h.context);
+  const pending = h.context.startMirror(); await flush();
+  visibility(false);
+  const old = h.stream(); h.requests[0].resolve(old); await pending;
+  assert.equal(old.track.stops, 1); assert.equal(h.current(), null);
+  assert.equal(h.context.document.documentElement.dataset.windowVisible, 'false');
+  visibility(true); await flush();
+  assert.equal(h.requests.length, 1, 'returning to the panel still requires an explicit camera click');
+  assert.equal(h.current(), null);
 });
 
 test('an old permission/capture rejection cannot stop or report an error over a newer live camera', async () => {

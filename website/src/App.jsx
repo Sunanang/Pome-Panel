@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUpRight, ArrowRight, CaretDown, CaretLeft, CaretRight, CaretUp, ArrowCounterClockwise, Play, X, SquaresFour, ListChecks, NotePencil, PlugsConnected, Globe } from '@phosphor-icons/react';
 import { useLanguage } from './i18n/context.jsx';
 import { readmeFilename } from './i18n/core.mjs';
+import { isDialogBackdropEvent } from './dialog.mjs';
 
 const REPO = 'https://github.com/Sunanang/Pome-Panel';
 const sections = [
@@ -128,9 +129,9 @@ export function App(){
   const {t,locale}=useLanguage();
   const reduced=useReducedMotion();
   const [tab,setTab]=useState(0), [download,setDownload]=useState(false), [nas,setNas]=useState(false);
-  const dialog=useRef(null),lastFocus=useRef(null);
+  const dialog=useRef(null),lastFocus=useRef(null),backdropPressed=useRef(false);
   useEffect(()=>{
-    if(download){lastFocus.current=document.activeElement;dialog.current.showModal();}
+    if(download){backdropPressed.current=false;lastFocus.current=document.activeElement;dialog.current.showModal();}
     else if(dialog.current?.open){dialog.current.close();lastFocus.current?.focus();}
   },[download]);
   const changeTab=i=>setTab((i+tabs.length)%tabs.length);
@@ -173,6 +174,6 @@ export function App(){
       </section>
     </main>
     <footer><a className="brand" href="#top"><img src="/assets/pome-icon.webp" alt=""/><span>Pome Panel</span></a><span>{t('footer.tagline')}</span><div><a href={REPO} target="_blank" rel="noreferrer">GitHub</a><a href={REPO+'/blob/dev/LICENSE'} target="_blank" rel="noreferrer">{t('footer.license')}</a><a href="https://github.com/xiaopu-ai/TO-DO-Panel" target="_blank" rel="noreferrer">{t('footer.credit')}</a></div></footer>
-    <dialog ref={dialog} className="download-dialog" onCancel={e=>{e.preventDefault();setDownload(false);}} onClick={e=>{if(e.target===dialog.current)setDownload(false);}} aria-labelledby="download-title"><div className="dialog-heading"><img src="/assets/pome-icon.webp" alt=""/><button className="icon-button" aria-label={t('action.closeDownload')} title={t('action.close')} onClick={()=>setDownload(false)}><X size={19} aria-hidden="true"/></button></div><span className="eyebrow">{t('download.eyebrow')}</span><h2 id="download-title">{t('download.title')}</h2><p>{t('download.description')}</p><a className="button primary" href={REPO+'/releases'} target="_blank" rel="noreferrer"><span>{t('download.releases')}</span><ArrowUpRight size={17} aria-hidden="true"/></a><a className="button quiet" href={REPO+'/blob/dev/'+readmeFilename(locale)} target="_blank" rel="noreferrer"><span>{t('download.source')}</span><ArrowUpRight size={16} aria-hidden="true"/></a><small>{t('download.platforms')}</small></dialog>
+    <dialog ref={dialog} className="download-dialog" onCancel={e=>{e.preventDefault();setDownload(false);}} onPointerDown={e=>{backdropPressed.current=isDialogBackdropEvent(e);}} onClick={e=>{if(backdropPressed.current&&isDialogBackdropEvent(e))setDownload(false);backdropPressed.current=false;}} aria-labelledby="download-title"><div className="dialog-heading"><img src="/assets/pome-icon.webp" alt=""/><button className="icon-button" aria-label={t('action.closeDownload')} title={t('action.close')} onClick={()=>setDownload(false)}><X size={19} aria-hidden="true"/></button></div><span className="eyebrow">{t('download.eyebrow')}</span><h2 id="download-title">{t('download.title')}</h2><p>{t('download.description')}</p><a className="button primary" href={REPO+'/releases'} target="_blank" rel="noreferrer"><span>{t('download.releases')}</span><ArrowUpRight size={17} aria-hidden="true"/></a><a className="button quiet" href={REPO+'/blob/dev/'+readmeFilename(locale)} target="_blank" rel="noreferrer"><span>{t('download.source')}</span><ArrowUpRight size={16} aria-hidden="true"/></a><small>{t('download.platforms')}</small></dialog>
   </>;
 }

@@ -47,8 +47,9 @@ const errors = [];
 dialog.showErrorBox = (title, message) => { errors.push(`${title}: ${message}`); };
 const watchdog = setTimeout(() => { console.error('Security/recovery checks timed out', errors); process.exit(1); }, 20000);
 async function until(contents, expression) {
-  for (let i = 0; i < 200; i++) {
-    try { if (await contents.executeJavaScript(expression)) return; } catch {}
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    try { if (await Promise.race([contents.executeJavaScript(expression), new Promise(resolve => setTimeout(() => resolve(false), 300))])) return; } catch {}
     await new Promise(resolve => setTimeout(resolve, 30));
   }
   throw new Error(`Timed out: ${expression}`);
@@ -130,7 +131,7 @@ async function run(contents) {
   await js(`setMode(false)`);
   await contents.executeJavaScript(`localStorage.setItem('source-only-key','must disappear'); localStorage.setItem('notch-home-note','Latest source edit'); document.getElementById('home-note').value='Latest source edit';`);
   // The result may be lost when the renderer reloads; verify durable state instead.
-  await contents.executeJavaScript(`window.notchAPI.chooseWorkspace()`).catch(() => {});
+  await Promise.race([contents.executeJavaScript(`window.notchAPI.chooseWorkspace()`).catch(() => {}), new Promise(resolve => setTimeout(resolve, 300))]);
   await until(contents, `!!window.NotchWorkspace && document.getElementById('home-note').value === 'Target workspace'`);
   assert.equal(JSON.parse(fs.readFileSync(sourceFile)).localStorage['notch-home-note'], 'Latest source edit');
   assert.equal(JSON.parse(fs.readFileSync(path.join(target, 'workspace.json'))).localStorage['notch-home-note'], 'Target workspace');
@@ -140,8 +141,8 @@ async function run(contents) {
   assert.equal(JSON.parse(fs.readFileSync(path.join(target, 'workspace.json'))).localStorage['notch-home-note'], 'Target workspace');
   // A crash between changing the main-process path and receiving its renderer
   // event loses sessionStorage. The persistent local root marker still recovers.
-  await contents.executeJavaScript(`sessionStorage.clear(); localStorage.setItem('notch-workspace-root', ${JSON.stringify(profile)});
-    localStorage.setItem('notch-home-note','Stale page after crash'); location.reload();`);
+  await Promise.race([contents.executeJavaScript(`sessionStorage.clear(); localStorage.setItem('notch-workspace-root', ${JSON.stringify(profile)});
+    localStorage.setItem('notch-home-note','Stale page after crash'); location.reload();`).catch(() => {}), new Promise(resolve => setTimeout(resolve, 300))]);
   await until(contents, `!!window.NotchWorkspace && document.getElementById('home-note').value === 'Target workspace'`);
   assert.equal(await contents.executeJavaScript(`collectLocalStorageSnapshot()['notch-workspace-root']`), undefined);
   assert.deepEqual(errors, []);

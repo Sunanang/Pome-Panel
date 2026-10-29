@@ -51,6 +51,8 @@ async function run(c) {
   async function until(expression) {
     for (let i = 0; i < 250; i++) { if (await js(expression).catch(() => false)) return; await sleep(20); }
     const state = await js('({hidden:document.hidden,app:document.getElementById("app")?.className,home:document.getElementById("tab-home")?.className,weather:window.PomeSun?.getWeather()})').catch(() => null);
+    if (state) state.native = { visible: BrowserWindow.fromWebContents(c).isVisible(),
+      backgroundThrottling: c.getBackgroundThrottling() };
     throw new Error(`Timed out: ${expression}; ${JSON.stringify(state)}`);
   }
   const tick = async () => { clock += 30 * 60 * 1000 + 1; await js(`window.weatherClock=${clock}`); };
@@ -248,10 +250,13 @@ async function run(c) {
   assert.equal(await js('PomeSun.getLocation().lat'),2);assert.equal(calls,formCalls,'invalid manual input never requests weather');
   await capture('location-validation',false);await js('PomeSun.closeLocation()');
   // Hiding also triggers the normal asynchronous blur/collapse workflow.
+  assert.equal(BrowserWindow.fromWebContents(c).webContents.getBackgroundThrottling(), true,
+    'the visibility lifecycle fixture must enable background throttling before hiding');
   BrowserWindow.fromWebContents(c).hide();
-  await until('document.hidden && !PomeSun.getWeather().effects.active');
+  await until('document.documentElement.dataset.windowVisible === "false" && !PomeSun.getWeather().effects.active');
+  assert.equal(BrowserWindow.fromWebContents(c).isVisible(), false);
   BrowserWindow.fromWebContents(c).show();
-  await until('!document.hidden');
+  await until('document.documentElement.dataset.windowVisible === "true" && PomeSun.getWeather().effects.active');
   c.debugger.detach();
   assert.deepEqual(errors,[]);
 }

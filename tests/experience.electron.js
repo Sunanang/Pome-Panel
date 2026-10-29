@@ -51,7 +51,12 @@ async function run(c){
  await js(`document.querySelector('#ui-capsule-hint button')?.click();dismissStatusToast(false);notchAPI.setFeature('clip',true)`);
  await tab('home');
  // Native button hit testing is necessary: a visible icon can still be covered.
- await click('#record-start');await until('NotchWorkspace.isRecordingActive()');await sleep(2200);await click('#record-pause');
+ await click('#record-start');await until('NotchWorkspace.isRecordingActive()');await sleep(2200);
+ win.hide();await until('document.documentElement.dataset.windowVisible==="false"');
+ assert.equal(await js('NotchWorkspace.isRecordingActive()'),true,'native hiding keeps the intentional recording active');
+ win.show();await until('document.documentElement.dataset.windowVisible==="true"');
+ assert.equal(await js('NotchWorkspace.isRecordingActive()'),true,'showing again does not restart or discard the recording');
+ await click('#record-pause');
  await tab('recordings');assert.match(await js("document.querySelector('.recording-detail').innerText"),/已暂停/);assert.doesNotMatch(await js("document.querySelector('.recording-detail').innerText"),/仍在录制/);
  await shot('recording-paused-zh');await tab('home'); await click('#record-stop');await until('!NotchWorkspace.isRecordingActive()');assert.equal(await js('activeTab'),'home','stop does not navigate to the library');
  await until(`!document.getElementById('status-toast')?.hidden && document.getElementById('status-toast').textContent.includes('录音已保存')`);

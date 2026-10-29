@@ -1,0 +1,1547 @@
+[
+  {
+    "file": "scripts/localization-resources.js",
+    "args": [
+      "scripts/localization-resources.js",
+      "--check"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--test",
+    "args": [
+      "--test",
+      "tests/additional-completion-hooks.test.js",
+      "tests/ai-attention.test.js",
+      "tests/ai-completion-sync.test.js",
+      "tests/ai-provider-catalog.test.js",
+      "tests/ai-source-hooks.test.js",
+      "tests/ai-usage-animation.test.js",
+      "tests/ai-usage.test.js",
+      "tests/almanac.test.js",
+      "tests/audit-fixes.test.js",
+      "tests/branch-protection.test.js",
+      "tests/capacity-and-inbox.test.js",
+      "tests/clipboard-generation.test.js",
+      "tests/codex-auth.test.js",
+      "tests/codex-thread-metadata.test.js",
+      "tests/codex-usage-remote.test.js",
+      "tests/codex-usage.test.js",
+      "tests/core-persistence-audit.test.js",
+      "tests/credential-editor-races.test.js",
+      "tests/cursor-mcp-auth-notify.test.js",
+      "tests/cursor-secrets.test.js",
+      "tests/cursor-usage.test.js",
+      "tests/domain.test.js",
+      "tests/escape-routing.test.js",
+      "tests/fnos-api.test.js",
+      "tests/fnos-device-port.test.js",
+      "tests/fnos-pairing.test.js",
+      "tests/fnos-web-ui.test.js",
+      "tests/fnos-workspace-ui.test.js",
+      "tests/fpk-build.test.js",
+      "tests/grok-notify.test.js",
+      "tests/inbox-bento-layout.test.js",
+      "tests/inbox-pagination.test.js",
+      "tests/layout.test.js",
+      "tests/localization.test.js",
+      "tests/main-services.test.js",
+      "tests/manus-completion.test.js",
+      "tests/manus-regressions.test.js",
+      "tests/metadata-races.test.js",
+      "tests/migration-snapshot.test.js",
+      "tests/multi-ai-usage.test.js",
+      "tests/nas-recovery.test.js",
+      "tests/note-conflicts.test.js",
+      "tests/note-flight.test.js",
+      "tests/notification-domain.test.js",
+      "tests/platform-adapters.test.js",
+      "tests/platform.test.js",
+      "tests/recording-playback.test.js",
+      "tests/recording-start.test.js",
+      "tests/recording-sync-integrity.test.js",
+      "tests/release-policy.test.js",
+      "tests/renderer-structure.test.js",
+      "tests/review-followups.test.js",
+      "tests/schema-version.test.js",
+      "tests/settings-refresh-races.test.js",
+      "tests/startup-recovery.test.js",
+      "tests/sun-weather.test.js",
+      "tests/sun.test.js",
+      "tests/sync-credentials.test.js",
+      "tests/sync-endpoints.test.js",
+      "tests/sync-key-races.test.js",
+      "tests/sync-migration.test.js",
+      "tests/sync-packaging.test.js",
+      "tests/sync-protocol.test.js",
+      "tests/sync-recovery-state.test.js",
+      "tests/sync-settings.test.js",
+      "tests/sync-store.test.js",
+      "tests/sync-tls-ban.test.js",
+      "tests/sync-tls-trust.test.js",
+      "tests/t8-g0-probe-prep.test.js",
+      "tests/t8-recovery-fixtures.test.js",
+      "tests/t8-workspace-secrets.test.js",
+      "tests/task-apps.test.js",
+      "tests/task-inbox.test.js",
+      "tests/todo-reminder-reliability.test.js",
+      "tests/todos-sync.test.js",
+      "tests/transcription.test.js",
+      "tests/tray-menu.test.js",
+      "tests/ui-devices.test.js",
+      "tests/ui-endpoint-editor.test.js",
+      "tests/ui-lifecycle.test.js",
+      "tests/ui-migration.test.js",
+      "tests/ui-nas-sync-backup.test.js",
+      "tests/ui-nas-sync-http-toggle.test.js",
+      "tests/ui-nas-sync-settings.test.js",
+      "tests/ui-nas-sync-status.test.js",
+      "tests/ui-pair.test.js",
+      "tests/ui-simplify.test.js",
+      "tests/user-data-directory.test.js",
+      "tests/welcome-settings-race.test.js",
+      "tests/window-visibility.test.js",
+      "tests/work-hub-statistics.test.js",
+      "tests/workbench-audit.test.js",
+      "tests/workspace-backup.test.js",
+      "tests/workspace-operation-lock.test.js",
+      "tests/workspace-sync.test.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/notch-focus.electron.js",
+    "args": [
+      "tests/notch-focus.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/retained-workspace.electron.js",
+    "args": [
+      "tests/retained-workspace.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/workspace-lifecycle.electron.js",
+    "args": [
+      "tests/workspace-lifecycle.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/metadata-races.electron.js",
+    "args": [
+      "tests/metadata-races.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/migration-integrity.electron.js",
+    "args": [
+      "tests/migration-integrity.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/clipboard-generation.electron.js",
+    "args": [
+      "tests/clipboard-generation.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/content-delete.electron.js",
+    "args": [
+      "tests/content-delete.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/experience.electron.js",
+    "args": [
+      "tests/experience.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/visual-consistency.electron.js",
+    "args": [
+      "tests/visual-consistency.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/notes-workflow.electron.js",
+    "args": [
+      "tests/notes-workflow.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/windows-widget.electron.js",
+    "args": [
+      "tests/windows-widget.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/windows-native.electron.js",
+    "status": "deferred"
+  },
+  {
+    "file": "tests/workbench.electron.js",
+    "args": [
+      "tests/workbench.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/startup.electron.js",
+    "args": [
+      "tests/startup.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/cursor-credentials.electron.js",
+    "args": [
+      "tests/cursor-credentials.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/user-data-directory.electron.js",
+    "args": [
+      "tests/user-data-directory.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/user-data-directory.electron.js",
+    "args": [
+      "tests/user-data-directory.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/user-data-directory.electron.js",
+    "args": [
+      "tests/user-data-directory.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/user-data-directory.electron.js",
+    "args": [
+      "tests/user-data-directory.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/user-data-directory.electron.js",
+    "args": [
+      "tests/user-data-directory.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/user-data-directory.electron.js",
+    "args": [
+      "tests/user-data-directory.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/user-data-directory.electron.js",
+    "args": [
+      "tests/user-data-directory.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/todo-board-fixes.electron.js",
+    "args": [
+      "tests/todo-board-fixes.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/ai-usage.electron.js",
+    "args": [
+      "tests/ai-usage.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/ai-usage-final.electron.js",
+    "args": [
+      "tests/ai-usage-final.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/quota-refresh.electron.js",
+    "args": [
+      "tests/quota-refresh.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/codex-usage-accuracy.electron.js",
+    "args": [
+      "tests/codex-usage-accuracy.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/provider-credentials.electron.js",
+    "args": [
+      "tests/provider-credentials.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/provider-credentials.electron.js",
+    "args": [
+      "tests/provider-credentials.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/home-layout-swap.electron.js",
+    "args": [
+      "tests/home-layout-swap.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/home-card-hover.electron.js",
+    "args": [
+      "tests/home-card-hover.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/sun-home.electron.js",
+    "args": [
+      "tests/sun-home.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/sun-weather.electron.js",
+    "args": [
+      "tests/sun-weather.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/almanac-home.electron.js",
+    "args": [
+      "tests/almanac-home.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/security-recovery.electron.js",
+    "args": [
+      "tests/security-recovery.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/history-retention.electron.js",
+    "args": [
+      "tests/history-retention.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/ai-completion-sync.electron.js",
+    "args": [
+      "tests/ai-completion-sync.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/additional-completion.electron.js",
+    "args": [
+      "tests/additional-completion.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/manus-completion.electron.js",
+    "args": [
+      "tests/manus-completion.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/notification.electron.js",
+    "args": [
+      "tests/notification.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/todo-reminder-hydration.electron.js",
+    "args": [
+      "tests/todo-reminder-hydration.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/todo-reminders.electron.js",
+    "args": [
+      "tests/todo-reminders.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/todo-reminders.electron.js",
+    "args": [
+      "tests/todo-reminders.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/ai-attention.electron.js",
+    "args": [
+      "tests/ai-attention.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/work-hub.electron.js",
+    "args": [
+      "tests/work-hub.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/work-hub-restart.electron.js",
+    "args": [
+      "tests/work-hub-restart.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/work-hub-nas.electron.js",
+    "args": [
+      "tests/work-hub-nas.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/work-hub-restart.electron.js",
+    "args": [
+      "tests/work-hub-restart.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/inbox-bento.electron.js",
+    "args": [
+      "tests/inbox-bento.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/inbox-pagination.electron.js",
+    "args": [
+      "tests/inbox-pagination.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/inbox-corrupt-startup.electron.js",
+    "args": [
+      "tests/inbox-corrupt-startup.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/ai-sources.electron.js",
+    "args": [
+      "tests/ai-sources.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/settings-slim.electron.js",
+    "args": [
+      "tests/settings-slim.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/ui-simplify.electron.js",
+    "args": [
+      "tests/ui-simplify.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/ui-simplify.electron.js",
+    "args": [
+      "tests/ui-simplify.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/nas-settings-card.electron.js",
+    "args": [
+      "tests/nas-settings-card.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/localization.electron.js",
+    "args": [
+      "tests/localization.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "tests/normal-startup.electron.js",
+    "args": [
+      "tests/normal-startup.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/localization-resources.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "localization/runtime.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "userDataDirectory.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/localization.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/check-work-hub-baseline.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/build-fpk.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/work-hub-statistics.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "tests/work-hub-baseline.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "panelTiming.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "atomicStorage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "todoReminders.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "taskInbox.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "aiSourceHooks.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "aiEventPolicy.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "aiAttentionStore.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "aiNotificationScheduler.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "claudeAttentionAdapter.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/claude-attention.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/ai-attention.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/ai-sources.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/cursor-notify.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/cursor-mcp-auth-notify.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "workspaceBackup.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "syncRecovery.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/task-inbox.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/task-inbox-domain.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "platform-adapters/task-apps.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/recovery.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/transactionLog.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "main.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "main-services.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "public-http.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "cursor-usage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "platform-adapters/cursor-secrets.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "codex-usage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "codex-usage-remote.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "codex-auth.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "codex-thread-metadata.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "aiProviderCatalog.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "grokbot-usage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "claude-usage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "copilot-usage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "grok-usage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "antigravity-usage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "manus-usage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "manusApi.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "manusCompletionAdapter.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "manusCompletionStore.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "manusCompletionService.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/ai-provider-registry.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/ai-usage-domain.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/ai-usage-animation.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/ai-usage.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/ui-simplify-domain.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/ui-simplify.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/experience.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/note-view.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/note-flight.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "tests/notes-workflow.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/delete-confirm.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "platform.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "platform-adapters/index.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "platform-adapters/darwin.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "platform-adapters/darwin-windows.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "tests/windows-widget.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "tests/windows-native.electron.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "platform-adapters/win32.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "platform-adapters/win32-user32.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "preload.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "sqliteProbe.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "sync-store.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "sync-migration.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "todos-sync.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "workspace-sync.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "sync-settings.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "sync-tls-trust.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/index.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/todo-reminders.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/schema.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/collections.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/ai-completions.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/mutation.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/pull.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/pairing.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/migration.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "packages/sync-protocol/endpoints.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/domain.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/vendor/suncalc/suncalc.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/cities.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/sun.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/sun-widget.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "sunWeather.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/weather-domain.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/weather-effects.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/weather-icons.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/vendor/lunar-javascript/lunar.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/almanac.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/almanac-widget.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/effects.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/app.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/workspace.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/icon-motion.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/notification.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/notification-domain.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/nas-sync-pair.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/nas-sync-migration.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "renderer/nas-sync-settings.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "build/afterPack.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/codex-notify.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/claude-notify.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/grok-notify.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/copilot-notify.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/antigravity-notify.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/completion-forwarder.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/smoke-app.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "scripts/make-ico.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/schema.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/auth.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/csrf.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/store.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/persistentStore.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/routes.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/createApp.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/devicePort.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/index.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/gatewayHttp.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/testHarness.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/server/pairing.js"
+    ],
+    "status": 0
+  },
+  {
+    "file": "--check",
+    "args": [
+      "--check",
+      "fnos/app/ui/pair.js"
+    ],
+    "status": 0
+  }
+]

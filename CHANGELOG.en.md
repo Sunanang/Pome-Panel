@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Track native window visibility independently of Chromium: pause weather and background effects, release the mirror camera, pause playback and mask credentials when hidden. Showing the panel never restarts the camera. Remove a redundant Mission Control call that prevented showing the window and handle duplicate Escape delivery during shortcut capture. Dismiss the download dialog only when both press and click occur on the backdrop, keeping card padding safe.
+- Expand regression coverage for visibility deduplication, camera cancellation, Escape ordering and dialog hit testing. Update outdated layer/quota assertions, bound cross-navigation waits, isolate each test's hook home and run the complete website test suite in CI.
 - Keep three quick-recording controls and use a saved-recording toast for navigation. Report missing microphones and retry unsupported audio constraints. Restore split panes for Notes, Recordings and Credentials, refine shared controls and update the default mirror cover. Read Cursor system credentials asynchronously and reveal provider quotas independently; retain valid local quotas when a manual token expires.
 - Preserve recording failure feedback after permission cleanup, open the correct saved recording from its toast, and consume duplicate Escape events while masking a credential. Recover startup visibility without stealing focus or reopening an explicitly hidden panel; keep notifications above the panel, preserve packaged test isolation, handle permission self-check failures, and ignore outdated initial settings reads.
 - Edit note titles directly and remove the redundant Rename button.

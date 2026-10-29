@@ -63,6 +63,8 @@ The current source development version is **0.11.0**. No formal Release installe
 
 Home keeps all enabled widgets reachable by scrolling in narrow windows. Use the context menu to resize or enter **Edit layout**, without a permanent Home toolbar. Settings provides task shortcuts and **Data & backup** without a NAS; temperature units and interface motion are independent preferences.
 
+Hiding the native window pauses weather and background effects, releases the mirror camera, pauses audio playback and masks credentials. Showing it again still requires an explicit click to start the mirror. An active recording continues while the panel is hidden.
+
 Installer availability follows Releases. If no installer is available, run from source. See the [changelog](CHANGELOG.en.md) for work in progress.
 
 > Data stays in your local `Pome Panel` folder unless you choose another location. NAS sync is optional. Some Windows native features are off by default; see the [user guide](docs/user-guide.en.md#windows).

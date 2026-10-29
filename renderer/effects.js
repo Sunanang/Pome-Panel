@@ -325,7 +325,7 @@
     };
     const isActive = () => Boolean(
       !disposed &&
-      document.visibilityState === 'visible' &&
+      document.visibilityState === 'visible' && document.documentElement.dataset.windowVisible !== 'false' &&
       app?.classList.contains('expanded') &&
       homePanel?.getAttribute('aria-hidden') !== 'true' &&
       !container?.hidden &&
@@ -383,6 +383,7 @@
     container.addEventListener('pointerleave', onPointerLeave);
     reducedMotion.addEventListener('change', syncActivity);
     document.addEventListener('visibilitychange', syncActivity);
+    document.addEventListener('notch:window-visibility', syncActivity);
     document.addEventListener('notch:modechange', syncActivity);
     document.addEventListener('notch:tabchange', syncActivity);
     const resizeObserver = new ResizeObserver(() => {
@@ -407,6 +408,7 @@
         container.removeEventListener('pointerleave', onPointerLeave);
         reducedMotion.removeEventListener('change', syncActivity);
         document.removeEventListener('visibilitychange', syncActivity);
+        document.removeEventListener('notch:window-visibility', syncActivity);
         document.removeEventListener('notch:modechange', syncActivity);
         document.removeEventListener('notch:tabchange', syncActivity);
         resizeObserver.disconnect();
