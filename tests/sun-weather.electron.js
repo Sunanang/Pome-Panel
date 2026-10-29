@@ -218,6 +218,16 @@ async function run(c) {
   await until('!PomeSun.getWeather().effects.active');assert.equal(await js('!!document.querySelector("#home-sun .wx-fx")'),false);
   await c.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
   await until('PomeSun.getWeather().effects.active');
+  await js(`{const select=document.getElementById('pome-interface-motion');select.value='reduce';select.dispatchEvent(new Event('change'));}`);
+  await until('!PomeSun.getWeather().effects.active');assert.equal(await js('PomeSun.getWeather().effects.count'),0,'local reduced motion also stops continuous weather effects');
+  await js(`{const select=document.getElementById('pome-interface-motion');select.value='system';select.dispatchEvent(new Event('change'));}`);
+  await until('PomeSun.getWeather().effects.active');
+  const sourceTemperature=await js('PomeSun.getWeather().data.temperature');
+  await js(`{const select=document.getElementById('pome-weather-unit');select.value='f';select.dispatchEvent(new Event('change'));}`);
+  assert.match(await js('document.querySelector("#home-sun .wx-reading").textContent'),/°F/);
+  assert.equal(await js('PomeSun.getWeather().data.temperature'),sourceTemperature,'display units never mutate weather source');
+  await capture('fahrenheit');
+  await js(`{const select=document.getElementById('pome-weather-unit');select.value='c';select.dispatchEvent(new Event('change'));}`);
   await js('setActiveTab("notes")');await until('!PomeSun.getWeather().effects.active');
   await js('setActiveTab("home")');await until('PomeSun.getWeather().effects.active');
   await js('setMode(false)');await until('!PomeSun.getWeather().effects.active');

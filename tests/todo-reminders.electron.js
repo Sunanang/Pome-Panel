@@ -129,7 +129,7 @@ async function run(c) {
     assert.equal(fs.readFileSync(receiptPath, 'utf8'), before);
     assert.equal(await js("document.getElementById('ui-error-bar').textContent.includes('数据文件夹权限')"), true);
     assert.equal(await js("document.querySelector('#ui-error-details pre').textContent.includes('ENOSPC')"), true);
-    assert.equal((await js('notchAPI.scheduleTodoReminders(PRIORITIES.flatMap(p=>data[p]||[]))')).ok, false, 'retry while disk is still failing cannot report success');
+    assert.equal((await js('notchAPI.scheduleTodoReminders(PRIORITIES.flatMap(p=>data[p]||[]),workspacePersistenceRoot)')).error, 'todo_reminder_storage_failed', 'retry while disk is still failing cannot report success');
     assert.equal(await js("document.getElementById('ui-error-bar').hidden"), false);
     await capture(BrowserWindow.fromWebContents(c), 'receipt-write-failure');
   } finally { fs.renameSync = rename; }

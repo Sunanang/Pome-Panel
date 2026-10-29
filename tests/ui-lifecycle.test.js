@@ -84,7 +84,7 @@ test('Dock leave and panel lifecycle cancel the pending frame before resetting h
   const surface = { querySelectorAll: () => [item], addEventListener: bind(handlers) };
   const context = { window: { addEventListener: bind(windowHandlers) }, document: { hidden: false, addEventListener: bind(documentHandlers) },
     requestAnimationFrame: callback => { frames.set(++next, callback); return next; }, cancelAnimationFrame: id => frames.delete(id) };
-  vm.createContext(context); vm.runInContext(section('function bindDockSurface(', '\n[\n'), context);
+  vm.createContext(context); vm.runInContext(section('function bindDockSurface(', '\n// Window rows keep'), context);
   context.bindDockSurface(surface, '.window-item', 1.12);
   const emit = (map, name, event = {}) => (map.get(name) || []).forEach(callback => callback(event));
   for (const reset of [

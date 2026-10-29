@@ -1011,3 +1011,10 @@ test('credential selection can toggle its only selected row off', () => {
     anchor: null,
   });
 });
+
+
+test('link validation rejects prose and single words but preserves public URL paths', () => {
+  for(const text of ['hello','not a url','https://bad host.example/','https://bad%20host.example/','https://exa\tmple.com']) assert.equal(normalizeHttpUrl(text),null,text);
+  assert.equal(normalizeHttpUrl('example.com/a b?q=hello world'),'https://example.com/a%20b?q=hello%20world');
+  assert.equal(normalizeHttpUrl('https://例子.中国/路径'),'https://xn--fsqu00a.xn--fiqs8s/%E8%B7%AF%E5%BE%84');
+});

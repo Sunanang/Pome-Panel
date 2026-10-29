@@ -24,3 +24,13 @@ native/.build/
 .env
 .env.*
 !.env.example
+
+# Keep this audit and installation screenshot evidence local.
+/docs/acceptance/2026-10-28-*/**/*.png
+/docs/acceptance/2026-10-28-*/**/*.jpg
+/docs/acceptance/2026-10-28-*/**/*.jpeg
+/docs/acceptance/2026-10-28-*/**/*.webp
+/docs/acceptance/2026-10-29-*/**/*.png
+/docs/acceptance/2026-10-29-*/**/*.jpg
+/docs/acceptance/2026-10-29-*/**/*.jpeg
+/docs/acceptance/2026-10-29-*/**/*.webp

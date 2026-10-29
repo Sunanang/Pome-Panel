@@ -1,0 +1,76 @@
+{
+  "frames": [
+    {
+      "t": 328,
+      "file": "70-tab-frame-0.png",
+      "activeTab": "notes",
+      "tabBusy": true,
+      "active": "tab-notes",
+      "opacity": "0"
+    },
+    {
+      "t": 423,
+      "file": "70-tab-frame-1.png",
+      "activeTab": "notes",
+      "tabBusy": false,
+      "active": "tab-notes",
+      "opacity": "1"
+    },
+    {
+      "t": 525,
+      "file": "70-tab-frame-2.png",
+      "activeTab": "notes",
+      "tabBusy": false,
+      "active": "tab-notes",
+      "opacity": "1"
+    },
+    {
+      "t": 652,
+      "file": "70-tab-frame-3.png",
+      "activeTab": "notes",
+      "tabBusy": false,
+      "active": "tab-notes",
+      "opacity": "1"
+    },
+    {
+      "t": 853,
+      "file": "70-tab-frame-4.png",
+      "activeTab": "notes",
+      "tabBusy": false,
+      "active": "tab-notes",
+      "opacity": "1"
+    }
+  ],
+  "moving": [
+    {
+      "duration": 140
+    },
+    {
+      "duration": 140
+    },
+    {
+      "duration": 140
+    },
+    {
+      "duration": 140
+    },
+    {
+      "duration": 420
+    },
+    {
+      "duration": 420
+    },
+    {
+      "target": "windows",
+      "duration": 780
+    },
+    {
+      "target": "sun",
+      "duration": 780
+    },
+    {
+      "target": "almanac",
+      "duration": 780
+    }
+  ]
+}

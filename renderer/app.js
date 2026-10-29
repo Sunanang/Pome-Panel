@@ -38,6 +38,7 @@ function collectLocalStorageSnapshot() {
 let workspaceReloadPending = false;
 let workspacePersistenceTimer = null;
 let workspacePersistenceRoot = null;
+let todoReminderWorkspaceReady = !window.notchAPI?.loadWorkspaceData;
 let applyingSyncTodosProjection = false;
 let todosSyncBound = false;
 
@@ -190,6 +191,11 @@ async function hydratePortableWorkspace() {
     renderClipFavs();
     // Bound startup: hydratePortableWorkspace → SQLite projection overrides workspace.
     await hydrateTodosSyncProjectionAfterWorkspace();
+    if (workspaceReloadPending) return;
+    // Only a fully hydrated workspace can declare tasks absent and prune their
+    // durable reminder receipts. Parser-time data may still be empty or stale.
+    todoReminderWorkspaceReady = true;
+    rescheduleTodoReminders();
     workspacePersistenceTimer = setInterval(() => {
       if (!workspaceReloadPending) window.notchAPI.saveWorkspaceData(collectLocalStorageSnapshot(), workspacePersistenceRoot).catch(() => {});
     }, 2000);
@@ -202,6 +208,7 @@ if (document.readyState === 'loading') {
   hydratePortableWorkspace();
 }
 window.notchAPI?.onWorkspaceChanged?.(() => {
+  todoReminderWorkspaceReady = false;
   workspaceReloadPending = true;
   clearInterval(workspacePersistenceTimer);
   sessionStorage.removeItem('notch-workspace-hydrated');
@@ -254,11 +261,12 @@ function showStatusToast(message, options = {}) {
   statusToastHideTimer = null;
   statusToast.hidden = false;
   statusToast.setAttribute('aria-hidden', 'false');
-  statusToastMessage.textContent = message;
+  if(options.messageKey)pomeLocaleRendererApp.bind(statusToastMessage,'textContent',()=>pomeLocaleRendererApp.t(options.messageKey));
+  else statusToastMessage.textContent = message;
   statusToastActionHandler = typeof onAction === 'function' ? onAction : null;
   statusToastExpireHandler = typeof onExpire === 'function' ? onExpire : null;
   if (statusToastAction && statusToastActionHandler) {
-    pomeLocaleRendererApp.bind(statusToastAction, "textContent", () => (actionLabel || pomeLocaleRendererApp.t("copy.undo.926a50")));
+    pomeLocaleRendererApp.bind(statusToastAction, "textContent", () => (options.actionLabelKey?pomeLocaleRendererApp.t(options.actionLabelKey):actionLabel || pomeLocaleRendererApp.t("copy.undo.926a50")));
     statusToastAction.hidden = false;
   }
   statusToast.classList.add('visible');
@@ -602,6 +610,7 @@ function applyTodoReminderReceipts(receipts) {
 }
 
 function rescheduleTodoReminders(items = PRIORITIES.flatMap(priority => data[priority] || [])) {
+  if (!todoReminderWorkspaceReady || workspaceReloadPending) return;
   window.notchAPI?.scheduleTodoReminders?.(items, workspacePersistenceRoot)
     .then(result => { if (result?.ok) applyTodoReminderReceipts(result.reminded); })
     .catch(() => {});
@@ -677,7 +686,7 @@ function captureTodoPositions(priority) {
 }
 
 function animateTodoOrder(priority, previousPositions) {
-  if (!previousPositions?.size || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (!previousPositions?.size || (document.documentElement.classList.contains('experience-reduced-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
   const list = document.querySelector(`.todo-list[data-priority="${priority}"]`);
   if (!list) return;
   requestAnimationFrame(() => {
@@ -807,7 +816,7 @@ function addTodo(priority, text, deadline) {
   );
   if (added) {
     requestAnimationFrame(() => {
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const reduceMotion = (document.documentElement.classList.contains('experience-reduced-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches);
       added.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
     });
   }
@@ -1146,7 +1155,7 @@ document.addEventListener('keydown', (event) => {
   if (document.querySelector('dialog[open]')) return;
   const target = event.target instanceof Element ? event.target : null;
   const editable = Boolean(target && target.closest(
-    'input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video, .recording-player button'
+    'input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video, .recording-player button, .notes-save, #note-save-btn, #notes-preview, .window-item, .windows-refresh, .windows-hidden'
   ));
   if (!window.NotchDomain.shouldTogglePanelForSpace({
     key: event.key,
@@ -1210,6 +1219,10 @@ document.addEventListener('compositionend', () => {
 if (window.notchAPI && typeof window.notchAPI.onEscape === 'function') {
   window.notchAPI.onEscape(() => {
     if (window.PomeDeleteConfirm?.closeOnEscape()) return;
+    if (shortcutRecorderActive) { closeShortcutRecorder(); return; }
+    if (todoEditorContext) { closeTodoEditor(); return; }
+    if (window.NotchWorkspace?.closeTranscriptionOnEscape?.()) return;
+    if (window.PomeExperience?.closeOverlayOnEscape?.()) return;
     if (window.NotchWorkspace?.closeCredentialCreateOnEscape?.()) return;
     if (window.closeWorkHubOverlay?.()) return;
     const el = document.activeElement;
@@ -1258,7 +1271,7 @@ function focusTodoFromReminder(payload) {
   if (!target) return false;
   document.querySelectorAll('.todo-item.is-reminder-focus').forEach(el => el.classList.remove('is-reminder-focus'));
   rows.forEach(el => el.classList.add('is-reminder-focus'));
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduceMotion = (document.documentElement.classList.contains('experience-reduced-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   target.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
   target.querySelector('[data-action="toggle"]')?.focus({ preventScroll: true });
   if (todoReminderFocusTimer) clearTimeout(todoReminderFocusTimer);
@@ -1559,6 +1572,9 @@ const shortcutRecorderValue = document.getElementById('shortcut-recorder-value')
 const shortcutRecorderCancel = document.getElementById('shortcut-recorder-cancel');
 let shortcutRecorderActive = false;
 
+document.addEventListener('notch:will-collapse', () => closeShortcutRecorder());
+document.addEventListener('notch:tabchange', () => closeShortcutRecorder());
+
 function closeShortcutRecorder() {
   shortcutRecorderActive = false;
   if (shortcutRecorder) shortcutRecorder.hidden = true;
@@ -1825,7 +1841,7 @@ function applyTodoEditorSelection(userChanged = true) {
     trigger.dataset.deadline = deadline;
     trigger.dataset.deadlineSource = userChanged ? 'manual' : (trigger.dataset.deadlineSource || 'default');
     trigger.querySelector('span').textContent = new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
-      day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+      month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
     }).format(new Date(deadline));
     trigger.classList.add('selected');
     trigger.classList.remove('invalid');
@@ -1912,7 +1928,7 @@ function applyDefaultTodoDeadline(trigger, now = new Date()) {
   trigger.dataset.deadline = deadline;
   trigger.dataset.deadlineSource = 'default';
   trigger.querySelector('span').textContent = new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
-    day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(new Date(deadline));
   trigger.classList.add('selected');
 }
@@ -2284,8 +2300,6 @@ const notesDetail = document.getElementById('notes-detail');
 const notesCount = document.getElementById('notes-count');
 const notesNewButton = document.getElementById('notes-new');
 const noteFormatActions = document.getElementById('note-format-actions');
-const noteModeButtons = Array.from(document.querySelectorAll('[data-note-mode]'));
-const noteEditButton = document.getElementById('note-edit-btn');
 const homeNote = document.querySelector('.home-note');
 
 const NOTE_INLINE_PATTERNS = [
@@ -2331,10 +2345,15 @@ function safeMarkdownUrl(rawUrl) {
   }
 }
 
-function appendInlineMarkdown(parent, source, depth = 0) {
+function appendNoteText(parent, text, sourceOffset) {
+  const node=document.createTextNode(text);
+  window.PomeNoteView?.markText(node,sourceOffset);parent.append(node);
+}
+
+function appendInlineMarkdown(parent, source, depth = 0, sourceOffset = 0) {
   const text = String(source || '');
   if (!text || depth > 6) {
-    if (text) parent.append(document.createTextNode(text));
+    if (text) appendNoteText(parent,text,sourceOffset);
     return;
   }
 
@@ -2342,36 +2361,36 @@ function appendInlineMarkdown(parent, source, depth = 0) {
   while (cursor < text.length) {
     const token = findNextInlineToken(text, cursor);
     if (!token) {
-      parent.append(document.createTextNode(text.slice(cursor)));
+      appendNoteText(parent,text.slice(cursor),sourceOffset+cursor);
       break;
     }
 
     const { type, match } = token;
     if (match.index > cursor) {
-      parent.append(document.createTextNode(text.slice(cursor, match.index)));
+      appendNoteText(parent,text.slice(cursor,match.index),sourceOffset+cursor);
     }
 
     if (type === 'code') {
       const code = document.createElement('code');
-      code.textContent = match[1];
+      appendNoteText(code,match[1],sourceOffset+match.index+1);
       parent.append(code);
     } else if (type === 'link') {
       const href = safeMarkdownUrl(match[2]);
       if (!href) {
-        parent.append(document.createTextNode(match[0]));
+        appendNoteText(parent,match[0],sourceOffset+match.index);
       } else {
         const link = document.createElement('a');
         link.dataset.noteHref = href;
         link.setAttribute('role', 'link');
         link.tabIndex = 0;
         link.rel = 'noreferrer';
-        appendInlineMarkdown(link, match[1], depth + 1);
+        appendInlineMarkdown(link,match[1],depth+1,sourceOffset+match.index+1);
         parent.append(link);
       }
     } else {
       const tagName = type === 'strong' ? 'strong' : type === 'delete' ? 'del' : 'em';
       const formatted = document.createElement(tagName);
-      appendInlineMarkdown(formatted, match[1], depth + 1);
+      appendInlineMarkdown(formatted,match[1],depth+1,sourceOffset+match.index+(type==='emphasis'?1:2));
       parent.append(formatted);
     }
 
@@ -2379,10 +2398,10 @@ function appendInlineMarkdown(parent, source, depth = 0) {
   }
 }
 
-function appendMarkdownLines(parent, lines) {
+function appendMarkdownLines(parent, lines, offsets = []) {
   lines.forEach((line, index) => {
     if (index > 0) parent.append(document.createElement('br'));
-    appendInlineMarkdown(parent, line);
+    appendInlineMarkdown(parent,line,0,offsets[index]||0);
   });
 }
 
@@ -2408,10 +2427,12 @@ function buildMarkdownPreview(source) {
   }
 
   const lines = normalized.split('\n');
+  let sourceOffset=0;const offsets=lines.map(line=>{const start=sourceOffset;sourceOffset+=line.length+1;return start;});
   let index = 0;
 
   while (index < lines.length) {
     const line = lines[index];
+    const blockStart=index;
     if (!line.trim()) {
       index += 1;
       continue;
@@ -2432,7 +2453,7 @@ function buildMarkdownPreview(source) {
       const pre = document.createElement('pre');
       const code = document.createElement('code');
       if (fenceMatch[2]) code.dataset.language = fenceMatch[2];
-      code.textContent = codeLines.join('\n');
+      appendNoteText(code,codeLines.join('\n'),offsets[blockStart+1]??normalized.length);
       pre.append(code);
       fragment.append(pre);
       continue;
@@ -2441,7 +2462,7 @@ function buildMarkdownPreview(source) {
     const headingMatch = line.match(NOTE_HEADING_RE);
     if (headingMatch) {
       const heading = document.createElement('h' + headingMatch[1].length);
-      appendInlineMarkdown(heading, headingMatch[2]);
+      appendInlineMarkdown(heading,headingMatch[2],0,offsets[index]+line.length-headingMatch[2].length);
       fragment.append(heading);
       index += 1;
       continue;
@@ -2455,15 +2476,15 @@ function buildMarkdownPreview(source) {
 
     const quoteMatch = line.match(NOTE_QUOTE_RE);
     if (quoteMatch) {
-      const quoteLines = [];
+      const quoteLines = [],quoteOffsets=[];
       while (index < lines.length) {
         const match = lines[index].match(NOTE_QUOTE_RE);
         if (!match) break;
-        quoteLines.push(match[1]);
+        quoteLines.push(match[1]);quoteOffsets.push(offsets[index]+lines[index].length-match[1].length);
         index += 1;
       }
       const quote = document.createElement('blockquote');
-      appendMarkdownLines(quote, quoteLines);
+      appendMarkdownLines(quote,quoteLines,quoteOffsets);
       fragment.append(quote);
       continue;
     }
@@ -2485,7 +2506,7 @@ function buildMarkdownPreview(source) {
         box.setAttribute('aria-hidden', 'true');
         box.textContent = done ? '✓' : '';
         const content = document.createElement('span');
-        appendInlineMarkdown(content, match[2]);
+        appendInlineMarkdown(content,match[2],0,offsets[index]+lines[index].length-match[2].length);
         item.append(box, content);
         list.append(item);
         index += 1;
@@ -2503,7 +2524,7 @@ function buildMarkdownPreview(source) {
         const match = lines[index].match(NOTE_ORDERED_RE);
         if (!match) break;
         const item = document.createElement('li');
-        appendInlineMarkdown(item, match[2]);
+        appendInlineMarkdown(item,match[2],0,offsets[index]+lines[index].length-match[2].length);
         list.append(item);
         index += 1;
       }
@@ -2519,7 +2540,7 @@ function buildMarkdownPreview(source) {
         const match = lines[index].match(NOTE_BULLET_RE);
         if (!match) break;
         const item = document.createElement('li');
-        appendInlineMarkdown(item, match[1]);
+        appendInlineMarkdown(item,match[1],0,offsets[index]+lines[index].length-match[1].length);
         list.append(item);
         index += 1;
       }
@@ -2534,7 +2555,7 @@ function buildMarkdownPreview(source) {
       index += 1;
     }
     const paragraph = document.createElement('p');
-    appendMarkdownLines(paragraph, paragraphLines);
+    appendMarkdownLines(paragraph,paragraphLines,offsets.slice(blockStart,index));
     fragment.append(paragraph);
   }
 
@@ -2702,61 +2723,27 @@ function applyNoteFormat(type) {
 }
 
 let noteMode = 'edit';
-let noteSelection = { start: 0, end: 0, direction: 'none', scrollTop: 0 };
-
-function setNoteMode(mode, focusTarget = true) {
-  if (!noteInput || !notePreview) return;
-  const previousMode = noteMode;
-  noteMode = mode === 'preview' ? 'preview' : 'edit';
-  const isPreview = noteMode === 'preview';
-
-  if (isPreview) {
-    noteSelection = {
-      start: noteInput.selectionStart,
-      end: noteInput.selectionEnd,
-      direction: noteInput.selectionDirection,
-      scrollTop: noteInput.scrollTop,
-    };
-    renderNotePreview();
-  } else if (previousMode === 'edit') {
-    // 重复点击已选中的“编辑”时保留用户当下光标，而不是恢复旧选区。
-    noteSelection = {
-      start: noteInput.selectionStart,
-      end: noteInput.selectionEnd,
-      direction: noteInput.selectionDirection,
-      scrollTop: noteInput.scrollTop,
-    };
-  }
-
-  noteInput.hidden = isPreview;
-  notePreview.hidden = !isPreview;
-  if (noteFormatActions) noteFormatActions.hidden = isPreview;
-  if (homeNote) homeNote.classList.toggle('is-preview', isPreview);
-  noteModeButtons.forEach((button) => {
-    const active = button.dataset.noteMode === noteMode;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', String(active));
-  });
-  if (noteEditButton) {
-    noteEditButton.classList.toggle('active', !isPreview);
-    pomeLocaleRendererApp.bind(noteEditButton, "textContent", () => (isPreview ? pomeLocaleRendererApp.t("copy.edit.051836") : pomeLocaleRendererApp.t("copy.done.c0b3fb")));
-    noteEditButton.setAttribute('aria-pressed', String(!isPreview));
-  }
-
-  if (!focusTarget) return;
-  requestAnimationFrame(() => {
-    if (isPreview) {
-      notePreview.focus({ preventScroll: true });
-    } else {
-      noteInput.focus({ preventScroll: true });
-      noteInput.setSelectionRange(
-        noteSelection.start,
-        noteSelection.end,
-        noteSelection.direction
-      );
-      noteInput.scrollTop = noteSelection.scrollTop;
-    }
-  });
+let homeDraftTimer = null;
+let homeDraftDirty = false;
+let homeCollecting = false;
+const NOTE_COLLECTION_KEY = 'notch-note-collection-pending-v1';
+function setNoteMode(_mode, focusTarget = true) {
+  noteMode='edit';
+  if(noteInput)noteInput.hidden=false;
+  if(notePreview)notePreview.hidden=true;
+  homeNote?.classList.remove('is-preview');
+  if(focusTarget)noteInput?.focus({preventScroll:true});
+}
+function reportNoteFailure(scope,error) {
+  window.NotchUi?.showError({messageKey:scope==='notes:collect'?'notes.collectFailed':'notes.saveFailed',
+    diagnostic:`Notes: ${error?.message||'storage_failed'}`,scope,
+    onRepair:()=>scope==='notes:collect'?saveHomeNote():scope==='notes:home-draft'?persistHomeNoteDraft():saveNotesDetail()});
+}
+function persistHomeNoteDraft() {
+  clearTimeout(homeDraftTimer);homeDraftTimer=null;
+  if(workspaceReloadPending)return false;
+  try {localStorage.setItem(NOTE_KEY,noteInput.value);window.NotchUi?.clearError('notes:home-draft');return true;}
+  catch(error){reportNoteFailure('notes:home-draft',error);return false;}
 }
 
 function continueNoteList(event) {
@@ -2830,25 +2817,13 @@ if (noteInput) {
     // ignore
   }
 
-  let noteTimer = null;
-  const saveNote = () => {
-    if (noteTimer) clearTimeout(noteTimer);
-    noteTimer = null;
-    if (workspaceReloadPending) return;
-    try {
-      localStorage.setItem(NOTE_KEY, noteInput.value);
-    } catch (e) {
-      // ignore quota errors
-    }
-  };
-
   noteInput.addEventListener('input', () => {
     if (!noteInput.value.trim()) localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
-    renderNotePreview();
-    clearTimeout(noteTimer);
-    noteTimer = setTimeout(saveNote, 300);
+    homeDraftDirty=true;
+    clearTimeout(homeDraftTimer);
+    homeDraftTimer=setTimeout(persistHomeNoteDraft,300);
   });
-  noteInput.addEventListener('blur', saveNote);
+  noteInput.addEventListener('blur',persistHomeNoteDraft);
   noteInput.addEventListener('compositionstart', () => {
     noteComposing = true;
   });
@@ -2859,14 +2834,15 @@ if (noteInput) {
     if (continueNoteList(event)) return;
     if (!(event.metaKey || event.ctrlKey) || event.altKey || event.isComposing) return;
     const key = event.key.toLowerCase();
+    if(key==='s'){event.preventDefault();saveHomeNote();return;}
     if (key !== 'b' && key !== 'i') return;
     event.preventDefault();
     applyNoteFormat(key === 'b' ? 'bold' : 'italic');
   });
 
-  window.addEventListener('beforeunload', saveNote);
+  window.addEventListener('beforeunload',persistHomeNoteDraft);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) saveNote();
+    if (document.hidden) persistHomeNoteDraft();
   });
 
   noteInput.hidden = false;
@@ -2904,43 +2880,28 @@ function noteArchiveTime(timestamp) {
 
 let notesDetailMode = 'edit';
 
+const notesViewStates = new Map();
 function syncNotesDetailModeButtons() {
-  if (!notesDetail) return;
-  notesDetail.querySelectorAll('[data-notes-mode]').forEach((button) => {
-    const active = button.dataset.notesMode === notesDetailMode;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', String(active));
-  });
+  const button=notesDetail?.querySelector('.notes-save');
+  if(button){button.style.visibility=notesDetailMode==='edit'?'visible':'hidden';button.disabled=notesDetailMode!=='edit';}
 }
-
-function setNotesDetailMode(mode, focusTarget = true) {
-  if (!notesDetail) return;
-  const next = mode === 'preview' ? 'preview' : 'edit';
-  const editor = notesDetail.querySelector('#notes-editor');
-  const preview = notesDetail.querySelector('#notes-preview');
-  if (!editor || !preview) {
-    notesDetailMode = next;
-    return;
-  }
-
-  if (next === 'preview') {
-    flushNotesEditorSave();
+function saveNotesDetail() {
+  const editor=notesDetail?.querySelector('#notes-editor');
+  if(!editor || editor.dataset.composing==='true')return false;
+  clearTimeout(notesSaveTimer);notesSaveTimer=null;
+  if(!persistNotesEditor(editor))return false;
+  setNotesDetailMode('preview');return true;
+}
+function setNotesDetailMode(mode, focusTarget = true, event = null) {
+  if(!notesDetail)return;
+  const next=mode==='preview'?'preview':'edit',editor=notesDetail.querySelector('#notes-editor'),preview=notesDetail.querySelector('#notes-preview');
+  if(!editor||!preview){notesDetailMode=next;return;}
+  if(next==='preview'&&!flushNotesEditorSave())return;
+  window.PomeNoteView.transfer(editor,preview,next==='preview',{focus:focusTarget,event,render:()=>{
     preview.replaceChildren(buildMarkdownPreview(editor.value));
-    syncNotesPreviewTitle(preview, notesDetail.querySelector('.notes-detail-title')?.value);
-  }
-
-  notesDetailMode = next;
-  const isPreview = notesDetailMode === 'preview';
-  editor.hidden = isPreview;
-  preview.hidden = !isPreview;
-  notesDetail.classList.toggle('is-preview', isPreview);
-  syncNotesDetailModeButtons();
-
-  if (!focusTarget) return;
-  requestAnimationFrame(() => {
-    if (isPreview) preview.focus({ preventScroll: true });
-    else editor.focus({ preventScroll: true });
-  });
+    syncNotesPreviewTitle(preview,notesDetail.querySelector('.notes-detail-title')?.value);
+  }});
+  notesDetailMode=next;notesDetail.classList.toggle('is-preview',next==='preview');syncNotesDetailModeButtons();
 }
 
 let notesDetailOpenedId = '';
@@ -2963,9 +2924,18 @@ function defaultNotesDetailMode(note) {
 
 function renderNotesDetail(notes = loadNoteArchive()) {
   if (!notesDetail) return;
-  notesDetail.replaceChildren();
-  notesDetail.classList.remove('is-preview');
-  const note = notes.find((item) => item.id === selectedNoteId);
+  const note=notes.find(item=>item.id===selectedNoteId);
+  const oldEditor=notesDetail.querySelector('#notes-editor'),oldPreview=notesDetail.querySelector('#notes-preview');
+  if(oldEditor&&oldPreview&&activeTab==='notes'&&isExpanded)notesViewStates.set(oldEditor.dataset.noteId,window.PomeNoteView.snapshot(oldEditor,oldPreview,notesDetailMode));
+  if(note&&oldEditor?.dataset.noteId===note.id){
+    if(notesDetailMode==='preview'&&oldEditor.value!==note.content){
+      const anchor=window.PomeNoteView.capturePreview(oldPreview);oldEditor.value=note.content;
+      oldPreview.replaceChildren(buildMarkdownPreview(note.content));syncNotesPreviewTitle(oldPreview,note.title);
+      window.PomeNoteView.restorePreview(oldPreview,anchor);
+    }
+    updateSavedNotePresentation(note);return;
+  }
+  notesDetail.replaceChildren();notesDetail.classList.remove('is-preview');
   if (!note) {
     notesDetailOpenedId = '';
     const empty = document.createElement('div');
@@ -2980,7 +2950,7 @@ function renderNotesDetail(notes = loadNoteArchive()) {
 
   if (notesDetailOpenedId !== note.id) {
     notesDetailOpenedId = note.id;
-    notesDetailMode = defaultNotesDetailMode(note);
+    notesDetailMode = notesViewStates.get(note.id)?.mode || defaultNotesDetailMode(note);
   }
 
   const header = document.createElement('header');
@@ -3009,22 +2979,9 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   const actions = document.createElement('div');
   actions.className = 'notes-detail-actions';
 
-  const modeSwitch = document.createElement('div');
-  modeSwitch.className = 'note-mode-switch notes-detail-mode-switch';
-  modeSwitch.setAttribute('role', 'group');
-  modeSwitch.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.previewOrEdit.566766"));
-  ;[
-    ['preview', pomeLocaleRendererApp.t("copy.preview.13d61f")],
-    ['edit', pomeLocaleRendererApp.t("copy.edit.051836")],
-  ].forEach(([mode, label]) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'note-mode' + (notesDetailMode === mode ? ' active' : '');
-    button.dataset.notesMode = mode;
-    button.textContent = label;
-    button.setAttribute('aria-pressed', String(notesDetailMode === mode));
-    modeSwitch.append(button);
-  });
+  const save=document.createElement('button');save.type='button';save.className='workspace-button compact primary notes-save';
+  save.dataset.action='save-note';pomeLocaleRendererApp.bind(save,'textContent',()=>pomeLocaleRendererApp.t('copy.save.a3030b'));
+  save.style.visibility=notesDetailMode==='edit'?'visible':'hidden';save.disabled=notesDetailMode!=='edit';
 
   const remove = document.createElement('button');
   remove.type = 'button';
@@ -3033,7 +2990,7 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   remove.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.deleteNote.07a619"));
   pomeLocaleRendererApp.bind(remove, "title", () => (pomeLocaleRendererApp.t("copy.deleteNote.07a619")));
   remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h10l1-12"/></svg>';
-  actions.append(modeSwitch, remove);
+  actions.append(save, remove);
   header.append(heading, actions);
 
   const body = document.createElement('div');
@@ -3061,8 +3018,10 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   preview.hidden = !isPreview;
   notesDetail.classList.toggle('is-preview', isPreview);
 
+  pomeLocaleRendererApp.bind(preview,'title',()=>pomeLocaleRendererApp.t('notes.clickToEdit'));
   body.append(editor, preview);
   notesDetail.append(header, body);
+  window.PomeNoteView.restore(editor,preview,notesViewStates.get(note.id));
   requestNoteTitle(note);
 }
 
@@ -3088,7 +3047,7 @@ async function requestNoteTitle(note) {
   }
   // A model reply can arrive inside the editor's save debounce. Commit that
   // draft before comparing content, then update labels without rebuilding it.
-  flushNotesEditorSave();
+  if(flushNotesEditorSave()===false)return;
   const next = window.NotchDomain.applyGeneratedNoteTitle(
     loadNoteArchive(),
     note.id,
@@ -3125,31 +3084,21 @@ function updateSavedNotePresentation(note) {
 }
 
 function persistNotesEditor(editor) {
-  if (!editor || !editor.dataset.noteId) return;
-  const notes = window.NotchDomain.updateNoteInArchive(
-    loadNoteArchive(),
-    editor.dataset.noteId,
-    editor.value,
-    Date.now()
-  );
-  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
-  const updated = notes.find((note) => note.id === editor.dataset.noteId);
-  if (localStorage.getItem(NOTE_ACTIVE_ARCHIVE_KEY) === editor.dataset.noteId && noteInput) {
-    noteInput.value = editor.value;
-    localStorage.setItem(NOTE_KEY, editor.value);
-    renderNotePreview();
-  }
-  updateSavedNotePresentation(updated);
-  if (pendingNotesEditor === editor) pendingNotesEditor = null;
+  if(!editor?.dataset.noteId)return false;
+  try {
+    const archive=loadNoteArchive(),previous=archive.find(note=>note.id===editor.dataset.noteId);
+    if(!previous)throw new Error('note_missing');
+    const notes=previous.content===editor.value?archive:window.NotchDomain.updateNoteInArchive(archive,editor.dataset.noteId,editor.value,Date.now());
+    localStorage.setItem(NOTE_ARCHIVE_KEY,JSON.stringify(notes));
+    updateSavedNotePresentation(notes.find(note=>note.id===editor.dataset.noteId));
+    if(pendingNotesEditor===editor)pendingNotesEditor=null;
+    window.NotchUi?.clearError('notes:save');return true;
+  } catch(error){pendingNotesEditor=editor;reportNoteFailure('notes:save',error);return false;}
 }
-
 function flushNotesEditorSave() {
-  if (workspaceReloadPending) return;
-  if (notesSaveTimer) clearTimeout(notesSaveTimer);
-  notesSaveTimer = null;
-  const editor = pendingNotesEditor;
-  pendingNotesEditor = null;
-  if (editor) persistNotesEditor(editor);
+  if(workspaceReloadPending)return false;
+  clearTimeout(notesSaveTimer);notesSaveTimer=null;
+  return pendingNotesEditor?persistNotesEditor(pendingNotesEditor):true;
 }
 
 function scheduleNotesEditorSave(editor) {
@@ -3209,7 +3158,7 @@ function renderNotesLibrary() {
 }
 
 notesNewButton?.addEventListener('click', () => {
-  flushNotesEditorSave();
+  if(!flushNotesEditorSave())return;
   const now = Date.now();
   const note = {
     id: generateId(),
@@ -3222,7 +3171,6 @@ notesNewButton?.addEventListener('click', () => {
   const notes = [note, ...loadNoteArchive()];
   localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
   selectedNoteId = note.id;
-  notesDetailMode = 'edit';
   if (notesSearch) notesSearch.value = '';
   renderNotesLibrary();
   requestAnimationFrame(() => {
@@ -3231,40 +3179,59 @@ notesNewButton?.addEventListener('click', () => {
   showStatusToast(pomeLocaleRendererApp.t("copy.noteCreated.246d61"));
 });
 
-noteSaveButton?.addEventListener('click', () => {
-  const content = noteInput?.value.trim() || '';
-  if (!content) {
-    showStatusToast(pomeLocaleRendererApp.t("copy.writeSomethingBeforeArchiving.9a3119"));
-    return;
+async function saveHomeNote() {
+  if(homeCollecting||noteComposing||workspaceReloadPending)return;
+  const content=noteInput?.value||'';
+  if(!content.trim()){showStatusToast(pomeLocaleRendererApp.t('copy.writeSomethingBeforeArchiving.9a3119'));return;}
+  if(!flushNotesEditorSave())return;
+  // Freeze this draft only while the compositor snapshots the whole module.
+  // It becomes writable again before the flight starts, so the next draft is
+  // independent of the pixels being absorbed into Notes.
+  homeCollecting=true;noteSaveButton.disabled=true;
+  const wasReadOnly=noteInput.readOnly;noteInput.readOnly=true;
+  let prepared=null,captureTimeout;
+  try {
+    prepared=await Promise.race([
+      window.PomeNoteFlight.prepare(noteInput),
+      new Promise(resolve=>{captureTimeout=setTimeout(()=>{window.PomeNoteFlight.stop();resolve(null);},250);})
+    ]);
+  } catch {} finally {clearTimeout(captureTimeout);noteInput.readOnly=wasReadOnly;}
+  if(workspaceReloadPending||noteInput.value!==content){homeCollecting=false;noteSaveButton.disabled=false;return;}
+  const note={id:generateId(),content,createdAt:Date.now(),updatedAt:Date.now()};
+  const keys=[NOTE_ARCHIVE_KEY,NOTE_KEY,NOTE_ACTIVE_ARCHIVE_KEY,NOTE_COLLECTION_KEY];
+  let previous;
+  try {
+    previous=keys.map(key=>localStorage.getItem(key));
+    const archive=JSON.parse(previous[0]||'[]');if(!Array.isArray(archive))throw new Error('invalid_note_archive');
+    localStorage.setItem(NOTE_ARCHIVE_KEY,JSON.stringify([note,...window.NotchDomain.normalizeNoteArchive(archive)]));
+    localStorage.setItem(NOTE_KEY,'');localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
+    const records=JSON.parse(previous[3]||'[]');
+    // Keep only the identity in the guard; the archive owns the note content.
+    localStorage.setItem(NOTE_COLLECTION_KEY,JSON.stringify([...(Array.isArray(records)?records:records?[records]:[]),{note:{id:note.id},home:content}]));
+  } catch(error){
+    if(previous)keys.forEach((key,index)=>{try{if(previous[index]===null)localStorage.removeItem(key);else localStorage.setItem(key,previous[index]);}catch{}});
+    homeCollecting=false;noteSaveButton.disabled=false;reportNoteFailure('notes:collect',error);return;
   }
-  const notes = loadNoteArchive();
-  let activeId = localStorage.getItem(NOTE_ACTIVE_ARCHIVE_KEY) || '';
-  const existing = notes.find((item) => item.id === activeId);
-  if (existing) {
-    existing.content = content;
-    existing.updatedAt = Date.now();
-  } else {
-    activeId = generateId();
-    notes.unshift({ id: activeId, content, createdAt: Date.now(), updatedAt: Date.now() });
-  }
-  localStorage.setItem(NOTE_ACTIVE_ARCHIVE_KEY, activeId);
-  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
-  localStorage.setItem(NOTE_KEY, noteInput.value);
-  selectedNoteId = activeId;
-  renderNotesLibrary();
-  showStatusToast(pomeLocaleRendererApp.t("copy.noteSaved.6d1bf9"));
-});
+  clearTimeout(homeDraftTimer);homeDraftTimer=null;homeDraftDirty=true;homeCollecting=true;
+  noteInput.value='';noteInput.scrollTop=0;setNoteMode('edit',false);selectedNoteId=note.id;
+  noteInput.focus({preventScroll:true});noteSaveButton.disabled=true;
+  window.NotchUi?.clearError('notes:collect');renderNotesLibrary();
+  showStatusToast(pomeLocaleRendererApp.t('copy.noteSaved.6d1bf9'),{messageKey:'copy.noteSaved.6d1bf9',actionLabelKey:'ux.notes.view',onAction:()=>setActiveTab('notes')});
+  let flight;try{flight=window.PomeNoteFlight.start(prepared);}catch{flight=Promise.resolve();}
+  Promise.resolve(flight).finally(()=>{homeCollecting=false;if(noteSaveButton?.isConnected)noteSaveButton.disabled=false;});
+}
+noteSaveButton?.addEventListener('click',saveHomeNote);
 
 notesList?.addEventListener('click', (event) => {
   const row = event.target.closest('[data-note-id]');
   if (!row) return;
-  flushNotesEditorSave();
+  if(!flushNotesEditorSave())return;
   selectedNoteId = row.dataset.noteId;
   renderNotesLibrary();
 });
 
 notesSearch?.addEventListener('input', () => {
-  flushNotesEditorSave();
+  if(!flushNotesEditorSave())return;
   renderNotesLibrary();
 });
 
@@ -3295,11 +3262,7 @@ notesDetail?.addEventListener('focusout', (event) => {
 });
 
 notesDetail?.addEventListener('click', async (event) => {
-  const modeButton = event.target.closest('[data-notes-mode]');
-  if (modeButton) {
-    setNotesDetailMode(modeButton.dataset.notesMode);
-    return;
-  }
+  if(event.target.closest('[data-action="save-note"]')){saveNotesDetail();return;}
 
   const link = event.target.closest('#notes-preview [data-note-href]');
   if (link) {
@@ -3312,9 +3275,14 @@ notesDetail?.addEventListener('click', async (event) => {
     return;
   }
 
+  if(event.target.closest('#notes-preview')){
+    const selection=window.getSelection();
+    if(!selection||selection.isCollapsed)setNotesDetailMode('edit',true,event);
+    return;
+  }
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (!action) return;
-  flushNotesEditorSave();
+  if(!flushNotesEditorSave())return;
   const notes = loadNoteArchive();
   const note = notes.find((item) => item.id === selectedNoteId);
   if (!note) return;
@@ -3336,6 +3304,13 @@ document.addEventListener('notch:tabchange', (event) => {
   if (event.detail?.tab !== 'notes') flushNotesEditorSave();
 });
 window.addEventListener('beforeunload', flushNotesEditorSave);
+notesDetail?.addEventListener('compositionstart',event=>{if(event.target.matches('#notes-editor'))event.target.dataset.composing='true';});
+notesDetail?.addEventListener('compositionend',event=>{if(event.target.matches('#notes-editor'))event.target.dataset.composing='false';});
+notesDetail?.addEventListener('keydown',event=>{
+  if(event.isComposing)return;
+  if((event.metaKey||event.ctrlKey)&&!event.altKey&&event.key.toLowerCase()==='s'){event.preventDefault();saveNotesDetail();return;}
+  if(event.key==='Enter'&&event.target.matches('#notes-preview')){event.preventDefault();setNotesDetailMode('edit');}
+});
 
 if (noteFormatActions) {
   noteFormatActions.addEventListener('mousedown', (event) => {
@@ -3348,14 +3323,9 @@ if (noteFormatActions) {
   });
 }
 
-noteModeButtons.forEach((button) => {
-  button.addEventListener('click', () => setNoteMode(button.dataset.noteMode));
-});
-noteEditButton?.addEventListener('click', () => setNoteMode(noteMode === 'preview' ? 'edit' : 'preview'));
-
-// 已有内容默认预览，空白速记默认编辑
+// 首页始终是草稿编辑区，保存后收纳到笔记库。
 if (noteInput && notePreview) {
-  setNoteMode(noteInput.value.trim() ? 'preview' : 'edit', false);
+  setNoteMode('edit', false);
 }
 
 if (notePreview) {
@@ -3467,7 +3437,7 @@ function bindHomeTilePointerGlow(bento) {
     // Keep tilt while crossing buttons/links inside the card. Resetting on every
     // interactive child caused the 3D motion to snap flat mid-hover. Click and
     // focus still flatten via pointerdown / focusin / :focus-within.
-    if (!tile || tile.hidden || !isExpanded || activeTab !== 'home' || modeBusy || reducedMotion.matches
+    if (!tile || tile.hidden || !isExpanded || activeTab !== 'home' || modeBusy || reducedMotion.matches || document.documentElement.classList.contains('experience-reduced-motion')
       || bento.dataset.layoutEditing === 'true' || bento.classList.contains('layout-motion-active')
       || bento.classList.contains('layout-dragging') || tile.contains(document.activeElement)) return false;
     return true;
@@ -3508,6 +3478,7 @@ function bindHomeTilePointerGlow(bento) {
   window.addEventListener('blur', () => reset({ immediate: true }));
   window.addEventListener('resize', () => reset({ immediate: true }));
   reducedMotion.addEventListener('change', () => reset({ immediate: true }));
+  document.addEventListener('notch:motion-preference', () => reset({ immediate: true }));
   document.addEventListener('visibilitychange', () => { if (document.hidden) reset({ immediate: true }); });
   document.addEventListener('notch:will-collapse', () => reset({ immediate: true }));
   document.addEventListener('notch:tabchange', event => { if (event.detail?.tab !== 'home') reset({ immediate: true }); });
@@ -3674,7 +3645,7 @@ let homeVisibilityPersisted = true;
 let homeLayoutReadOnly = false;
 let homeLayoutMotionGeneration = 0;
 let homeLayoutMotionAnimations = [];
-const HOME_LAYOUT_MOTION_MS = 780;
+const HOME_LAYOUT_MOTION_MS = 300;
 const HOME_LAYOUT_MOTION_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 function saveHomeLayout() {
@@ -3818,12 +3789,12 @@ function captureHomeLayoutVisualState() {
 function animateCommittedHomeLayout(reason, beforeState, { draggedId = null } = {}) {
   if (!homeBento || !beforeState || reason === 'initial' || reason === 'rollback'
     || reason === 'size-preview' || reason === 'drag-commit'
-    || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    || (document.documentElement.classList.contains('experience-reduced-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
   const generation = homeLayoutMotionGeneration;
   const isPreview = reason === 'reorder-preview';
   const isDragRelease = reason === 'drag-release';
   const duration = isDragRelease ? 260 : isPreview
-    ? 560
+    ? 240
     : reason === 'reorder'
       ? Math.round(HOME_LAYOUT_MOTION_MS * 1.2)
       : HOME_LAYOUT_MOTION_MS;
@@ -4321,7 +4292,9 @@ if (homeBento) {
     homeContextMenu.style.visibility = '';
   };
 
+  document.addEventListener('notch:edit-home-layout', () => setHomeLayoutEditing(true));
   const setHomeLayoutEditing = (editing, { silent = false, action = 'enter' } = {}) => {
+    if (editing && innerWidth < 980) { showStatusToast(pomeLocaleRendererApp.t('ux.layout.widen')); return; }
     resetHomeTilePointerMotion({ immediate: true });
     const next = Boolean(editing) && !homeLayoutReadOnly;
     const wasEditing = homeLayoutEditing;
@@ -4847,13 +4820,7 @@ function bindDockSurface(surface, selector, maxScale = 1.14) {
   });
 }
 
-[
-  ['#window-list', '.window-item', 1.12],
-].forEach(([surfaceSelector, itemSelector, scale]) => {
-  document.querySelectorAll(surfaceSelector).forEach((surface) => {
-    bindDockSurface(surface, itemSelector, scale);
-  });
-});
+// Window rows keep a steady hit area; they do not use Dock magnification.
 
 
 function syncPomodoroBgSrc(tile) {
@@ -5297,6 +5264,12 @@ function clipEntryHtml(entry, faved) {
 }
 
 function getFilteredClipItems() {
+  const query = document.getElementById('clip-search')?.value.trim().toLocaleLowerCase() || '';
+  const matches = entry => !query || String(entry.text || '').toLocaleLowerCase().includes(query);
+  return getClipItemsByType().filter(matches);
+}
+
+function getClipItemsByType() {
   if (clipFilter === 'all') return clipHistory;
   if (clipFilter === 'text') return clipHistory.filter((e) => e.type === 'text' || e.type === 'url');
   if (clipFilter === 'image') return clipHistory.filter((e) => e.type === 'image');
@@ -5350,11 +5323,35 @@ function renderClipList() {
 }
 
 // ---- 工具栏事件委托 ----
+let clipFilterMotion = null;
+let clipContentMotion = null;
+function stopClipFilterMotion() {
+  clipFilterMotion?.cancel(); clipFilterMotion = null;
+  clipContentMotion?.cancel(); clipContentMotion = null;
+}
+function syncClipFilterIndicator(animate = false) {
+  const wrap = document.getElementById('clip-filter-switch');
+  const indicator = wrap?.querySelector('.clip-filter-indicator');
+  const selected = wrap?.querySelector('.clip-filter.active');
+  if (!indicator || !selected || !wrap.getClientRects().length) return;
+  const previous = indicator.getBoundingClientRect(), parent = wrap.getBoundingClientRect();
+  stopClipFilterMotion();
+  const left = selected.offsetLeft, width = selected.offsetWidth;
+  indicator.style.left = `${left}px`; indicator.style.width = `${width}px`;
+  const reduce = document.documentElement.classList.contains('experience-reduced-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!animate || reduce || !previous.width) return;
+  clipFilterMotion = indicator.animate([
+    { left: `${previous.left-parent.left}px`, width: `${previous.width}px` },
+    { left: `${left}px`, width: `${width}px` },
+  ], { duration: 200, easing: 'cubic-bezier(.22,1,.36,1)' });
+  clipContentMotion = clipListEl.animate([{opacity: .55, transform: 'translateY(3px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 160, easing: 'ease-out'});
+}
 if (clipToolbarEl) {
   clipToolbarEl.addEventListener('click', (e) => {
     e.stopPropagation();
     const filterBtn = e.target.closest('.clip-filter');
     if (filterBtn) {
+      if (clipFilter === filterBtn.dataset.filter) return;
       clipFilter = filterBtn.dataset.filter || 'all';
       clipToolbarEl.querySelectorAll('.clip-filter').forEach((b) => {
         const selected = b === filterBtn;
@@ -5363,6 +5360,7 @@ if (clipToolbarEl) {
       });
       clipDataVersion++; // clipFilter 已变 → 输出变化
       renderClipList();
+      syncClipFilterIndicator(true);
       return;
     }
     if (e.target.closest('#clip-clear-btn')) {
@@ -5372,6 +5370,14 @@ if (clipToolbarEl) {
   clipToolbarEl.querySelectorAll('.clip-filter').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.classList.contains('active')));
   });
+  new ResizeObserver(() => syncClipFilterIndicator()).observe(document.getElementById('clip-filter-switch'));
+  document.addEventListener('notch:tabchange', event => {
+    if (event.detail?.tab === 'clip') syncClipFilterIndicator();
+    else stopClipFilterMotion();
+  });
+  document.addEventListener('notch:modechange', event => { if (!event.detail?.expanded) stopClipFilterMotion(); });
+  document.addEventListener('notch:motion-preference', () => syncClipFilterIndicator());
+  matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => syncClipFilterIndicator());
 }
 
 // ---- 列表事件委托 ----
@@ -5491,24 +5497,19 @@ function resetClipClearConfirmation() {
   }
 }
 
-function requestClearClipHistory() {
-  if (clipHistory.length === 0) {
-    showStatusToast(pomeLocaleRendererApp.t("copy.clipboardHistoryIsAlreadyEmpty.d4a211"));
+async function requestClearClipHistory() {
+  if (!clipHistory.length) {
+    showStatusToast(pomeLocaleRendererApp.t('copy.clipboardHistoryIsAlreadyEmpty.d4a211'));
     return;
   }
-  if (!clipClearArmed) {
-    clipClearArmed = true;
-    if (clipClearBtn) {
-      clipClearBtn.classList.add('confirming');
-      clipClearBtn.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.clickAgainToClearHistoryEntries.04c46d", { arg1: (clipHistory.length) }));
-    }
-    showStatusToast(pomeLocaleRendererApp.t("copy.clickTheBinAgainToClearEntries.8ef455", { arg1: (clipHistory.length) }), {
-      duration: 3000,
-      onExpire: resetClipClearConfirmation,
-    });
-    return;
-  }
-  resetClipClearConfirmation();
+  const snapshot = JSON.stringify({history: clipHistory, favorites: clipFavorites});
+  const approved = await window.PomeDeleteConfirm.open({
+    titleKey: 'copy.clearHistory.17ac4a',
+    messageKey: 'ux.clip.clearScope',
+    args: {count: clipHistory.length, favorites: clipFavorites.length},
+    items: clipHistory.map(e => e.type === 'image' ? pomeLocaleRendererApp.t('copy.image.d24c10') : e.text),
+  });
+  if (!approved || snapshot !== JSON.stringify({history: clipHistory, favorites: clipFavorites})) return;
   clearClipHistory();
 }
 
@@ -5566,6 +5567,7 @@ async function copyClipEntry(id) {
   // 视觉反馈：800ms 后移除 copied 类
   const itemEl = clipListEl && clipListEl.querySelector(`.clip-item[data-id="${CSS.escape(id)}"]`);
   if (itemEl) {
+    document.dispatchEvent(new CustomEvent('notch:copied',{detail:{target:itemEl}}));
     itemEl.classList.add('copied');
     setTimeout(() => itemEl.classList.remove('copied'), 800);
   }
@@ -5630,21 +5632,31 @@ function getWorkspaceSnapshotForSync() {
 window.getWorkspaceSnapshotForSync = getWorkspaceSnapshotForSync;
 
 function applyWorkspaceNotes(notes) {
-  if (!notes || typeof notes !== 'object') return;
-  if (typeof notes.home === 'string') {
-    if (notes.home) localStorage.setItem(NOTE_KEY, notes.home);
-    else localStorage.removeItem(NOTE_KEY);
-    if (noteInput) noteInput.value = notes.home;
+  if(!notes||typeof notes!=='object')return;
+  let pending=[];try{const records=JSON.parse(localStorage.getItem(NOTE_COLLECTION_KEY)||'[]');pending=Array.isArray(records)?records:records?[records]:[];}catch{}
+  const incomingHome=typeof notes.home==='string'?notes.home:null;
+  const staleCollection=pending.some(record=>incomingHome===record.home);
+  if(incomingHome!==null&&!staleCollection&&(!homeDraftDirty||incomingHome===noteInput?.value)){
+    localStorage.setItem(NOTE_KEY,incomingHome);if(noteInput)noteInput.value=incomingHome;homeDraftDirty=false;
+  } else if(noteInput)localStorage.setItem(NOTE_KEY,noteInput.value);
+  if(Array.isArray(notes.archive)){
+    let archive=notes.archive;
+    for(const record of pending){if(!archive.some(note=>note.id===record.note.id)){
+      const local=loadNoteArchive().find(note=>note.id===record.note.id);if(local)archive=[local,...archive];
+    }}
+    // An editor owns the text being typed, including while a sync reply arrives.
+    const editor=notesDetail?.querySelector('#notes-editor');
+    if(editor&&notesDetailMode==='edit'){
+      const local=loadNoteArchive().find(note=>note.id===editor.dataset.noteId);
+      if(local)archive=archive.map(note=>note.id===local.id&&Number(note.updatedAt)<Number(local.updatedAt)?local:note);
+    }
+    localStorage.setItem(NOTE_ARCHIVE_KEY,JSON.stringify(archive));
+    const remaining=pending.filter(record=>incomingHome===record.home||!notes.archive.some(note=>note.id===record.note.id));
+    if(remaining.length)localStorage.setItem(NOTE_COLLECTION_KEY,JSON.stringify(remaining));else localStorage.removeItem(NOTE_COLLECTION_KEY);
   }
-  if (Array.isArray(notes.archive)) {
-    localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes.archive));
-  }
-  if (notes.activeId) localStorage.setItem(NOTE_ACTIVE_ARCHIVE_KEY, String(notes.activeId));
-  else localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
-  if (typeof renderNotesLibrary === 'function') renderNotesLibrary();
-  if (noteInput && typeof setNoteMode === 'function') {
-    setNoteMode(noteInput.value.trim() ? 'preview' : 'edit', false);
-  }
+  localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
+  if(typeof renderNotesLibrary==='function')renderNotesLibrary();
+  setNoteMode('edit',false);
 }
 
 function applyWorkspaceClipboard(clipboard) {
@@ -5713,6 +5725,8 @@ window.addEventListener('pome:language-changed', () => {
     const addInput = document.querySelector(`.add-row input[data-priority="${priority}"]`);
     if (addInput) addInput.setAttribute('aria-label', pomeLocaleRendererApp.t('copy.addATaskTo.efb0ec', { arg1: todoCategoryNames[priority] }));
   }
+  clipDataVersion++;
+  if (activeTab === 'clip') renderClipList();
   for (const button of document.querySelectorAll('.todo-bulk-delete')) {
     button.textContent = pomeLocaleRendererApp.t('copy.delete.2f9daa');
   }
@@ -5722,7 +5736,7 @@ window.addEventListener('pome:language-changed', () => {
     if (!label) continue;
     // Keep selected deadlines reformatted; empty triggers need the localized "日期/Date" label.
     if (deadline && trigger.classList.contains('selected')) {
-      label.textContent = pomeLocaleRendererApp.date(deadline, { day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+      label.textContent = pomeLocaleRendererApp.date(deadline, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     } else {
       label.textContent = pomeLocaleRendererApp.t('copy.date.70d0c1');
     }

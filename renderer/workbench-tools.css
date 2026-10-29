@@ -14,6 +14,10 @@
 #tab-recordings .recordings-page {
   grid-template-columns: minmax(230px, var(--wb-sidebar-width, 280px)) minmax(0, 1fr);
   gap: 0;
+  border: 1px solid var(--wb-line);
+  border-radius: var(--wb-radius);
+  background: var(--wb-surface);
+  overflow: hidden;
 }
 #tab-recordings :is(.recording-library, .recording-detail) {
   background: none;
@@ -166,7 +170,7 @@
 .recording-player-feedback { grid-column: 1 / -1; color: var(--p0); font-size: var(--fs-small); }
 .recording-player-feedback[hidden] { display: none; }
 
-#tab-credentials .credentials-page { display: block; }
+#tab-credentials .credentials-page { display: block; border: 1px solid var(--wb-line); border-radius: var(--wb-radius); background: var(--wb-surface); overflow: hidden; }
 #tab-credentials .credentials-library {
   width: 100%;
   height: 100%;

@@ -1,0 +1,325 @@
+{
+  "steps": [
+    "six pages retain fixed geometry with long content in Chinese, English and German",
+    "notes search is directly clickable and updates results without losing focus",
+    "note title deduplication is preview-only and distinct content headings remain visible",
+    "credential create opens on demand; cancel, Escape, backdrop, navigation and collapse preserve drafts without saving or leaving a revealed password",
+    "failed create stays editable; successful create closes the form and clears its secret",
+    "custom player controls real audio playback, seek, keyboard seek and mute; switching recordings releases the old media",
+    "reduced motion retains usable navigation and dialog controls without persistent page animations",
+    "900px and 740px widths plus a 500px-high viewport retain reachable primary actions without changing content"
+  ],
+  "geometries": [
+    {
+      "locale": "zh-CN",
+      "tab": "todo",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "zh-CN",
+      "tab": "notes",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "zh-CN",
+      "tab": "links",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "zh-CN",
+      "tab": "recordings",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "zh-CN",
+      "tab": "credentials",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "zh-CN",
+      "tab": "settings",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "en-US",
+      "tab": "todo",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "en-US",
+      "tab": "notes",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "en-US",
+      "tab": "links",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "en-US",
+      "tab": "recordings",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "en-US",
+      "tab": "credentials",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "en-US",
+      "tab": "settings",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "de-DE",
+      "tab": "todo",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "de-DE",
+      "tab": "notes",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "de-DE",
+      "tab": "links",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "de-DE",
+      "tab": "recordings",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "de-DE",
+      "tab": "credentials",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    },
+    {
+      "locale": "de-DE",
+      "tab": "settings",
+      "width": 1200,
+      "height": 540,
+      "overflow": false,
+      "visible": true
+    }
+  ],
+  "responsive": [
+    {
+      "tab": "todo",
+      "width": 900,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "notes",
+      "width": 900,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "links",
+      "width": 900,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "recordings",
+      "width": 900,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "credentials",
+      "width": 900,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "settings",
+      "width": 900,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "todo",
+      "width": 740,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "notes",
+      "width": 740,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "links",
+      "width": 740,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "recordings",
+      "width": 740,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "credentials",
+      "width": 740,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "settings",
+      "width": 740,
+      "height": 638,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "todo",
+      "width": 740,
+      "height": 500,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "notes",
+      "width": 740,
+      "height": 500,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "links",
+      "width": 740,
+      "height": 500,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "recordings",
+      "width": 740,
+      "height": 500,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "credentials",
+      "width": 740,
+      "height": 500,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    },
+    {
+      "tab": "settings",
+      "width": 740,
+      "height": 500,
+      "cardsOverlap": false,
+      "overflow": false,
+      "actionVisible": true,
+      "hittable": true
+    }
+  ],
+  "errors": [],
+  "sampleData": true,
+  "isolated": true
+}

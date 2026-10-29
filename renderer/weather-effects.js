@@ -202,6 +202,7 @@
   function create(tile, isVisible) {
     let canvas, state, raf = 0, last = null, config = { family: 'none', enabled: false, size: 'mini' };
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const reduced = () => media.matches || document.documentElement.classList.contains('experience-reduced-motion');
     function stop() {
       if (raf) window.cancelAnimationFrame(raf);
       raf = 0; last = null; canvas?.remove(); canvas = null; state = null;
@@ -215,7 +216,7 @@
     }
     function frame(timestamp) {
       raf = 0;
-      if (!isVisible() || document.hidden || media.matches) { stop(); return; }
+      if (!isVisible() || document.hidden || reduced()) { stop(); return; }
       const dt = last === null ? 0 : Math.min(.05, Math.max(0, (timestamp - last) / 1000)); last = timestamp;
       step(state, dt);
       const ctx = canvas.getContext('2d');
@@ -227,7 +228,7 @@
       const changed = config.family !== next.family || config.size !== next.size;
       config = { ...next };
       const active = config.enabled && ['medium', 'large'].includes(config.size) && config.family !== 'none'
-        && !document.hidden && !media.matches && isVisible();
+        && !document.hidden && !reduced() && isVisible();
       if (!active || changed || (canvas && !canvas.isConnected)) stop();
       if (!active || canvas) return;
       canvas = document.createElement('canvas'); canvas.className = 'wx-fx'; canvas.setAttribute('aria-hidden', 'true');
@@ -236,9 +237,10 @@
     const observer = new ResizeObserver(resize); observer.observe(tile);
     const motionChanged = () => sync();
     media.addEventListener('change', motionChanged);
+    document.addEventListener('notch:motion-preference', motionChanged);
     return { sync, stop, inspect: () => ({ active: Boolean(raf), family: config.family,
       count: state?.particles.length || 0, time: state?.time || 0, flash: state?.flash || 0 }),
-    destroy() { stop(); observer.disconnect(); media.removeEventListener('change', motionChanged); } };
+    destroy() { stop(); observer.disconnect(); media.removeEventListener('change', motionChanged); document.removeEventListener('notch:motion-preference', motionChanged); } };
   }
   return { SPECS, scene, step, draw, create };
 });

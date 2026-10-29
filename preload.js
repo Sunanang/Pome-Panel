@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   resetPanelPosition: () => ipcRenderer.invoke('window:reset-panel-position'),
   setTypingFocus: (focused) => ipcRenderer.invoke('window:set-typing-focus', focused === true),
   setTab: (tab) => ipcRenderer.invoke('window:set-tab', tab),
+  captureNoteModule: (rect) => ipcRenderer.invoke('notes:capture-module', rect),
   ensureCamera: () => ipcRenderer.invoke('media:camera'),
   ensureMicrophone: () => ipcRenderer.invoke('media:microphone'),
   // 只读状态 + 按平台算好的提示文案；ensure* 仍返回布尔，契约不变（P3-2）。

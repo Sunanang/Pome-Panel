@@ -145,9 +145,9 @@ Known limitations: no code signing; no following between virtual desktops; Soda 
 
 Only fresh installs see the three-step welcome (activation, home widgets, optional NAS/AI). The wizard starts from the platform's default layout and applies the user's individual widget choices. Existing layouts stay intact. Settings → Display → Home provides individual visibility switches with the existing automatic fit rules. At least one widget stays visible, and Quick recording cannot be hidden during an active recording.
 
-NAS shows a brief status and primary action; pairing, endpoints, migration, rollback, HTTP permissions and backups live in Troubleshooting. Missing schemes become HTTPS. A detected HTTPS-to-HTTP mismatch only corrects the draft; HTTP credentials still require explicit consent. Cursor/Codex can Get and save local tokens in one click, with manual entry folded away. Source status follows actual quota responses.
+NAS shows a brief status and primary action; initial pairing lives in Connection setup; endpoints, migration, rollback and HTTP permissions remain in Troubleshooting. Local backup also has an independent Data & backup entry. Missing schemes become HTTPS. A detected HTTPS-to-HTTP mismatch only corrects the draft; HTTP credentials still require explicit consent. Cursor/Codex can Get and save local tokens in one click, with manual entry folded away. Source status follows actual quota responses.
 
-Quota defaults to one value per provider; hover, click or keyboard reveals the window breakdown. Quick notes retain preview, edit and save controls; saved notes are available from the Notes tab. Recording keeps its library shortcut. Disabling a workspace hides its tab and recording shortcut where applicable. Initial activation hints stop after three openings. Confirmations summarize impact with expandable details. Errors provide repair and redacted diagnostics. Windows can enable native capabilities from Current windows; forced-off and unavailable-native cases remain recoverable.
+Quota defaults to one value per provider; hover, click or keyboard reveals the window breakdown. Quick notes remain editable drafts; Save clears Home and collects the text into Notes. Recording keeps its library shortcut. Disabling a workspace hides its tab and recording shortcut where applicable. Initial activation hints stop after three openings. Confirmations summarize impact with expandable details. Errors provide repair and redacted diagnostics. Windows can enable native capabilities from Current windows; forced-off and unavailable-native cases remain recoverable.
 
 Quota panel reveals render cached readings immediately and refresh in the background, with a 30-second reveal debounce. Manual refresh remains immediate. Changed values use a 720ms ease-out ring/number transition and 60ms staggered window bars; new results continue from the current frame. First readings start at zero, unchanged or failed readings do not start an animation, and reduced motion applies values immediately. Depleted styling changes after the transition ends.
 
@@ -166,3 +166,26 @@ Tasks show open and total counts above the existing categories; Add category is 
 Credentials opens to the library. Select Add credential to open the form. Cancel, Escape, the backdrop, changing tabs or collapsing the panel closes it and masks the password again; unsaved input remains only in the current session. Successful saves close the form; failures retain the draft and show error feedback.
 
 Recordings provide play/pause, seeking, volume/mute and playback speed. Leaving the page or collapsing pauses playback; switching recordings releases the previous player. Settings first shows AI and device/activation controls, with transcription, mirror cover, visibility and NAS options available by scrolling their columns.
+
+
+## Interaction and regional preferences
+
+Home retains every enabled widget in a scrollable narrow-window layout. Widen the window to edit saved placement. The quota card keeps its settings button outside the scrollable explanation. Escape first closes the date picker, shortcut recorder or transcription settings; opening the date picker is only a preview.
+
+Clipboard and Links support search. Clipboard clear confirmation covers all history, including favorites, regardless of the current filter, and aborts if content changes during confirmation. Ordinary history keeps 100 entries; favorites remain until deleted. Links can move between existing groups and retain their hostname when metadata is unavailable. Notes provide rename controls and click-to-edit content; credentials provide explicit edit controls.
+
+Audio recording needs no API key. Transcription and smart naming are optional. Paused audio is labeled accurately; native WebM playback uses saved duration until the media decoder reports a finite duration. Interface language changes preserve recognition language and service region. API-key help follows the selected Beijing or Singapore region; use an account, key and endpoint from the same region.
+
+Temperature units and reduced motion are independent local preferences under this device’s settings. Reduced motion suppresses movement and weather particles while retaining state and timing. Built-in country names and Gregorian weekdays follow the interface language. Chinese almanac text remains traditional; its explanation distinguishes the device calendar, solar-term timestamps in Beijing time, and weather in the selected city’s time zone.
+
+Install and open the fnOS Pome companion, generate a pairing code, and enter its full sync-service URL. Input-format errors stay beside the fields. Actual connection failures retain persistent diagnostics. Data & backup works without a NAS; restoration still validates, previews and snapshots before replacement. Passwords, API keys, device tokens and Home layout are excluded.
+
+
+### Quick notes and editing
+
+Home quick notes remain recoverable editable drafts. Save collects the text into the Notes library and clears Home. The entire quick-note widget, including its background, title, controls and text, narrows into a curved funnel and is absorbed into the Notes tab; a fresh empty widget appears in place, and you can type the next draft during the flight. Reduced motion uses brief feedback. In Notes, click the body to edit; Save or Ctrl/Cmd+S returns to preview at the current reading position. Background autosave keeps editing active. Links and text selection retain their usual behavior; failed saves retain the text and offer retry in the error bar.
+
+
+### Current windows
+
+On macOS, Current windows enumerates and focuses standard windows exposed through Accessibility. Real same-title windows remain separate. Closed or unavailable targets offer refresh instead of opening a different window; minimized targets can be restored. Rows prioritize the window title and show the application underneath. Narrow widgets use one scrollable column, and every entry remains reachable. Hold and drag a row out to hide that window; Restore reveals hidden rows. Existing hidden preferences are retained. Reading window titles requires Accessibility, without requesting screen-recording access.

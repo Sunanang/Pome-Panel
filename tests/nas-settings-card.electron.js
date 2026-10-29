@@ -66,14 +66,15 @@ async function run(c) {
   async function capture(name) { await js(`document.getElementById('settings-nas-sync-card').scrollIntoView({block:'start'})`); await sleep(300); fs.writeFileSync(path.join(artifacts, name + '.png'), (await c.capturePage()).toPNG()); }
   await until('!!window.NotchWorkspace'); await js(`setMode(true)`); await sleep(650); await js(`setActiveTab('settings')`);
   await until(`document.getElementById('settings-nas-content-results').children.length===10`);
-  const placement = await js(`(()=>({left:!!document.querySelector('.settings-column-primary #settings-nas-sync-card'),right:!!document.querySelector('.settings-column-secondary #settings-nas-sync-card'),cards:document.querySelectorAll('#settings-nas-sync-card').length,last:document.getElementById('settings-nas-sync-card').nextElementSibling===null,before:document.getElementById('settings-nas-sync-card').previousElementSibling.classList.contains('settings-display-card')}))()`);
+  const placement = await js(`(()=>({left:!!document.querySelector('.settings-column-primary #settings-nas-sync-card'),right:!!document.querySelector('.settings-column-secondary #settings-nas-sync-card'),cards:document.querySelectorAll('#settings-nas-sync-card').length,last:document.getElementById('settings-nas-sync-card').nextElementSibling===null,before:document.getElementById('settings-nas-sync-card').previousElementSibling.classList.contains('experience-backup')}))()`);
   assert.deepEqual(placement, { left: false, right: true, cards: 1, last: true, before: true });
   assert.equal(await js(`document.getElementById('settings-nas-advanced').open || document.getElementById('settings-nas-details').open`), false);
   assert.equal(await js(`document.getElementById('settings-nas-sync-open').disabled`), true);
   await capture('unpaired');
-  await js(`document.getElementById('settings-nas-sync-base-url').value='https://nas.example/sync';document.getElementById('settings-nas-pair-submit').click()`);
-  await until(`!document.getElementById('ui-error-bar').hidden && document.querySelector('#ui-error-details pre').textContent.includes('请输入配对码')`);
-  assert.equal(await js(`document.getElementById('settings-nas-sync-hint').textContent`),'');
+  await js(`document.getElementById('ui-nas-main').click();document.getElementById('settings-nas-sync-base-url').value='https://nas.example/sync';document.getElementById('settings-nas-pair-submit').click()`);
+  await until(`document.getElementById('settings-nas-sync-hint').textContent===PomeI18n.t('ux.nas.fields')`);
+  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'invalid pairing fields are inline validation');
+  assert.equal(await js('document.activeElement.id'),'settings-nas-pair-code');
   pairFailure = { ok: false, error: 'code_expired' };
   await js(`document.getElementById('settings-nas-pair-code').value='123456';document.getElementById('settings-nas-pair-submit').click()`);
   await until(`!document.getElementById('ui-error-bar').hidden && document.querySelector('#ui-error-details pre').textContent.includes('配对码已过期')`);

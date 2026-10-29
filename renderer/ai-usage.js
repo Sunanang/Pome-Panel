@@ -256,7 +256,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
 
   function fadeState(node, key, next) {
     const previous = visualStates.get(key);
-    if (previous && previous.state !== next && !motion.matches && node.checkVisibility()) {
+    if (previous && previous.state !== next && !(motion.matches || document.documentElement.classList.contains('experience-reduced-motion')) && node.checkVisibility()) {
       const ghost = document.createElement('span');
       ghost.className = 'q-fade-previous'; ghost.innerHTML = previous.html;
       node.append(ghost);
@@ -370,7 +370,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       const offset = (inset + Math.max(0, valueWidth - visibleWidth) - pad) / 2;
       const content = card.querySelector('.q-inline-content');
       animation.set(`${m.id}/rows-offset`, offset, value => { content.style.transform = `translateX(${value}px)`; },
-        { reduced:motion.matches, from:offset, delay:Math.min(180, Math.max(0, m.rows.length - 1) * 60) });
+        { reduced:(motion.matches || document.documentElement.classList.contains('experience-reduced-motion')), from:offset, delay:Math.min(180, Math.max(0, m.rows.length - 1) * 60) });
     });
     diameter = Math.max(10, Math.floor(diameter*10)/10);
     tile.style.setProperty('--q-render-size', `${diameter}px`);
@@ -387,7 +387,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       // Reuse the existing value store for FLIP adaptation; a second refresh
       // measures the current visual frame before rebinding the new DOM.
       animation.remove(`${m.id}/position`);
-      animation.set(`${m.id}/position`, 0, value => { node.style.transform = value ? `translate(${dx * value}px,${dy * value}px)` : ''; }, { from:1, reduced:motion.matches });
+      animation.set(`${m.id}/position`, 0, value => { node.style.transform = value ? `translate(${dx * value}px,${dy * value}px)` : ''; }, { from:1, reduced:(motion.matches || document.documentElement.classList.contains('experience-reduced-motion')) });
     }
   }
   function animateModels(models) {
@@ -407,7 +407,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     }
     for (const m of models) {
       const el = byId(`ai-provider-${m.id}`);
-      const reduced = motion.matches;
+      const reduced = (motion.matches || document.documentElement.classList.contains('experience-reduced-motion'));
       const priorDepleted = m.status !== 'error' && visualStates.get(`${m.id}/depleted`) === true;
       el.dataset.depleted = String(priorDepleted);
       const finish = () => { el.dataset.animating = 'false'; };
@@ -652,6 +652,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     refreshTimer = setTimeout(() => refresh({ force: usageVisible() }), D.refreshDelay(state, usageVisible()));
   }
   motion.addEventListener('change', render);
+  document.addEventListener('notch:motion-preference', render);
   function resetTextMeasurements() { textWidths.clear(); syncGeometry(); }
   document.fonts.ready.then(resetTextMeasurements);
   document.fonts.addEventListener('loadingdone', resetTextMeasurements);

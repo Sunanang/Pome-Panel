@@ -205,6 +205,12 @@ async function main() {
     assert.equal(probe.title, '', `${name}: almanac must not show a hover tooltip`);
     fs.writeFileSync(path.join(shots, `${name}.png`), (await win.capturePage(probe.rect)).toPNG());
   }
+  await js(`PomeI18n.setState(PomeI18n.snapshot('en-US',['en-US']));window.dispatchEvent(new Event('pome:language-changed'));PomeAlmanac.render()`);
+  assert.doesNotMatch(await js('document.querySelector("#home-almanac .almanac-weekday").textContent'),/[\u4e00-\u9fff]/,'Gregorian weekday follows interface language');
+  assert.equal(await js('document.querySelector("#home-almanac").getAttribute("aria-label")'),'Chinese almanac');
+  await js('document.querySelector("#ui-capsule-hint button")?.click();document.querySelector("#home-almanac .almanac-explanation").open=true;new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  assert.match(await js('document.querySelector("#home-almanac .almanac-explanation").textContent'),/UTC\+8/);
+  await js('new Promise(r=>setTimeout(r,180))');const box=await js(`(()=>{const r=document.querySelector('#home-almanac').getBoundingClientRect();return {x:Math.floor(r.x),y:Math.floor(r.y),width:Math.ceil(r.width),height:Math.ceil(r.height)}})()`);const full=await win.capturePage(box);fs.writeFileSync(path.join(shots,'explanation-en.png'),full.toPNG());
   assert.deepEqual(errors, []);
   console.log('almanac-home: four sizes, minute precision, timezone, early/late Zi and year boundary OK');
   console.log('shots:', shots);

@@ -155,6 +155,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       commands.unshift(command);
       persistCommands();
       renderCommands();
+      window.PomeExperience?.highlight(commandList.querySelector(`[data-id="${CSS.escape(command.id)}"]`));
     });
   }
 
@@ -192,6 +193,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       if (action.dataset.action === 'copy-command' && window.notchAPI) {
         const copied = await window.notchAPI.writeClipboard({ type: 'text', text: command.text });
         if (copied) {
+          document.dispatchEvent(new CustomEvent('notch:copied',{detail:{target:action}}));
           row.classList.add('copied');
           setTimeout(() => row.classList.remove('copied'), 700);
         }
@@ -220,6 +222,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   let linkSelection = new Set();
   let linkSelectionAnchor = null;
   let addingLinkGroupId = '';
+  let linkQuery = '';
+  document.addEventListener('notch:link-search', event => { linkQuery = String(event.detail || '').toLocaleLowerCase(); renderLinkGroups(); });
 
   function persistLinks() {
     saveJson(LINKS_KEY, linkGroups);
@@ -230,7 +234,10 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       linksStatus.textContent = '';
       linksStatus.dataset.tone = tone;
     }
-    if (message && typeof showStatusToast === 'function') showStatusToast(message);
+    if (linksStatus) { linksStatus.textContent = message; linksStatus.hidden = !message; }
+    if (tone === 'error') { linkInput?.setAttribute('aria-invalid', 'true'); linkInput?.focus(); }
+    else linkInput?.removeAttribute('aria-invalid');
+    if (message && tone !== 'error' && typeof showStatusToast === 'function') showStatusToast(message);
   }
 
   function allLinks() {
@@ -276,7 +283,10 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       return;
     }
 
-    linkGroups.forEach((group) => {
+    if(linkQuery && !linkGroups.some(group=>(group.links||[]).some(link=>`${link.title} ${link.url} ${group.name}`.toLocaleLowerCase().includes(linkQuery)))){
+      const empty=document.createElement('p');empty.className='links-empty';empty.textContent=pomeLocaleRendererWorkspace.t('ux.search.empty');linkGroupsEl.append(empty);return;
+    }
+    linkGroups.map(group => ({...group, links:(group.links || []).filter(link => !linkQuery || `${link.title} ${link.url} ${group.name}`.toLocaleLowerCase().includes(linkQuery))})).filter(group => !linkQuery || group.links.length).forEach((group) => {
       const section = document.createElement('section');
       section.className = `link-group${group.collapsed ? ' collapsed' : ''}`;
       section.dataset.groupId = group.id;
@@ -333,7 +343,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         const title = document.createElement('strong');
         title.textContent = link.title || linkHostname(link.url);
         const domain = document.createElement('span');
-        domain.textContent = linkHostname(link.url);
+        domain.textContent = linkHostname(link.url) + (pendingLinkMetadata.has(link.id) ? ` · ${pomeLocaleRendererWorkspace.t('copy.reading.146da2')}` : '');
+        open.setAttribute('aria-busy',String(pendingLinkMetadata.has(link.id)));
         open.append(title, domain);
         const actions = document.createElement('div');
         actions.className = 'link-actions';
@@ -342,6 +353,14 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
           createIconButton('edit-link', pomeLocaleRendererWorkspace.t("copy.rename.88f462"), EDIT_ICON),
           createIconButton('delete-link', pomeLocaleRendererWorkspace.t("copy.deleteLink.e8feb9"), DELETE_ICON, true)
         );
+        if (linkGroups.length > 1) {
+          const move = document.createElement('select'); move.className='link-move';
+          pomeLocaleRendererWorkspace.bind(move, 'ariaLabel', () => pomeLocaleRendererWorkspace.t('ux.links.move'));
+          for (const target of linkGroups) { const option=document.createElement('option'); option.value=target.id; option.textContent=target.name; move.append(option); }
+          move.value=group.id;
+          move.addEventListener('change', () => { linkGroups=Domain.moveLinkToGroup(linkGroups,link.id,move.value); persistLinks(); renderLinkGroups(); });
+          actions.prepend(move);
+        }
         row.append(mark, open, actions);
         list.appendChild(row);
       });
@@ -353,6 +372,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   }
 
   let linkMetadataRenderPending = false;
+  const pendingLinkMetadata = new Set();
   function renderLinkMetadataWhenIdle() {
     if (!linkGroupsEl) return;
     const focused = document.activeElement;
@@ -383,7 +403,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       setLinksStatus(pomeLocaleRendererWorkspace.t("copy.thisLinkIsAlreadySaved.6e1239"), 'error');
       return false;
     }
-    const link = { id: uid('link'), url: normalized, title: pomeLocaleRendererWorkspace.t("copy.untitled.67bee6"), icon: '', createdAt: Date.now() };
+    const link = { id: uid('link'), url: normalized, title: linkHostname(normalized), icon: '', createdAt: Date.now() };
     const preferredGroupId = requestedGroupId || Domain.preferredLinkGroupId(linkGroups, normalized);
     const preferredGroup = linkGroups.find((group) => group.id === preferredGroupId);
     if (preferredGroup) {
@@ -393,6 +413,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     } else {
       linkGroups = Domain.addLinkToGroups(linkGroups, link, Domain.classifyLink(normalized, ''));
     }
+    pendingLinkMetadata.add(link.id);
     const initialTitle = link.title;
     const initialGroup = linkGroups.find((group) => (group.links || []).some((item) => item.id === link.id));
     const initialGroupId = initialGroup?.id;
@@ -445,8 +466,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         }
       }
       persistLinks();
-      renderLinkMetadataWhenIdle();
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => { pendingLinkMetadata.delete(link.id); renderLinkMetadataWhenIdle(); });
     return true;
   }
 
@@ -1266,7 +1286,9 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     renderSettingsPanel();
   }
 
+  let transcriptionSettingsTrigger = null;
   function openTranscriptionSettings() {
+    transcriptionSettingsTrigger = document.activeElement;
     if (!transcriptionSettingsBackdrop) return;
     transcriptionSettingsBackdrop.hidden = false;
     transcriptionSettingsNote.classList.remove('error', 'success');
@@ -1274,7 +1296,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       ? pomeLocaleRendererWorkspace.t("copy.keysFromAnOlderVersionCouldNot.d775b1")
       : transcriptionConfig.configured || transcriptionConfig.llmConfigured
         ? pomeLocaleRendererWorkspace.t("copy.leaveConfiguredApiKeysBlankToKeep.fc984e")
-        : pomeLocaleRendererWorkspace.t("copy.configureSeparateApiKeysForModelStudio.3e266d")));
+        : pomeLocaleRendererWorkspace.t("ux.record.configHint")));
     if (transcriptionApiKey) transcriptionApiKey.value = '';
     if (llmApiKey) llmApiKey.value = '';
     updateTranscriptionConfigUi();
@@ -1283,6 +1305,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
 
   function closeTranscriptionSettings() {
     if (transcriptionSettingsBackdrop) transcriptionSettingsBackdrop.hidden = true;
+    transcriptionSettingsTrigger?.isConnected && transcriptionSettingsTrigger.focus({preventScroll:true});
   }
 
   async function saveTranscriptionSettings() {
@@ -1376,6 +1399,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     if (recordingStartTask.isPending()) return pomeLocaleRendererWorkspace.t("copy.waitingForMicrophonePermission.a87426");
     if (recordingCaptureIssue) return recordingCaptureIssue;
     if (recordingStatus === 'saving') return pomeLocaleRendererWorkspace.t("copy.savingRecording.f571d6");
+    if (recordingStatus === 'paused') return pomeLocaleRendererWorkspace.t('ux.record.paused');
     if (transcriptionConfig.asrNeedsReentry) return pomeLocaleRendererWorkspace.t("copy.transcriptionKeyUnavailableConfigureTheApiKey.855d7e");
     if (transcriptionStatus === 'browser-error') return pomeLocaleRendererWorkspace.t("copy.transcriptionApiNotConfiguredAudioIsStill.52b6ff");
     if (transcriptionStatus === 'error') return pomeLocaleRendererWorkspace.t("copy.transcriptionConnectionFailedAudioIsStillRecording.7631f4");
@@ -1440,6 +1464,9 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     if (detailTime) detailTime.textContent = formatClock(durationMs);
     if (detailTranscript && detailTranscript.value !== text) detailTranscript.value = text;
     if (detailFeedback) detailFeedback.textContent = currentRecordingFeedback();
+    const audioTitle = recordingDetail?.querySelector('[data-live-audio-title]');
+    if (audioTitle) pomeLocaleRendererWorkspace.bind(audioTitle, 'textContent', () => pomeLocaleRendererWorkspace.t(recordingStatus === 'paused' ? 'ux.record.paused' : recordingStatus === 'saving' ? 'copy.saving.a1a172' : 'copy.audioIsRecordingLocally.ff0874'));
+    if (detailTranscript) pomeLocaleRendererWorkspace.bind(detailTranscript, 'placeholder', () => pomeLocaleRendererWorkspace.t(transcriptionConfig.configured ? 'copy.startSpeakingToSeeTheTranscriptHere.833551' : 'ux.record.audioOnly'));
     if (detailConfigure) detailConfigure.hidden = transcriptionConfig.configured && !transcriptionConfig.asrNeedsReentry;
     if (detailPause) {
       pomeLocaleRendererWorkspace.bind(detailPause, "textContent", () => (recordingStatus === 'paused' ? pomeLocaleRendererWorkspace.t("copy.resume.7c9691") : pomeLocaleRendererWorkspace.t("copy.pause.8d12fc")));
@@ -2366,6 +2393,13 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   } = {}) {
     if (!window.NasSyncPair || !window.notchAPI || typeof window.notchAPI.syncPairClaim !== 'function') return;
     const code = settingsNasPairCode?.value || '';
+    let address; try { address = new URL(window.NotchUiDomain.normalizeAddress(settingsNasSyncBaseUrl?.value || '')); } catch {}
+    if (!address || !['https:', 'http:'].includes(address.protocol) || !/^\d{6}$/.test(code.trim())) {
+      const field = !address || !['https:', 'http:'].includes(address.protocol) ? settingsNasSyncBaseUrl : settingsNasPairCode;
+      if (settingsNasSyncHint) pomeLocaleRendererWorkspace.bind(settingsNasSyncHint,'textContent',()=>pomeLocaleRendererWorkspace.t('ux.nas.fields'));
+      field?.setAttribute('aria-invalid', 'true'); field?.focus(); return;
+    }
+    settingsNasSyncBaseUrl?.removeAttribute('aria-invalid'); settingsNasPairCode?.removeAttribute('aria-invalid');
     const baseUrl = window.NotchUiDomain.normalizeAddress(settingsNasSyncBaseUrl?.value || '');
     if (settingsNasSyncBaseUrl) settingsNasSyncBaseUrl.value = baseUrl;
     applyNasPairUi({ type: 'submit_start' });
@@ -2847,7 +2881,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   if (transcriptionSettingsSave) transcriptionSettingsSave.addEventListener('click', saveTranscriptionSettings);
   if (transcriptionApiHelp) {
     transcriptionApiHelp.addEventListener('click', () => {
-      window.notchAPI?.openExternal('https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key');
+      const singapore = document.getElementById('transcription-region')?.value === 'singapore';
+      window.notchAPI?.openExternal(singapore ? 'https://modelstudio.console.alibabacloud.com/ap-southeast-1/model/settings/api-key' : 'https://bailian.console.aliyun.com/cn-beijing/?tab=app#/api-key');
     });
   }
   if (llmApiHelp) {
@@ -3091,10 +3126,10 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }, { once: true });
     audio.src = currentAudioUrl;
     currentAudioElement = audio;
-    container.replaceChildren(createRecordingPlayer(audio, generation, recording.id, container));
+    container.replaceChildren(createRecordingPlayer(audio, generation, recording.id, container, recording.durationMs));
   }
 
-  function createRecordingPlayer(audio, generation, recordingId, container) {
+  function createRecordingPlayer(audio, generation, recordingId, container, durationMs) {
     const player = document.createElement('div');
     player.className = 'recording-player';
     const toggle = document.createElement('button');
@@ -3142,28 +3177,39 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       if ((event.key === ' ' || event.code === 'Space') && event.target.closest('button')) event.stopPropagation();
     });
     let scrubbing = false;
+    let renderedPlaying;
+    let renderedMuted;
     const isCurrent = () => generation === recordingAudioGeneration && currentAudioElement === audio
       && selectedRecordingId === recordingId && container.isConnected;
     const mediaClock = seconds => formatClock((Number.isFinite(seconds) ? Math.max(0, seconds) : 0) * 1000);
     const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m9 6 9 6-9 6z"/></svg>';
     const pauseIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6h4v12H7zM14 6h4v12h-4z"/></svg>';
+    const playableSeconds = () => Number.isFinite(audio.duration) && audio.duration > 0
+      ? audio.duration : (Number.isFinite(durationMs) && durationMs > 0 ? durationMs / 1000 : 0);
     function update() {
-      const playableDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+      const playableDuration = playableSeconds();
       current.textContent = mediaClock(audio.currentTime);
       duration.textContent = playableDuration ? mediaClock(playableDuration) : '—:—';
-      seek.disabled = !playableDuration;
+      seek.disabled = !playableDuration || audio.readyState < 1;
       seek.max = String(playableDuration);
       if (!scrubbing) seek.value = String(Math.min(playableDuration, audio.currentTime || 0));
       seek.style.setProperty('--player-progress', `${playableDuration ? Math.min(100, (Number(seek.value) / playableDuration) * 100) : 0}%`);
       seek.setAttribute('aria-valuetext', `${mediaClock(Number(seek.value))} / ${duration.textContent}`);
       const playing = !audio.paused && !audio.ended;
-      toggle.innerHTML = playing ? pauseIcon : playIcon;
+      if (renderedPlaying !== playing) {
+        toggle.innerHTML = playing ? pauseIcon : playIcon;
+        renderedPlaying = playing;
+      }
       toggle.setAttribute('aria-pressed', String(playing));
       pomeLocaleRendererWorkspace.bind(toggle, 'ariaLabel', () => pomeLocaleRendererWorkspace.t(playing ? 'copy.pause.8d12fc' : 'copy.play.c33961'));
       const muted = audio.muted || audio.volume === 0;
-      mute.innerHTML = muted
+      // Preserve pointer targets when a media event lands between down/up.
+      if (renderedMuted !== muted) {
+        mute.innerHTML = muted
         ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 5-5 4H3v6h3l5 4zM16 9l5 6M21 9l-5 6"/></svg>'
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 5-5 4H3v6h3l5 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg>';
+        renderedMuted = muted;
+      }
       mute.setAttribute('aria-pressed', String(muted));
       pomeLocaleRendererWorkspace.bind(mute, 'ariaLabel', () => pomeLocaleRendererWorkspace.t(muted ? 'workbench.recordings.unmute' : 'workbench.recordings.mute'));
       volume.value = String(audio.muted ? 0 : audio.volume);
@@ -3187,8 +3233,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     seek.addEventListener('pointercancel', () => { scrubbing = false; update(); });
     seek.addEventListener('blur', () => { scrubbing = false; update(); });
     seek.addEventListener('input', () => {
-      if (!isCurrent() || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
-      audio.currentTime = Math.min(audio.duration, Math.max(0, Number(seek.value) || 0));
+      if (!isCurrent() || audio.readyState < 1 || !playableSeconds()) return;
+      audio.currentTime = Math.min(playableSeconds(), Math.max(0, Number(seek.value) || 0));
       update();
     });
     mute.addEventListener('click', () => {
@@ -3241,7 +3287,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
 
       const liveAudio = document.createElement('div');
       liveAudio.className = 'recording-live-audio';
-      const liveAudioTitle = document.createElement('strong');
+      const liveAudioTitle = document.createElement('strong'); liveAudioTitle.dataset.liveAudioTitle='';
       pomeLocaleRendererWorkspace.bind(liveAudioTitle, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.audioIsRecordingLocally.ff0874")));
       const liveAudioHint = document.createElement('span');
       pomeLocaleRendererWorkspace.bind(liveAudioHint, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.aPlayerWillAppearAfterFinishingAnd.c0bdd1")));
@@ -3497,9 +3543,12 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const windowsRefresh = document.getElementById('windows-refresh');
   const windowsHidden = document.getElementById('windows-hidden');
   const windowList = document.getElementById('window-list');
+  const windowsCount=document.createElement('span');windowsCount.className='windows-count';windowsCount.hidden=true;
+  document.querySelector('.home-windows .tile-label')?.after(windowsCount);
   let windows = [];
   let hiddenWindows = new Set(loadJson(HIDDEN_WINDOWS_KEY, []).filter((item) => typeof item === 'string'));
   let windowsLoading = false;
+  let focusingWindowId = null;
   let workspaceTab = document.querySelector('.tab.active')?.dataset.tab || 'home';
   let workspaceExpanded = document.getElementById('app')?.classList.contains('expanded') || false;
   let homeWindowsVisible = window.NotchHome?.isVisible?.('windows') !== false;
@@ -3507,8 +3556,11 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   let suppressWindowClickUntil = 0;
 
   function windowHideKey(windowInfo) {
-    return `${String(windowInfo.appName || '').trim()}\u0000${String(windowInfo.title || '').trim()}`;
+    if(windowInfo.axWindowId||windowInfo.handle||windowInfo.windowNumber)return 'id:'+windowInfo.id;
+    return legacyWindowHideKey(windowInfo);
   }
+
+  function legacyWindowHideKey(item){return `${String(item.appName||'').trim()}\u0000${String(item.title||'').trim()}`;}
 
   function persistHiddenWindows() {
     saveJson(HIDDEN_WINDOWS_KEY, [...hiddenWindows]);
@@ -3534,9 +3586,14 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
 
   function renderWindows(error = '') {
     if (!windowList) return;
+    windowsCount.hidden=true;
     // 轮询可能在长按过程中重建列表；先清理捕获与卡片移除态，避免红色区域残留。
     clearWindowDragVisuals();
+    const scrollTop=windowList.scrollTop,focusId=windowList.contains(document.activeElement)?document.activeElement.closest('[data-id]')?.dataset.id:null;
     windowList.replaceChildren();
+    if(error==='window_scan_failed'){
+      const empty=document.createElement('div');empty.className='window-empty';empty.textContent=pomeLocaleRendererWorkspace.t('windows.scanFailed');windowList.append(empty);return;
+    }
     if (error === 'native_unavailable' || error === 'unsupported') {
       // Windows：原生绑定没加载（实验开关关着、POME_DISABLE_WIN_NATIVE=1 或 koffi 加载失败）。
       // 这里不是权限问题，也没有系统设置可开，只说清状态。
@@ -3590,11 +3647,14 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       return;
     }
     const visibleWindows = Domain.numberWindowLabels(
-      windows.filter((item) => !hiddenWindows.has(windowHideKey(item)))
+      windows.filter(item=>!hiddenWindows.has(windowHideKey(item))&&!hiddenWindows.has(legacyWindowHideKey(item)))
+        .sort((a,b)=>String(a.appName).localeCompare(String(b.appName))||String(a.id).localeCompare(String(b.id),undefined,{numeric:true}))
     );
+    windowsCount.hidden=visibleWindows.length===0;windowsCount.textContent=String(visibleWindows.length);
+    pomeLocaleRendererWorkspace.bind(windowsCount,'title',()=>pomeLocaleRendererWorkspace.t('windows.count',{count:visibleWindows.length}));
     if (windowsHidden) {
       windowsHidden.hidden = hiddenWindows.size === 0;
-      pomeLocaleRendererWorkspace.bind(windowsHidden, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.hide.145219")));
+      pomeLocaleRendererWorkspace.bind(windowsHidden, "textContent", () => (pomeLocaleRendererWorkspace.t('windows.restoreHidden',{count:hiddenWindows.size})));
       windowsHidden.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.restoreHiddenWindows.3bacb0", { arg1: (hiddenWindows.size) }));
     }
     if (!visibleWindows.length) {
@@ -3604,15 +3664,16 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         ? pomeLocaleRendererWorkspace.t("copy.readingCurrentWindows.7a1554")
         : hiddenWindows.size
           ? pomeLocaleRendererWorkspace.t("copy.allWindowsHiddenRestoreThemAbove.5d9517")
-          : pomeLocaleRendererWorkspace.t("copy.noSwitchableWindowsFound.4aee12")));
+          : pomeLocaleRendererWorkspace.t("ux.windows.empty")));
       windowList.appendChild(empty);
       return;
     }
-    visibleWindows.slice(0, 15).forEach((windowInfo) => {
+    visibleWindows.forEach((windowInfo) => {
       const button = document.createElement('button');
       button.className = 'window-item';
       button.type = 'button';
       button.dataset.id = windowInfo.id;
+      button.setAttribute('aria-label',`${windowInfo.title} · ${windowInfo.appName}`);
       pomeLocaleRendererWorkspace.bind(button, "title", () => (pomeLocaleRendererWorkspace.t("copy.pressAndHoldThenDragOutsideThe.8d9a71", { arg1: (windowInfo.displayName), arg2: (windowInfo.title) })));
       const mark = document.createElement('span');
       mark.className = 'window-app-mark';
@@ -3627,24 +3688,31 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       }
       const appName = document.createElement('strong');
       appName.textContent = windowInfo.displayName;
-      button.append(mark, appName);
+      const copy=document.createElement('span');copy.className='window-copy';
+      const application=document.createElement('span');application.className='window-application';
+      pomeLocaleRendererWorkspace.bind(application,'textContent',()=>windowInfo.appName+(windowInfo.minimized?' · '+pomeLocaleRendererWorkspace.t('windows.minimized'):''));
+      copy.append(appName,application);button.append(mark,copy);
       windowList.appendChild(button);
     });
+    windowList.scrollTop=scrollTop;
+    if(focusId){const row=[...windowList.querySelectorAll('[data-id]')].find(e=>e.dataset.id===focusId);row?.focus({preventScroll:true});}
   }
 
   async function refreshWindows(force = false) {
     if (!window.NotchHome?.isVisible?.('windows')) return;
-    if (windowsLoading || !window.notchAPI || (!force && (!workspaceExpanded || workspaceTab !== 'home'))) return;
+    if (windowsLoading || focusingWindowId || !window.notchAPI || (!force && (!workspaceExpanded || workspaceTab !== 'home'))) return;
     windowsLoading = true;
     renderWindows();
     let result;
     try {
       result = await window.notchAPI.listWindows();
     } catch (error) {
-      result = { items: [], error: 'accessibility_permission_required' };
+      result = { items: [], error: 'window_scan_failed' };
     }
     windowsLoading = false;
     windows = result && Array.isArray(result.items) ? result.items : [];
+    if(result?.error==='window_scan_failed')window.NotchUi?.showError({messageKey:'windows.scanFailed',scope:'windows:list',onRepair:()=>refreshWindows(true)});
+    else if(!result?.error)window.NotchUi?.clearError('windows:list');
     renderWindows(result && result.error);
   }
 
@@ -3657,10 +3725,29 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     });
   }
   if (windowList) {
-    windowList.addEventListener('click', (event) => {
-      if (Date.now() < suppressWindowClickUntil) return;
+    windowList.addEventListener('click', async (event) => {
+      if (Date.now() < suppressWindowClickUntil || focusingWindowId) return;
       const item = event.target.closest('.window-item[data-id]');
-      if (item && window.notchAPI) window.notchAPI.focusWindow(item.dataset.id);
+      if(!item||!window.notchAPI)return;
+      focusingWindowId=item.dataset.id;item.setAttribute('aria-disabled','true');item.setAttribute('aria-busy','true');
+      try{
+        const focused=await window.notchAPI.focusWindow(focusingWindowId);
+        if(!focused)throw new Error('window_focus_failed');
+        window.NotchUi?.clearError('windows:focus');
+      }catch{
+        window.NotchUi?.showError({messageKey:'windows.focusFailed',scope:'windows:focus',onRepair:()=>refreshWindows(true)});
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{
+          if(!item.isConnected||document.activeElement!==item)return;
+          const row=item.getBoundingClientRect(),list=windowList.getBoundingClientRect();
+          const home=windowList.closest('.home-bento')?.getBoundingClientRect()||list;
+          const top=Math.max(list.top,home.top),bottom=Math.min(list.bottom,home.bottom);
+          // Keep the failed target visible inside this list; do not scroll the
+          // whole Home page when the error bar reduces the available height.
+          if(row.top<top)windowList.scrollTop-=top-row.top;
+          else if(row.bottom>bottom)windowList.scrollTop+=row.bottom-bottom;
+        }));
+      }finally{focusingWindowId=null;item.removeAttribute('aria-disabled');item.removeAttribute('aria-busy');}
+
     });
     windowList.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 || windowDrag) return;
@@ -3780,6 +3867,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     let status;
     try { status = await window.notchAPI.getMusicStatus(); } catch (error) { status = null; }
     homeMusic.classList.toggle('music-running', Boolean(status && status.running));
+    homeMusic.dataset.installed = String(status?.installed === true);
+    homeMusic.querySelectorAll('[data-music-action]').forEach(button => { button.disabled = status?.installed !== true; });
     if (status && typeof status.playing === 'boolean') {
       musicPlaying = status.playing;
       renderMusicPlaybackState();
@@ -3796,7 +3885,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   }
 
   homeMusic?.addEventListener('click', async (event) => {
-    if (event.target.closest('.widget-layout-control') || !window.notchAPI) return;
+    if (event.target.closest('.widget-layout-control') || !window.notchAPI || homeMusic.dataset.installed === 'false') return;
     const control = event.target.closest('[data-music-action]') || musicPlayToggle;
     if (!control) return;
     event.stopPropagation();
@@ -4052,19 +4141,22 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       const accountCopy = document.createElement('button');
       accountCopy.type = 'button';
       accountCopy.dataset.credentialCopy = 'account';
-      pomeLocaleRendererWorkspace.bind(accountCopy, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.account.311bb3")));
+      pomeLocaleRendererWorkspace.bind(accountCopy, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.copyAccount.800564")));
       accountCopy.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.copyAccount.800564"));
       const passwordCopy = document.createElement('button');
       passwordCopy.type = 'button';
       passwordCopy.dataset.credentialCopy = 'password';
-      pomeLocaleRendererWorkspace.bind(passwordCopy, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.password.a621ab")));
+      pomeLocaleRendererWorkspace.bind(passwordCopy, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.copyPassword.c49aca")));
       passwordCopy.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.copyPassword.c49aca"));
       const deleteAction = Domain.credentialRowAction({ requestedAction: 'delete' });
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.dataset.credentialDelete = 'true';
-      remove.textContent = deleteAction.label;
-      remove.setAttribute('aria-label', deleteAction.ariaLabel);
+      pomeLocaleRendererWorkspace.bind(remove, 'textContent', () => Domain.credentialRowAction({requestedAction:'delete'}).label);
+      pomeLocaleRendererWorkspace.bind(remove, 'ariaLabel', () => Domain.credentialRowAction({requestedAction:'delete'}).ariaLabel);
+      const editButton = document.createElement('button'); editButton.type='button'; editButton.dataset.credentialEdit='true';
+      pomeLocaleRendererWorkspace.bind(editButton, 'textContent', () => pomeLocaleRendererWorkspace.t('ux.edit'));
+      actions.append(editButton);
       actions.append(accountCopy, passwordCopy, remove);
       if (credentialsReadFailed) actions.querySelectorAll('button').forEach(button => { button.disabled = true; });
       row.append(copy, actions);
@@ -4222,7 +4314,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     const action = Domain.credentialRowAction({
       requestedAction: event.target.closest('[data-credential-delete]') ? 'delete' : '',
       copyField,
-      rowBody: Boolean(event.target.closest('.credential-copy')),
+      rowBody: Boolean(event.target.closest('.credential-copy') || event.target.closest('[data-credential-edit]')),
       shiftKey: event.shiftKey,
       selected: credentialSelection.has(row.dataset.id),
     });
@@ -4256,6 +4348,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }
     if (action.type === 'copy') {
       const copied = await window.notchAPI.copyCredential(row.dataset.id, action.field).catch(() => false);
+      if(copied)document.dispatchEvent(new CustomEvent('notch:copied',{detail:{target:event.target.closest('[data-credential-copy]')}}));
       if (credentialsNote) pomeLocaleRendererWorkspace.bind(credentialsNote, "textContent", () => (copied ? pomeLocaleRendererWorkspace.t("copy.copied.f39f6e", { arg1: (copyField === 'password' ? pomeLocaleRendererWorkspace.t("copy.password.a621ab") : pomeLocaleRendererWorkspace.t("copy.account.311bb3")) }) : pomeLocaleRendererWorkspace.t("copy.copyFailed.753d8b")));
       return;
     }
@@ -4454,5 +4547,6 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     startRecording,
     isRecordingActive: isRecordingBusy,
     closeCredentialCreateOnEscape,
+    closeTranscriptionOnEscape() { if (transcriptionSettingsBackdrop.hidden) return false; closeTranscriptionSettings(); return true; },
   };
 })();

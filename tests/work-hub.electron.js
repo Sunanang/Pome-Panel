@@ -43,7 +43,8 @@ app.on('web-contents-created',(_event,c)=>{
 async function run(c){
  await until(c,`!!window.NotchWorkspace && document.getElementById('home-note').value.includes('原始备份内容')`);
  await c.executeJavaScript('setMode(true)');
- assert.equal(await c.executeJavaScript(`getComputedStyle(document.getElementById('home-note')).display`),'none');
+ assert.notEqual(await c.executeJavaScript(`getComputedStyle(document.getElementById('home-note')).display`),'none','restored Home content stays an editable draft');
+ assert.equal(await c.executeJavaScript(`getComputedStyle(document.getElementById('home-note-preview')).display`),'none','Home never overlays the draft with a preview');
  assert.equal(await c.executeJavaScript(`document.getElementById('credential-password').type`),'password');
  const exported=await c.executeJavaScript('window.notchAPI.backupExport()');assert.equal(exported.ok,true,JSON.stringify(exported));
  const inspected=await require('../workspaceBackup').inspectWorkspaceBackup(destination);

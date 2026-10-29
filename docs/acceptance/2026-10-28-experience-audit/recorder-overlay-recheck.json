@@ -1,0 +1,24 @@
+{
+  "stop": {
+    "x": 509,
+    "y": 303,
+    "width": 27,
+    "height": 27,
+    "top": 303,
+    "right": 536,
+    "bottom": 330,
+    "left": 509
+  },
+  "entry": {
+    "x": 509,
+    "y": 303,
+    "width": 92,
+    "height": 30,
+    "top": 303,
+    "right": 601,
+    "bottom": 333,
+    "left": 509
+  },
+  "hit": "ui-open-recordings",
+  "clickedStopCenterGoesTo": "recordings"
+}

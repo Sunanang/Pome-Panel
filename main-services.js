@@ -198,9 +198,10 @@ function normalizeWindowRows(rows, platform = 'darwin') {
       const candidatePath = String(row && row.appPath || '').trim();
       const appPath = isAppPath(candidatePath) ? candidatePath : '';
       const handle = /^\d+$/.test(String(row && row.handle || '')) ? String(row.handle) : '';
+      const axWindowId=!windows&&/^\d{1,20}$/.test(String(row?.axWindowId??''))?String(row.axWindowId):'';
       if (!pid || !appName || !title) return null;
       return {
-        id: windowNumber ? `window-${pid}-${windowNumber}` : `window-${pid}-${windowIndex}-${order}`,
+        id: axWindowId ? `window-${pid}-ax-${axWindowId}` : windowNumber ? `window-${pid}-${windowNumber}` : `window-${pid}-${windowIndex}-${order}`,
         pid,
         windowIndex,
         windowNumber,
@@ -209,19 +210,19 @@ function normalizeWindowRows(rows, platform = 'darwin') {
         bundleId: typeof row.bundleId === 'string' ? row.bundleId.trim().slice(0, 240) || null : null,
         title: title.slice(0, 240),
         ...(handle ? { handle } : {}),
+        ...(axWindowId ? {axWindowId,minimized:Boolean(row.minimized)} : {}),
       };
     })
     .filter(Boolean)
-    // 同一进程下标题完全相同的窗口只保留最前面那条：CGWindowList 按前后顺序返回，
-    // 首条就是最靠前的那个。实测微信只开一个窗口却会返回两条同名记录（窗口号不同），
-    // 界面上就成了两个「微信」。而聚焦是按标题匹配的，重复条目永远指向同一个窗口，
-    // 留着也点不出第二个结果。标题不同的多窗口（如 VS Code 各工作区）不受影响。
-    // Windows 反过来：聚焦按 HWND，同标题的两个资源管理器窗口是两个真窗口，
-    // 只能按句柄去重。
-    .filter((item, index, list) => (item.handle
+    // Modern macOS rows use AX identity, preserving genuine same-title windows.
+    // Legacy CG rows retain title deduplication for old imports/callers; Windows
+    // rows keep their HWND identity. Never merge an AX row by its title.
+    .filter((item, index, list) => (item.axWindowId
+      ? list.findIndex(other=>other.pid===item.pid&&other.axWindowId===item.axWindowId)===index
+      : item.handle
       ? list.findIndex((other) => other.handle === item.handle) === index
       : list.findIndex(
-        (other) => !other.handle && other.pid === item.pid && other.title === item.title
+        (other) => !other.handle && !other.axWindowId && other.pid === item.pid && other.title === item.title
       ) === index));
 }
 

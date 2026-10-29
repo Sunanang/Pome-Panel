@@ -1,0 +1,20 @@
+{
+  "node": {
+    "total": 1009,
+    "passed": 1008,
+    "skipped": 1,
+    "failed": 0
+  },
+  "electronSuites": 44,
+  "allSuitesExecuted": true,
+  "resumeExitCode": 0,
+  "syntaxChecks": 126,
+  "noteWorkflowFinal": "passed",
+  "localization": "passed",
+  "diffWhitespace": "passed",
+  "initialRun": "Stopped on the old work-hub assertion requiring the Home draft textarea to be hidden. Updated it to the approved always-editing behavior, then reran all Node tests and the failed/remaining Electron suites and syntax checks.",
+  "unverified": [
+    "Windows hardware",
+    "real NAS multi-device end-to-end sync"
+  ]
+}

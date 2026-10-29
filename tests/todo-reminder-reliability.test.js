@@ -32,6 +32,60 @@ test('deadline change invalidates the old receipt, including changing back befor
   assert.equal(store.merge([todo({ deadline: '2026-10-29T12:00:00Z' })])[0].remindedAt, 0);
   assert.equal(createTodoReminderReceipts({ filePath }).merge([todo()])[0].remindedAt, 0);
 });
+test('merge drops receipts for tasks that left the workspace projection', t => {
+  const filePath = fixture(t), store = createTodoReminderReceipts({ filePath });
+  store.markShown([todo(), todo({ id: 't2' })], 12345);
+  assert.equal(store.merge([todo()])[0].remindedAt, 12345);
+  const state = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  assert.deepEqual(state.receipts.map(row => row.id), ['t1']);
+  assert.equal(createTodoReminderReceipts({ filePath }).merge([todo({ id: 't2' })])[0].remindedAt, 0);
+});
+test('orphan receipt prune failures do not block an otherwise unchanged schedule merge', t => {
+  const filePath = fixture(t);
+  createTodoReminderReceipts({ filePath }).markShown([todo(), todo({ id: 't2' })], 100);
+  const disk = Object.create(fs);
+  disk.renameSync = () => { throw Object.assign(new Error('fixture ENOSPC'), { code: 'ENOSPC' }); };
+  const store = createTodoReminderReceipts({ filePath, disk });
+  assert.equal(store.merge([todo()])[0].remindedAt, 100);
+  assert.equal(JSON.parse(fs.readFileSync(filePath, 'utf8')).receipts.length, 2);
+  assert.throws(() => store.merge([todo({ id: 't3', remindedAt: 200 })]), /ENOSPC/);
+});
+test('main ignores rootless and foreign schedules before touching workspace receipts', t => {
+  const filePath = fixture(t), root = path.dirname(filePath), receipts = createTodoReminderReceipts({filePath});
+  receipts.markShown([todo()],100);
+  const before = fs.readFileSync(filePath,'utf8'), webContents = {send() {}};
+  let handler, schedules = 0;
+  const sandbox = {
+    path, mainWindow:{isDestroyed:()=>false,webContents}, workspaceSwitching:false,
+    workspaceRoot:()=>root, todoReminderRoot:root, todoReminderReceipts:receipts,
+    scheduledTodoReminders:[todo({remindedAt:100})], activeTaskNotification:null,
+    mergeTodoReminderSchedule:require('../main-services').mergeTodoReminderSchedule,
+    acknowledgeTodoReminder:()=>false, syncTodoReminderReceipts(){}, reportTodoReminderError(){},
+    scheduleNextTodoReminder(){schedules++;}, clearTodoReminderTimer(){},
+    ipcMain:{handle:(_channel,callback)=>{handler=callback;}},
+  };
+  const main = fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
+  const start = main.indexOf("ipcMain.handle('todos:schedule-reminders'");
+  vm.createContext(sandbox);
+  vm.runInContext(main.slice(start,main.indexOf("ipcMain.handle('pomodoro:notify'",start)),sandbox);
+  for(const expectedRoot of [undefined,null,'','relative-root']) {
+    assert.equal(handler({sender:webContents},[],expectedRoot).error,'workspace_not_ready');
+    assert.equal(fs.readFileSync(filePath,'utf8'),before);
+  }
+  assert.equal(handler({sender:webContents},[],root+'-other').error,'stale_workspace');
+  assert.equal(fs.readFileSync(filePath,'utf8'),before);
+  assert.equal(sandbox.scheduledTodoReminders.length,1);
+  assert.equal(schedules,0,'early schedules never reach reminder execution');
+  assert.equal(handler({sender:webContents},[],root).ok,true);
+  assert.equal(JSON.parse(fs.readFileSync(filePath,'utf8')).receipts.length,0,'authoritative deletion still prunes');
+  sandbox.activeTaskNotification={todoShown:true};
+  sandbox.scheduledTodoReminders=[todo()];
+  const edited=todo({deadline:'2026-10-29T12:00:00Z'});
+  assert.equal(handler({sender:webContents},[edited],root).error,'todo_reminder_storage_failed');
+  assert.equal(sandbox.scheduledTodoReminders[0].deadline,edited.deadline,'failed acknowledgement does not block edits');
+  assert.equal(handler({sender:webContents},[],root).error,'todo_reminder_storage_failed');
+  assert.equal(sandbox.scheduledTodoReminders.length,0,'failed acknowledgement does not block deletes');
+});
 test('storage failure retains original bytes and can retry; corruption is not silently overwritten', t => {
   const filePath = fixture(t), store = createTodoReminderReceipts({ filePath });
   store.markShown([todo()], 100);

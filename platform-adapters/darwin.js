@@ -12,7 +12,6 @@ const { execFile } = require('child_process');
 const { createTaskApps } = require('./task-apps');
 const {
   normalizeWindowRows,
-  screenRecordingProbePolicy,
   sodaShortcutSpec,
   controlSodaMusic,
   taskAppMatches,
@@ -20,7 +19,7 @@ const {
 
 const SODA_MUSIC_APP = '/Applications/汽水音乐.app';
 const PERMISSION_PROMPT_SKIP_FILE = 'permission-prompt-skipped';
-const SELF_BUNDLE_IDS = ['com.github.Electron', 'com.vibecoding.notch-todo', 'com.dynamicpanel.app'];
+const SELF_BUNDLE_IDS = ['com.github.Electron', 'com.pomepanel.app'];
 
 // 只放行固定的几个隐私面板，渲染层传来的值只能当作枚举的键来查，
 // 绝不能拼进 URL：x-apple.systempreferences: 能打开任意设置面板。
@@ -31,103 +30,7 @@ const PRIVACY_SETTINGS_PANES = {
   camera: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',
 };
 
-const WINDOWS_LIST_JXA = `
-ObjC.import('AppKit');
-ObjC.import('CoreGraphics');
-ObjC.import('Foundation');
-function run() {
-  const rows = [];
-  let candidates = 0;
-  let titled = 0;
-  const options = $.kCGWindowListOptionAll | $.kCGWindowListExcludeDesktopElements;
-  const windowList = ObjC.castRefToObject(
-    $.CGWindowListCopyWindowInfo(options, $.kCGNullWindowID)
-  );
-  const appPaths = {};
-  for (let index = 0; index < Number(windowList.count); index++) {
-    const info = windowList.objectAtIndex(index);
-    const get = (key) => ObjC.unwrap(info.objectForKey($(key)));
-    const layer = Number(get('kCGWindowLayer'));
-    const pid = Number(get('kCGWindowOwnerPID'));
-    const appName = String(get('kCGWindowOwnerName') || '').trim();
-    const title = String(get('kCGWindowName') || '').replace(/\\s+/g, ' ').trim();
-    const windowNumber = Number(get('kCGWindowNumber'));
-    // 没有「屏幕录制」权限时 CGWindowList 仍会返回别的应用的窗口，只是 kCGWindowName
-    // 一律为空，系统不报任何错。于是下面这句会把所有行丢掉、列表看起来像「真的没窗口」。
-    // 统计候选数与其中有标题的条数，好让主进程区分这两种情况。
-    if (layer === 0 && pid && appName && windowNumber) {
-      candidates += 1;
-      if (title) titled += 1;
-    }
-    if (layer !== 0 || !pid || !appName || !title || !windowNumber) continue;
-    if (!Object.prototype.hasOwnProperty.call(appPaths, pid)) {
-      const meta = { appPath: '', bundleId: '', policy: -1 };
-      try {
-        const runningApp = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
-        if (runningApp && !runningApp.isNil()) {
-          meta.policy = Number(runningApp.activationPolicy);
-          meta.bundleId = String(ObjC.unwrap(runningApp.bundleIdentifier) || '');
-          if (runningApp.bundleURL && !runningApp.bundleURL.isNil()) {
-            meta.appPath = String(ObjC.unwrap(runningApp.bundleURL.path) || '');
-          }
-        }
-      } catch (error) {}
-      appPaths[pid] = meta;
-    }
-    const appMeta = appPaths[pid];
-    // activationPolicy 2 = NSApplicationActivationPolicyProhibited：XPC 与系统辅助进程
-    // （如 AuthenticationServicesHelper，bundle 是 .xpc 不是 .app）。它们在系统层面就
-    // 不能被激活，列出来点了也不会有任何反应，属于纯粹的假窗口。
-    // 注意不能用 kCGWindowIsOnscreen 过滤：真实窗口在其他 Space 或被遮挡时该字段也是
-    // nil，实测微信 / Arc / Chrome / 飞书都会被误删。
-    if (appMeta.policy === 2) continue;
-    rows.push({ pid, appName, appPath: appMeta.appPath, bundleId: appMeta.bundleId, title, windowIndex: index, windowNumber });
-  }
-  // candidates 是本可列出的窗口数，titled 是其中拿到标题的数量。
-  // candidates > 0 而 titled === 0 时几乎一定是缺「屏幕录制」权限，不是真的没窗口。
-  return JSON.stringify({ rows: rows, candidates: candidates, titled: titled });
-}`;
-
-const WINDOW_FOCUS_JXA = `
-function run(argv) {
-  const pid = Number(argv[0]);
-  const wantedTitle = String(argv[1] || '');
-  const fallbackIndex = Number(argv[2] || 0);
-  const se = Application('System Events');
-  const matches = se.applicationProcesses.whose({ unixId: pid })();
-  if (!matches.length) return 'false';
-  const process = matches[0];
-  process.frontmost = true;
-  delay(0.08);
-  const windows = process.windows();
-  let target = windows[fallbackIndex];
-  for (let i = 0; i < windows.length; i++) {
-    try {
-      if (String(windows[i].name()) === wantedTitle) { target = windows[i]; break; }
-    } catch (error) {}
-  }
-  if (target) {
-    try { target.actions.byName('AXRaise').perform(); } catch (error) {}
-  }
-  try {
-    const menuBarItems = process.menuBars[0].menuBarItems();
-    let windowMenu = null;
-    for (let i = 0; i < menuBarItems.length; i++) {
-      const name = String(menuBarItems[i].name());
-      if (name === 'Window' || name === '窗口') { windowMenu = menuBarItems[i]; break; }
-    }
-    if (windowMenu) {
-      const items = windowMenu.menus[0].menuItems();
-      for (let i = 0; i < items.length; i++) {
-        if (String(items[i].name()) === wantedTitle) {
-          items[i].click();
-          break;
-        }
-      }
-    }
-  } catch (error) {}
-  return 'true';
-}`;
+const { WINDOWS_LIST_JXA, WINDOW_FOCUS_JXA } = require('./darwin-windows');
 
 const SYSTEM_ICON_JXA = `
 ObjC.import('AppKit');
@@ -271,12 +174,13 @@ async function readEmbeddedAppIcon(appPath) {
 
 function createDarwinAdapter(options = {}) {
   const electron = options.electron || {};
-  const { app, systemPreferences, shell, dialog, desktopCapturer } = electron;
+  const { app, systemPreferences, shell, dialog } = electron;
   const hooks = options.hooks || {};
   const mediaPermissionCoordinator = options.mediaPermissionCoordinator || null;
 
   // 模块级状态随代码迁入实例。
   let windowScanCache = new Map();
+  let windowScanRevision = 0;
   const windowIconCache = new Map();
   let previousPasteTarget = null;
   let sodaMusicPlaying = false;
@@ -356,25 +260,17 @@ function createDarwinAdapter(options = {}) {
   }
 
   async function listWindows() {
+    const revision=++windowScanRevision;
     if (systemPreferences?.isTrustedAccessibilityClient && !systemPreferences.isTrustedAccessibilityClient(false)) {
       windowScanCache = new Map();
       return { items: [], error: 'accessibility_permission_required' };
     }
     try {
-      const raw = await runJxa(WINDOWS_LIST_JXA);
+      const raw = await runJxa(WINDOWS_LIST_JXA,[process.pid]);
       const parsed = JSON.parse(raw || '{}');
-      // 兼容旧格式（裸数组），新格式是 { rows, candidates, titled }。
-      const payload = Array.isArray(parsed)
-        ? { rows: parsed, candidates: parsed.length, titled: parsed.length }
-        : parsed;
-      const rows = normalizeWindowRows(payload.rows || []).filter((item) => item.pid !== process.pid);
-      // 有候选窗口却一个标题都读不到 = 缺「屏幕录制」权限。macOS 10.15 起读取其他应用的
-      // 窗口标题需要该权限，系统不会报错也不会弹提示，只是静默返回空标题，
-      // 结果界面上只剩一句「没有读取到可切换窗口」，把权限问题伪装成了「真的没窗口」。
-      if (rows.length === 0 && Number(payload.candidates) > 0 && Number(payload.titled) === 0) {
-        windowScanCache = new Map();
-        return { items: [], error: 'screen_recording_permission_required' };
-      }
+      const payload=Array.isArray(parsed)?{rows:parsed}:parsed;
+      if(payload.error){if(revision===windowScanRevision)windowScanCache=new Map();return {items:[],error:payload.error};}
+      const rows=normalizeWindowRows(payload.rows||[]).filter(item=>item.pid!==process.pid);
       const appPaths = [...new Set(rows.map((item) => item.appPath).filter(Boolean))];
       await Promise.all(appPaths.map(async (appPath) => {
         if (windowIconCache.has(appPath)) return;
@@ -384,18 +280,19 @@ function createDarwinAdapter(options = {}) {
       rows.forEach((item) => {
         item.icon = item.appPath ? windowIconCache.get(item.appPath) || null : null;
       });
+      if(revision!==windowScanRevision)return {items:[...windowScanCache.values()],error:null};
       windowScanCache = new Map(rows.map((item) => [item.id, item]));
       return { items: rows, error: null };
     } catch (error) {
-      windowScanCache = new Map();
-      return { items: [], error: 'accessibility_permission_required' };
+      if(revision===windowScanRevision)windowScanCache = new Map();
+      return { items: [], error: 'window_scan_failed' };
     }
   }
 
   async function focusWindowRow(target) {
-    if (!target) return false;
+    if (!target?.axWindowId) return false;
     try {
-      return (await runJxa(WINDOW_FOCUS_JXA, [target.pid, target.title, target.windowIndex])) === 'true';
+      return (await runJxa(WINDOW_FOCUS_JXA, [target.pid, target.axWindowId])) === 'true';
     } catch (error) {
       return false;
     }
@@ -478,25 +375,6 @@ function createDarwinAdapter(options = {}) {
     }
   }
 
-  // 先尊重系统的明确状态，尤其不能在 not-determined 时调用 desktopCapturer，
-  // 否则启动自检本身就会抢先弹出系统录屏框。只有系统报告 granted 时才通过
-  // 无缩略图的窗口标题做二次确认；未知状态 fail-open，等用户实际使用时再申请。
-  async function hasScreenRecordingAccess() {
-    const policy = screenRecordingProbePolicy(systemPreferences.getMediaAccessStatus('screen'));
-    if (!policy.inspectWindowTitles) return policy.hasAccess;
-    try {
-      const sources = await desktopCapturer.getSources({
-        types: ['window'],
-        thumbnailSize: { width: 0, height: 0 },
-        fetchWindowIcons: false,
-      });
-      if (sources.length === 0) return true; // 拿不到源无法判定，不误报
-      return sources.some((source) => String(source.name || '').trim().length > 0);
-    } catch (error) {
-      return true; // 探测本身失败时不打扰用户
-    }
-  }
-
   // ============ 启动时的权限自检 ============
   // DMG 装的是全新二进制，TCC 授权不会从开发版继承，而这几项缺失时的表现都是「静默失效」：
   // 缺「屏幕录制」→ CGWindowList 照样返回窗口但标题全空，当前窗口看起来像真的没窗口；
@@ -509,7 +387,7 @@ function createDarwinAdapter(options = {}) {
     const missing = [];
     // 传 false 只查询不弹系统框：先把缺失项攒齐一次性告知，避免连弹两个系统对话框。
     if (!systemPreferences.isTrustedAccessibilityClient(false)) missing.push('accessibility');
-    if (!await hasScreenRecordingAccess()) missing.push('screen-recording');
+    // AX enumerates titles and focuses windows without capturing screen pixels.
     if (missing.length === 0) return;
 
     const names = missing.map((key) => (key === 'accessibility' ? pomeLocalePlatformAdaptersDarwin.t("copy.accessibility.b8f88a") : pomeLocalePlatformAdaptersDarwin.t("copy.screenRecording.77dfb4")));

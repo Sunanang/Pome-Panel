@@ -27,22 +27,37 @@ function createTodoReminderReceipts({ filePath, disk = fs }) {
   }
   function merge(items) {
     const receipts = read();
-    let changed = false;
+    let liveChanged = false;
+    let pruned = false;
+    const liveIds = new Set();
     const merged = items.map(item => {
       const id = String(item.id), prior = receipts.get(id);
+      liveIds.add(id);
       if (prior && reminderKey(prior) !== reminderKey(item)) {
         receipts.delete(id);
-        changed = true;
+        liveChanged = true;
       }
       const next = mergeReminderMark(prior, item);
       if (reminderKey(next) && reminderStamp(next.remindedAt)
         && (!receipts.has(id) || receipts.get(id).remindedAt !== next.remindedAt)) {
         receipts.set(id, { id, deadline: next.deadline, remindedAt: next.remindedAt });
-        changed = true;
+        liveChanged = true;
       }
       return next;
     });
-    if (changed) write(receipts);
+    for (const id of [...receipts.keys()]) {
+      if (liveIds.has(id)) continue;
+      receipts.delete(id);
+      pruned = true;
+    }
+    if (liveChanged || pruned) {
+      try { write(receipts); }
+      catch (error) {
+        // Orphan cleanup can wait for the next durable write; failing it must not
+        // block scheduling or suppress due reminders while the disk is unhappy.
+        if (liveChanged) throw error;
+      }
+    }
     return merged;
   }
   function markShown(items, now = Date.now()) {

@@ -1,0 +1,23 @@
+:root {--note-flight-ms:720;--note-received-color:rgba(229,182,174,.2);--note-workflow-head-height:62px;}
+.note-text-measure {position:fixed;left:-100000px;top:0;visibility:hidden;pointer-events:none;contain:layout style;}
+.note-flight {position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:1200;}
+#tab-button-notes.note-received {background:var(--note-received-color);}
+.home-note #home-note-preview {display:none!important;}
+.home-note .note-toolbar {flex-wrap:nowrap;}
+.home-note .note-toolbar>.tile-label {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.home-note .note-persist-actions {margin-left:auto;flex:none;}
+#tab-notes .notes-detail-head {height:var(--note-workflow-head-height);min-height:var(--note-workflow-head-height);flex:none;}
+#tab-notes .notes-detail-body>.notes-editor,#tab-notes .notes-detail-body>.notes-preview {box-sizing:border-box;border:0;outline-offset:-2px;padding:10px 6px;}
+#tab-notes .notes-preview {cursor:text;}
+#tab-notes .notes-preview [data-note-href] {cursor:pointer;}
+#tab-notes .notes-save {min-width:62px;}
+
+/* Writing is identified by its caret and Save action; keep the body borderless. */
+#tab-notes .notes-editor:is(:focus,:focus-visible),
+.home-note .note-input:is(:focus,:focus-visible) {outline:none;box-shadow:none;}
+#tab-notes .notes-detail-title:is(:focus,:focus-visible) {outline:none;box-shadow:inset 0 -1px 0 var(--hairline);}
+.home-note.note-replenish {animation:note-replenish 160ms ease-out;}
+@keyframes note-replenish {from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.home-note.note-replenish{animation:none}}
+.experience-reduced-motion .home-note.note-replenish{animation:none}
+.note-snapshotting #status-toast{visibility:hidden!important}

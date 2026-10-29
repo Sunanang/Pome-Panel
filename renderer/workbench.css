@@ -81,7 +81,7 @@ html[data-liquid-glass='1'] #panel .topbar .tab-indicator {
 .workbench-page-heading h2 { flex: 0 0 auto; margin: 0; color: #f2eee8; font-size: 19px; font-weight: 620; line-height: 1.35; letter-spacing: -.3px; }
 
 /* Links become a compact shelf, grouped by spacing and fine separators. */
-#tab-links .links-page { gap: 12px; padding: 4px 8px 0; }
+#tab-links .links-page { gap: 12px; padding: 18px; border: 1px solid var(--wb-line); border-radius: var(--wb-radius); background: var(--wb-surface); overflow: hidden; }
 #tab-links .links-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; min-height: 36px; }
 #tab-links .link-add-wrap { flex: 1 1 260px; max-width: 540px; margin-left: auto; }
 #tab-links .link-add-wrap input { height: 36px; padding-top: 8px; padding-bottom: 8px; border: 1px solid var(--wb-line); border-radius: var(--r-pill); background: var(--wb-control); box-shadow: none; font-size: 12px; }
@@ -94,8 +94,8 @@ html[data-liquid-glass='1'] #panel .topbar .tab-indicator {
 #tab-links .group-count { color: var(--wb-text-muted); font-size: 10px; }
 #tab-links .link-group-body { gap: 0; padding: 7px 0 0; }
 #tab-links .link-group.collapsed .link-group-body { padding: 0; }
-#tab-links .link-list { gap: 1px; }
-#tab-links .link-item { min-height: 58px; padding: 9px 8px; gap: 11px; border-radius: 12px; }
+#tab-links .link-list { gap: 1px; min-width: 0; overflow-x: hidden; padding: 0 5px 4px 0; scrollbar-gutter: stable; }
+#tab-links .link-item { min-width: 0; width: 100%; flex-shrink: 0; min-height: 58px; padding: 9px 8px; gap: 11px; border-radius: 12px; transform: none; }
 #tab-links .link-item:hover,
 #tab-links .link-item:focus-within { background: rgba(255,255,255,.045); }
 #tab-links .link-favicon { width: 30px; height: 30px; border: 1px solid var(--wb-line); border-radius: 10px; background: var(--wb-control); color: #cec9c8; }
@@ -113,22 +113,21 @@ html[data-liquid-glass='1'] #panel .topbar .tab-indicator {
 /* Settings are reading surfaces rather than a wall of embossed cards.
    The HTML order matches the visual/focus order: AI/API/cover, device/display/NAS. */
 #tab-settings .settings-page { grid-template-columns: minmax(0,1.06fr) minmax(0,.94fr); gap: 26px; padding: 4px 8px 0; }
-#tab-settings .settings-column { gap: 0; padding-right: 8px; }
+#tab-settings .settings-column { gap: 14px; padding-right: 8px; }
+#tab-settings .settings-card,
 html[data-liquid-glass='1'] #tab-settings .settings-card {
-  padding: 16px 4px 22px;
-  border: 0 !important;
-  border-bottom: 1px solid var(--wb-line) !important;
-  border-radius: 0;
-  background: transparent !important;
+  padding: 16px 20px;
+  border: 1px solid var(--wb-line) !important;
+  border-radius: var(--wb-radius);
+  background: var(--wb-surface) !important;
   background-image: none !important;
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   overflow: visible;
 }
-#tab-settings .settings-column > .settings-card:first-child { padding-top: 3px; }
-#tab-settings .settings-column > .settings-card + .settings-card { margin-top: 20px; }
-#tab-settings .settings-column > .settings-card:last-child { border-bottom: 0 !important; }
+#tab-settings .settings-column > .settings-card:first-child { padding-top: 16px; }
+#tab-settings .settings-column > .settings-card + .settings-card { margin-top: 0; }
 #tab-settings :is(.settings-card-heading strong,.settings-mirror-card strong) { color: #f0ece6; font-size: 17px; font-weight: 600; }
 #tab-settings .settings-card-heading { gap: 10px; align-items: center; }
 #tab-settings .settings-card p { font-size: 10.5px; color: #96949e; line-height: 1.65; }
@@ -164,7 +163,10 @@ html[data-liquid-glass='1'] #tab-settings .settings-card {
 #tab-clip .clip-panel { padding: 4px 8px 0; }
 #tab-clip .clip-toolbar { gap: 5px; margin-bottom: 12px; }
 #tab-clip .clip-filter { padding: 6px 12px; border: 1px solid transparent; border-radius: var(--r-pill); background: none; color: var(--wb-text-muted); }
-#tab-clip .clip-filter.active { border-color: var(--wb-line); background: var(--wb-control-hover); color: #f2ece5; }
+#tab-clip .clip-filter-switch { position: relative; display: flex; gap: 5px; flex: 0 0 auto; isolation: isolate; }
+#tab-clip .clip-filter { position: relative; z-index: 1; white-space: nowrap; }
+#tab-clip .clip-filter.active { border-color: transparent; background: transparent; color: #f2ece5; }
+.clip-filter-indicator { position: absolute; top: 0; bottom: 0; left: 0; border: 1px solid var(--wb-line); border-radius: var(--r-pill); background: var(--wb-control-hover); pointer-events: none; z-index: 0; }
 #tab-clip .clip-item { border-radius: var(--wb-radius); box-shadow: none; background: var(--wb-surface); }
 #tab-clip .clip-item .clip-text { font-size: 13px; line-height: 1.65; }
 #tab-clip .clip-meta { color: var(--wb-text-muted); }

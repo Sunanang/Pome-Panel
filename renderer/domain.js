@@ -40,11 +40,13 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
 
   function normalizeHttpUrl(value) {
     const input = String(value || '').trim();
-    if (!input) return null;
+    if (!input || /[\u0000-\u001f\u007f]/u.test(input)) return null;
     const candidate = /^[a-z][a-z\d+.-]*:/i.test(input) ? input : `https://${input}`;
     try {
       const url = new URL(candidate);
       if (!['http:', 'https:'].includes(url.protocol) || isLocalHostname(url.hostname)) return null;
+      const host = url.hostname.replace(/\.$/, '');
+      if ((!host.includes('.') && !host.includes(':')) || /[%\s]/u.test(host)) return null;
       url.username = '';
       url.password = '';
       return url.toString();

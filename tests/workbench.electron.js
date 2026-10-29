@@ -15,6 +15,11 @@ fs.mkdirSync(process.env.POME_HOOK_TEST_HOME, { recursive: true });
 app.commandLine.appendSwitch('user-data-dir', profile);
 if (process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain');
 require('./provider-usage-fixtures.cjs');
+require('../codex-usage').readCodexUsage = async () => ({ ok: true, detected: false });
+require('../codex-auth').readLocalCodexToken = async () => ({ ok: false, error: 'fixture_no_auth' });
+require('../codex-usage-remote').createCodexUsageService = () => ({
+  tokenState: () => ({ manualTokenInvalid: false }), getUsage: async () => ({ ok: true, detected: false }), reset() {},
+});
 clipboard.read = async () => [];
 clipboard.write = async () => {};
 clipboard.writeText = async () => {};
@@ -34,6 +39,7 @@ audioBytes.writeUInt32LE(8000, 24); audioBytes.writeUInt32LE(16000, 28); audioBy
 audioBytes.writeUInt16LE(16, 34); audioBytes.write('data', 36); audioBytes.writeUInt32LE(audioBytes.length - 44, 40);
 const handle = ipcMain.handle.bind(ipcMain);
 ipcMain.handle = (channel, listener) => handle(channel, (event, ...args) => {
+  if (channel === 'windows:list') return { items: [], error: null };
   if (channel === 'credentials:list') {
     if (holdCredentialList) return new Promise(resolve => { releaseCredentialList = () => { holdCredentialList = false; resolve({ok:true,secureStorage:true,items:credentials}); }; });
     return { ok: true, secureStorage: true, items: credentials };
@@ -87,10 +93,11 @@ async function run(c) {
   async function tab(name) {
     await js(`setActiveTab(${JSON.stringify(name)})`);
     await until(`activeTab===${JSON.stringify(name)} && !tabBusy && document.getElementById('tab-${name}').classList.contains('active')`);
-    await sleep(220);
+    await js(`Promise.all(document.getElementById('tab-${name}').getAnimations().map(a=>a.finished.catch(()=>{})))`);
   }
   await until('!!window.NotchWorkspace && !workspaceReloadPending');
-  BrowserWindow.fromWebContents(c).showInactive();
+  BrowserWindow.fromWebContents(c).show();
+  BrowserWindow.fromWebContents(c).focus();
   await js('setMode(true)'); await until('!modeBusy');
   await js(`document.querySelector('#ui-capsule-hint button')?.click();dismissStatusToast(false);`);
   await js(`(() => {
@@ -122,7 +129,7 @@ async function run(c) {
       await capture(locale + '-' + name);
     }
   }
-  assert(geometries.every(g => Math.abs(g.width - geometries[0].width) < 1 && Math.abs(g.height - geometries[0].height) < 1), 'all page content rectangles share one geometry');
+  assert(geometries.every(g => Math.abs(g.width - geometries[0].width) < 1 && Math.abs(g.height - geometries[0].height) < 1), 'all page content rectangles share one geometry: '+JSON.stringify(geometries));
   steps.push('six pages retain fixed geometry with long content in Chinese, English and German');
   await tab('notes'); await click('#notes-search');
   await js(`{const s=document.getElementById('notes-search');s.value='Working at your own pace';s.dispatchEvent(new Event('input',{bubbles:true}));}`);
@@ -133,9 +140,9 @@ async function run(c) {
   await click('#notes-list [data-note-id="workbench-note-1"]');
   await until('!!document.querySelector("#notes-preview h1")');
   assert.equal(await js('document.querySelector("#notes-preview h1").hidden'), true, 'preview avoids repeating the matching document title');
-  await click('[data-notes-mode="edit"]');
+  await click('#notes-preview');
   assert.equal(await js('document.getElementById("notes-editor").value.startsWith("# 项目记录 1")'), true, 'editing retains the original Markdown heading');
-  await click('[data-notes-mode="preview"]');
+  await click('.notes-save');
   await js(`{window.workbenchNoteEditor=document.getElementById('notes-editor');const t=document.querySelector('.notes-detail-title');t.value='更名后的项目记录';t.dispatchEvent(new Event('input',{bubbles:true}));}`);
   assert.equal(await js('document.querySelector("#notes-preview h1").hidden'), false, 'a distinct content heading remains visible after rename');
   assert.equal(await js('document.querySelector(".notes-document-heading").getAttribute("aria-label")'), '更名后的项目记录', 'the accessible document heading follows the visible title');
@@ -213,7 +220,12 @@ async function run(c) {
   const beforeKey = await js('workbenchAudio.currentTime');
   await key('Right');
   assert(await js('workbenchAudio.currentTime') > beforeKey, 'the seek range supports keyboard adjustment');
+  await js(`document.querySelector('[data-player-action="mute"]').addEventListener('pointerdown',event=>{
+    workbenchAudio.dispatchEvent(new Event('timeupdate'));
+    window.workbenchMuteTargetPreserved=event.target.isConnected;
+  },{once:true})`);
   await click('[data-player-action="mute"]');
+  assert.equal(await js('workbenchMuteTargetPreserved'), true, 'media refresh preserves the pressed icon until pointerup');
   assert.equal(await js('workbenchAudio.muted'), true);
   assert.equal(await js('document.querySelector("[data-player-action=mute]").getAttribute("aria-pressed")'), 'true');
   await click('[data-player-action="mute"]'); assert.equal(await js('workbenchAudio.muted'), false);

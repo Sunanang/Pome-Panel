@@ -1,0 +1,12 @@
+{
+  "sha256": "685a752ae864bf58cb05d39974ae29787017cbd1936853ca3ddaa8d986264d66",
+  "bytes": 136673989,
+  "bundleIds": {
+    "Info.plist": "com.pomepanel.app",
+    "Frameworks/Pome Panel Helper (Renderer).app/Contents/Info.plist": "com.pomepanel.app.helper.Renderer",
+    "Frameworks/Pome Panel Helper.app/Contents/Info.plist": "com.pomepanel.app.helper",
+    "Frameworks/Pome Panel Helper (Plugin).app/Contents/Info.plist": "com.pomepanel.app.helper.Plugin",
+    "Frameworks/Pome Panel Helper (GPU).app/Contents/Info.plist": "com.pomepanel.app.helper.GPU"
+  },
+  "finalTitleChangeIncluded": true
+}

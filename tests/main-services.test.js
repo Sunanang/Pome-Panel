@@ -864,3 +864,14 @@ test('native conversation title and multiline completion summary stay separate',
   assert.equal(content.title, '修复布局。'); assert.equal(content.project, 'Done');
   assert.equal(content.sessionTitle, '首页改版'); assert.equal(content.completionSummary, summary);
 });
+
+test('AX identities preserve separate same-title windows and survive title/index changes',()=>{
+ const items=normalizeWindowRows([
+  {pid:10,appName:'Terminal',title:'zsh',axWindowId:'41',windowIndex:0},
+  {pid:10,appName:'Terminal',title:'zsh',axWindowId:'42',windowIndex:1},
+  {pid:10,appName:'Terminal',title:'zsh',axWindowId:'41',windowIndex:2},
+ ]);
+ assert.equal(items.length,2);assert.notEqual(items[0].id,items[1].id);
+ const changed=normalizeWindowRows([{pid:10,appName:'Terminal',title:'npm test',axWindowId:'41',windowIndex:5}]);
+ assert.equal(changed[0].id,items[0].id);
+});

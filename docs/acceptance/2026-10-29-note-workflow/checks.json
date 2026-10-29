@@ -1,0 +1,60 @@
+{
+  "checks": [
+    {
+      "positionTransfers": [
+        {
+          "selector": "h2",
+          "before": {
+            "offset": 1256,
+            "y": 26.686676025390625
+          },
+          "editY": 26.53125,
+          "after": {
+            "offset": 1256,
+            "y": 26.6875
+          }
+        },
+        {
+          "selector": "p",
+          "before": {
+            "offset": 1256,
+            "y": -8.3125
+          },
+          "editY": -8.46875,
+          "after": {
+            "offset": 1256,
+            "y": -8.3125
+          }
+        },
+        {
+          "selector": "ul",
+          "before": {
+            "offset": 1392,
+            "y": 28.09375
+          },
+          "editY": 27.9140625,
+          "after": {
+            "offset": 1392,
+            "y": 28.09375
+          }
+        },
+        {
+          "selector": "pre",
+          "before": {
+            "offset": 1409,
+            "y": 43.53125
+          },
+          "editY": 43.3203125,
+          "after": {
+            "offset": 1409,
+            "y": 43.53125
+          }
+        }
+      ]
+    },
+    "links, per-note position, autosave remains edit, retained editor, failed save/retry, keyboard Save",
+    "native 620ms flight, immediate detach, new draft untouched, two offline collections and stale/acknowledged projections",
+    "partial-write rollback, system/manual reduced motion, resize/collapse/tab cleanup, independent home draft, English localization, native selection, new-note Save and draft recovery across reload"
+  ],
+  "errors": []
+}

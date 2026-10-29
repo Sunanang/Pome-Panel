@@ -955,8 +955,15 @@ function clearTodoReminderTimer() {
 }
 
 function todoNotificationItems(notification) {
-  return notification?.todoItems || (notification?.source === 'todo'
-    ? [{ id: notification.taskId, deadline: new Date(notification.deadline).toISOString() }] : []);
+  if (Array.isArray(notification?.todoItems)) return notification.todoItems;
+  if (notification?.source !== 'todo') return [];
+  const deadlineMs = Number(notification.deadline);
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) return [];
+  try {
+    return [{ id: notification.taskId, deadline: new Date(deadlineMs).toISOString() }];
+  } catch {
+    return [];
+  }
 }
 
 function reportTodoReminderError(key = 'todo.reminderStorageError', error = null) {
@@ -1053,7 +1060,8 @@ ipcMain.handle('todos:schedule-reminders', (event, items, expectedRoot) => {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return { ok: false, error: 'invalid_sender' };
   if (workspaceSwitching) return { ok: false, error: 'workspace_switching' };
   const root = workspaceRoot();
-  if (expectedRoot && path.resolve(expectedRoot) !== path.resolve(root)) return { ok: false, error: 'stale_workspace' };
+  if (typeof expectedRoot !== 'string' || !path.isAbsolute(expectedRoot)) return { ok: false, error: 'workspace_not_ready' };
+  if (path.resolve(expectedRoot) !== path.resolve(root)) return { ok: false, error: 'stale_workspace' };
   if (todoReminderRoot !== root) {
     scheduledTodoReminders = [];
     todoReminderRoot = root;
@@ -1061,16 +1069,19 @@ ipcMain.handle('todos:schedule-reminders', (event, items, expectedRoot) => {
     if (activeTaskNotification?.source === 'todo') dismissActiveTaskNotificationShell();
   }
   try {
-    if (activeTaskNotification?.todoShown && !acknowledgeTodoReminder(activeTaskNotification)) {
-      return { ok: false, error: 'todo_reminder_storage_failed' };
-    }
+    // Always adopt the renderer projection even when an on-screen receipt cannot
+    // be flushed yet; otherwise deletes/edits stay stuck in main memory and can
+    // re-fire after the bubble is dismissed.
+    const ackOk = !activeTaskNotification?.todoShown
+      || acknowledgeTodoReminder(activeTaskNotification);
     scheduledTodoReminders = todoReminderReceipts.merge(mergeTodoReminderSchedule(scheduledTodoReminders, items));
     try {
       syncTodoReminderReceipts(scheduledTodoReminders.filter(row => row.remindedAt > 0));
-      mainWindow.webContents.send('todo:reminder-error', { cleared: true });
+      if (ackOk) mainWindow.webContents.send('todo:reminder-error', { cleared: true });
     }
     catch (error) { reportTodoReminderError('todo.reminderSyncError', error); }
     scheduleNextTodoReminder();
+    if (!ackOk) return { ok: false, error: 'todo_reminder_storage_failed' };
     return { ok: true, count: scheduledTodoReminders.length, reminded: scheduledTodoReminders.filter(row => row.remindedAt > 0).map(({ id, deadline, remindedAt }) => ({ id, deadline, remindedAt })) };
   } catch (error) {
     clearTodoReminderTimer();
@@ -2109,6 +2120,22 @@ function createTray() {
 
 ipcMain.handle('window:begin-open', (event) => { requireWorkspaceOwner(event); return require('./panelTiming').begin(); });
 ipcMain.handle('window:open-interactive', (event, id) => { requireWorkspaceOwner(event); return require('./panelTiming').finish(id); });
+// Capture only this workspace's rendered pixels. This does not capture the
+// desktop, request screen-recording permission, write a file or send pixels out.
+ipcMain.handle('notes:capture-module', async (event, rect) => {
+  requireWorkspaceOwner(event);
+  if(currentMode!=='expanded'||currentTab!=='home'||!mainWindow.isVisible())return null;
+  if(!rect||!['x','y','width','height'].every(key=>Number.isFinite(rect[key])))return null;
+  const [width,height]=mainWindow.getContentSize();
+  const x=Math.max(0,Math.floor(rect.x)),y=Math.max(0,Math.floor(rect.y));
+  const crop={x,y,width:Math.min(width,Math.ceil(rect.x+rect.width))-x,height:Math.min(height,Math.ceil(rect.y+rect.height))-y};
+  if(crop.width<10||crop.height<10||rect.width<=0||rect.height<=0)return null;
+  try {
+    const bitmap=await event.sender.capturePage(crop);
+    if(bitmap.isEmpty()||currentMode!=='expanded'||currentTab!=='home')return null;
+    return {rect:crop,dataURL:bitmap.toDataURL()};
+  } catch {return null;}
+});
 ipcMain.handle('window:set-mode', async (event, mode) => {
   if (mode === 'expanded') await rememberPasteTarget();
   applyMode(mode === 'expanded' ? 'expanded' : 'collapsed');
@@ -2816,14 +2843,16 @@ ipcMain.handle('smart:organize-material', async (event, payload) => {
   }
 });
 
-// 窗口枚举与聚焦在适配层实现（Mac 走 JXA，Windows 暂时 unsupported）。
+// 窗口枚举与聚焦由适配层实现：macOS 使用 AX 身份，Windows 使用 HWND。
 // 聚焦只接受最近一次扫描缓存里的窗口 ID，缓存也留在适配层实例里。
-ipcMain.handle('windows:list', async () => {
+ipcMain.handle('windows:list', async (event) => {
+  requireWorkspaceOwner(event);
   if (!platformCapabilities.features.windowSwitcher) return { items: [], error: 'unsupported' };
   return platformAdapter.windows.list();
 });
 
 ipcMain.handle('windows:focus', async (event, windowId) => {
+  requireWorkspaceOwner(event);
   if (!platformCapabilities.features.windowSwitcher) return false;
   return platformAdapter.windows.focus(windowId);
 });

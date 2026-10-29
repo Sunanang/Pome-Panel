@@ -204,7 +204,7 @@ async function run(mainContents) {
   assert.equal(!afterLatest || !afterLatest.isVisible(), true, 'no older queued bubbles remain');
   // Settings can suppress the top bubble while completions still save, and must
   // clear queued shells so a later re-enable does not resurrect them.
-  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'suppressed-due',text:'关闭后不应再弹出的待办',deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0}])`);
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'suppressed-due',text:'关闭后不应再弹出的待办',deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0}],workspacePersistenceRoot)`);
   win = await shown('关闭后不应再弹出的待办');
   assert.equal((await mainContents.executeJavaScript('notchAPI.setTaskNotifications(false)')).ok, true);
   await delay(400);
@@ -249,7 +249,7 @@ async function run(mainContents) {
   // Exercise the real todo IPC rather than creating a completion record for a reminder.
   const before = JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length;
   const todoDeadline = new Date(Date.now()+1800000).toISOString();
-  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-due',text:'提交 Pome Panel 1.4 发布说明',deadline:${JSON.stringify(todoDeadline)},done:false,remindedAt:0}])`);
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-due',text:'提交 Pome Panel 1.4 发布说明',deadline:${JSON.stringify(todoDeadline)},done:false,remindedAt:0}],workspacePersistenceRoot)`);
   win = await shown('提交 Pome Panel 1.4 发布说明');
   assert.equal(await evaluate(win, 'currentNotification.status'), 'due');
   assert.equal(await evaluate(win, 'detailElement.textContent'), '将在 1 小时内截止');
@@ -291,14 +291,14 @@ async function run(mainContents) {
   await until(() => !notificationWindow() || !notificationWindow().isVisible(), 'todo bubble dismisses after open');
   assert.equal(JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length, before);
   // Overdue catch-up when the lead window was missed and remindedAt is still 0.
-  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-overdue',text:'补交上周周报',deadline:new Date(Date.now()-60000).toISOString(),done:false,remindedAt:0}])`);
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-overdue',text:'补交上周周报',deadline:new Date(Date.now()-60000).toISOString(),done:false,remindedAt:0}],workspacePersistenceRoot)`);
   win = await shown('补交上周周报');
   assert.equal(await evaluate(win, 'currentNotification.status'), 'overdue');
   assert.equal(await evaluate(win, 'detailElement.textContent'), '截止时间已过');
   await capture(win, 'todo-overdue'); await dismiss(win);
   // Two deadlines in the same turn retain FIFO order through AI bursts and a
   // notification-window crash. No reminder is marked then silently dropped.
-  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders(['a','b'].map(id=>({id:'batch-'+id,text:'批量待办 '+id,deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0})))`);
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders(['a','b'].map(id=>({id:'batch-'+id,text:'批量待办 '+id,deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0})),workspacePersistenceRoot)`);
   win = await shown('批量待办 a');
   assert.equal(await evaluate(win, 'queueElement.textContent'), '+1');
   await send('codex', { title: '较早排队的 AI 完成' });

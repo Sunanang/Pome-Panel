@@ -13,6 +13,10 @@
     <link rel="stylesheet" href="workbench.css" />
     <link rel="stylesheet" href="workbench-content.css" />
     <link rel="stylesheet" href="workbench-tools.css" />
+    <link rel="stylesheet" href="experience.css" />
+    <link rel="stylesheet" href="notes-workflow.css" />
+    <link rel="stylesheet" href="windows-widget.css" />
+    <link rel="stylesheet" href="scrollbars.css" />
   </head>
   <body>
     <div id="app" class="collapsed" data-dock="top">
@@ -156,8 +160,9 @@
                 <div class="ai-usage-providers" id="ai-usage-providers"></div>
                 <div class="ai-usage-footer" id="ai-usage-footer" hidden></div>
                 <div class="ai-usage-empty" id="ai-usage-empty" hidden>
-                  <strong class="ai-empty-title"></strong><p class="ai-empty-body"></p>
-                  <div class="ai-empty-bars"></div>
+                  <div class="ai-empty-content" tabindex="0"><strong class="ai-empty-title"></strong><p class="ai-empty-body"></p>
+                    <div class="ai-empty-bars"></div>
+                  </div>
                   <button class="workspace-button compact ai-open-settings" type="button"><span data-i18n="copy.openSettings.b6ce1d">去设置 ›</span></button>
                 </div>
               </section>
@@ -219,10 +224,7 @@
               <!-- 速记 -->
               <section class="tile home-note" data-home-module="note" data-widget-size="large">
                 <div class="note-toolbar" role="toolbar" aria-label="随笔记操作" data-i18n-aria-label="copy.quickNoteActions.b502c9">
-                  <div class="note-mode-switch" role="group" aria-label="预览或编辑" data-i18n-aria-label="copy.previewOrEdit.566766">
-                    <button class="note-mode" type="button" data-note-mode="preview" aria-pressed="false"><span data-i18n="copy.preview.13d61f">预览</span></button>
-                    <button class="note-mode active" type="button" data-note-mode="edit" aria-pressed="true"><span data-i18n="copy.edit.051836">编辑</span></button>
-                  </div>
+                  <span class="tile-label" data-i18n="copy.quickNote.990572">随笔记</span>
                   <div class="note-persist-actions" role="group" aria-label="速记保存操作" data-i18n-aria-label="copy.quickNoteSaveActions.643cc7">
                     <button class="note-mode note-save-btn" id="note-save-btn" type="button" aria-label="保存笔记" title="保存笔记" data-i18n-aria-label="copy.saveNote.b3e264" data-i18n-title="copy.saveNote.b3e264">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></svg>
@@ -236,7 +238,7 @@
                     placeholder="用 Markdown 随手记点什么…"
                     aria-label="Markdown 速记内容"
                     spellcheck="false"
-                   data-i18n-placeholder="copy.writeAQuickNoteInMarkdown.88b8ae" data-i18n-aria-label="copy.markdownQuickNoteContent.05d6b4"></textarea>
+                   data-i18n-placeholder="notes.homePlaceholder" data-i18n-aria-label="copy.markdownQuickNoteContent.05d6b4"></textarea>
                   <div
                     id="home-note-preview"
                     class="note-preview"
@@ -269,7 +271,7 @@
           <section id="tab-todo" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-todo" aria-hidden="true" inert>
             <div class="settings-nas-migration-banner" id="todo-migration-banner" data-control-id="migration.state-banner" hidden role="status"><span data-i18n="copy.migratingPleaseWait.7aed12">迁移中，稍候</span></div>
             <div class="workbench-page-heading todo-page-heading">
-              <div class="todo-page-title"><h2 data-i18n="copy.tasks.52fdbb">待办</h2><span id="todo-board-summary" role="status"></span></div>
+              <div class="todo-page-title"><span id="todo-board-summary" role="status"></span></div>
               <button type="button" class="todo-add-fab" id="todo-add-category" aria-label="添加分类" title="添加分类" data-i18n-aria-label="todo.addCategory" data-i18n-title="todo.addCategory" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 <span data-i18n="todo.addCategory">添加分类</span>
@@ -317,6 +319,7 @@
                 </div>
                 <button class="bulk-delete" id="link-bulk-delete" type="button" hidden><span data-i18n="copy.delete.2f9daa">删除</span></button>
               </div>
+              <p id="links-status" class="experience-hint" role="status" hidden></p>
               <div class="link-groups" id="link-groups"></div>
             </div>
           </section>
@@ -343,10 +346,13 @@
           <section id="tab-clip" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-clip" aria-hidden="true" inert>
             <div class="clip-panel">
               <div class="clip-toolbar" id="clip-toolbar">
+                <div class="clip-filter-switch" id="clip-filter-switch">
+                <span class="clip-filter-indicator" aria-hidden="true"></span>
                 <button class="clip-filter active" data-filter="all" type="button"><span data-i18n="copy.all.5c55a6">全部</span></button>
                 <button class="clip-filter" data-filter="text" type="button"><span data-i18n="copy.text.14b69b">文字</span></button>
                 <button class="clip-filter" data-filter="image" type="button"><span data-i18n="copy.image.d24c10">图片</span></button>
                 <button class="clip-filter" data-filter="faved" type="button"><span data-i18n="copy.star.60a535">收藏</span></button>
+                </div>
                 <button class="clip-clear-btn squircle" id="clip-clear-btn" type="button" aria-label="清空历史" data-i18n-aria-label="copy.clearHistory.17ac4a">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M4 7h16" />
@@ -764,6 +770,8 @@
     <script src="ai-provider-registry.js"></script>
     <script src="ai-usage-domain.js"></script>
     <script src="delete-confirm.js"></script>
+    <script src="note-view.js"></script>
+    <script src="note-flight.js"></script>
     <script src="app.js"></script>
     <script src="ai-usage-animation.js"></script>
     <script src="ai-usage.js"></script>
@@ -787,5 +795,6 @@
     <script src="ai-attention.js"></script>
     <script src="icon-motion.js"></script>
     <script src="ui-simplify.js"></script>
+    <script src="experience.js"></script>
   </body>
 </html>

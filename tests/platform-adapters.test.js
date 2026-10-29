@@ -14,6 +14,7 @@ test('Darwin uses runtime bundle metadata for window rows and app discovery', as
   const app = { pid: 4242, appName: 'ChatGPT', bundleId: 'runtime.bundle', appPath: '/Applications/ChatGPT.app' };
   const adapter = createDarwinAdapter({ runJxa: async (script, args) => {
     calls.push({ script, args });
+    if (script.includes('POME_WINDOW_SCAN')) return JSON.stringify({ rows: [{ ...app, title: 'ChatGPT', axWindowId: '101' }] });
     if (script.includes('runningApplications;')) return JSON.stringify([app]);
     if (script.includes('CGWindowListCopyWindowInfo')) return JSON.stringify({ rows: [{ ...app, title: 'ChatGPT', windowNumber: 11 }], candidates: 1, titled: 1 });
     if (script.includes("return 'missing'")) return 'ok';
@@ -309,4 +310,30 @@ test('koffi is pinned to 3.x and excluded from the Mac build', () => {
     Object.hasOwn(lockfile.packages, 'node_modules/@koromix/koffi-win32-x64'),
     'lockfile 必须含 Windows x64 原生子包，否则 Windows runner 的 npm ci 装不上'
   );
+});
+
+test('Darwin focus uses the cached AX identity, never a title or window index',async()=>{
+ const {createDarwinAdapter}=require('../platform-adapters/darwin');const calls=[];
+ let rows=[{pid:101,appName:'Browser',title:'a',axWindowId:'51'},{pid:101,appName:'Browser',title:'b',axWindowId:'52'}];
+ const adapter=createDarwinAdapter({runJxa:async(script,args)=>{
+  if(script.includes('POME_WINDOW_SCAN'))return JSON.stringify({rows});
+  calls.push(args);return args[1]==='51'?'true':'false';
+ }});
+ const list=await adapter.windows.list();assert.equal(await adapter.windows.focus(list.items[0].id),true);assert.deepEqual(calls[0],[101,'51']);
+ assert.equal(await adapter.windows.focus('forged'),false);assert.equal(calls.length,1);
+ rows=rows.slice(1);await adapter.windows.list();assert.equal(await adapter.windows.focus(list.items[0].id),false);assert.equal(calls.length,1,'a closed entry cannot fall back to b');
+ assert.equal(await adapter.windows.focus(list.items[1].id),false,'native focus failure is not reported as success');
+});
+
+test('an older Darwin scan cannot replace a more recent cache',async()=>{
+ const {createDarwinAdapter}=require('../platform-adapters/darwin');let finish,first=true;
+ const adapter=createDarwinAdapter({runJxa:async()=>{if(first){first=false;return new Promise(r=>finish=r)}return JSON.stringify({rows:[{pid:1,appName:'Browser',title:'new',axWindowId:'2'}]})}});
+ const stale=adapter.windows.list();const latest=await adapter.windows.list();finish(JSON.stringify({rows:[{pid:1,appName:'Browser',title:'old',axWindowId:'1'}]}));
+ assert.deepEqual((await stale).items.map(w=>w.id),latest.items.map(w=>w.id));
+});
+
+test('Darwin window permission check no longer requests screen capture for AX titles',async()=>{
+ const {createDarwinAdapter}=require('../platform-adapters/darwin');let probes=0;
+ const adapter=createDarwinAdapter({electron:{app:{getPath:()=>'/tmp/pome-window-permission-no-file'},systemPreferences:{isTrustedAccessibilityClient:()=>true,getMediaAccessStatus:()=>{probes++;return 'denied'}},desktopCapturer:{getSources:async()=>{probes++;return []}},dialog:{showMessageBox:async()=>{throw Error('no extra permission needed')}}}});
+ await adapter.permissions.selfCheck();assert.equal(probes,0);
 });

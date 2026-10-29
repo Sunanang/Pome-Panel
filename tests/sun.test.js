@@ -509,3 +509,15 @@ test('saved layouts with a hole beside a shrunk neighbor are repaired without re
   assert.deepEqual(fixedBelow.placements.commands, belowHole.commands);
   assert.deepEqual(fixedBelow.placements.note, belowHole.note);
 });
+
+
+test('built-in country labels follow UI language while manual location names remain untouched', () => {
+  const I=require('../localization/runtime'),before=I.getState();
+  try {
+    I.setState(I.snapshot('en-US',['en-US']));
+    assert.equal(sun.cityLabel({name:'纽约',en:'New York City',admin:'美国'}),'New York City, United States');
+    assert.equal(sun.cityLabel({name:'My own place',source:'manual',admin:'美国'}),'My own place, 美国');
+    I.setState(I.snapshot('zh-CN',['zh-CN']));
+    assert.equal(sun.cityLabel({name:'纽约',en:'New York City',admin:'美国'}),'纽约, 美国');
+  } finally { I.setState({...before,revision:I.getState().revision+1}); }
+});

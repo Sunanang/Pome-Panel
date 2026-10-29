@@ -208,7 +208,7 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
   }
   function weatherHtml(size) {
     if (!location || !Weather) return '';
-    const v = Weather.view(weatherData, size, (key, params) => pomeLocaleRendererSunWidget.t(key, params));
+    const v = Weather.view(weatherData, size, (key, params) => pomeLocaleRendererSunWidget.t(key, params), localStorage.getItem('pome-weather-unit') || 'c');
     const icon = v.showIcon ? `<span class="ic" aria-hidden="true">${window.PomeWeatherIcons[v.icon] || window.PomeWeatherIcons.empty}</span>` : '';
     const text = size === 'mini' ? escapeHtml(v.text)
       : `<span class="wx-state">${escapeHtml(v.label)}</span><span class="wx-separator">${size === 'small' ? '·' : ' · '}</span><span class="wx-reading">${escapeHtml(v.temperature)}<span class="wx-humidity">${escapeHtml(v.humidity)}</span></span>`;
@@ -499,6 +499,7 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
     }
     const value = preset == null ? '' : preset;
     pop.innerHTML = ("<label class=\"sun-search\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"6\"/><path d=\"m20 20-4.2-4.2\"/></svg><input id=\"sun-city-query\" type=\"text\" placeholder=\"" + (pomeLocaleRendererSunWidget.attribute("copy.searchCities.a40a92")) + "\" data-i18n-placeholder=\"copy.searchCities.a40a92\" autocomplete=\"off\" spellcheck=\"false\" aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.searchCities.a40a92")) + "\" data-i18n-aria-label=\"copy.searchCities.a40a92\" value=\"" + (escapeHtml(value)) + "\"></label>\n      <ul id=\"sun-city-results\">" + (resultRows(value)) + "</ul>\n      <div class=\"sep\"></div>\n      <button class=\"sun-manual-toggle\" type=\"button\" data-sun-manual aria-expanded=\"" + (manualOpen ? 'true' : 'false') + "\"><span data-i18n=\"copy.canTFindMyCity.ba0eac\">" + (pomeLocaleRendererSunWidget.t("copy.canTFindMyCity.ba0eac")) + "</span></button>\n      <form class=\"sun-manual\" data-sun-manual-form " + (manualOpen ? '' : 'hidden') + ">\n        <label><span data-i18n=\"copy.latitude.9c11bd\">" + (pomeLocaleRendererSunWidget.t("copy.latitude.9c11bd")) + "</span><input name=\"lat\" inputmode=\"decimal\" placeholder=\"31.23\" aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.latitude.9c11bd")) + "\" data-i18n-aria-label=\"copy.latitude.9c11bd\"></label>\n        <label><span data-i18n=\"copy.longitude.69f788\">" + (pomeLocaleRendererSunWidget.t("copy.longitude.69f788")) + "</span><input name=\"lng\" inputmode=\"decimal\" placeholder=\"121.47\" aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.longitude.69f788")) + "\" data-i18n-aria-label=\"copy.longitude.69f788\"></label>\n        <label><span data-i18n=\"copy.name.d44e9b\">" + (pomeLocaleRendererSunWidget.t("copy.name.d44e9b")) + "</span><input name=\"name\" maxlength=\"24\" placeholder=\"" + (pomeLocaleRendererSunWidget.attribute("copy.optional.537352")) + "\" data-i18n-placeholder=\"copy.optional.537352\" aria-label=\"" + (pomeLocaleRendererSunWidget.attribute("copy.locationName.1e1d6f")) + "\" data-i18n-aria-label=\"copy.locationName.1e1d6f\"></label>\n        <button type=\"submit\"><span data-i18n=\"copy.useThisLocation.2887bb\">" + (pomeLocaleRendererSunWidget.t("copy.useThisLocation.2887bb")) + "</span></button>\n        <p class=\"sun-manual-error\" data-sun-manual-error hidden></p>\n      </form>\n      <p class=\"foot\"><span data-i18n=\"copy.locationIsStoredOnThisDeviceOnly.3bc25b\">" + (pomeLocaleRendererSunWidget.t("copy.locationIsStoredOnThisDeviceOnly.3bc25b")) + "</span></p>");
+    const zone=document.createElement('p');zone.className='foot sun-zone-note';zone.textContent=location?.tz || Intl.DateTimeFormat().resolvedOptions().timeZone;pop.append(zone);
     pop.hidden = false;
     pop.scrollTop = 0;
     positionPanel();
@@ -514,7 +515,7 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
     manualOpen = false;
     const pop = document.getElementById('sun-location-popover');
     if (pop) {
-      if (pop.contains(document.activeElement)) document.activeElement.blur();
+      if (pop.contains(document.activeElement)) tile.querySelector('.sun-place')?.focus({preventScroll:true});
       pop.hidden = true;
       pop.replaceChildren();
     }

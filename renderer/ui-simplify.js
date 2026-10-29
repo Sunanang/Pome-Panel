@@ -148,7 +148,7 @@
     const value = options.diagnostic || options.message || '';
     const problem = options.messageKey || D.errorKey(value);
     const layoutProblem = options.scope === 'home:layout' || problem === 'ui.error.layout';
-    text(errorMessage, problem); text(repairCopy, options.repairKey || (layoutProblem ? 'ui.error.layoutRepair' : 'ui.error.repair'));
+    text(errorMessage, problem); text(fix, options.repairActionKey || (layoutProblem ? 'ux.settings.display' : options.scope === 'nas' ? 'ux.nas.connection' : options.scope?.startsWith('token:') || options.scope?.startsWith('source:') || !options.onRepair ? 'copy.openSettings.93112c' : 'ui.retry')); text(repairCopy, options.repairKey || (layoutProblem ? 'ui.error.layoutRepair' : 'ui.error.repair'));
     raw.textContent = D.diagnostic(value);
     const source = ['claude','codex','cursor','manus','grok','copilot'].find(id => value.toLowerCase().includes(id));
     repair = options.onRepair || (layoutProblem ? () => { void setActiveTab('settings').then(() => el('settings-home-module-list')?.scrollIntoView({ block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
@@ -212,6 +212,7 @@
         const card = document.createElement('div'), title = document.createElement('strong'), hint = document.createElement('p');
         text(title, 'ui.welcome.' + key); text(hint, 'ui.welcome.' + key + 'Hint'); card.append(title, hint); cards.append(card);
       }
+      const demo=document.createElement('div');demo.className='welcome-capsule-demo';demo.setAttribute('aria-hidden','true');demo.innerHTML='<span class="welcome-demo-capsule"></span><span class="welcome-demo-panel"><i></i><i></i><i></i><i></i></span>';body.prepend(demo);
       body.append(cards);
     } else if (step === 2) {
       const note = document.createElement('p'); text(note, 'ui.welcome.modules'); body.append(note);
@@ -230,6 +231,7 @@
         body.append(button(key, async () => { if (!await finishWelcome()) return; await setActiveTab('settings'); el(target)?.scrollIntoView({ block: 'start' }); if (target.includes('nas')) nasDetails.open = true; }));
       }
     }
+    const scrollHint=document.createElement('small');scrollHint.className='welcome-scroll-hint';text(scrollHint,'ux.welcome.scroll');body.append(scrollHint);
     if (finishing) welcome.querySelectorAll('button').forEach(b => { b.disabled = true; });
   }
   let finishing = false;

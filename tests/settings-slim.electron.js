@@ -64,7 +64,10 @@ async function run(c) {
   }))()`);
   assert.equal(structure.primary.length,3);
   for (const [i,name] of ['ai-sources','api','mirror'].entries()) assert(structure.primary[i].includes(`settings-${name}-card`));
-  for (const [i,name] of ['device','display','nas-sync'].entries()) assert(structure.secondary[i].includes(`settings-${name}-card`));
+  for (const [i,name] of ['device','display'].entries()) assert(structure.secondary[i].includes(`settings-${name}-card`),JSON.stringify(structure.secondary));
+  assert.equal(structure.secondary.length,4);
+  assert(structure.secondary[2].includes('experience-backup'),'local backup is independently discoverable before NAS');
+  assert(structure.secondary[3].includes('settings-nas-sync-card'));
   assert.equal(await js(`document.querySelectorAll('.settings-page .tile-label').length`),1,'only mirror cover keeps its eyebrow');
   assert.equal(await js(`!!document.querySelector('.settings-mirror-card .tile-label')`),true);
   assert.equal(await js(`!!document.querySelector('.settings-device-card .settings-language-row #settings-language')`),true,'language is a device setting');
@@ -87,7 +90,7 @@ async function run(c) {
   assert.equal(await js(`document.querySelector('.settings-language-card')`),null);
   assert.equal(await js(`(()=>{const props=['height','minWidth','paddingLeft','paddingRight','backgroundColor','borderColor','borderRadius','fontSize','fontFamily','color','appearance','colorScheme'];const [a,b]=['settings-language','settings-default-tab'].map(id=>getComputedStyle(document.getElementById(id)));return props.every(p=>a[p]===b[p])})()`),true,'language and default-page selects share the same appearance');
 
-  assert.equal(structure.secondary.length,3);
+  assert.equal(structure.secondary.length,4);
   assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI');
   assert.equal(structure.oldQuota,false); assert.equal(structure.obsolete,0); assert.equal(structure.testButtons,0);
   assert.equal(structure.tokens.length,6);

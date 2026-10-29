@@ -1,0 +1,86 @@
+/* Affordances and state feedback; content and native docking geometry stay shared. */
+:root { --ux-feedback: 160ms; --ux-surface: #202027; --ux-focus: #dec6c0; }
+#tab-home.active { display:flex; flex-direction:column; gap:6px; }
+.experience-hint { color:var(--text-3); font-size:11px; line-height:1.5; margin:6px 0; overflow-wrap:anywhere; }
+#tab-home .home-bento { flex:1; min-height:0; }
+.home-bento > .home-recorder[data-layout-variant] { padding-bottom:88px; }
+.home-bento > .home-recorder[data-layout-variant] .recorder-controls { bottom:48px!important; left:14px!important; gap:6px; }
+.home-bento > .home-recorder[data-layout-variant] > .ui-quick-entry { bottom:10px; left:14px; right:14px; max-width:none; width:auto; min-height:26px; z-index:3; }
+.home-bento > .home-commands[data-layout-variant] .command-add { display:block!important; flex:none; min-height:26px; margin:5px 0; }
+.home-bento > .home-commands[data-layout-variant] .command-list { display:block!important; min-height:0; flex:1; overflow:auto; }
+.mirror-action-label { position:absolute; bottom:12px; left:12px; right:12px; z-index:4; padding:6px 10px; border-radius:8px; background:#141419dc; color:#f4f3f5; font-size:11px; text-align:center; pointer-events:none; }
+.clip-item-text .clip-text { padding-right:calc(var(--clip-action-size)*2 + var(--clip-action-gap) + 8px); }
+.experience-search { min-width:100px; max-width:240px; border:1px solid var(--hairline-soft); border-radius:9px; background:var(--bg-card); color:var(--text-1); padding:7px 10px; font:inherit; font-size:12px; }
+#clip-search { margin-left:auto; }
+#clip-clear-btn { margin-left:0; flex:none; }
+.links-toolbar { flex-wrap:wrap; }
+.links-toolbar .experience-search { max-width:180px; }
+.link-move { max-width:100px; background:var(--ux-surface); color:var(--text-2); border:1px solid var(--hairline-soft); border-radius:6px; font-size:10px; padding:4px; }
+.settings-experience-nav { display:flex; flex:none; gap:6px; overflow-x:auto; padding-bottom:8px; }
+#tab-settings.active { display:flex; flex-direction:column; }
+#settings-page { min-height:0; flex:1; }
+.experience-backup h3 { margin:0; font-size:15px; }
+.experience-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.ai-attention-section { background:#202027!important; border:1px solid #ffffff28; box-shadow:0 18px 60px #0009; }
+.ai-attention-section::backdrop { background:#0006; }
+.transcription-settings-card { padding-bottom:0; }
+.transcription-settings-actions { position:sticky; bottom:0; z-index:5; background:var(--ux-surface); padding:12px 0; margin-top:12px; border-top:1px solid var(--hairline-soft); }
+.transcription-fields-row { grid-template-columns:minmax(160px,1fr) minmax(180px,1fr); }
+.transcription-field small { font-size:11px; color:var(--text-3); line-height:1.45; }
+.transcription-advanced { margin:10px 0; color:var(--text-2); }
+.transcription-advanced summary { cursor:pointer; padding:7px 0; font-size:12px; }
+.ui-error-bar { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:9px 12px; max-height:150px; }
+.ui-error-bar > p { flex:1 1 260px; margin:0; font-size:12px; }
+.ui-error-bar > small { display:none; }
+.ui-error-bar > details { flex-basis:100%; margin:0; }
+.ui-error-bar > button { margin:0; }
+.home-bento>.home-pomodoro, .home-bento>.home-recorder { container-type:inline-size; }
+@container (max-width:160px) {
+  .recorder-controls .record-control { width:22px; height:22px; min-width:22px; }
+  .pomodoro-dial input { font-size:clamp(18px,13cqw,42px); min-width:0; }
+}
+@media (max-width:979px) {
+  #tab-home .home-bento { grid-template-columns:repeat(6,minmax(0,1fr))!important; grid-template-rows:none!important; grid-auto-rows:260px; grid-auto-flow:row dense; overflow-y:auto; align-content:start; padding-right:4px; }
+  #tab-home .home-bento > [data-home-module]:not([hidden]) { grid-area:auto!important; grid-column:span 2!important; min-height:0; }
+  #tab-home .home-bento > [data-widget-size='medium']:not([hidden]) { grid-column:span 4!important; }
+  #tab-home .home-bento > [data-widget-size='large']:not([hidden]) { grid-column:span 6!important; }
+  .settings-experience-nav .workspace-button { white-space:nowrap; }
+}
+/* Feedback is local and interruptible; no whole-list replay while typing. */
+.experience-copied { outline:1px solid #73cfa2; background:#386f5433!important; }
+.experience-copied::after { content:'✓'; position:absolute; right:2px; top:0; color:#8ae2b5; font-size:10px; }
+.experience-highlight { animation:ux-highlight 1s ease-out; }
+@keyframes ux-highlight { from { outline:2px solid var(--ux-focus); outline-offset:-2px; } to { outline:2px solid transparent; outline-offset:-2px; } }
+.motion-icon.motion-active .lucide-motion { transform:none; animation:none; }
+.motion-icon.motion-active .lucide-motion [pathLength='1'] { animation:none; stroke-dasharray:none; }
+.motion-icon.motion-tap .lucide-motion { animation:none; }
+.windows-refresh.motion-active .lucide-motion { transform:rotate(45deg); transition:transform var(--ux-feedback) ease; }
+html.experience-reduced-motion *, html.experience-reduced-motion *::before, html.experience-reduced-motion *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }
+@media (prefers-reduced-motion:reduce) { .experience-highlight {animation:none;} }
+
+.welcome-capsule-demo {display:flex;align-items:center;justify-content:center;gap:28px;padding:8px;}
+.welcome-demo-capsule {width:62px;height:7px;border-radius:8px;background:#e5cdc5;box-shadow:0 3px 20px #e5cdc522;}
+.welcome-demo-panel {display:grid;grid-template-columns:1fr 1fr;gap:5px;width:100px;height:52px;border:1px solid #ffffff33;border-radius:10px;padding:9px;}
+.welcome-demo-panel i {border-radius:4px;background:#ffffff19;}
+.welcome-scroll-hint {display:block;color:var(--text-3);margin-top:12px;font-size:11px;}
+.ui-welcome-body {overscroll-behavior:contain;}
+.almanac-explanation {font-size:10px;color:var(--text-3);position:absolute;right:10px;bottom:6px;max-width:85%;z-index:3;}
+.almanac-explanation summary {cursor:pointer;text-align:right;}
+.almanac-explanation[open] {padding:9px;border:1px solid #ffffff33;border-radius:8px;background:var(--ux-surface);color:var(--text-2);}
+.almanac-explanation p {margin:6px 0 0;line-height:1.5;}
+.experience-copied {position:relative;}
+.transcription-settings-card {overflow-y:auto;overflow-x:hidden;scroll-padding-bottom:76px;}
+.transcription-advanced .transcription-field {display:flex;flex-direction:column;margin-bottom:10px;scroll-margin-bottom:76px;}
+
+/* Keep the action outside the empty-state scroll area at every widget size. */
+.home-cursor .ai-usage-empty {display:flex;flex:1 1 0;flex-direction:column;gap:8px;min-height:0;overflow:hidden;}
+.home-cursor .ai-empty-content {flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;}
+.home-cursor .ai-empty-title {display:block;}
+.home-cursor .ai-empty-body {margin:6px 0;}
+.home-cursor .ai-empty-bars {margin-top:8px;}
+.home-cursor .ai-open-settings {flex:none;align-self:flex-start;min-height:28px;max-width:100%;margin:0;}
+/* Capsule help is a small vertical stack, including when its copy wraps. */
+:root {--ux-hint-gap:10px;}
+.ui-capsule-hint {display:flex;flex-direction:column;align-items:flex-start;gap:var(--ux-hint-gap);width:max-content;max-width:min(500px,calc(100% - 32px));padding:12px 14px;box-sizing:border-box;background:var(--ux-surface);}
+.ui-capsule-hint > span {display:block;min-width:0;line-height:1.55;overflow-wrap:anywhere;}
+.ui-capsule-hint > button {margin:0;flex:none;align-self:flex-start;}

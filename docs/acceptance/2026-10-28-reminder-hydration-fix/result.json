@@ -1,0 +1,203 @@
+{
+  "phases": [
+    {
+      "label": "cold-import",
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN",
+      "restored": [
+        {
+          "id": "cold-seen",
+          "remindedAt": 1793195137345
+        },
+        {
+          "id": "cold-unseen",
+          "remindedAt": 0
+        }
+      ],
+      "delivered": "cold-unseen"
+    },
+    {
+      "label": "workspace-switch",
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN/second-workspace",
+      "restored": [
+        {
+          "id": "switched-seen",
+          "remindedAt": 1793195140213
+        },
+        {
+          "id": "switched-unseen",
+          "remindedAt": 0
+        }
+      ],
+      "delivered": "switched-unseen"
+    }
+  ],
+  "schedules": [
+    {
+      "ids": [],
+      "result": {
+        "ok": false,
+        "error": "workspace_not_ready"
+      }
+    },
+    {
+      "ids": [],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN-old",
+      "result": {
+        "ok": false,
+        "error": "stale_workspace"
+      }
+    },
+    {
+      "ids": [
+        "cold-seen",
+        "cold-unseen"
+      ],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN",
+      "result": {
+        "ok": true,
+        "count": 2,
+        "reminded": [
+          {
+            "id": "cold-seen",
+            "deadline": "2026-10-28T14:16:37.345Z",
+            "remindedAt": 1793195137345
+          }
+        ]
+      }
+    },
+    {
+      "ids": [
+        "cold-seen",
+        "cold-unseen"
+      ],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN",
+      "result": {
+        "ok": true,
+        "count": 2,
+        "reminded": [
+          {
+            "id": "cold-seen",
+            "deadline": "2026-10-28T14:16:37.345Z",
+            "remindedAt": 1793195137345
+          }
+        ]
+      }
+    },
+    {
+      "ids": [
+        "cold-seen",
+        "cold-unseen"
+      ],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN",
+      "result": {
+        "ok": true,
+        "count": 2,
+        "reminded": [
+          {
+            "id": "cold-seen",
+            "deadline": "2026-10-28T14:16:37.345Z",
+            "remindedAt": 1793195137345
+          },
+          {
+            "id": "cold-unseen",
+            "deadline": "2026-10-28T14:16:37.345Z",
+            "remindedAt": 1793195199031
+          }
+        ]
+      }
+    },
+    {
+      "ids": [],
+      "result": {
+        "ok": false,
+        "error": "workspace_not_ready"
+      }
+    },
+    {
+      "ids": [],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN/second-workspace-old",
+      "result": {
+        "ok": false,
+        "error": "stale_workspace"
+      }
+    },
+    {
+      "ids": [
+        "switched-seen",
+        "switched-unseen"
+      ],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN/second-workspace",
+      "result": {
+        "ok": true,
+        "count": 2,
+        "reminded": [
+          {
+            "id": "switched-seen",
+            "deadline": "2026-10-28T14:16:40.213Z",
+            "remindedAt": 1793195140213
+          }
+        ]
+      }
+    },
+    {
+      "ids": [
+        "switched-seen",
+        "switched-unseen"
+      ],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN/second-workspace",
+      "result": {
+        "ok": true,
+        "count": 2,
+        "reminded": [
+          {
+            "id": "switched-seen",
+            "deadline": "2026-10-28T14:16:40.213Z",
+            "remindedAt": 1793195140213
+          }
+        ]
+      }
+    },
+    {
+      "ids": [
+        "switched-seen",
+        "switched-unseen"
+      ],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN/second-workspace",
+      "result": {
+        "ok": true,
+        "count": 2,
+        "reminded": [
+          {
+            "id": "switched-seen",
+            "deadline": "2026-10-28T14:16:40.213Z",
+            "remindedAt": 1793195140213
+          },
+          {
+            "id": "switched-unseen",
+            "deadline": "2026-10-28T14:16:40.213Z",
+            "remindedAt": 1793195201546
+          }
+        ]
+      }
+    },
+    {
+      "ids": [],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN",
+      "result": {
+        "ok": false,
+        "error": "stale_workspace"
+      }
+    },
+    {
+      "ids": [],
+      "root": "/private/tmp/pome-reminder-hydration-fix-QtSgAN/second-workspace",
+      "result": {
+        "ok": true,
+        "count": 0,
+        "reminded": []
+      }
+    }
+  ],
+  "authoritativeDeletePruned": true,
+  "consoleErrors": []
+}

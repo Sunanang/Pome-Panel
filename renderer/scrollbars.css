@@ -1,0 +1,26 @@
+/* The same quiet track on every platform and scrollable surface. Explicit
+   webkit styling also avoids macOS' wide classic horizontal scrollbar. */
+:root {
+  --scrollbar-w: 4px;
+  --scrollbar-thumb: rgba(255,255,255,.16);
+  --scrollbar-thumb-hover: rgba(255,255,255,.28);
+  --scrollbar-thumb-active: rgba(255,255,255,.36);
+  --scrollbar-inset: 4px;
+}
+html * { scrollbar-width: auto !important; scrollbar-color: auto !important; }
+*::-webkit-scrollbar { width: var(--scrollbar-w) !important; height: var(--scrollbar-w) !important; }
+*::-webkit-scrollbar-track { background: transparent !important; margin: var(--scrollbar-inset); }
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb) !important;
+  background-image: none !important;
+  background-clip: padding-box !important;
+  border: 0 !important;
+  border-radius: var(--r-pill) !important;
+  min-height: 28px;
+  min-width: 28px;
+  box-shadow: none !important;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover) !important; }
+*::-webkit-scrollbar-thumb:active { background: var(--scrollbar-thumb-active) !important; }
+*::-webkit-scrollbar-button { display: none !important; width: 0 !important; height: 0 !important; }
+*::-webkit-scrollbar-corner { background: transparent !important; }

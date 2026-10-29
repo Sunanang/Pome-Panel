@@ -38,11 +38,13 @@
     }
     return { name, icon, family, available: true };
   }
-  function view(data, size, t) {
+  function view(data, size, t, unit) {
     const state = classify(data);
     const compact = size === 'mini' || size === 'small';
     const label = t(`weather.${state.name}`);
-    const temperature = state.available ? `${compact ? Math.round(data.temperature) : Math.round(data.temperature * 10) / 10}°` : '--°';
+    const reading = unit === 'f' ? data?.temperature * 9 / 5 + 32 : data?.temperature;
+    const suffix = unit === 'f' ? '°F' : unit === 'c' ? '°C' : '°';
+    const temperature = state.available ? `${compact ? Math.round(reading) : Math.round(reading * 10) / 10}${suffix}` : `--${suffix}`;
     const humidity = size === 'large' && state.available && Number.isFinite(data.humidity)
       ? ` · ${t('weather.humidity', { value: Math.round(data.humidity) })}` : '';
     const title = `${label} · ${temperature}${humidity}`;

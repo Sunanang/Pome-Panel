@@ -1,0 +1,28 @@
+{
+  "node": {
+    "total": 1009,
+    "passed": 1008,
+    "skipped": 1,
+    "failed": 0
+  },
+  "focusedUnitTests": 12,
+  "electronFlows": [
+    "notes-workflow",
+    "workbench",
+    "work-hub",
+    "ui-simplify"
+  ],
+  "restartPhases": [
+    "work-hub inbox",
+    "ui-simplify"
+  ],
+  "syntaxChecks": 126,
+  "result": "passed",
+  "localization": "passed",
+  "diffWhitespace": "passed",
+  "verifiedPlatform": "macOS Electron; isolated data and fixtures",
+  "unverified": [
+    "Windows hardware",
+    "real NAS multi-device sync"
+  ]
+}

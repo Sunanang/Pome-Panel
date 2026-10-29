@@ -6,6 +6,20 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Edit note titles directly and remove the redundant Rename button.
+- Keep Home layout editing in the context menu and remove its permanent toolbar. Remove the duplicate Tasks heading and combine statistics, help and Add category into one row with full help on hover.
+- Use the same thin scrollbar across all views; fix clipped link highlights and unwanted horizontal bars. Restore opaque reading surfaces for links, recordings and credentials, solid settings cards and separate task/category cards. Animate clipboard filter selection and results while respecting reduced motion.
+- Give macOS its own `com.pomepanel.app` identity to avoid permission confusion with legacy TO-DO Panel installations. Keep the Pome Panel data directory and the existing Windows installer identity. The updated Mac app needs its own Accessibility authorization.
+- Preserve unchanged audio-player icons during media updates so events between pointer down and up cannot discard mute or playback clicks.
+- Use macOS AX window identities for enumeration and verified focus, preventing global graphics indices from selecting another window and avoiding hidden backing surfaces. Preserve real same-title windows. Simplify the widget to title/application rows with no hover magnification, scrollable access to all entries, stable scroll/focus on refresh and per-window hiding. Window titles no longer require screen-recording access.
+
+- Keep Home quick notes as recoverable drafts; Save clears Home and collects the text into Notes with a Genie-style curved-funnel animation of the entire widget, preserving its actual background, title, controls and text while the next draft stays editable. Replace mode toggles with click-to-edit content and Save-to-preview at the same reading position, without a blue frame around the editor. Autosave retains edit mode; failures retain text with retry. Simplify feedback for reduced motion and clean up flight on navigation, collapse or resize.
+
+- Fix overlapping recording actions, native WebM duration/seeking, date/shortcut Escape handling, invalid links and stale clipboard translations. Keep every enabled Home widget reachable by scrolling in narrow windows; separate the AI empty-state settings action from its scrollable explanation to prevent bottom-edge clipping. Align capsule help copy and its action with a consistent vertical gap after wrapping.
+- Add clipboard/link search, link group moves, direct note editing and explicit credential edit actions, scoped clear confirmation, settings navigation and an independent backup entry. Clarify recording/NAS/quota setup; add independent temperature units and reduced-motion preferences, localized country/calendar labels and region-specific transcription help.
+
+- Preserve task reminder receipts during first import and data-folder changes. Schedule only after workspace hydration and reject rootless or stale-workspace requests, preventing duplicate reminders while retaining unseen-task delivery and receipt cleanup after deletion.
+
 - Persist workspace reminder receipts atomically only after display; recover unseen queued tasks after re-enabling or restarting. Deduplicate by task and deadline so quick edits remain eligible. Preserve matching reminder marks across desktop/NAS sync with persistent retryable failures, batched receipts and sync transactions, and migration/recovery guards. Group at least three overdue tasks into a localized summary that opens and highlights its members; translate active summaries without replaying them. Label the injected AI storage warning in tests while preserving production errors.
 
 - Remind tasks one hour before their deadline, with an overdue catch-up only when no reminder was sent. Send at most one reminder per deadline; clicking the bubble expands Tasks and locates the item.
@@ -17,7 +31,7 @@ Important features, fixes and release changes. Unreleased changes are archived u
 - Cancel superseded checks for the same pull request while letting main, version-tag and manually requested installer builds finish uninterrupted.
 - When Windows native capabilities are disabled, clicking a completion bubble only dismisses it. Label the action accordingly and enforce the rule in the main process; explicit source opening from the inbox remains separate.
 - Reserve measured temperature and Chinese weather-name widths in weather cards, shorten long headings, and omit the small location button's decorative chevron to prevent Windows clipping or overflow. Cover wide negative readings and long German headings at medium/large sizes, and set an explicit Chinese locale for cold-start inbox recovery acceptance.
-- Show and focus animation acceptance windows, set motion preferences explicitly, and sample layout-return interpolation on its actual CSS animation timeline to avoid software-rendering and background-window timing failures.
+- Show and focus animation/workbench acceptance windows, isolate local quota/window sources, and wait for actual page transitions. Set motion preferences explicitly and sample layout-return interpolation on its actual CSS animation timeline to avoid software-rendering and background-window timing failures.
 - Enable native window visibility before loading the weather acceptance page and cover both motion preferences, keeping the hidden-window effects suspension check reliable.
 - Align installed Windows acceptance with the current nine default home widgets, including sun and almanac. Distinguish the window-widget enable entry from active native capabilities, and respect platform-specific placement and visible controls.
 - Measure quota digits and percent signs with their actual font weights to keep progress-row margins balanced across system fonts. Show quota acceptance windows so Windows software rendering can continue producing frames.

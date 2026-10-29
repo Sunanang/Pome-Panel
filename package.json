@@ -113,6 +113,7 @@
       "localization/locales/*.json"
     ],
     "mac": {
+      "appId": "com.pomepanel.app",
       "icon": "build/pome-panel-icon.icns",
       "files": [
         "panelTiming.js",

@@ -1196,7 +1196,10 @@ async function main() {
         await new Promise((resolve) => requestAnimationFrame(resolve));
         const ghosts = [...document.querySelectorAll('.home-layout-ghost')];
         const tileAnimations = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
-          .flatMap((tile) => tile.getAnimations());
+          .flatMap((tile) => tile.getAnimations())
+          // Layout uses WAAPI; unrelated hover transitions can start when a
+          // resized card moves underneath the stationary mouse pointer.
+          .filter((animation) => !(animation instanceof CSSTransition) && !(animation instanceof CSSAnimation));
         const tileDurations = tileAnimations
           .map((animation) => Number(animation.effect?.getTiming?.().duration) || 0)
           .filter((duration) => duration > 0);

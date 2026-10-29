@@ -1,0 +1,135 @@
+{
+  "checks": [
+    {
+      "width": 1240,
+      "scrollbars": [
+        {
+          "selector": ".link-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".link-groups",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".window-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".notes-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".recording-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".credential-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".settings-column-primary",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".todo-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        }
+      ]
+    },
+    {
+      "width": 740,
+      "scrollbars": [
+        {
+          "selector": ".link-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".link-groups",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".window-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".notes-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".recording-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".credential-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".settings-column-primary",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        },
+        {
+          "selector": ".todo-list",
+          "width": "4px",
+          "height": "4px",
+          "thumb": "rgba(255, 255, 255, 0.16)",
+          "standard": "auto"
+        }
+      ]
+    }
+  ],
+  "task": {
+    "quadrant": "rgb(26, 26, 29)",
+    "row": "rgb(36, 36, 40)",
+    "border": "1px",
+    "gap": 12
+  },
+  "filterMotion": true,
+  "reducedMotion": true,
+  "isolated": true
+}

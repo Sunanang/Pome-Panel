@@ -1,0 +1,51 @@
+{
+  "keyboardNavigation": [
+    {
+      "key": "Right",
+      "active": "todo",
+      "focus": "tab-button-todo"
+    },
+    {
+      "key": "Left",
+      "active": "home",
+      "focus": "tab-button-home"
+    }
+  ],
+  "fixtureCredentialCopy": "Account copied",
+  "clearedNoteSearchResults": 2,
+  "focusTimer": {
+    "before": "01:10",
+    "after": "01:08",
+    "state": "running"
+  },
+  "weatherReducedMotion": {
+    "before": {
+      "active": true,
+      "count": 10
+    },
+    "after": {
+      "active": false,
+      "count": 0
+    }
+  },
+  "regressions": [
+    {
+      "script": "tests/ai-sources.electron.js",
+      "exitCode": 0
+    },
+    {
+      "script": "tests/nas-settings-card.electron.js",
+      "exitCode": 0
+    }
+  ],
+  "mediaDevices": "Chromium fake devices",
+  "realAccounts": false,
+  "realNas": false,
+  "realWindows": false,
+  "baseHead": "3ce142c",
+  "branch": "dev",
+  "artifactLinksValid": true,
+  "acceptedScreenshots": 114,
+  "findings": 30,
+  "pathGroups": 25
+}
