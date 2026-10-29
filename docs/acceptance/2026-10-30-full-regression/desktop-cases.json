@@ -188,7 +188,11 @@
   },
   {
     "file": "tests/windows-native.electron.js",
-    "status": "deferred"
+    "status": 0,
+    "args": [
+      "tests/windows-native.electron.js"
+    ],
+    "verification": "Separate authorized follow-up; AX tree enabled only for this run in own test child processes; see native-checks.json"
   },
   {
     "file": "tests/workbench.electron.js",
