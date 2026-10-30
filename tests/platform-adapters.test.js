@@ -337,3 +337,24 @@ test('Darwin window permission check no longer requests screen capture for AX ti
  const adapter=createDarwinAdapter({electron:{app:{getPath:()=>'/tmp/pome-window-permission-no-file'},systemPreferences:{isTrustedAccessibilityClient:()=>true,getMediaAccessStatus:()=>{probes++;return 'denied'}},desktopCapturer:{getSources:async()=>{probes++;return []}},dialog:{showMessageBox:async()=>{throw Error('no extra permission needed')}}}});
  await adapter.permissions.selfCheck();assert.equal(probes,0);
 });
+
+test('Darwin retains discovery cursors per scan and focuses off-Space rows with two identities', async () => {
+ const {createDarwinAdapter}=require('../platform-adapters/darwin');let scans=0;const focused=[];
+ const discovery={70:{launch:42,cursor:500,roots:[{remoteId:17,windowNumber:117,identity:'4272'}]}};
+ const adapter=createDarwinAdapter({runJxa:async(script,args)=>{
+  if(script.includes('POME_WINDOW_SCAN')){if(scans++)assert.deepEqual(JSON.parse(args[1]),discovery);return JSON.stringify({rows:[{pid:70,appName:'Browser',title:'other Space',axWindowId:'4272',axRemoteId:'17',windowNumber:117}],discovery});}
+  focused.push(args);return 'true';
+ }});
+ const first=await adapter.windows.list();await adapter.windows.list();
+ assert.equal(await adapter.windows.focus(first.items[0].id),true);assert.deepEqual(focused,[[70,'4272','17',117]]);
+ assert.equal(await adapter.windows.focus('forged'),false);assert.equal(focused.length,1);
+});
+
+test('a failed compatibility subprocess backs off to public AX and later retries discovery', async () => {
+ const {createDarwinAdapter}=require('../platform-adapters/darwin');const modes=[];let now=100;
+ const adapter=createDarwinAdapter({now:()=>now,runJxa:async(_script,args)=>{modes.push(args[2]);if(args[2]==='extended')throw Error('compatibility unavailable');return JSON.stringify({rows:[{pid:70,appName:'Browser',title:'ordinary',axWindowId:'4272'}]});}});
+ assert.equal((await adapter.windows.list()).items.length,1);assert.equal((await adapter.windows.list()).items.length,1);
+ assert.deepEqual(modes,['extended','public-only','public-only']);
+ now+=31000;assert.equal((await adapter.windows.list()).items.length,1);
+ assert.deepEqual(modes,['extended','public-only','public-only','extended','public-only']);
+});

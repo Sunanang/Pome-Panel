@@ -189,3 +189,5 @@ Home quick notes remain recoverable editable drafts. Save collects the text into
 ### Current windows
 
 On macOS, Current windows enumerates and focuses standard windows exposed through Accessibility. Real same-title windows remain separate. Closed or unavailable targets offer refresh instead of opening a different window; minimized targets can be restored. Rows prioritize the window title and show the application underneath. Narrow widgets use one scrollable column, and every entry remains reachable. Hold and drag a row out to hide that window; Restore reveals hidden rows. Existing hidden preferences are retained. Reading window titles requires Accessibility, without requesting screen-recording access.
+
+Discovery covers all display coordinates and supplements windows omitted from the ordinary AX list on other desktop and fullscreen Spaces. Scans have a time budget, so large inventories can fill over subsequent refreshes. If macOS compatibility APIs are unavailable, directly published windows remain available without requesting screen-recording access. Focusing verifies both the AX identity and native window number.

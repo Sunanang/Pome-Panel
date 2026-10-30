@@ -124,7 +124,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   onAiProviderTokenChanged: (cb) => subscribe('ai-provider:token-changed', (event, status) => cb(status)),
   controlMusic: (action) => ipcRenderer.invoke('music:control', action),
   inspectLink: (url) => ipcRenderer.invoke('links:inspect', url),
-  listWindows: () => ipcRenderer.invoke('windows:list'),
+  listWindows: (force = false) => ipcRenderer.invoke('windows:list', force === true),
   focusWindow: (windowId) => ipcRenderer.invoke('windows:focus', windowId),
   saveRecording: (payload) => ipcRenderer.invoke('recordings:save', payload),
   readRecording: (audioPath) => ipcRenderer.invoke('recordings:read', audioPath),

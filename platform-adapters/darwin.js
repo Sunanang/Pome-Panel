@@ -181,6 +181,9 @@ function createDarwinAdapter(options = {}) {
   // 模块级状态随代码迁入实例。
   let windowScanCache = new Map();
   let windowScanRevision = 0;
+  let windowDiscoveryState = {};
+  let windowDiscoveryRetryAt = 0;
+  const discoveryNow = options.now || Date.now;
   const windowIconCache = new Map();
   let previousPasteTarget = null;
   let sodaMusicPlaying = false;
@@ -259,17 +262,28 @@ function createDarwinAdapter(options = {}) {
     return systemIcon || readEmbeddedAppIcon(appPath);
   }
 
-  async function listWindows() {
+  async function listWindows(request = {}) {
     const revision=++windowScanRevision;
     if (systemPreferences?.isTrustedAccessibilityClient && !systemPreferences.isTrustedAccessibilityClient(false)) {
       windowScanCache = new Map();
+      windowDiscoveryState = {};
+      windowDiscoveryRetryAt = 0;
       return { items: [], error: 'accessibility_permission_required' };
     }
     try {
-      const raw = await runJxa(WINDOWS_LIST_JXA,[process.pid]);
+      let raw;
+      const args = [process.pid, JSON.stringify(windowDiscoveryState)];
+      const force = request?.force === true;
+      const publicOnly = !force && windowDiscoveryRetryAt > discoveryNow();
+      try { raw = await runJxa(WINDOWS_LIST_JXA, [...args, publicOnly ? 'public-only' : 'extended', force ? 'force' : 'scheduled']); }
+      catch (error) {
+        if (publicOnly) throw error;
+        raw = await runJxa(WINDOWS_LIST_JXA, [...args, 'public-only', force ? 'force' : 'scheduled']);
+        if (revision === windowScanRevision) windowDiscoveryRetryAt = discoveryNow() + 30000;
+      }
       const parsed = JSON.parse(raw || '{}');
       const payload=Array.isArray(parsed)?{rows:parsed}:parsed;
-      if(payload.error){if(revision===windowScanRevision)windowScanCache=new Map();return {items:[],error:payload.error};}
+      if(payload.error){if(revision===windowScanRevision){windowScanCache=new Map();windowDiscoveryState={};}return {items:[],error:payload.error};}
       const rows=normalizeWindowRows(payload.rows||[]).filter(item=>item.pid!==process.pid);
       const appPaths = [...new Set(rows.map((item) => item.appPath).filter(Boolean))];
       await Promise.all(appPaths.map(async (appPath) => {
@@ -281,6 +295,7 @@ function createDarwinAdapter(options = {}) {
         item.icon = item.appPath ? windowIconCache.get(item.appPath) || null : null;
       });
       if(revision!==windowScanRevision)return {items:[...windowScanCache.values()],error:null};
+      windowDiscoveryState = payload.discovery && typeof payload.discovery === 'object' && !Array.isArray(payload.discovery) ? payload.discovery : {};
       windowScanCache = new Map(rows.map((item) => [item.id, item]));
       return { items: rows, error: null };
     } catch (error) {
@@ -292,7 +307,9 @@ function createDarwinAdapter(options = {}) {
   async function focusWindowRow(target) {
     if (!target?.axWindowId) return false;
     try {
-      return (await runJxa(WINDOW_FOCUS_JXA, [target.pid, target.axWindowId])) === 'true';
+      const args = [target.pid, target.axWindowId];
+      if (target.axRemoteId && target.windowNumber) args.push(target.axRemoteId, target.windowNumber);
+      return (await runJxa(WINDOW_FOCUS_JXA, args)) === 'true';
     } catch (error) {
       return false;
     }

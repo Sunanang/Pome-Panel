@@ -51,6 +51,8 @@ Tasks remind one hour before their deadline and catch up if no reminder was disp
 
 On macOS, Current windows enumerates and focuses standard windows exposed through Accessibility. Real same-title windows remain separate. Closed or unavailable targets offer refresh instead of opening a different window; minimized targets can be restored. Rows prioritize the window title and show the application underneath. Narrow widgets use one scrollable column, and every entry remains reachable. Hold and drag a row out to hide that window; Restore reveals hidden rows. Existing hidden preferences are retained. Reading window titles requires Accessibility, without requesting screen-recording access.
 
+Discovery covers all display coordinates and supplements windows omitted from the ordinary AX list on other desktop and fullscreen Spaces. A time-bounded macOS compatibility path may fill large inventories over subsequent refreshes; unavailable compatibility APIs fall back to directly published windows. Focusing verifies both the AX identity and native window number, so a closed reference cannot redirect to a same-title window.
+
 The Mac app uses the distinct `com.pomepanel.app` identity and can coexist with legacy TO-DO Panel. After first updating to this identity, authorize the installed Pome Panel in System Settings → Privacy & Security → Accessibility; the old app's permission does not transfer automatically. The data directory remains Pome Panel. After source changes reach `dev`, rebuild that branch and replace the installed app; pulling source alone does not update a running installation.
 
 ## Get started

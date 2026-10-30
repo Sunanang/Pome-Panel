@@ -13,14 +13,14 @@ require('../codex-usage').readCodexUsage=async()=>({ok:true,detected:false});
 require('../codex-auth').readLocalCodexToken=async()=>({ok:false,error:'fixture_no_auth'});
 require('../codex-usage-remote').createCodexUsageService=()=>({tokenState:()=>({manualTokenInvalid:false}),getUsage:async()=>({ok:true,detected:false}),reset(){}});
 clipboard.read=async()=>[];clipboard.write=async()=>{};clipboard.writeText=async()=>{};clipboard.clear=()=>{};
-const focusCalls=[];let windowItems=[],focusResult=true,listFailure=false;
+const focusCalls=[],listRequests=[];let windowItems=[],focusResult=true,listFailure=false;
 let pairCalls=0,captureMode='',releaseCapture;const external=[];require('electron').shell.openExternal=async url=>{external.push(url);};
 const handle=ipcMain.handle.bind(ipcMain);
 ipcMain.handle=(channel,fn)=>handle(channel,(e,...args)=>{
   if(channel==='notes:capture-module'&&captureMode==='hold')return new Promise(resolve=>{releaseCapture=resolve});
   if(channel==='notes:capture-module'&&captureMode==='fail')return null;
   if((channel==='windows:list'||channel==='windows:focus')&&!e.sender.getURL().endsWith('/renderer/index.html'))return fn(e,...args);
-  if(channel==='windows:list')return {items:listFailure?[]:windowItems,error:listFailure?'window_scan_failed':null};
+  if(channel==='windows:list'){listRequests.push(args[0]);return {items:listFailure?[]:windowItems,error:listFailure?'window_scan_failed':null};}
   if(channel==='windows:focus'){focusCalls.push(args[0]);return focusResult;}
   if(channel==='links:inspect')return {ok:true,title:'Reference example',url:args[0]};
   if(channel==='credentials:list')return {ok:true,secureStorage:true,items:[]};
@@ -50,6 +50,7 @@ async function run(c){
  windowItems=[...Array.from({length:5},(_,i)=>({id:'terminal-'+i,pid:100,appName:'Terminal',title:['Pome-Panel — npm start','FNMessageBots — 日志检查','~/coding — zsh','Pome-Panel — npm test','服务器连接 — ssh'][i],icon:icons.Terminal})),...['a · 项目设计文档','b · 浏览器窗口验收'].map((title,i)=>({id:'browser-'+i,pid:200,appName:'Google Chrome',title,icon:icons['Google Chrome']})),{id:'wechat',pid:300,appName:'WeChat',title:'微信',icon:icons.WeChat}];
  await click('#windows-refresh');await until('document.querySelectorAll("#window-list .window-item").length===8');await shot(process.env.POME_WINDOWS_AUDIT==='before'?'01-before':'02-after');if(process.env.POME_WINDOWS_AUDIT!=='before'){const r=await js(`(()=>{const r=document.querySelector('.home-windows').getBoundingClientRect();return {x:Math.floor(r.x),y:Math.floor(r.y),width:Math.ceil(r.width),height:Math.ceil(r.height)}})()`);fs.writeFileSync(path.join(output,'02-after-module.png'),(await c.capturePage(r)).toPNG());}
  if(process.env.POME_WINDOWS_AUDIT!=='before'){
+  assert.equal(listRequests.at(-1),true,'manual refresh reaches the native discovery force flag');
   await click('.window-item[data-id=browser-0]');assert.equal(focusCalls.at(-1),'browser-0');await click('.window-item[data-id=browser-1]');assert.equal(focusCalls.at(-1),'browser-1');
   const beforeKeys=focusCalls.length;await js(`document.querySelector('.window-item[data-id=browser-0]').focus()`);await key('Space');assert.equal(focusCalls.length,beforeKeys+1,'Space activates the focused window row');assert.equal(await js('isExpanded'),true,'row Space does not collapse the workspace');
   const geometry=await js(`(()=>{const r=document.querySelector('.window-item').getBoundingClientRect();return {width:r.width,height:r.height,cols:getComputedStyle(document.querySelector('#window-list')).gridTemplateColumns}})()`);assert(geometry.width>140&&geometry.height>=50,'window titles have a readable row');

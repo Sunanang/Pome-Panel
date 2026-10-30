@@ -3779,7 +3779,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     renderWindows();
     let result;
     try {
-      result = await window.notchAPI.listWindows();
+      result = await window.notchAPI.listWindows(force);
     } catch (error) {
       result = { items: [], error: 'window_scan_failed' };
     }

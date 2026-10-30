@@ -121,6 +121,7 @@ for (const file of [
   'platform-adapters/darwin-windows.js',
   'tests/windows-widget.electron.js',
   'tests/windows-native.electron.js',
+  'tests/windows-spaces.native.cjs',
   'platform-adapters/win32.js',
   'platform-adapters/win32-user32.js',
   'preload.js',

@@ -199,6 +199,9 @@ function normalizeWindowRows(rows, platform = 'darwin') {
       const appPath = isAppPath(candidatePath) ? candidatePath : '';
       const handle = /^\d+$/.test(String(row && row.handle || '')) ? String(row.handle) : '';
       const axWindowId=!windows&&/^\d{1,20}$/.test(String(row?.axWindowId??''))?String(row.axWindowId):'';
+      const remoteCandidate = String(row?.axRemoteId ?? '');
+      const axRemoteId = axWindowId && windowNumber > 0 && /^\d{1,16}$/.test(remoteCandidate)
+        && Number.isSafeInteger(Number(remoteCandidate)) ? remoteCandidate : '';
       if (!pid || !appName || !title) return null;
       return {
         id: axWindowId ? `window-${pid}-ax-${axWindowId}` : windowNumber ? `window-${pid}-${windowNumber}` : `window-${pid}-${windowIndex}-${order}`,
@@ -211,6 +214,7 @@ function normalizeWindowRows(rows, platform = 'darwin') {
         title: title.slice(0, 240),
         ...(handle ? { handle } : {}),
         ...(axWindowId ? {axWindowId,minimized:Boolean(row.minimized)} : {}),
+        ...(axRemoteId ? {axRemoteId} : {}),
       };
     })
     .filter(Boolean)

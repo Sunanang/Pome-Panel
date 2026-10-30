@@ -2891,10 +2891,10 @@ ipcMain.handle('smart:organize-material', async (event, payload) => {
 
 // 窗口枚举与聚焦由适配层实现：macOS 使用 AX 身份，Windows 使用 HWND。
 // 聚焦只接受最近一次扫描缓存里的窗口 ID，缓存也留在适配层实例里。
-ipcMain.handle('windows:list', async (event) => {
+ipcMain.handle('windows:list', async (event, force = false) => {
   requireWorkspaceOwner(event);
   if (!platformCapabilities.features.windowSwitcher) return { items: [], error: 'unsupported' };
-  return platformAdapter.windows.list();
+  return platformAdapter.windows.list({ force: force === true });
 });
 
 ipcMain.handle('windows:focus', async (event, windowId) => {

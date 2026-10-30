@@ -878,3 +878,11 @@ test('AX identities preserve separate same-title windows and survive title/index
  const changed=normalizeWindowRows([{pid:10,appName:'Terminal',title:'npm test',axWindowId:'41',windowIndex:5}]);
  assert.equal(changed[0].id,items[0].id);
 });
+
+test('remote AX tokens require a valid AX identity, native window number and safe element ID', () => {
+ const base={pid:70,appName:'Browser',title:'other Space',axWindowId:'4272',windowNumber:117};
+ assert.equal(normalizeWindowRows([{...base,axRemoteId:'0'}])[0].axRemoteId,'0');
+ for(const axRemoteId of ['-1','17; do shell script','9007199254740992','NaN'])assert.equal(normalizeWindowRows([{...base,axRemoteId}])[0].axRemoteId,undefined);
+ assert.equal(normalizeWindowRows([{...base,windowNumber:0,axRemoteId:'17'}])[0].axRemoteId,undefined);
+ assert.equal(normalizeWindowRows([{...base,axWindowId:'',axRemoteId:'17'}])[0].axRemoteId,undefined);
+});

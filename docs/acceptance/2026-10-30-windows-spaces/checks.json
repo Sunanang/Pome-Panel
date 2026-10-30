@@ -1,0 +1,17 @@
+{
+  "node": {
+    "total": 1051,
+    "pass": 1050,
+    "skipped": 1,
+    "fail": 0
+  },
+  "configHashesUnchanged": true,
+  "sourceHashes": {
+    "main.js": "0c03f68f2d3e5053dd7a9225f49804634131827e3ce8f404399fef58053f31f4",
+    "main-services.js": "8d312cfc4933abe5ebd16dd7c98655e90e7ffefacb9316453287af619d807c71",
+    "preload.js": "983adf5dd3c210172db2104f5dc20ebb808f6b32f42595e313c648aeaf47313f",
+    "renderer/workspace.js": "c06d11ceb06420d4e37a5a26296f99401df9e9a237ff74e829b1f2fe13878424",
+    "platform-adapters/darwin.js": "c083549ddf9f1a8d8c4c54eed3d04776b291ef859c9ef035c188dd5475018c5a",
+    "platform-adapters/darwin-windows.js": "4e6ba2fcfe09c7894d713566e7950c809086bec7d53e352cbb538a556648e41f"
+  }
+}

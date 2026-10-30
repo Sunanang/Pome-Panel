@@ -23,6 +23,7 @@
     "pack": "electron-builder --dir",
     "make-ico": "node scripts/make-ico.js",
     "check:work-hub": "node scripts/check-work-hub-baseline.js",
+    "check:windows-spaces": "node tests/windows-spaces.native.cjs",
     "i18n:generate": "node scripts/localization-resources.js",
     "i18n:check": "node scripts/localization-resources.js --check"
   },
