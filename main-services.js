@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { reminderKey, reminderStamp } = require('./packages/sync-protocol');
 const notificationDomain = require('./renderer/notification-domain');
+const { windowLayer } = require('./platform');
 
 function isPrivateAddress(address) {
   const value = String(address || '').trim().toLowerCase().split('%', 1)[0];
@@ -124,7 +125,7 @@ function createForegroundMediaPermissionCoordinator(defaults = {}) {
             restoreAlwaysOnTop = false;
             if (shouldRestore && targetToRestore && !targetToRestore.isDestroyed()) {
               // Match the main panel's normal layer (status on macOS, floating elsewhere).
-              const level = process.platform === 'darwin' ? 'status' : 'floating';
+              const { level } = windowLayer(process.platform);
               targetToRestore.setAlwaysOnTop(true, level);
             }
           }

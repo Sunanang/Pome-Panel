@@ -77,7 +77,7 @@ test('first-run auto-launch only fires for a genuinely fresh install', () => {
   assert.equal(firstRunAutoLaunchPlan().reason, 'unsupported');
 });
 
-test('media permission prompts temporarily lower the panel and restore its normal floating layer', async () => {
+test('media permission prompts temporarily lower the panel and restore its shared normal layer', async () => {
   const events = [];
   let alwaysOnTop = true;
   const expectedLevel = process.platform === 'darwin' ? 'status' : 'floating';

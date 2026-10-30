@@ -82,7 +82,7 @@ async function run(c) {
   }
   async function click(selector, fraction = .5) {
     const point = await js(`(() => { const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw new Error('Missing '+${JSON.stringify(selector)});const r=e.getBoundingClientRect();const x=r.x+r.width*${fraction},y=r.y+r.height/2;const hit=document.elementFromPoint(x,y);return {x,y,hittable:!!hit&&(hit===e||e.contains(hit))};})()`);
-    assert.equal(point.hittable, true, selector + ' is visible and directly clickable');
+    assert.equal(point.hittable, true, selector + ' is visible and directly clickable; ' + JSON.stringify(await js('({isExpanded,modeBusy,tab:activeTab,app:document.getElementById("app").className})')));
     await pointer(point.x, point.y);
   }
   async function key(keyCode) { c.sendInputEvent({ type: 'keyDown', keyCode }); c.sendInputEvent({ type: 'keyUp', keyCode }); await sleep(80); }
@@ -96,6 +96,10 @@ async function run(c) {
     await js(`Promise.all(document.getElementById('tab-${name}').getAnimations().map(a=>a.finished.catch(()=>{})))`);
   }
   await until('!!window.NotchWorkspace && !workspaceReloadPending');
+  // This suite controls native hide/show to test privacy and page geometry.
+  // Native blur may otherwise begin a normal collapse midway through those
+  // controlled steps; focus/collapse behavior is covered by the lifecycle suites.
+  BrowserWindow.fromWebContents(c).removeAllListeners('blur');
   BrowserWindow.fromWebContents(c).show();
   BrowserWindow.fromWebContents(c).focus();
   await js('setMode(true)'); await until('!modeBusy');

@@ -1,0 +1,8 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {verifyPackagedSources}=require('../build/sourceManifest');
+const files=['main.js','main-services.js','platform.js','preload.js','renderer/index.html','renderer/app.js','renderer/workspace.js','renderer/assets/cover.webp'];
+function fixture(t){const root=fs.mkdtempSync(path.join(os.tmpdir(),'pome-build-source-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));for(const area of ['source','app'])for(const file of files){const dest=path.join(root,area,file);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.writeFileSync(dest,'content '+file);}return{source:path.join(root,'source'),app:path.join(root,'app')};}
+test('packaged source verification covers core code and shipped assets',t=>{const f=fixture(t),hashes=verifyPackagedSources(f.source,f.app);assert.equal(Object.keys(hashes).length,files.length);assert.match(hashes['main.js'],/^[a-f0-9]{64}$/);});
+test('a stale packaged bootstrap is rejected before signing',t=>{const f=fixture(t);fs.writeFileSync(path.join(f.app,'main.js'),'old packaged guard');assert.throws(()=>verifyPackagedSources(f.source,f.app),/Packaged source mismatch: main.js/);});
+test('missing required product files and mismatched assets are rejected',t=>{const f=fixture(t);fs.rmSync(path.join(f.app,'preload.js'));assert.throws(()=>verifyPackagedSources(f.source,f.app),/preload.js/);fs.writeFileSync(path.join(f.app,'preload.js'),'content preload.js');fs.writeFileSync(path.join(f.app,'renderer/assets/cover.webp'),'stale asset');assert.throws(()=>verifyPackagedSources(f.source,f.app),/cover.webp/);});

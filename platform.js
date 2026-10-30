@@ -3,6 +3,15 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.NotchPlatform = factory();
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  function desktopTestEnvironment({ packaged = false, env = {} } = {}) {
+    const requested = Boolean(env.TODO_TEST_USER_DATA);
+    const testMode = requested && (!packaged || env.POME_PACKAGED_TEST_MODE === '1');
+    return { testMode, ignoreInheritedTestState: packaged && !testMode };
+  }
+
+  function windowLayer(platform, { notification = false } = {}) {
+    return { level: platform === 'darwin' ? 'status' : 'floating', relativeLevel: notification ? 1 : 0 };
+  }
   // ============ 能力层 v2（P0-1） ============
   // 纯数据，主进程与渲染层共享：能力层只声明"能不能做 / 用什么参数"，
   // "怎么做"在 platform-adapters/ 里。渲染层一律读 notchAPI.capabilities，
@@ -574,6 +583,8 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
   applyPlatformDataset();
 
   return {
+    desktopTestEnvironment,
+    windowLayer,
     baseCapabilities,
     resolveCapabilities,
     capabilities,

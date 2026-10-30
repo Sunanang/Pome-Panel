@@ -15,11 +15,18 @@ const {
   desktopCapturer,
   ClipboardItem,
 } = require('electron');
+const platformPolicy = require('./platform');
+// Production installations ignore a leaked test profile. Packaged acceptance
+// must opt in explicitly, before any profile, service or permission decision.
+if (platformPolicy.desktopTestEnvironment({ packaged: app.isPackaged === true, env: process.env }).ignoreInheritedTestState) {
+  for (const key of ['TODO_TEST_USER_DATA', 'POME_TEST_LANGUAGE', 'POME_TEST_NOTIFICATIONS', 'POME_HOOK_TEST_HOME']) delete process.env[key];
+}
 const WebSocket = require('ws');
 const PomeI18n = require('./localization/runtime');
 let localizationRevision = 0;
 const path = require('path');
 const fs = require('fs');
+const { writeAtomic } = require('./atomicStorage');
 const http = require('http');
 const { validatePublicHttpUrl, fetchPublicHttp, readLimitedBody } = require('./public-http');
 const zlib = require('zlib');
@@ -45,7 +52,6 @@ const sourceTestTokens = new Map();
 const backup = require('./workspaceBackup');
 const { createSyncRecovery } = require('./syncRecovery');
 function recoveryStore() { return createSyncRecovery(path.join(app.getPath('userData'), 'sync-recovery.json')); }
-const platformPolicy = require('./platform');
 const { loadAdapter } = require('./platform-adapters');
 const { completionIds: catalogCompletionIds, httpNotifyIds: catalogHttpNotifyIds } = require('./aiProviderCatalog');
 const { createManusCompletionService } = require('./manusCompletionService');
@@ -352,7 +358,7 @@ function createNotchTrayIcon() {
 //
 // NOTCH_LIP（原 6px 唇边）已移除：折叠条高度现在恰好等于菜单栏高（≈物理刘海高），
 // 一个像素都不超出物理刘海。虽然折叠条完全在菜单栏拦截带内，
-// 但本项目窗口使用 setAlwaysOnTop(true,'floating') 级别（不压截图/输入法），
+// 本项目的层级由 platformPolicy.windowLayer 统一决定，仍低于系统截图选区，
 // 实测菜单栏不拦截该级别窗口的点击，折叠条仍可点击展开。
 // （见项目记忆 notch-top-geometry-constraint / commit f12aea1）
 
@@ -373,7 +379,8 @@ const CREDENTIALS_VAULT_FILE = 'credentials.vault.json';
 const APP_SETTINGS_FILE = 'app-settings.json';
 const WORKSPACE_SETTINGS_FILE = 'workspace-settings.json';
 const WORKSPACE_DATA_FILE = 'workspace.json';
-const MIRROR_IMAGE_FILE = 'mirror-cover.jpg';
+const MIRROR_IMAGE_FILE = 'mirror-cover.webp';
+const LEGACY_MIRROR_IMAGE_FILE = 'mirror-cover.jpg';
 const SYNC_CREDENTIALS_FILE_NAME = 'sync-credentials.json';
 let workspacePersistenceGate = createWorkspacePersistenceGate();
 const sensitiveClipboardGuard = createSensitiveClipboardGuard();
@@ -406,6 +413,11 @@ const TODO_REMINDER_LEAD_MS = 60 * 60 * 1000;
 
 let mainWindow = null;
 let tray = null;
+let trayMenu = null;
+let trayOpenQueued = false;
+let mirrorImageGeneration = 0;
+let pendingHideUntilTray = false;
+const desktopTrayExpected = !process.env.TODO_TEST_USER_DATA;
 let currentMode = 'collapsed';
 let panelDragOffset = null;
 let typingFocusActive = false;
@@ -705,7 +717,7 @@ function applyMode(mode, display) {
   mainWindow.setBounds(nextBounds);
   mainWindow.setIgnoreMouseEvents(false);
   currentMode = mode;
-  if (mode === 'expanded') hideWhenCollapsed = false;
+  if (mode === 'expanded') { hideWhenCollapsed = false; pendingHideUntilTray = false; }
   if (mode === 'collapsed') {
     // 把纠正后的落点写回，避免下次仍用旧坐标算出错位动画种子。
     // 回退到旧 Windows 布局时不写回：那条路径的坐标恒为顶部居中，会把旧 edge 一起腌坏。
@@ -721,7 +733,7 @@ function applyMode(mode, display) {
     }
     if (hideWhenCollapsed) {
       hideWhenCollapsed = false;
-      mainWindow.hide();
+      hideMainWindowSafely();
       refreshTrayMenu();
     }
   }
@@ -778,6 +790,7 @@ function activateMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (process.env.TODO_TEST_USER_DATA) return;
   const plan = mainPanelActivationPlan(process.platform);
+  pendingHideUntilTray = false;
   hideWhenCollapsed = false;
   if (plan.showIfHidden && !mainWindow.isVisible()) mainWindow.show();
   if (plan.stealAppFocus) {
@@ -788,10 +801,23 @@ function activateMainWindow() {
 
 function recoverStartupPanelVisibility() {
   if (!mainWindow || mainWindow.isDestroyed() || isQuitting || startupRecoveryDismissed
-    || process.env.TODO_TEST_USER_DATA || mediaPermissionRequests > 0 || mainWindow.isVisible()) return;
-  // Recover an ordered-out capsule without stealing focus from the user's app.
+    || process.env.TODO_TEST_USER_DATA || mediaPermissionRequests > 0) return;
+  // isVisible() may remain true after a native order-out. Reorder without
+  // activating the application, even when Electron's visible flag stayed true.
   mainWindow.showInactive();
   applyMainWindowLayer();
+}
+
+function hideMainWindowSafely() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (desktopTrayExpected && (!tray || tray.isDestroyed())) {
+    pendingHideUntilTray = true;
+    mainWindow.showInactive();
+    applyMainWindowLayer();
+    return;
+  }
+  pendingHideUntilTray = false;
+  mainWindow.hide();
 }
 
 function hideWindowAfterCollapse() {
@@ -803,7 +829,7 @@ function hideWindowAfterCollapse() {
     return;
   }
   hideWhenCollapsed = false;
-  mainWindow.hide();
+  hideMainWindowSafely();
   refreshTrayMenu();
 }
 
@@ -1177,7 +1203,8 @@ function createTaskNotificationWindow() {
   const targetWindow = notificationWindow;
   // 与主窗同级；relativeLevel 1 让气泡仍叠在面板之上。
   // 不用 screen-saver：该级会压住系统截图选区，且常被截图工具排除。
-  notificationWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'status' : 'floating', 1);
+  const notificationLayer = platformPolicy.windowLayer(process.platform, { notification: true });
+  notificationWindow.setAlwaysOnTop(true, notificationLayer.level, notificationLayer.relativeLevel);
   if (process.platform === 'darwin') notificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   notificationWindow.setIgnoreMouseEvents(false);
   notificationWindow.loadFile(path.join(__dirname, 'renderer', 'notification.html'));
@@ -1602,7 +1629,7 @@ function createWindow() {
 
   // status：盖住普通全屏应用（Cursor 全屏时 floating 会被挡住，表现为「安装后看不到」）。
   // 仍低于 screen-saver，避免压住系统截图选区。
-  mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'status' : 'floating');
+  mainWindow.setAlwaysOnTop(true, platformPolicy.windowLayer(process.platform).level);
   if (process.platform === 'darwin') {
     try { mainWindow.setVibrancy(null); } catch (e) {}
   }
@@ -1660,9 +1687,9 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     applyMode('collapsed');
-    if (!process.env.TODO_TEST_USER_DATA) {
+    if (!process.env.TODO_TEST_USER_DATA && !startupRecoveryDismissed) {
       mainWindow.show();
-      // Keychain / permission prompts during first paint can leave the floating
+      // Keychain / permission prompts during first paint can leave the status
       // capsule ordered out (CGWindow onScreen=false). Re-assert visibility.
       setTimeout(recoverStartupPanelVisibility, 400);
     }
@@ -1671,6 +1698,7 @@ function createWindow() {
   mainWindow.on('closed', () => {
     cancelCollapseWatchdog();
     hideWhenCollapsed = false;
+    trayOpenQueued = false;
     mainWindow = null;
   });
 
@@ -1917,7 +1945,7 @@ function copyWorkspaceAssets(sourceRoot, targetRoot) {
       fs.cpSync(source, target, { recursive: true, force: false, errorOnExist: false });
     } catch (error) { throw new Error('workspace_assets_copy_failed', { cause: error }); }
   }
-  for (const filename of [WORKSPACE_DATA_FILE, MIRROR_IMAGE_FILE]) {
+  for (const filename of [WORKSPACE_DATA_FILE, MIRROR_IMAGE_FILE, LEGACY_MIRROR_IMAGE_FILE]) {
     const source = path.join(sourceRoot, filename);
     const target = path.join(targetRoot, filename);
     try {
@@ -2050,7 +2078,12 @@ function mirrorImagePath() {
 
 function mirrorImageDataUrl() {
   try {
-    const image = nativeImage.createFromPath(mirrorImagePath());
+    const bytes = fs.readFileSync(mirrorImagePath());
+    if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP')
+      return `data:image/webp;base64,${bytes.toString('base64')}`;
+  } catch { /* Keep the legacy cover readable until a valid WebP has been saved. */ }
+  try {
+    const image = nativeImage.createFromPath(workspacePath(LEGACY_MIRROR_IMAGE_FILE));
     if (image.isEmpty()) return null;
     return image.toDataURL();
   } catch (error) {
@@ -2058,7 +2091,35 @@ function mirrorImageDataUrl() {
   }
 }
 
+async function encodeMirrorCover(image, contents) {
+  if (!contents || contents.isDestroyed()) throw new Error('mirror_encoder_unavailable');
+  const size = image.getSize(), ratio = Math.min(1, 1600 / Math.max(size.width, size.height));
+  const bounded = ratio < 1 ? image.resize({ width: Math.max(1, Math.round(size.width * ratio)),
+    height: Math.max(1, Math.round(size.height * ratio)), quality: 'best' }) : image;
+  const script = `(async () => {
+    const image = new Image(); image.src = ${JSON.stringify(bounded.toDataURL())}; await image.decode();
+    const canvas = new OffscreenCanvas(image.naturalWidth, image.naturalHeight);
+    canvas.getContext('2d').drawImage(image, 0, 0);
+    const blob = await canvas.convertToBlob({ type: 'image/webp', quality: 0.86 });
+    if (blob.type !== 'image/webp') throw new Error('webp_encoder_unavailable');
+    return await new Promise((resolve, reject) => { const reader = new FileReader();
+      reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('image_encode_failed'));
+      reader.readAsDataURL(blob); });
+  })()`;
+  let timer;
+  const dataUrl = await Promise.race([contents.executeJavaScript(script), new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('image_encode_timeout')), 10000);
+  })]).finally(() => clearTimeout(timer));
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/webp;base64,')) throw new Error('invalid_webp');
+  const bytes = Buffer.from(dataUrl.slice('data:image/webp;base64,'.length), 'base64');
+  if (bytes.length < 12 || bytes.length > 10 * 1024 * 1024 || bytes.toString('ascii', 0, 4) !== 'RIFF'
+    || bytes.toString('ascii', 8, 12) !== 'WEBP') throw new Error('invalid_webp');
+  return { bytes, dataUrl };
+}
+
 async function chooseMirrorImage() {
+  const generation = ++mirrorImageGeneration, destination = mirrorImagePath(), owner = mainWindow;
+  const current = () => generation === mirrorImageGeneration && destination === mirrorImagePath() && owner === mainWindow && owner && !owner.isDestroyed();
   const result = await showOwnedOpenDialog({
     title: PomeI18n.t("copy.changeMirrorCover.855f71"),
     properties: ['openFile'],
@@ -2071,21 +2132,39 @@ async function chooseMirrorImage() {
     if (image.isEmpty()) throw new Error('invalid_image');
     const size = image.getSize();
     if (!size.width || !size.height || size.width * size.height > 60_000_000) throw new Error('image_too_large');
-    fs.writeFileSync(mirrorImagePath(), image.toJPEG(92), { mode: 0o600 });
-    const dataUrl = mirrorImageDataUrl();
+    const { bytes, dataUrl } = await encodeMirrorCover(image, owner?.webContents);
+    if (!current()) return { ok: false, canceled: true };
+    writeAtomic(destination, bytes);
     if (dataUrl && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('mirror:image-changed', dataUrl);
     }
     return { ok: true, canceled: false, dataUrl };
   } catch (error) {
+    if (!current()) return { ok: false, canceled: true };
     await dialog.showMessageBox({ type: 'error', title: PomeI18n.t("copy.couldnTChangeTheCover.29c48a"), message: PomeI18n.t("copy.chooseAValidImageOfASupported.298e1e") });
     return { ok: false, error: 'invalid_image' };
   }
 }
 
 function showMainPanelFromTray() {
+  if (isQuitting) return;
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow();
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  pendingHideUntilTray = false;
+  if (mainWindow.webContents.isLoadingMainFrame()) {
+    if (!trayOpenQueued) {
+      trayOpenQueued = true;
+      const owner = mainWindow;
+      owner.webContents.once('did-finish-load', () => {
+        trayOpenQueued = false;
+        if (mainWindow === owner) showMainPanelFromTray();
+      });
+    }
+    return;
+  }
   repositionWindow(getTargetDisplay());
+  mainWindow.showInactive();
+  applyMainWindowLayer();
   activateMainWindow();
   if (currentMode !== 'expanded') {
     mainWindow.webContents.send('shortcut:toggle-panel');
@@ -2138,10 +2217,14 @@ function refreshTrayMenu() {
       click: () => app.quit(),
     },
   ]);
-  tray.setContextMenu(menu);
+  trayMenu = menu;
+  // macOS automatically opens an attached menu on left click. Keep left click
+  // for opening Pome and show this menu explicitly on right click instead.
+  tray.setContextMenu(process.platform === 'darwin' ? null : menu);
 }
 
 function createTray() {
+  if (isQuitting || (tray && !tray.isDestroyed())) return;
   try {
     const icon = createNotchTrayIcon();
     if (!icon || icon.isEmpty()) {
@@ -2150,15 +2233,21 @@ function createTray() {
     tray = new Tray(icon);
     tray.setToolTip('Pome Panel');
     tray.on('click', () => {
-      if (!mainWindow) return;
-      // Always surface the panel: a hidden floating window is easy to miss, and a
+      // Always surface the panel: a hidden status window is easy to miss, and a
       // visible collapsed capsule may still sit under the menu bar after auth dialogs.
+      // Do not gate on mainWindow — showMainPanelFromTray recreates it when needed.
       showMainPanelFromTray();
     });
+    if (process.platform === 'darwin') {
+      tray.setIgnoreDoubleClickEvents(true);
+      tray.on('right-click', () => { if (trayMenu) tray.popUpContextMenu(trayMenu); });
+    }
     refreshTrayMenu();
+    if (pendingHideUntilTray && currentMode === 'collapsed') hideMainWindowSafely();
   } catch (error) {
     // Tray failure must not abort whenReady (notification server / permission prompts).
     console.error('[pome] createTray failed', error);
+    try { tray?.destroy(); } catch (_) {}
     tray = null;
   }
 }
@@ -2268,7 +2357,7 @@ ipcMain.handle('window:reset-panel-position', () => {
 function applyMainWindowLayer() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mediaPermissionRequests > 0) return;
-  mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'status' : 'floating');
+  mainWindow.setAlwaysOnTop(true, platformPolicy.windowLayer(process.platform).level);
   if (process.platform === 'darwin') {
     try { mainWindow.setVibrancy(null); } catch (e) {}
   }
@@ -6260,8 +6349,9 @@ app.whenReady().then(() => {
   refreshRuntimeCapabilities();
   backup.recoverWorkspaceRestore(workspaceRoot());
   createWindow();
-  // An explicit test profile stays isolated in both source and packaged runs.
-  // Match createWindow/activateMainWindow and the notification port policy.
+  // Packaged installs already cleared leaked TODO_TEST_* above (unless
+  // POME_PACKAGED_TEST_MODE=1). Source/Electron tests keep an explicit profile
+  // and skip tray + notify + permission prompts here.
   const testUserData = Boolean(process.env.TODO_TEST_USER_DATA);
   const enableDesktopChrome = !testUserData;
   if (enableDesktopChrome) {
@@ -6270,6 +6360,7 @@ app.whenReady().then(() => {
     // no status item / no way back into a hidden LSUIElement panel).
     try { startTaskNotificationServer(); } catch (error) { console.error('[pome] notify server failed', error); }
     setImmediate(() => {
+      if (isQuitting) return;
       try { createTray(); } catch (error) { console.error('[pome] createTray aborted', error); }
     });
     void promptForMissingPermissions()

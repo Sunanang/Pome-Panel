@@ -100,7 +100,8 @@ async function run(mainContents) {
     assert.equal(win.isAlwaysOnTop(), true);
     // Match the panel's platform layer, with notifications one relative level above.
     // Keep both below screen-saver so system capture UI can still appear above them.
-    assert.match(fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8'), /notificationWindow\.setAlwaysOnTop\(true, process\.platform === 'darwin' \? 'status' : 'floating', 1\)/);
+    const notificationLayer=require('../platform').windowLayer(process.platform,{notification:true});
+    assert.deepEqual(notificationLayer,{level:process.platform==='darwin'?'status':'floating',relativeLevel:1});
     assert.equal(win.getBounds().width, 400);
     assert.equal(win.hasShadow(), false, 'native window cannot add a second outer shadow');
     const edge = await evaluate(win, `({shadow:getComputedStyle(shell.querySelector('.notification-shape')).boxShadow,
