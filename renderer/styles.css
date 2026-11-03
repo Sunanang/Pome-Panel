@@ -3092,13 +3092,20 @@ body.panel-dragging #app.collapsed .notch {
 
 .home-bento {
   position: relative;
+  --home-fill-gap: 12px;
   grid-template-columns: repeat(var(--home-grid-columns, 12), minmax(0, 1fr));
   grid-template-rows: repeat(var(--home-grid-rows, 4), minmax(0, 1fr));
   grid-auto-flow: dense;
   grid-template-areas: none;
-  gap: 12px;
+  gap: var(--home-fill-gap);
   height: 100%;
   isolation: isolate;
+}
+
+.home-bento[data-fill-layout='true'] > :is([data-home-module]:not([hidden]), .home-swap-placeholder) {
+  position:absolute;
+  left:var(--home-fill-left);top:var(--home-fill-top);
+  width:var(--home-fill-width);height:var(--home-fill-height);
 }
 
 .home-bento > [data-widget-size='mini']   { grid-column: span 2; grid-row: span 1; }
@@ -3549,7 +3556,7 @@ body.panel-dragging #app.collapsed .notch {
 }
 
 @media (max-width: 900px) {
-  .home-bento { grid-template-columns: repeat(var(--home-grid-columns, 12), minmax(0, 1fr)); gap: 8px; }
+  .home-bento { --home-fill-gap:8px;grid-template-columns: repeat(var(--home-grid-columns, 12), minmax(0, 1fr)); gap:var(--home-fill-gap); }
   .tab { padding-right: 9px; padding-left: 9px; }
 }
 
@@ -8465,11 +8472,17 @@ html[data-panel-size] #tab-home .home-bento { overflow:hidden; }
 .command-comment { min-width:0; padding:0; border:0; background:none; color:var(--text-3); font:inherit; font-size:var(--fs-caption); text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:text; }
 .home-inbox-listener { margin-left:auto; color:var(--text-3); font-size:var(--fs-micro); white-space:nowrap; }
 .home-inbox-listener[data-error='true'] { color:var(--p0); }
+.home-inbox-head > strong { margin-right:auto; }
+.home-inbox-head > #home-inbox-unread-label { margin-left:0; }
+.home-inbox-head > #home-inbox-read-all { order:2;margin-left:0;white-space:nowrap; }
+.home-inbox-head > .home-inbox-listener { order:1;margin-left:0; }
 
 /* Match the edit-mode selector so pointer movement never inherits its FLIP transition. */
 .home-bento[data-layout-editing='true'] > [data-home-module].is-dragging { transition:none; }
 
 .home-inbox[data-widget-size='small'] .home-inbox-head { flex-wrap:wrap; }
 .home-inbox[data-widget-size='small'] .home-inbox-listener { flex:1 0 100%; margin-left:0; }
+.home-inbox[data-widget-size='small'] .home-inbox-listener { order:3; }
+.home-inbox[data-widget-size='small'] #home-inbox-read-all { margin-left:auto; }
 
 .home-inbox[data-widget-size='mini'] #home-inbox-unread-label { display:none; }

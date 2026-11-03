@@ -3882,22 +3882,28 @@ function animateCommittedHomeLayout(reason, beforeState, { draggedId = null } = 
 
 function projectHomeLayoutForPanel(layout, order = homeOrder, sizes = homeSizes) {
   const projection = homeCapacity(hiddenHomeModules, order, sizes);
-  const columns = homePanelSize === 'compact' ? 8 : homePanelSize === 'medium' ? 10 : 12;
+  let columns = homePanelSize === 'compact' ? 8 : homePanelSize === 'medium' ? 10 : 12;
   let rows = homePanelSize === 'compact' ? 3 : 4;
   let renderLayout = layout;
   if (homePanelSize !== 'standard') {
-    let placements = window.NotchDomain.packHomeWidgetLayout(projection.visibleIds, sizes, columns, rows, false);
-    // A large footprint is four rows tall; retain it intact in compact mode.
-    if (!placements && rows === 3) { rows = 4; placements = window.NotchDomain.packHomeWidgetLayout(projection.visibleIds, sizes, columns, rows, false); }
-    if (!placements) throw new Error('Homepage preset projection failed.');
-    renderLayout = { placements, variants: Object.fromEntries(Object.entries(placements).map(([id, p]) => [id, window.NotchDomain.layoutVariantForPlacement(p)])) };
+    const preset=window.NotchPlatform.layout.panelSizePreset(homePanelSize);
+    renderLayout=window.NotchDomain.fitHomeWidgetView(projection.visibleIds,sizes,columns,rows,(preset.width-40)/preset.panelHeight);
+    if(!renderLayout)throw new Error('Homepage preset projection failed.');
+    ({columns,rows}=renderLayout);
   }
   return { renderLayout, projection, columns, rows };
+}
+
+function applyHomeFillRect(element, rect) {
+  for(const [property,value,isSize] of [['left',rect.x,false],['top',rect.y,false],['width',rect.width,true],['height',rect.height,true]]) {
+    element.style.setProperty('--home-fill-'+property, `calc(${value*100}% + ${value-(isSize?1:0)} * var(--home-fill-gap))`);
+  }
 }
 
 function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   if (!homeBento || !layout) throw new Error('A validated homepage layout is required.');
   const { renderLayout, projection, columns, rows } = projectHomeLayoutForPanel(layout);
+  homeBento.dataset.fillLayout=String(Boolean(renderLayout.rects));
   homeBento.style.setProperty('--home-grid-columns', String(columns));
   homeBento.style.setProperty('--home-grid-rows', String(rows));
   resetHomeTilePointerMotion({ immediate: true });
@@ -3911,7 +3917,7 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   if (placeholder) {
     const slot = homeInboxSavedPlacement;
     const overlaps = slot && Object.values(renderLayout.placements).some(p => p.column < slot.column + slot.width && p.column + p.width > slot.column && p.row < slot.row + slot.height && p.row + p.height > slot.row);
-    placeholder.hidden = !hiddenHomeModules.includes('inbox') || !slot || overlaps || slot.column + slot.width > columns || slot.row + slot.height > rows;
+    placeholder.hidden = Boolean(renderLayout.rects) || !hiddenHomeModules.includes('inbox') || !slot || overlaps || slot.column + slot.width > columns || slot.row + slot.height > rows;
     if (!placeholder.hidden) placeholder.style.gridArea = `${slot.row + 1} / ${slot.column + 1} / span ${slot.height} / span ${slot.width}`;
   }
   const automaticLayout = !homeLayoutReadOnly && effectiveHomeHidden(hiddenHomeModules).length > 0;
@@ -3932,8 +3938,9 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
       tile.dataset.layoutRow = String(placement.row);
       tile.dataset.layoutWidth = String(placement.width);
       tile.dataset.layoutHeight = String(placement.height);
-      tile.style.gridColumn = `${placement.column + 1} / span ${placement.width}`;
-      tile.style.gridRow = `${placement.row + 1} / span ${placement.height}`;
+      tile.style.gridColumn = renderLayout.rects ? '1 / -1' : `${placement.column + 1} / span ${placement.width}`;
+      tile.style.gridRow = renderLayout.rects ? '1 / -1' : `${placement.row + 1} / span ${placement.height}`;
+      if(renderLayout.rects)applyHomeFillRect(tile,renderLayout.rects[moduleId]);
     } else {
       delete tile.dataset.layoutVariant;
       delete tile.dataset.layoutColumn;
@@ -4339,7 +4346,7 @@ if (homeBento) {
     const current = cloneHomeLayout(homeWorkingLayout);
     if (!current?.placements?.[sourceId] || !current?.placements?.[targetId]) return false;
 
-    const next = window.NotchDomain.swapHomeWidgetPlacements(current, sourceId, targetId, { order: homeOrder });
+    const next = window.NotchDomain.swapHomeWidgetPlacements(current, sourceId, targetId, { order: homeOrder, fillGaps: homePanelSize === 'standard' });
     if (!next) return false;
 
     const visibleIds = Object.keys(current.placements);
@@ -4396,7 +4403,7 @@ if (homeBento) {
     if (!targetId) { clearDisplacePreview(); return; }
     const original = dragState.originLayout;
     if (!dragState.previewPlans.has(targetId)) {
-      const plan = window.NotchDomain.swapHomeWidgetPlacements(original, sourceId, targetId, { order: dragState.originOrder });
+      const plan = window.NotchDomain.swapHomeWidgetPlacements(original, sourceId, targetId, { order: dragState.originOrder, fillGaps: homePanelSize === 'standard' });
       const nextSizes = { ...homeSizes };
       if (plan) Object.entries(plan.placements).forEach(([id, p]) => {
         if (id !== sourceId && id !== targetId) nextSizes[id] = sizeFromPlacement(p);
@@ -4405,7 +4412,7 @@ if (homeBento) {
       dragState.previewPlans.set(targetId, projected);
     }
     const preview = dragState.previewPlans.get(targetId);
-    if (!preview) { clearDisplacePreview(); return; }
+    if (!preview?.placements[sourceId]) { clearDisplacePreview(); return; }
     const origin = dragState.originRenderLayout;
     const targetTile = homeBento.querySelector(`[data-home-module="${targetId}"]`);
     if (!targetTile) return;
@@ -4413,8 +4420,12 @@ if (homeBento) {
     homeTiles.forEach((item) => {
       const id = item.dataset.homeModule;
       if (item.hidden || id === sourceId || !origin.placements[id] || !preview.placements[id]) return;
-      const dx = (preview.placements[id].column - origin.placements[id].column) * pitchX;
-      const dy = (preview.placements[id].row - origin.placements[id].row) * pitchY;
+      const dx = preview.rects
+        ? (preview.rects[id].x-origin.rects[id].x)*Number(homeBento.style.getPropertyValue('--home-grid-columns'))*pitchX
+        : (preview.placements[id].column - origin.placements[id].column) * pitchX;
+      const dy = preview.rects
+        ? (preview.rects[id].y-origin.rects[id].y)*Number(homeBento.style.getPropertyValue('--home-grid-rows'))*pitchY
+        : (preview.placements[id].row - origin.placements[id].row) * pitchY;
       item.classList.toggle('layout-displacing', Boolean(dx || dy));
       if (dx || dy) {
         item.style.setProperty('--home-displace-x', `${dx}px`);
@@ -4430,6 +4441,10 @@ if (homeBento) {
     placeholder.setAttribute('aria-hidden', 'true');
     placeholder.style.gridColumn = `${destination.column + 1} / span ${destination.width}`;
     placeholder.style.gridRow = `${destination.row + 1} / span ${destination.height}`;
+    if(preview.rects) {
+      placeholder.style.gridColumn='1 / -1';placeholder.style.gridRow='1 / -1';
+      applyHomeFillRect(placeholder,preview.rects[sourceId]);
+    }
     if (!placeholder.isConnected) homeBento.append(placeholder);
     dragState.target = targetTile;
   };
@@ -4504,7 +4519,7 @@ if (homeBento) {
     homeWorkingLayout = null;
     const layout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
       forcePack: true,
-      sealGaps: true,
+      sealGaps: homePanelSize === 'standard',
       frozenIds: [moduleId],
     });
     if (!layout) {

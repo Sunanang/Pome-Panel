@@ -256,6 +256,11 @@ async function run(c) {
   await until('document.documentElement.dataset.windowVisible === "false" && !PomeSun.getWeather().effects.active');
   assert.equal(BrowserWindow.fromWebContents(c).isVisible(), false);
   BrowserWindow.fromWebContents(c).show();
+  // Native hide may finish collapsing before show. Weather remains paused in
+  // the capsule; explicitly reopen after that transition instead of depending
+  // on the hide/show race leaving the panel expanded.
+  await until('document.documentElement.dataset.windowVisible === "true" && !modeBusy');
+  await js('setMode(true)');
   await until('document.documentElement.dataset.windowVisible === "true" && PomeSun.getWeather().effects.active');
   c.debugger.detach();
   assert.deepEqual(errors,[]);

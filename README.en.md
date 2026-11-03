@@ -71,6 +71,8 @@ The current source development version is **0.11.0**. No formal Release installe
 
 Settings → Local settings offers Standard (1240×638), Medium (1040×580) and Compact (880×520) panel sizes in logical pixels, constrained by the display's safe area. The selection is saved on this device and restored at startup, independently of Home card sizes. Switching preserves the saved dock edge.
 
+Medium and Compact distribute remaining space among the visible Home cards to fill the surface. This affects presentation only, without rewriting saved card sizes or enlarging other cards' size preferences to fill gaps. **Mark all read** stays at the right edge of AI activity, after the listener status; small cards put the status on a separate line.
+
 Home displays the ordered prefix of enabled widgets that fits a capacity of 48 / 36 / 24, using the existing four footprints. It stops at the first widget that does not fit, preserving saved order, sizes and visibility preferences. Capacity warnings and disabled choices appear only in Settings → Display features → Home; Home has no outer scrolling or permanent no-space strip. New/reset layouts prioritize Sun and Almanac, with Music and Quick recording hidden by default; existing layouts remain. Use the context menu to resize cards or enter **Edit layout**. Other tabs retain split panes and internal scrolling. Settings provides task shortcuts and **Data & backup** without a NAS; temperature units and interface motion are independent preferences.
 
 Hiding the native window pauses weather and background effects, releases the mirror camera, pauses audio playback and masks credentials. Showing it again still requires an explicit click to start the mirror. An active recording continues while the panel is hidden.

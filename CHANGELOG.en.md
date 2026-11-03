@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Restore the right-aligned **Mark all read** action after adding listener status. Fill unused Home space in Medium and Compact using only the admitted widgets, preserving capacity truncation, logical footprints and saved preferences. Resizing or dragging in smaller presets no longer enlarges sibling size preferences to fill the standard canvas.
+
 - Add device-local Standard (1240×638), Medium (1040×580) and Compact (880×520) panel presets with startup restoration and repositioning along the saved dock edge. Home uses existing footprints and user order with capacities of 48/36/24; warnings and disabled choices stay in Home widget settings. Preserve widget UI and existing preferences without outer Home scrolling. New defaults prioritize Sun and Almanac and hide Music and Quick recording.
 
 - Add automatic meeting mode for macOS and Windows: pause top notifications for camera use, detected mirroring/sharing or system Focus, then resume about 30 seconds after all signals clear. Keep the manual switch and event storage independent, show each detection state, and retain an existing pause when a signal becomes unavailable.

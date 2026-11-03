@@ -793,7 +793,7 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
     return place(0) ? placements : null;
   }
 
-  function swapHomeWidgetPlacements(layout, sourceId, targetId, { order = [], columns = 12, rows = 4 } = {}) {
+  function swapHomeWidgetPlacements(layout, sourceId, targetId, { order = [], columns = 12, rows = 4, fillGaps = true } = {}) {
     const original = layout?.placements;
     const ids = Object.keys(original || {});
     if (sourceId === targetId || !original?.[sourceId] || !original?.[targetId]
@@ -815,7 +815,8 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
       if (!placements) return null;
     }
     // Gap filling may grow other cards, but the exchanged pair is always frozen.
-    const filled = fillHomeLayoutGaps(placements, { columns, rows, frozenIds: [sourceId, targetId] });
+    const filled = fillGaps ? fillHomeLayoutGaps(placements, { columns, rows, frozenIds: [sourceId, targetId] })
+      : { placements, gapCount: columns*rows-area };
     const result = {
       ...layout, allowGaps: filled.gapCount > 0, placements: filled.placements,
       variants: Object.fromEntries(ids.map((id) => [id, layoutVariantForPlacement(filled.placements[id])])),
@@ -1298,6 +1299,68 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
     return { enabledIds, visibleIds, overflowIds, used, capacity, remaining: capacity - used };
   }
 
+  // Keep the selected footprints as the logical layout, then distribute only
+  // the current view's free space. Neither sizes nor stored placements change.
+  function fitHomeWidgetView(order, sizes, maxColumns, preferredRows, aspectRatio = maxColumns / preferredRows) {
+    const area = { mini:2, small:4, medium:8, large:16 };
+    const total = order.reduce((sum,id) => sum + area[sizes[id]], 0);
+    if (!order.length || !Number.isFinite(total)) return null;
+    const grids = [];
+    for(let columns=2;columns<=maxColumns;columns+=2)for(let rows=1;rows<=4;rows++) {
+      if(columns*rows>=total)grids.push({columns,rows,empty:columns*rows-total,
+        distortion:Math.abs(Math.log((columns/rows)/(maxColumns/preferredRows)))});
+    }
+    grids.sort((a,b)=>a.empty-b.empty||a.distortion-b.distortion||a.columns-b.columns);
+    let grid, placements;
+    for(const candidate of grids) {
+      placements=packHomeWidgetLayout(order,sizes,candidate.columns,candidate.rows,candidate.empty===0);
+      if(placements){grid=candidate;break;}
+    }
+    if(!placements)return null;
+    const rects={};
+    const weight=ids=>ids.reduce((sum,id)=>sum+area[sizes[id]],0);
+    const bounds=ids=>({left:Math.min(...ids.map(id=>placements[id].column)),top:Math.min(...ids.map(id=>placements[id].row)),
+      right:Math.max(...ids.map(id=>placements[id].column+placements[id].width)),bottom:Math.max(...ids.map(id=>placements[id].row+placements[id].height))});
+    const cellAspect=aspectRatio/(grid.columns/grid.rows);
+    function divide(ids,rect) {
+      if(ids.length===1){rects[ids[0]]=rect;return;}
+      const sum=weight(ids),cuts=[];
+      for(const vertical of [true,false]) {
+        const points=new Set(ids.map(id=>vertical?placements[id].column+placements[id].width:placements[id].row+placements[id].height));
+        for(const point of points) {
+          const first=ids.filter(id=>vertical?placements[id].column+placements[id].width<=point:placements[id].row+placements[id].height<=point);
+          const second=ids.filter(id=>vertical?placements[id].column>=point:placements[id].row>=point);
+          if(!first.length||!second.length||first.length+second.length!==ids.length)continue;
+          const fraction=weight(first)/sum;
+          const children=vertical
+            ? [{x:rect.x,y:rect.y,width:rect.width*fraction,height:rect.height},{x:rect.x+rect.width*fraction,y:rect.y,width:rect.width*(1-fraction),height:rect.height}]
+            : [{x:rect.x,y:rect.y,width:rect.width,height:rect.height*fraction},{x:rect.x,y:rect.y+rect.height*fraction,width:rect.width,height:rect.height*(1-fraction)}];
+          const score=[first,second].reduce((cost,group,index)=>{
+            const b=bounds(group),desired=(b.right-b.left)/(b.bottom-b.top)*cellAspect;
+            const actual=children[index].width/children[index].height*aspectRatio;
+            return cost+weight(group)/sum*Math.log(actual/desired)**2;
+          },0);
+          cuts.push({first,second,children,score});
+        }
+      }
+      cuts.sort((a,b)=>a.score-b.score);
+      let cut=cuts[0];
+      if(!cut) {
+        // Non-slicing user packs still get a complete, deterministic view.
+        const sorted=[...ids].sort((a,b)=>placements[a].row-placements[b].row||placements[a].column-placements[b].column);
+        const first=sorted.slice(0,Math.ceil(sorted.length/2)),second=sorted.slice(first.length),fraction=weight(first)/sum;
+        const vertical=rect.width*aspectRatio>=rect.height;
+        cut={first,second,children:vertical
+          ? [{...rect,width:rect.width*fraction},{...rect,x:rect.x+rect.width*fraction,width:rect.width*(1-fraction)}]
+          : [{...rect,height:rect.height*fraction},{...rect,y:rect.y+rect.height*fraction,height:rect.height*(1-fraction)}]};
+      }
+      divide(cut.first,cut.children[0]);divide(cut.second,cut.children[1]);
+    }
+    divide(order,{x:0,y:0,width:1,height:1});
+    return {columns:grid.columns,rows:grid.rows,placements,rects,
+      variants:Object.fromEntries(order.map(id=>[id,layoutVariantForPlacement(placements[id])]))};
+  }
+
   function calculateAudioLevel(samples) {
     const values = samples instanceof Float32Array ? samples : new Float32Array(samples || []);
     if (!values.length) return 0;
@@ -1405,6 +1468,7 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
     sizeNameFromPlacement,
     resolveHomeWidgetLayout,
     projectHomeCapacity,
+    fitHomeWidgetView,
     validateHomeWidgetLayout,
     layoutVariantForPlacement,
     calculateAudioLevel,

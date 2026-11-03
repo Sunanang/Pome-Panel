@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { layout } = require('../platform');
 const { appSettingsLayoutPreferences } = require('../main-services');
-const { projectHomeCapacity, packHomeWidgetLayout, validateHomeWidgetLayout } = require('../renderer/domain');
+const { projectHomeCapacity, packHomeWidgetLayout, validateHomeWidgetLayout, fitHomeWidgetView } = require('../renderer/domain');
 
 test('three local presets generate every tab size; invalid persisted values fall back safely', () => {
   for (const [preset, width, height, capacity] of [['standard',1240,638,48],['medium',1040,580,36],['compact',880,520,24]]) {
@@ -66,5 +66,29 @@ test('presets stay pinned to all four edges and within work areas on both platfo
     if(edge==='right')assert.equal(bounds.x+bounds.width,ctx.position.x+side.width);
     if(edge==='top')assert.equal(bounds.y,ctx.position.y);
     if(edge==='bottom')assert.equal(bounds.y+bounds.height,ctx.position.y+side.height);
+  }
+});
+
+test('narrow views fill the entire surface without changing selected footprints or the admitted set', () => {
+  for(const [sizes,columns,rows] of [
+    [{pomodoro:'small',note:'small',inbox:'medium',windows:'medium',cursor:'medium'},10,4],
+    [{pomodoro:'small',note:'small',inbox:'medium',windows:'medium'},8,3],
+    [{sun:'medium',pomodoro:'mini',cursor:'small',almanac:'small',inbox:'medium',commands:'mini',mirror:'medium'},10,4],
+    [{sun:'medium',pomodoro:'mini',cursor:'small',almanac:'small'},8,3],
+    [{cursor:'large',sun:'medium'},8,3],
+    [{note:'mini'},8,3],
+  ]) {
+    const before=JSON.stringify(sizes),ids=Object.keys(sizes),view=fitHomeWidgetView(ids,sizes,columns,rows,2);
+    assert(validateHomeWidgetLayout({placements:view.placements,allowGaps:true},ids,view.columns,view.rows));
+    assert.equal(JSON.stringify(sizes),before);
+    const rectangles=Object.values(view.rects);
+    assert(Math.abs(rectangles.reduce((sum,r)=>sum+r.width*r.height,0)-1)<1e-9,'no unused surface');
+    for(const [id,p] of Object.entries(view.placements))assert.equal(p.width*p.height,{mini:2,small:4,medium:8,large:16}[sizes[id]]);
+    for(let i=0;i<rectangles.length;i++) {
+      const a=rectangles[i];assert(a.x>=0&&a.y>=0&&a.x+a.width<=1+1e-9&&a.y+a.height<=1+1e-9);
+      for(let j=i+1;j<rectangles.length;j++) {
+        const b=rectangles[j];assert(!(a.x<b.x+b.width-1e-9&&a.x+a.width>b.x+1e-9&&a.y<b.y+b.height-1e-9&&a.y+a.height>b.y+1e-9),'tiles cannot overlap');
+      }
+    }
   }
 });
