@@ -6,3 +6,16 @@ function fixture(t){const root=fs.mkdtempSync(path.join(os.tmpdir(),'pome-build-
 test('packaged source verification covers core code and shipped assets',t=>{const f=fixture(t),hashes=verifyPackagedSources(f.source,f.app);assert.equal(Object.keys(hashes).length,files.length);assert.match(hashes['main.js'],/^[a-f0-9]{64}$/);});
 test('a stale packaged bootstrap is rejected before signing',t=>{const f=fixture(t);fs.writeFileSync(path.join(f.app,'main.js'),'old packaged guard');assert.throws(()=>verifyPackagedSources(f.source,f.app),/Packaged source mismatch: main.js/);});
 test('missing required product files and mismatched assets are rejected',t=>{const f=fixture(t);fs.rmSync(path.join(f.app,'preload.js'));assert.throws(()=>verifyPackagedSources(f.source,f.app),/preload.js/);fs.writeFileSync(path.join(f.app,'preload.js'),'content preload.js');fs.writeFileSync(path.join(f.app,'renderer/assets/cover.webp'),'stale asset');assert.throws(()=>verifyPackagedSources(f.source,f.app),/cover.webp/);});
+
+test('electron-builder stripped package.json still verifies product identity',t=>{
+ const f=fixture(t);
+ const source={name:'pome-panel',version:'0.11.0',main:'main.js',license:'MIT',scripts:{start:'electron .'},devDependencies:{electron:'^44.0.0'},build:{appId:'com.example'}};
+ const packed={name:'pome-panel',version:'0.11.0',main:'main.js',license:'MIT'};
+ fs.writeFileSync(path.join(f.source,'package.json'),JSON.stringify(source));
+ fs.writeFileSync(path.join(f.app,'package.json'),JSON.stringify(packed));
+ const hashes=verifyPackagedSources(f.source,f.app);
+ assert.match(hashes['package.json'],/^[a-f0-9]{64}$/);
+ packed.version='9.9.9';
+ fs.writeFileSync(path.join(f.app,'package.json'),JSON.stringify(packed));
+ assert.throws(()=>verifyPackagedSources(f.source,f.app),/package\.json\.version/);
+});
