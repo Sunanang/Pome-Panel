@@ -101,7 +101,7 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
   const copilotHome = typeof env.COPILOT_HOME === 'string' && env.COPILOT_HOME.trim() ? path.resolve(env.COPILOT_HOME) : path.join(homeDir, '.copilot');
   const geminiHome = path.join(homeDir, '.gemini');
   const files = {
-    codex: path.join(homeDir, '.codex/config.toml'),
+    codex: path.join(typeof env.CODEX_HOME === 'string' && env.CODEX_HOME.trim() ? path.resolve(env.CODEX_HOME) : path.join(homeDir, '.codex'), 'config.toml'),
     claude: path.join(homeDir, '.claude/settings.json'),
     cursor: path.join(homeDir, '.cursor/hooks.json'),
     grok: path.join(grokHome, 'hooks', 'pome-panel.json'),
@@ -430,7 +430,8 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
     const payload = JSON.stringify({ _pome_test: true, _pome_test_token: token, event_id: token,
       title: pomeLocaleAiSourceHooks.t("copy.connectionTest.dd9a12", { arg1: (LABELS[source]) }), session_id: token, sessionId: token, conversationId: token, conversation_id: token, generation_id: token, hook_event_name: stopName, hookEventName: stopName });
     await new Promise((resolve, reject) => {
-      const child = spawn(runtimePath, [script(source), marker(source), ...(source === 'codex' ? [payload] : [])], {
+      const command = source === 'codex' ? readConfig(files.codex, source).value.notify : [runtimePath, script(source), marker(source)];
+      const child = spawn(command[0], [...command.slice(1), ...(source === 'codex' ? [payload] : [])], {
         env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', POME_NOTIFY_PORT: String(port), ...(source === 'grok' ? { GROK_HOOK_EVENT: 'Stop' } : {}) }, stdio: ['pipe', 'ignore', 'pipe'], windowsHide: true,
       });
       const timer = setTimeout(() => { child.kill(); reject(new Error(pomeLocaleAiSourceHooks.t("copy.testNotificationTimedOut.d2c1f5"))); }, 5000);

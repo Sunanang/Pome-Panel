@@ -37,6 +37,8 @@ const { createAiSourceHooks } = require('./aiSourceHooks');
 const { classifyAiEvent, MANUS_TRUSTED_ADAPTER } = require('./aiEventPolicy');
 const { createAiAttentionStore, rebuildAiAttention } = require('./aiAttentionStore');
 const { createAiNotificationScheduler } = require('./aiNotificationScheduler');
+const { createMeetingModeMonitor } = require('./meetingMode');
+const { createMeetingProbe } = require('./platform-adapters/meetingProbe');
 const { createClaudeAttentionAdapter } = require('./claudeAttentionAdapter');
 const { expandMcpAuthSessionResolution, isMcpAuthSessionResolution } = require('./scripts/cursor-mcp-auth-notify');
 const claudeAttentionAdapter = createClaudeAttentionAdapter();
@@ -431,7 +433,11 @@ let mediaPermissionRequests = 0;
 let mediaPermissionBatchHadCamera = false;
 let transientSystemInteractionRequests = 0;
 let cameraBlurDeferred = false;
-const mediaPermissionCoordinator = createForegroundMediaPermissionCoordinator();
+const mediaPermissionCoordinator = createForegroundMediaPermissionCoordinator({
+  getWindowLayer: () => platformPolicy.windowLayer(process.platform, {
+    typingFocus: currentMode === 'expanded' && typingFocusActive,
+  }),
+});
 
 // 适配层（P0-2）：JXA / osascript 等"怎么做"的实现都在 platform-adapters/ 下，
 // main.js 只做 IPC 与生命周期。Electron 依赖与窗口相关的钩子由这里注入。
@@ -444,10 +450,31 @@ const platformAdapter = loadAdapter(process.platform, {
   },
 });
 
+let ownCameraLabels = [];
+const meetingProbe = createMeetingProbe({ packaged: app.isPackaged === true, ownCameraLabels: () => ownCameraLabels });
+let effectiveMeetingMode = false;
+const meetingMonitor = createMeetingModeMonitor({ probe: meetingProbe, onChange: () => applyMeetingNotificationPolicy() });
+function meetingModeActive() {
+  return readAppSettings().meetingMode === true || meetingMonitor.snapshot().active;
+}
+function applyMeetingNotificationPolicy() {
+  const active = meetingModeActive();
+  if (active !== effectiveMeetingMode) {
+    effectiveMeetingMode = active;
+    if (active) { notificationScheduler.clearDisplay(); dismissActiveTaskNotificationShell(); }
+    else { scheduleNextTodoReminder(); refreshAttentionNotifications(); showNextTaskNotification(); }
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', publicAppSettings());
+  publishNotificationListenerState();
+  refreshTrayMenu();
+}
+
 let notificationWindow = null;
 let notificationWindowReady = false;
 let notificationServer = null;
 let notificationServerAvailable = false;
+let notificationServerError = null;
+let notificationServerRetry = null;
 let activeTaskNotification = null;
 let taskNotificationLeaving = false;
 let taskNotificationTimer = null;
@@ -479,7 +506,8 @@ function attentionNotification(row) {
     window: { app: event.source === 'claude' ? 'Terminal' : event.source === 'cursor' ? 'Cursor' : 'Codex' } };
 }
 function taskNotificationsEnabled() {
-  return readAppSettings().taskNotifications !== false;
+  const settings = readAppSettings();
+  return settings.taskNotifications !== false && !meetingModeActive();
 }
 function dismissActiveTaskNotificationShell() {
   const eventId = activeTaskNotification?.eventId;
@@ -680,6 +708,8 @@ function layoutDisplayContext(display) {
 function layoutContext(display) {
   const ctx = layoutDisplayContext(display);
   const settings = readAppSettings();
+  ctx.panelSize = settings.panelSize;
+  ctx.tabSizes = platformPolicy.layout.tabSizes(settings.panelSize);
   ctx.position = settings.panelPosition;
   ctx.legacyWinLayout = process.platform === 'win32'
     && (LEGACY_WIN_LAYOUT_ENV || settings.legacyWinLayout === true);
@@ -717,6 +747,7 @@ function applyMode(mode, display) {
   mainWindow.setBounds(nextBounds);
   mainWindow.setIgnoreMouseEvents(false);
   currentMode = mode;
+  applyMainWindowLayer();
   if (mode === 'expanded') { hideWhenCollapsed = false; pendingHideUntilTray = false; }
   if (mode === 'collapsed') {
     // 把纠正后的落点写回，避免下次仍用旧坐标算出错位动画种子。
@@ -1194,7 +1225,7 @@ function createTaskNotificationWindow() {
       nodeIntegration: false,
       sandbox: true,
       backgroundThrottling: false,
-      additionalArguments: [capabilitiesArgument(), localizationArgument()],
+      additionalArguments: [capabilitiesArgument(), localizationArgument(), `--pome-panel-size=${readAppSettings().panelSize}`],
     },
   });
 
@@ -1366,8 +1397,18 @@ function sendTaskNotificationResponse(response, statusCode, body) {
   response.end(json);
 }
 
+function notificationListenerState() {
+  return { listening: notificationServerAvailable, error: notificationServerError,
+    port: notificationServer?.address()?.port || TASK_NOTIFICATION_PORT,
+    meetingMode: meetingModeActive(),
+    meetingStatus: meetingMonitor.snapshot(),
+    topBubbleEnabled: readAppSettings().taskNotifications !== false };
+}
+function publishNotificationListenerState() {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('tasks:listener-changed', notificationListenerState());
+}
 function startTaskNotificationServer() {
-  if (notificationServer) return;
+  if (notificationServer || isQuitting) return;
   const server = http.createServer((request, response) => {
     let requestUrl;
     try {
@@ -1517,11 +1558,18 @@ function startTaskNotificationServer() {
   server.once('listening', () => {
     if (notificationServer !== server) return;
     notificationServerAvailable = true;
+    notificationServerError = null;
+    publishNotificationListenerState();
     refreshTrayMenu();
   });
   server.on('error', (error) => {
     if (notificationServer === server) notificationServer = null;
     notificationServerAvailable = false;
+    notificationServerError = error.code || 'listen_failed';
+    publishNotificationListenerState();
+    clearTimeout(notificationServerRetry);
+    notificationServerRetry = setTimeout(() => { notificationServerRetry = null; startTaskNotificationServer(); }, 5000);
+    notificationServerRetry.unref();
     refreshTrayMenu();
     console.warn(`Task notification server unavailable: ${error.message}`);
   });
@@ -1530,6 +1578,7 @@ function startTaskNotificationServer() {
 }
 
 function stopTaskNotificationServer() {
+  clearTimeout(notificationServerRetry); notificationServerRetry = null;
   const server = notificationServer;
   notificationServer = null;
   notificationServerAvailable = false;
@@ -1621,7 +1670,7 @@ function createWindow() {
       // A startup test can sit under the already-running panel. Keep its
       // hidden renderer scheduled so workspace recovery still finishes.
       backgroundThrottling: !process.env.TODO_TEST_USER_DATA,
-      additionalArguments: [capabilitiesArgument(), localizationArgument()],
+      additionalArguments: [capabilitiesArgument(), localizationArgument(), `--pome-panel-size=${readAppSettings().panelSize}`],
     },
   });
 
@@ -1677,6 +1726,9 @@ function createWindow() {
   visibilityOwner.on('show', publishVisibility);
   visibilityOwner.on('hide', publishVisibility);
   visibilityOwner.webContents.on('did-finish-load', () => { lastWindowVisibility = undefined; publishVisibility(); });
+  visibilityOwner.webContents.on('did-start-loading', () => { ownCameraLabels = []; });
+  visibilityOwner.webContents.on('render-process-gone', () => { ownCameraLabels = []; });
+  visibilityOwner.webContents.on('destroyed', () => { ownCameraLabels = []; });
   // Some macOS floating/status windows change visibility without emitting show/hide.
   // A cheap native-state check backs up those events; IPC is sent only on changes.
   const visibilityWatch = setInterval(publishVisibility, 200);
@@ -1895,7 +1947,7 @@ function syncDockMetrics() {
 function publicAppSettings() {
   const settings = readAppSettings();
   const { encryptedCursorToken, encryptedCodexToken, encryptedProviderTokens, ...publicSettings } = settings;
-  return { ...publicSettings, localization: localizationSnapshot(), autoLaunch: isAutoLaunchEnabled() };
+  return { ...publicSettings, meetingStatus: meetingMonitor.snapshot(), localization: localizationSnapshot(), autoLaunch: isAutoLaunchEnabled() };
 }
 
 function saveAppSettings(settings) {
@@ -2194,6 +2246,11 @@ function refreshTrayMenu() {
     },
     { type: 'separator' },
     {
+      label: PomeI18n.t('notifications.manualMeetingMode'), type: 'checkbox',
+      checked: readAppSettings().meetingMode === true,
+      click: item => setMeetingMode(item.checked),
+    },
+    {
       label: PomeI18n.t("copy.about.52d25a"),
       click: () => {
         dialog.showMessageBox({
@@ -2352,18 +2409,22 @@ ipcMain.handle('window:reset-panel-position', () => {
   return true;
 });
 
-// macOS 用 status：盖住普通全屏应用；仍低于 screen-saver，不压系统截图选区。
-// 其它平台保持 floating。打字焦点开关会回调这里，不可再写回 floating 冲掉 createWindow 的层级。
+// 胶囊和非编辑状态使用 status，展开编辑期间临时让位给 macOS 输入法候选窗。
+// 所有恢复路径都按当前输入状态计算，避免授权结束或收起后留下错误层级。
 function applyMainWindowLayer() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mediaPermissionRequests > 0) return;
-  mainWindow.setAlwaysOnTop(true, platformPolicy.windowLayer(process.platform).level);
+  mainWindow.setAlwaysOnTop(true, platformPolicy.windowLayer(process.platform, {
+    typingFocus: currentMode === 'expanded' && typingFocusActive,
+  }).level);
   if (process.platform === 'darwin') {
     try { mainWindow.setVibrancy(null); } catch (e) {}
   }
 }
 
 ipcMain.handle('window:set-typing-focus', (event, focused) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
+    || event.senderFrame !== mainWindow.webContents.mainFrame) return false;
   const next = focused === true;
   if (typingFocusActive === next) return typingFocusActive;
   typingFocusActive = next;
@@ -2431,6 +2492,19 @@ ipcMain.handle('settings:set-auto-launch', (event, enabled) => {
   refreshTrayMenu();
   return { ok: true, autoLaunch: settings.autoLaunch };
 });
+ipcMain.handle('settings:set-panel-size', (event, preset) => {
+  requireWorkspaceOwner(event);
+  if (typeof preset !== 'string' || !Object.hasOwn(platformPolicy.layout.panelSizePresets, preset)) return { ok: false, error: 'invalid' };
+  const settings = readAppSettings();
+  if (settings.panelSize === preset) return { ok: true, settings: publicAppSettings() };
+  if (!saveAppSettings({ ...settings, panelSize: preset })) return { ok: false, error: 'save_failed' };
+  // Resolve against the saved edge/alignment, never the cursor's display.
+  repositionWindow();
+  syncDockMetrics();
+  const updated = publicAppSettings();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', updated);
+  return { ok: true, settings: updated };
+});
 ipcMain.handle('settings:set-task-notifications', (event, enabled) => {
   if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
   const next = { ...readAppSettings(), taskNotifications: enabled };
@@ -2445,7 +2519,31 @@ ipcMain.handle('settings:set-task-notifications', (event, enabled) => {
   }
   const settings = publicAppSettings();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', settings);
+  publishNotificationListenerState();
   return { ok: true, taskNotifications: settings.taskNotifications === true };
+});
+function setMeetingMode(enabled) {
+  if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
+  if (!saveAppSettings({ ...readAppSettings(), meetingMode: enabled })) return { ok: false, error: 'save_failed' };
+  applyMeetingNotificationPolicy();
+  return { ok: true, meetingMode: enabled };
+}
+ipcMain.handle('settings:set-meeting-mode', (event, enabled) => {
+  requireWorkspaceOwner(event); return setMeetingMode(enabled);
+});
+ipcMain.handle('settings:set-auto-meeting-mode', (event, enabled) => {
+  requireWorkspaceOwner(event);
+  if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
+  if (!saveAppSettings({ ...readAppSettings(), autoMeetingMode: enabled })) return { ok: false, error: 'save_failed' };
+  meetingMonitor.setEnabled(enabled);
+  if (!enabled) meetingProbe.stop();
+  applyMeetingNotificationPolicy();
+  return { ok: true, autoMeetingMode: enabled };
+});
+ipcMain.on('media:own-camera-state', (event, labels) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+  if (!Array.isArray(labels) || labels.length > 8 || labels.some(label => typeof label !== 'string' || label.length > 256)) return;
+  ownCameraLabels = labels;
 });
 ipcMain.handle('settings:set-weather-effects', (event, enabled) => {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return { ok: false, error: 'invalid_sender' };
@@ -2702,7 +2800,7 @@ ipcMain.handle('ai-attention:rebuild', async event => {
     return result;
   } catch { return { ok: false, message: PomeI18n.t('attention.storageError') }; }
 });
-ipcMain.handle('tasks:sources', async (event) => { requireWorkspaceOwner(event); return { ok: true, sources: await getAiSourceHooks().list() }; });
+ipcMain.handle('tasks:sources', async (event) => { requireWorkspaceOwner(event); return { ok: true, sources: await getAiSourceHooks().list(), listener: notificationListenerState() }; });
 ipcMain.handle('tasks:sources-preview', async (event, source, action) => {
   requireWorkspaceOwner(event);
   try { return { ok: true, preview: await getAiSourceHooks().preview(source, action) }; }
@@ -2719,6 +2817,7 @@ ipcMain.handle('tasks:sources-apply', async (event, token) => {
 });
 ipcMain.handle('tasks:sources-test', async (event, source) => {
   requireWorkspaceOwner(event);
+  if (!notificationServerAvailable) return { ok: false, message: PomeI18n.t('notifications.listenerUnavailable') };
   const token = crypto.randomUUID(), test = { source, expires: Date.now() + 10000, delivered: false };
   sourceTestTokens.set(token, test);
   try {
@@ -6372,6 +6471,13 @@ app.whenReady().then(() => {
     } catch { /* Manus listener is optional at boot. */ }
   }
   if (testUserData && process.env.POME_TEST_NOTIFICATIONS === '1') startTaskNotificationServer();
+  meetingMonitor.setEnabled(readAppSettings().autoMeetingMode !== false);
+  // Isolated acceptance injects probe samples; never inspect the user's system
+  // or let their actual Focus/camera state make notification tests nondeterministic.
+  if (!testUserData) meetingMonitor.start();
+  if (testUserData && process.env.POME_TEST_NOTIFICATIONS === '1') {
+    app.on('pome-test-meeting-sample', sample => meetingMonitor.accept(sample));
+  }
   watchDisplayChanges();
   watchActiveSpaceChanges();
   ensureClipImagesDir();
@@ -6397,6 +6503,7 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  meetingMonitor.stop(); meetingProbe.stop();
   cancelCollapseWatchdog();
   platformAdapter.paste.stopTracking();
   clearTodoReminderTimer();

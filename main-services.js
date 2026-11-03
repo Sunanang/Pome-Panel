@@ -124,8 +124,9 @@ function createForegroundMediaPermissionCoordinator(defaults = {}) {
             layerOwner = null;
             restoreAlwaysOnTop = false;
             if (shouldRestore && targetToRestore && !targetToRestore.isDestroyed()) {
-              // Match the main panel's normal layer (status on macOS, floating elsewhere).
-              const { level } = windowLayer(process.platform);
+              // Resolve at completion: focus can change while a prompt is open.
+              const { level } = typeof defaults.getWindowLayer === 'function'
+                ? defaults.getWindowLayer() : windowLayer(process.platform);
               targetToRestore.setAlwaysOnTop(true, level);
             }
           }
@@ -691,6 +692,9 @@ function appSettingsLayoutPreferences(stored) {
     winNative: typeof source.winNative === 'boolean' ? source.winNative : WIN_NATIVE_DEFAULT,
     // Top bubble tips default on; only an explicit false disables them.
     taskNotifications: source.taskNotifications !== false,
+    meetingMode: source.meetingMode === true,
+    autoMeetingMode: source.autoMeetingMode !== false,
+    panelSize: ['standard', 'medium', 'compact'].includes(source.panelSize) ? source.panelSize : 'standard',
     weatherEffects: source.weatherEffects !== false,
   };
 }

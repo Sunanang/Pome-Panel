@@ -195,12 +195,13 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
     return trimClipboardHistory([entry, ...(Array.isArray(history) ? history : [])], favorites, maxEntries);
   }
 
-  function createCommand(text, id, createdAt) {
+  function createCommand(text, id, createdAt, comment) {
     const normalized = String(text || '').trim();
     if (!normalized) return null;
     return {
       id: String(id || `command-${Date.now().toString(36)}`),
       text: normalized,
+      ...(String(comment || '').trim() ? { comment: String(comment).trim().slice(0, 1000) } : {}),
       createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
     };
   }
@@ -1281,6 +1282,22 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
     return validateHomeWidgetLayout(result, visibleOrder, columns, rows) ? result : null;
   }
 
+  // A view projection: neither hidden preferences nor selected tile sizes are
+  // changed by switching the local window preset. Stop at the first overflow.
+  function projectHomeCapacity(order, sizes, hiddenIds = [], capacity = 48) {
+    const area = { mini: 2, small: 4, medium: 8, large: 16 };
+    const hidden = new Set(hiddenIds);
+    const enabledIds = [...new Set(order)].filter(id => !hidden.has(id) && Object.hasOwn(sizes, id));
+    const visibleIds = [], overflowIds = [];
+    let used = 0, truncated = false;
+    for (const id of enabledIds) {
+      const amount = area[sizes[id]] || 8;
+      if (truncated || used + amount > capacity) { truncated = true; overflowIds.push(id); }
+      else { used += amount; visibleIds.push(id); }
+    }
+    return { enabledIds, visibleIds, overflowIds, used, capacity, remaining: capacity - used };
+  }
+
   function calculateAudioLevel(samples) {
     const values = samples instanceof Float32Array ? samples : new Float32Array(samples || []);
     if (!values.length) return 0;
@@ -1387,6 +1404,7 @@ const pomeLocaleRendererDomain = typeof module === 'object' && module.exports ? 
     fillHomeLayoutGaps,
     sizeNameFromPlacement,
     resolveHomeWidgetLayout,
+    projectHomeCapacity,
     validateHomeWidgetLayout,
     layoutVariantForPlacement,
     calculateAudioLevel,

@@ -395,6 +395,7 @@ const pomeLocaleFnosAppUiPanel = typeof module === 'object' && module.exports ? 
         if (!text) continue;
         const row = el('article', 'nas-command-item');
         row.appendChild(el('p', 'nas-command-text', text));
+        if (item.comment) row.appendChild(el('small', 'nas-command-comment', item.comment));
         list.appendChild(row);
       }
     }

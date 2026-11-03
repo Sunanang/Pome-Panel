@@ -781,6 +781,10 @@ async function main() {
       const matrix = await window.webContents.executeJavaScript(`
         (async () => {
           const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
           ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
           const results = [];
@@ -825,6 +829,10 @@ async function main() {
     const transactionAudit = await window.webContents.executeJavaScript(`
       (() => {
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         const first = window.NotchHome.setModuleVisible('mirror', false);
@@ -847,10 +855,10 @@ async function main() {
           visible: [...document.querySelectorAll('[data-home-module]')].filter((tile) => !tile.hidden).map((tile) => tile.dataset.homeModule).join(','),
           styles: [...document.querySelectorAll('[data-home-module]')].map((tile) => tile.getAttribute('style')).join('|'),
         };
-        const originalResolver = window.NotchDomain.resolveHomeWidgetLayout;
-        window.NotchDomain.resolveHomeWidgetLayout = () => null;
+        const originalResolver = resolveValidatedHomeLayout;
+        resolveValidatedHomeLayout = () => null;
         const rollback = window.NotchHome.setModuleVisible('music', false);
-        window.NotchDomain.resolveHomeWidgetLayout = originalResolver;
+        resolveValidatedHomeLayout = originalResolver;
         const afterRollback = {
           hidden: JSON.stringify(window.NotchHome.getVisibility().hiddenIds),
           stored: localStorage.getItem('notch-home-hidden-modules-v1'),
@@ -897,6 +905,10 @@ async function main() {
     const persistenceAndRecorderAudit = await window.webContents.executeJavaScript(`
       (() => {
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         const originalSetItem = Storage.prototype.setItem;
@@ -1024,6 +1036,10 @@ async function main() {
     const lifecycleAudit = await window.webContents.executeJavaScript(`
       (async () => {
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         document.getElementById('tab-button-home').click();
@@ -1182,6 +1198,10 @@ async function main() {
           sizeButton.click();
         };
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         document.getElementById('tab-button-home').click();

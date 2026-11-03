@@ -76,7 +76,11 @@ async function main() {
     await js(`projectRecordings([recordingRow]); testReads.at(-1).resolve({bytes:new Uint8Array([1,2,3]),mimeType:'audio/wav'});`);
     await until(`document.querySelector('.recording-audio')?.textContent === PomeI18n.t('copy.audioFileUnavailable.d7ce80')`);
     assert.equal(await js(`testRevoked.length`), 2, 'decoder failure must release its URL');
-    await js(`(async () => { await setActiveTab('home'); await NotchWorkspace.refreshWindows(true); })()`);
+    await js(`(async () => {
+      hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>id!=='windows');homeWorkingLayout=null;
+      applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});
+      await setActiveTab('home'); await NotchWorkspace.refreshWindows(true);
+    })()`);
     await until(`!!document.querySelector('.window-item[data-id="fixture-window"]')`);
     for (const type of ['pointercancel', 'notch:will-collapse', 'pointerup']) {
       const drag = await js(`(async () => {

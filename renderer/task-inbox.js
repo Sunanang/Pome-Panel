@@ -12,6 +12,9 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
   const readAll = document.getElementById('home-inbox-read-all');
   const mini = document.getElementById('home-inbox-mini');
   const unreadLabel = document.getElementById('home-inbox-unread-label');
+  const listenerLabel = document.createElement('small'); listenerLabel.className = 'home-inbox-listener';
+  listenerLabel.setAttribute('role', 'status');
+  tile.querySelector('.home-inbox-head').append(listenerLabel);
   const homeTab = document.getElementById('tab-button-home');
   const sourceSuggestion = document.createElement('div');
   sourceSuggestion.className = 'home-inbox-source-suggestion'; sourceSuggestion.hidden = true;
@@ -42,6 +45,19 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     return new Date(at).toLocaleDateString(pomeLocaleRendererTaskInbox.getState().formatLocale);
   }
   function updateBadge() {
+    const state = window.NotchAiSources?.getState();
+    const connected = state?.sources?.some(row => row.state === 'connected');
+    const listener = state?.listener;
+    const key = listener?.meetingMode ? 'notifications.meetingMode'
+      : listener && !listener.listening ? 'notifications.listenerUnavailable'
+      : connected && listener?.listening ? 'copy.listening.fa2d74' : null;
+    pomeLocaleRendererTaskInbox.bind(listenerLabel, 'textContent', () => key ? pomeLocaleRendererTaskInbox.t(key) : '');
+    listenerLabel.dataset.error = String(Boolean(listener && !listener.listening));
+    pomeLocaleRendererTaskInbox.bind(listenerLabel, 'title', () => listener?.meetingStatus?.active
+      ? pomeLocaleRendererTaskInbox.t('notifications.meetingReasons', { reasons: listener.meetingStatus.reasons.map(key => pomeLocaleRendererTaskInbox.t(`notifications.meetingReason.${key}`)).join(' / ') })
+      : pomeLocaleRendererTaskInbox.t(listener?.meetingMode ? 'notifications.meetingHint'
+      : listener && !listener.listening ? 'notifications.listenerUnavailable'
+      : listener?.topBubbleEnabled === false ? 'settings.notifications.topBubbleDisabled' : 'notifications.listenerHint'));
     const moduleHidden = tile.hidden || window.NotchHome?.isVisible('inbox') === false;
     badge.hidden = homeTab.classList.contains('active') || (!failure && unread === 0);
     badge.dataset.dot = String(moduleHidden);
@@ -50,7 +66,7 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     pomeLocaleRendererTaskInbox.bind(badge, "title", () => (moduleHidden ? pomeLocaleRendererTaskInbox.t("copy.aiActivityIsHiddenOpenSettings.83167e") : failure ? pomeLocaleRendererTaskInbox.t("copy.aiActivityInboxErrorClickToReview.828d6f") : pomeLocaleRendererTaskInbox.t("copy.aiEventsToReview.22d6c7", { arg1: (unread) })));
     homeTab.setAttribute('aria-label', failure ? pomeLocaleRendererTaskInbox.t("copy.homeAiActivityInboxError.71a7c7") : unread ? pomeLocaleRendererTaskInbox.t("copy.homeUnreadAiEvents.cf1008", { arg1: (unread) }) : pomeLocaleRendererTaskInbox.t("copy.home.203c08"));
     document.getElementById('home-inbox-unread').textContent = String(unread);
-    pomeLocaleRendererTaskInbox.bind(unreadLabel, "textContent", () => (failure ? pomeLocaleRendererTaskInbox.t("copy.receivingPaused.ddea48") : unread ? pomeLocaleRendererTaskInbox.t("copy.unread.1b2d74", { arg1: (unread) }) : total === 0 && tile.dataset.sourceState === 'waiting' ? pomeLocaleRendererTaskInbox.t("copy.listening.fa2d74") : ''));
+    pomeLocaleRendererTaskInbox.bind(unreadLabel, "textContent", () => (failure ? pomeLocaleRendererTaskInbox.t("copy.receivingPaused.ddea48") : unread ? pomeLocaleRendererTaskInbox.t("copy.unread.1b2d74", { arg1: (unread) }) : ''));
     readAll.disabled = Boolean(failure) || editing || unread === 0;
     readAll.hidden = Boolean(failure) || total === 0;
   }
@@ -103,7 +119,7 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     else if (connected.length) actions.append(button(pomeLocaleRendererTaskInbox.t("copy.manageSources.a0b36f"), () => window.NotchAiSources?.openSettings()));
     else actions.append(button(pomeLocaleRendererTaskInbox.t("copy.connect.d312c6"), () => window.NotchAiSources?.openSettings(), primary));
     empty.append(actions); list.append(empty);
-    if (state === 'waiting') pomeLocaleRendererTaskInbox.bind(unreadLabel, "textContent", () => (pomeLocaleRendererTaskInbox.t("copy.listening.fa2d74")));
+
   }
   function paint() {
     if (failure) { updateBadge(); return; }

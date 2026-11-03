@@ -60,7 +60,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const commandList = document.getElementById('command-list');
   const commandBulkDelete = document.getElementById('command-bulk-delete');
   let commands = loadJson(COMMANDS_KEY, [])
-    .map((item) => Domain.createCommand(item && item.text, item && item.id, item && item.createdAt))
+    .map((item) => Domain.createCommand(item && item.text, item && item.id, item && item.createdAt, item && item.comment))
     .filter(Boolean);
   let commandSelection = new Set();
   let commandSelectionAnchor = null;
@@ -113,18 +113,26 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       remove.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.deleteCommand.ebd35b"));
       remove.innerHTML = DELETE_ICON;
       actions.append(copy, remove);
-      row.append(textButton, actions);
+      const content = document.createElement('div'); content.className = 'command-content';
+      const comment = document.createElement('button'); comment.type = 'button';
+      comment.className = 'command-comment'; comment.dataset.action = 'edit-comment';
+      comment.textContent = command.comment || pomeLocaleRendererWorkspace.t('commands.addComment');
+      comment.title = command.comment || comment.textContent;
+      content.append(textButton, comment);
+      row.append(content, actions);
       commandList.appendChild(row);
     });
   }
 
-  function editCommand(row) {
+  function editCommand(row, field = 'text') {
     const command = commands.find((item) => item.id === row.dataset.id);
     if (!command || row.querySelector('input')) return;
-    const button = row.querySelector('.command-text');
+    const button = row.querySelector(field === 'comment' ? '.command-comment' : '.command-text');
     const input = document.createElement('input');
     input.className = 'command-edit';
-    input.value = command.text;
+    input.value = command[field] || '';
+    input.maxLength = field === 'comment' ? 1000 : 500;
+    input.setAttribute('aria-label', pomeLocaleRendererWorkspace.t(field === 'comment' ? 'commands.comment' : 'copy.commands.b85789'));
     button.replaceWith(input);
     input.focus();
     input.select();
@@ -133,8 +141,9 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       if (finished) return;
       finished = true;
       const value = input.value.trim();
-      if (save && value) command.text = value;
-      persistCommands();
+      if (save && (value || field === 'comment') && value !== command[field]) {
+        command[field] = value; persistCommands();
+      }
       renderCommands();
     };
     input.addEventListener('blur', () => finish(true));
@@ -183,6 +192,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       const action = event.target.closest('[data-action]');
       if (!action) return;
       if (action.dataset.action === 'edit-command') editCommand(row);
+      if (action.dataset.action === 'edit-comment') editCommand(row, 'comment');
       if (action.dataset.action === 'delete-command') {
         if (!await window.PomeDeleteConfirm.open({titleKey:'copy.deleteCommand.ebd35b',items:[command.text]})) return;
         commands = commands.filter((item) => item.id !== command.id);
@@ -858,11 +868,15 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const settingsShortcutChange = document.getElementById('settings-shortcut-change');
   const settingsResetPanelPosition = document.getElementById('settings-reset-panel-position');
   const settingsDefaultTab = document.getElementById('settings-default-tab');
+  const settingsPanelSize = document.getElementById('settings-panel-size');
   const settingsWorkspaceKind = document.getElementById('settings-workspace-kind');
   const settingsWorkspacePath = document.getElementById('settings-workspace-path');
   const settingsWorkspaceOpen = document.getElementById('settings-workspace-open');
   const settingsWorkspaceChoose = document.getElementById('settings-workspace-choose');
   const settingsAutoLaunch = document.getElementById('settings-auto-launch');
+  const settingsMeetingMode = document.getElementById('settings-meeting-mode');
+  const settingsAutoMeetingMode = document.getElementById('settings-auto-meeting-mode');
+  const settingsMeetingStatus = document.getElementById('settings-meeting-status');
   const settingsTaskNotifications = document.getElementById('settings-task-notifications');
   const settingsWeatherEffects = document.getElementById('settings-weather-effects');
   const settingsWinNativeRow = document.getElementById('settings-win-native-row');
@@ -1108,6 +1122,30 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       settingsWorkspacePath.title = summary.workspacePath || '';
     }
     if (settingsAutoLaunch) settingsAutoLaunch.checked = summary.autoLaunch;
+    if (settingsMeetingMode) settingsMeetingMode.checked = settingsAppSettings?.meetingMode === true;
+    settingsPanelSize?.querySelectorAll('[data-panel-size]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.panelSize === (settingsAppSettings?.panelSize || 'standard')));
+    });
+    const autoMeetingSupported = window.notchAPI?.capabilities?.features?.automaticMeetingMode === true;
+    for (const id of ['settings-auto-meeting-row', 'settings-meeting-status', 'settings-meeting-coverage']) {
+      const row = document.getElementById(id); if (row) row.hidden = !autoMeetingSupported;
+    }
+    if (settingsAutoMeetingMode) settingsAutoMeetingMode.checked = settingsAppSettings?.autoMeetingMode !== false;
+    if (settingsMeetingStatus) {
+      settingsMeetingStatus.replaceChildren();
+      const enabled = settingsAppSettings?.autoMeetingMode !== false;
+      for (const key of ['camera', 'sharing', 'focus']) {
+        const signal = settingsAppSettings?.meetingStatus?.signals?.[key];
+        const status = !enabled ? 'off' : signal?.available !== true ? signal?.active ? 'held' : 'unavailable' : signal.active ? 'active' : 'inactive';
+        const chip = document.createElement('span');
+        chip.dataset.active = String(enabled && signal?.active === true);
+        chip.textContent = pomeLocaleRendererWorkspace.t('notifications.meetingSignal', {
+          reason: pomeLocaleRendererWorkspace.t(`notifications.meetingReason.${key}`),
+          status: pomeLocaleRendererWorkspace.t(`notifications.meetingState.${status}`),
+        });
+        settingsMeetingStatus.append(chip);
+      }
+    }
     if (settingsTaskNotifications) settingsTaskNotifications.checked = settingsAppSettings?.taskNotifications !== false;
     if (settingsWeatherEffects) settingsWeatherEffects.checked = settingsAppSettings?.weatherEffects !== false;
     // Windows 原生能力（P4 / D16）：杀软首轮测试没跑，默认关，只在 Windows 上露出这一行。
@@ -1126,13 +1164,24 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     const state = window.NotchHome?.getVisibility?.();
     const hidden = new Set(state?.hiddenIds || []);
     const recordingActive = window.NotchWorkspace?.isRecordingActive?.() ?? isRecordingActive();
+    const capacity = state?.capacity;
+    const area = { mini: 2, small: 4, medium: 8, large: 16 };
+    let capacityBlockedAny = false;
     settingsHomeModuleList?.querySelectorAll('input[data-settings-home-module]').forEach((input) => {
       const moduleId = input.dataset.settingsHomeModule;
       const unavailable = state?.unavailableIds?.includes(moduleId) === true;
       input.closest('label').hidden = unavailable;
+      input.closest('label').style.order = String(Math.max(0, state?.order?.indexOf(moduleId) ?? 0));
       input.checked = !hidden.has(moduleId);
+      const needs = area[state?.sizes?.[moduleId]] || 8;
+      const capacityBlocked = !input.checked && (needs > (capacity?.remaining ?? 48)
+        || capacity?.blockedIds?.includes(moduleId));
+      capacityBlockedAny ||= capacityBlocked && !unavailable;
       input.disabled = unavailable || state?.readOnly === true
+        || capacityBlocked
+        || (input.checked && state?.visibleIds?.length === 1)
         || (moduleId === 'recorder' && recordingActive && input.checked);
+      input.setAttribute('aria-describedby', 'settings-home-module-status');
     });
     const recorderNote = settingsHomeModuleList?.querySelector('[data-home-module-setting-note="recorder"]');
     if (recorderNote) pomeLocaleRendererWorkspace.bind(recorderNote, "textContent", () => (recordingActive ? pomeLocaleRendererWorkspace.t("copy.recordingInProgress.d548e4") : pomeLocaleRendererWorkspace.t("copy.recordingTranscription.376486")));
@@ -1142,8 +1191,10 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
         ? pomeLocaleRendererWorkspace.t("copy.safeModeChangesUnavailable.d3e9bc")
         : state?.persisted === false
           ? pomeLocaleRendererWorkspace.t("copy.thisSessionOnlyCouldnTSave.379370")
-          : pomeLocaleRendererWorkspace.t("copy.hiddenSpacesRefillAutomaticallyKeepAtLeast.be4674")));
-      status.dataset.state = state?.readOnly || state?.persisted === false ? 'warning' : 'saved';
+          : capacity && (capacityBlockedAny || capacity.overflowIds.length || capacity.remaining < 2)
+            ? pomeLocaleRendererWorkspace.t('settings.panelSize.capacity', { mode: pomeLocaleRendererWorkspace.t(`settings.panelSize.${capacity.panelSize}`), used: capacity.used, capacity: capacity.capacity })
+            : pomeLocaleRendererWorkspace.t("copy.hiddenSpacesRefillAutomaticallyKeepAtLeast.be4674")));
+      status.dataset.state = state?.readOnly || state?.persisted === false || capacityBlockedAny || capacity?.overflowIds?.length || capacity?.remaining < 2 ? 'warning' : 'saved';
     }
   }
 
@@ -2991,6 +3042,18 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     renderSettingsPanel();
     setSettingsNote(pomeLocaleRendererWorkspace.t("copy.featureVisibilityUpdated.ae777d"));
   });
+  settingsPanelSize?.addEventListener('click', async event => {
+    const button = event.target.closest('[data-panel-size]');
+    if (!button || button.disabled || button.getAttribute('aria-pressed') === 'true') return;
+    const buttons = settingsPanelSize.querySelectorAll('button');
+    buttons.forEach(item => { item.disabled = true; });
+    try {
+      const result = await window.notchAPI.setPanelSize(button.dataset.panelSize);
+      if (result?.ok) { settingsAppSettings = result.settings; window.NotchHome?.setPanelSize?.(result.settings.panelSize); }
+      else setSettingsNote(pomeLocaleRendererWorkspace.t('settings.panelSize.saveFailed'), true);
+    } catch { setSettingsNote(pomeLocaleRendererWorkspace.t('settings.panelSize.saveFailed'), true); }
+    finally { buttons.forEach(item => { item.disabled = false; }); renderSettingsPanel(); }
+  });
   settingsHomeModuleList?.addEventListener('change', async (event) => {
     const input = event.target.closest('input[data-settings-home-module]');
     if (!input || !window.NotchHome?.setModuleVisible) return;
@@ -3000,6 +3063,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       input.checked
     );
     renderHomeModuleSettings();
+    if (result?.error === 'capacity_exceeded') return;
     if (!result?.ok) {
       const message = result?.error === 'at_least_one_required'
         ? pomeLocaleRendererWorkspace.t("copy.keepAtLeastOneHomeWidget.fddd04")
@@ -3111,6 +3175,26 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     if (result?.ok && settingsAppSettings) settingsAppSettings.weatherEffects = result.weatherEffects === true;
     if (!result?.ok) setSettingsNote(pomeLocaleRendererWorkspace.t('settings.weather.saveFailed'), true);
     else setSettingsNote('');
+  });
+  settingsMeetingMode?.addEventListener('change', async () => {
+    const previous = settingsAppSettings?.meetingMode === true;
+    settingsMeetingMode.disabled = true;
+    try {
+      const result = await window.notchAPI.setMeetingMode(settingsMeetingMode.checked);
+      settingsMeetingMode.checked = result?.ok ? result.meetingMode === true : previous;
+      if (!result?.ok) setSettingsNote(pomeLocaleRendererWorkspace.t('settings.notifications.topBubbleFailed'), true);
+    } catch { settingsMeetingMode.checked = previous; }
+    finally { settingsMeetingMode.disabled = false; }
+  });
+  settingsAutoMeetingMode?.addEventListener('change', async () => {
+    const previous = settingsAppSettings?.autoMeetingMode !== false;
+    settingsAutoMeetingMode.disabled = true;
+    try {
+      const result = await window.notchAPI.setAutoMeetingMode(settingsAutoMeetingMode.checked);
+      settingsAutoMeetingMode.checked = result?.ok ? result.autoMeetingMode === true : previous;
+      if (!result?.ok) setSettingsNote(pomeLocaleRendererWorkspace.t('settings.notifications.topBubbleFailed'), true);
+    } catch { settingsAutoMeetingMode.checked = previous; }
+    finally { settingsAutoMeetingMode.disabled = false; }
   });
   settingsTaskNotifications?.addEventListener('change', async () => {
     if (!window.notchAPI?.setTaskNotifications) return;
@@ -4453,6 +4537,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   window.getCommandsForSync = () => commands.map((command) => ({
     id: command.id,
     text: command.text,
+    comment: command.comment || '',
     createdAt: command.createdAt,
   }));
   window.getLinkGroupsForSync = () => linkGroups.map((group) => ({
@@ -4496,7 +4581,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     }
     if (Array.isArray(detail.commands)) {
       commands = detail.commands
-        .map((item) => Domain.createCommand(item && item.text, item && item.id, item && item.createdAt))
+        .map((item) => Domain.createCommand(item && item.text, item && item.id, item && item.createdAt, item && item.comment))
         .filter(Boolean);
       commandSelection = new Set();
       commandSelectionAnchor = null;

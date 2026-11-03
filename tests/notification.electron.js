@@ -83,6 +83,21 @@ app.on('web-contents-created', (_event, contents) => {
 async function run(mainContents) {
   await until(async () => port && await mainContents.executeJavaScript('!!window.NotchWorkspace'), 'production startup');
   assert.equal((await fetch(`http://127.0.0.1:${port}/notify/gpt`, {method:'POST'})).status,404);
+  // Meeting mode pauses display while continuing durable receipt of AI completions.
+  const js = source => mainContents.executeJavaScript(source);
+  assert.equal((await js('notchAPI.setMeetingMode(true)')).meetingMode, true);
+  await send('codex', { title: '会议期间已保存', 'thread-id': 'meeting-session', 'turn-id': 'meeting-turn' });
+  const inbox = await js('notchAPI.getTaskInbox()');
+  assert(inbox.items.some(row => row.title === '会议期间已保存'));
+  assert.equal(notificationWindow()?.isVisible() || false, false);
+  assert.equal((await js('notchAPI.getAppSettings()')).taskNotifications, true);
+  assert.equal((await js('notchAPI.setMeetingMode(false)')).meetingMode, false);
+  await send('codex', { title: '会议结束后恢复提醒' });
+  await dismiss(await shown('会议结束后恢复提醒'));
+  await js('notchAPI.setTaskNotifications(false)');
+  await js('notchAPI.setMeetingMode(true)'); await js('notchAPI.setMeetingMode(false)');
+  assert.equal((await js('notchAPI.getAppSettings()')).taskNotifications, false, 'meeting mode preserves the original bubble preference');
+  await js('notchAPI.setTaskNotifications(true)');
   // Each known source enters through the real HTTP receiver and source identity service.
   const variants = [
     ['codex-completed', 'codex', { title: '重构通知队列，补齐悬停暂停逻辑', project: 'Pome-Panel' }],

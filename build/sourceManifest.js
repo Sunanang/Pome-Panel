@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const REQUIRED=['main.js','main-services.js','platform.js','preload.js','renderer/index.html','renderer/app.js','renderer/workspace.js'];
+const REQUIRED=['main.js','main-services.js','meetingMode.js','platform.js','preload.js','renderer/index.html','renderer/app.js','renderer/workspace.js'];
 function verifyPackagedSources(projectRoot,appRoot){
  const hashes={};
  function verify(relative){

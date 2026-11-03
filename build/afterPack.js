@@ -38,6 +38,9 @@ exports.default = async function afterPack(context) {
   }
   const macOSDirectory = path.join(appPath, 'Contents', 'MacOS');
   const electronExecutablePath = path.join(macOSDirectory, context.packager.appInfo.productFilename);
+  const meetingProbePath = path.join(appRoot, 'platform-adapters', 'meeting-probe');
+  execFileSync('/usr/bin/xcrun', ['swiftc', '-O', '-target', 'arm64-apple-macos13.0',
+    path.join(appRoot, 'platform-adapters', 'meeting-probe.swift'), '-o', meetingProbePath], { stdio: 'pipe' });
 
   if (!fs.existsSync(electronExecutablePath)) {
     throw new Error(`找不到 Electron 主程序：${electronExecutablePath}`);
@@ -75,6 +78,7 @@ exports.default = async function afterPack(context) {
   };
 
   const fwDir = path.join(appPath, 'Contents', 'Frameworks');
+  cs(meetingProbePath, true);
 
   // 1) 所有 dylib
   walk(fwDir, (n) => n.endsWith('.dylib'), cs);

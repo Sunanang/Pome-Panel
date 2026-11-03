@@ -11,6 +11,7 @@ function subscribe(channel, handler) {
 // webPreferences.additionalArguments 传 --pome-caps=<base64 JSON>。
 // 沙箱 preload 不能 require 本地模块，所以这里只解析、不重新计算。
 const CAPABILITIES_ARGUMENT_PREFIX = '--pome-caps=';
+const initialPanelSize = (process.argv || []).find(value => value.startsWith('--pome-panel-size='))?.slice('--pome-panel-size='.length);
 
 function decodeBase64Json(value) {
   let json;
@@ -165,10 +166,16 @@ contextBridge.exposeInMainWorld('notchAPI', {
   onEscape: (cb) => subscribe('key:escape', () => cb()),
   onToggleShortcut: (cb) => subscribe('shortcut:toggle-panel', () => cb()),
   getHoverSpaceStatus: () => ipcRenderer.invoke('shortcut:hover-space-status'),
+  setMeetingMode: enabled => ipcRenderer.invoke('settings:set-meeting-mode', enabled),
+  setAutoMeetingMode: enabled => ipcRenderer.invoke('settings:set-auto-meeting-mode', enabled),
+  setOwnCameraState: labels => ipcRenderer.send('media:own-camera-state', labels),
+  onNotificationListenerChanged: cb => subscribe('tasks:listener-changed', (event, state) => cb(state)),
   getAppSettings: () => ipcRenderer.invoke('settings:get'),
   completeWelcome: () => ipcRenderer.invoke('settings:complete-welcome'),
   setFeature: (featureId, enabled) => ipcRenderer.invoke('settings:set-feature', { featureId, enabled }),
   setDefaultTab: (tab) => ipcRenderer.invoke('settings:set-default-tab', tab),
+  setPanelSize: preset => ipcRenderer.invoke('settings:set-panel-size', preset),
+  panelSize: ['standard', 'medium', 'compact'].includes(initialPanelSize) ? initialPanelSize : 'standard',
   setWinNative: (enabled) => ipcRenderer.invoke('settings:set-win-native', enabled === true),
   setAutoLaunch: (enabled) => ipcRenderer.invoke('settings:set-auto-launch', enabled === true),
   setTaskNotifications: (enabled) => ipcRenderer.invoke('settings:set-task-notifications', enabled === true),

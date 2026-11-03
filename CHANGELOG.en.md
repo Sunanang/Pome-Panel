@@ -6,6 +6,14 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Add device-local Standard (1240×638), Medium (1040×580) and Compact (880×520) panel presets with startup restoration and repositioning along the saved dock edge. Home uses existing footprints and user order with capacities of 48/36/24; warnings and disabled choices stay in Home widget settings. Preserve widget UI and existing preferences without outer Home scrolling. New defaults prioritize Sun and Almanac and hide Music and Quick recording.
+
+- Add automatic meeting mode for macOS and Windows: pause top notifications for camera use, detected mirroring/sharing or system Focus, then resume about 30 seconds after all signals clear. Keep the manual switch and event storage independent, show each detection state, and retain an existing pause when a signal becomes unavailable.
+
+- Keep the AI listener status visible with history, recover after notification-port conflicts, add connection testing and honor `CODEX_HOME`. Add meeting mode that pauses top notifications while saving events. Add synced command comments without including them in copied commands. Fix card drag lag and center jumps, retaining the pointer grip across consecutive drags.
+
+- Fix macOS IME candidates hidden behind the panel: temporarily lower its layer while editing, restore it after editing or collapse, and use the latest focus state after media permission prompts. Preserve always-on-top and cross-Space visibility; cover native Pinyin composition, candidate selection and layer restoration.
+
 - Fix missing macOS windows on other desktop and fullscreen Spaces with focused/main-window merging and bounded identity discovery across all display coordinates. Keep AX standard-window admission, validate retained identities, fall back when compatibility APIs fail, and verify both AX and native window IDs before focusing. Add native fullscreen-Space cold-start and bidirectional-focus regression coverage.
 - Track native window visibility independently of Chromium: pause weather and background effects, release the mirror camera, pause playback and mask credentials when hidden. Showing the panel never restarts the camera. Remove a redundant Mission Control call that prevented showing the window and handle duplicate Escape delivery during shortcut capture. Dismiss the download dialog only when both press and click occur on the backdrop, keeping card padding safe.
 - Expand regression coverage for visibility deduplication, camera cancellation, Escape ordering and dialog hit testing. Update outdated layer/quota assertions, bound cross-navigation waits, isolate each test's hook home and run the complete website test suite in CI.

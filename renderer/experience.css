@@ -45,10 +45,10 @@
   .pomodoro-dial input { font-size:clamp(18px,13cqw,42px); min-width:0; }
 }
 @media (max-width:979px) {
-  #tab-home .home-bento { grid-template-columns:repeat(6,minmax(0,1fr))!important; grid-template-rows:none!important; grid-auto-rows:260px; grid-auto-flow:row dense; overflow-y:auto; align-content:start; padding-right:4px; }
-  #tab-home .home-bento > [data-home-module]:not([hidden]) { grid-area:auto!important; grid-column:span 2!important; min-height:0; }
-  #tab-home .home-bento > [data-widget-size='medium']:not([hidden]) { grid-column:span 4!important; }
-  #tab-home .home-bento > [data-widget-size='large']:not([hidden]) { grid-column:span 6!important; }
+  html:not([data-panel-size]) #tab-home .home-bento { grid-template-columns:repeat(6,minmax(0,1fr))!important; grid-template-rows:none!important; grid-auto-rows:260px; grid-auto-flow:row dense; overflow-y:auto; align-content:start; padding-right:4px; }
+  html:not([data-panel-size]) #tab-home .home-bento > [data-home-module]:not([hidden]) { grid-area:auto!important; grid-column:span 2!important; min-height:0; }
+  html:not([data-panel-size]) #tab-home .home-bento > [data-widget-size='medium']:not([hidden]) { grid-column:span 4!important; }
+  html:not([data-panel-size]) #tab-home .home-bento > [data-widget-size='large']:not([hidden]) { grid-column:span 6!important; }
   .settings-experience-nav .workspace-button { white-space:nowrap; }
 }
 /* Feedback is local and interruptible; no whole-list replay while typing. */

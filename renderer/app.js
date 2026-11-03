@@ -1370,6 +1370,7 @@ function applyIslandClipVars(edge, align) {
 function applyLayoutMetrics(metrics) {
   if (!metrics) return;
   layoutMetrics = metrics;
+  window.NotchHome?.setPanelSize?.(metrics.panelSize);
   if (metrics.stripHeight) {
     document.documentElement.style.setProperty('--notch-h', `${metrics.stripHeight}px`);
   }
@@ -3395,7 +3396,13 @@ window.notchAPI?.onCapabilitiesChanged?.((capabilities) => {
   unavailableHomeModules.splice(0, unavailableHomeModules.length, ...capabilities.unavailableHomeModules);
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
 });
-const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'commands', 'mirror', 'note', 'windows', 'sun', 'almanac'];
+const HOME_ORDER_DEFAULTS = ['sun', 'pomodoro', 'cursor', 'almanac', 'inbox', 'commands', 'mirror', 'note', 'windows', 'music', 'recorder'];
+const HOME_DEFAULT_HIDDEN = ['music', 'recorder'];
+let homePanelSize = window.NotchPlatform.layout.normalizePanelSize(window.notchAPI?.panelSize);
+function homeCapacity(hidden = hiddenHomeModules, order = homeOrder, sizes = homeSizes, limit = null) {
+  return window.NotchDomain.projectHomeCapacity(order, sizes, effectiveHomeHidden(hidden),
+    limit ?? window.NotchPlatform.layout.panelSizePreset(homePanelSize).capacity);
+}
 const HOME_SIZE_DEFAULTS = {
   music: 'small',
   windows: 'medium',
@@ -3407,22 +3414,19 @@ const HOME_SIZE_DEFAULTS = {
   pomodoro: 'mini',
   cursor: 'small',
   sun: 'medium',
-  // Small keeps the Windows first-run 12×4 fill at exactly 48 cells with sun enabled.
+  // Preserve the existing small footprint; panel capacity never changes it.
   almanac: 'small',
 };
 const HOME_SIZE_LABELS = { get mini() { return pomeLocaleRendererApp.t("copy.mini.43d4ba"); }, get small() { return pomeLocaleRendererApp.t("copy.small.6a7339"); }, get medium() { return pomeLocaleRendererApp.t("copy.medium.a567bd"); }, get large() { return pomeLocaleRendererApp.t("copy.large.7d4ca7"); } };
 const homeBento = document.getElementById('home-bento');
 const homeContextMenu = document.getElementById('home-context-menu');
 const homeTabPanel = document.getElementById('tab-home');
-// New profiles and an exact old Windows default get platform defaults.
-// Customized visibility, sizes and deliberate gaps remain the user's choices.
-let freshWindowsHome = false;
+// New default visibility/order applies only to fresh or explicitly reset profiles.
+let freshHomeProfile = false;
 try {
-  freshWindowsHome = readPlatformCapabilities().homeDefaults?.showSun === true
-    && [HOME_ORDER_KEY, HOME_SIZES_KEY, HOME_PLACEMENTS_KEY, HOME_HIDDEN_MODULES_KEY, 'notch-home-layout-v2']
-      .every((key) => localStorage.getItem(key) === null);
+  freshHomeProfile = [HOME_ORDER_KEY, HOME_SIZES_KEY, HOME_PLACEMENTS_KEY, HOME_HIDDEN_MODULES_KEY, 'notch-home-layout-v2']
+    .every(key => localStorage.getItem(key) === null);
 } catch {}
-
 function bindHomeTilePointerGlow(bento) {
   if (!bento || bento.dataset.tileGlowBound === 'true') return () => {};
   bento.dataset.tileGlowBound = 'true';
@@ -3561,7 +3565,7 @@ function loadHomeSizes() {
 function loadHiddenHomeModules() {
   try {
     const rawText = localStorage.getItem(HOME_HIDDEN_MODULES_KEY);
-    if (rawText === null) return { hiddenIds: [], needsRepair: false };
+    if (rawText === null) return { hiddenIds: freshHomeProfile ? [...HOME_DEFAULT_HIDDEN] : [], needsRepair: false };
     const parsed = JSON.parse(rawText);
     const hiddenIds = window.NotchDomain.normalizeHiddenHomeModules(parsed, HOME_MODULE_REGISTRY);
     return {
@@ -3643,20 +3647,14 @@ if (!homeInboxSavedPlacement) {
     if (slot && window.NotchDomain.validateHomeWidgetLayout({ allowGaps: true, placements: { inbox: slot } }, ['inbox'], 12, 4)) homeInboxSavedPlacement = slot;
   } catch {}
 }
-if (legacyDefaultHome) { homeOrder = [...HOME_ORDER_DEFAULTS]; homeSizes = {...HOME_SIZE_DEFAULTS}; homeWorkingLayout = null; }
+if (legacyDefaultHome) {
+  // Preserve the established legacy migration; the new priority list is for
+  // default/reset paths only, not a replacement for existing profiles.
+  homeOrder = ['music','pomodoro','cursor','recorder','inbox','commands','mirror','note','windows','sun','almanac'];
+  homeSizes = {...HOME_SIZE_DEFAULTS}; homeWorkingLayout = null;
+}
 const loadedHomeVisibility = loadHiddenHomeModules();
 let hiddenHomeModules = loadedHomeVisibility.hiddenIds;
-const repairWindowsDefaultHome = readPlatformCapabilities().homeDefaults?.showSun === true
-  && window.NotchDomain.isLegacyWindowsDefaultHomeLayout({
-    order: homeOrder, defaultOrder: HOME_ORDER_DEFAULTS, sizes: homeSizes, defaults: HOME_SIZE_DEFAULTS,
-    placements: homeWorkingLayout?.placements, hiddenIds: hiddenHomeModules,
-    unavailableIds: effectiveHomeHidden([]), registry: HOME_MODULE_REGISTRY,
-  });
-const useWindowsHomeDefaults = freshWindowsHome || repairWindowsDefaultHome;
-if (repairWindowsDefaultHome) {
-  hiddenHomeModules = hiddenHomeModules.filter(id => id !== 'sun');
-  homeWorkingLayout = null;
-}
 let homeVisibilityPersisted = true;
 let homeLayoutReadOnly = false;
 let homeLayoutMotionGeneration = 0;
@@ -3670,7 +3668,10 @@ function saveHomeLayout() {
     localStorage.setItem(HOME_SIZES_KEY, JSON.stringify(homeSizes));
     if (homeWorkingLayout?.placements) {
       if (homeWorkingLayout.placements.inbox) homeInboxSavedPlacement = { ...homeWorkingLayout.placements.inbox };
-      localStorage.setItem(HOME_PLACEMENTS_KEY, JSON.stringify(homeWorkingLayout.placements));
+      const previous = loadHomePlacements()?.placements || {};
+      const overflow = new Set(homeCapacity(hiddenHomeModules, homeOrder, homeSizes, 48).overflowIds);
+      const retained = Object.fromEntries(Object.entries(previous).filter(([id]) => overflow.has(id)));
+      localStorage.setItem(HOME_PLACEMENTS_KEY, JSON.stringify({ ...retained, ...homeWorkingLayout.placements }));
       if (homeInboxSavedPlacement) localStorage.setItem(HOME_INBOX_SLOT_KEY, JSON.stringify(homeInboxSavedPlacement));
     }
     return true;
@@ -3691,7 +3692,7 @@ function saveHiddenHomeModules() {
   }
 }
 
-if (loadedHomeVisibility.needsRepair) saveHiddenHomeModules();
+if (loadedHomeVisibility.needsRepair || freshHomeProfile) saveHiddenHomeModules();
 
 function sealResolvedHomeLayout(layout, visibleIds, {
   preferredIds = [],
@@ -3729,6 +3730,10 @@ function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSi
   persistSeal = false,
 } = {}) {
   hiddenIds = effectiveHomeHidden(hiddenIds);
+  // Master placements always use the standard 48-unit canvas. The selected
+  // window's smaller capacity is a render mask in applyHomeLayout, never saved.
+  const capacity = window.NotchDomain.projectHomeCapacity(order, sizes, hiddenIds, 48);
+  hiddenIds = [...new Set([...hiddenIds, ...capacity.overflowIds])];
   const visibleIds = HOME_MODULE_REGISTRY.filter((id) => !hiddenIds.includes(id));
 
   if (!forcePack && homeWorkingLayout?.placements) {
@@ -3749,7 +3754,7 @@ function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSi
           : { layout: candidate, changed: false };
         const resolved = sealed.layout || candidate;
         homeWorkingLayout = cloneHomeLayout(resolved);
-        // Fresh Windows fill must persist the sealed pack even when sealing is a no-op,
+        // Persist a sealed pack even when sealing is a no-op,
         // otherwise reload re-packs without sealGaps and can reshuffle cards.
         if (persistSeal) saveHomeLayout();
         return resolved;
@@ -3875,8 +3880,26 @@ function animateCommittedHomeLayout(reason, beforeState, { draggedId = null } = 
     });
 }
 
+function projectHomeLayoutForPanel(layout, order = homeOrder, sizes = homeSizes) {
+  const projection = homeCapacity(hiddenHomeModules, order, sizes);
+  const columns = homePanelSize === 'compact' ? 8 : homePanelSize === 'medium' ? 10 : 12;
+  let rows = homePanelSize === 'compact' ? 3 : 4;
+  let renderLayout = layout;
+  if (homePanelSize !== 'standard') {
+    let placements = window.NotchDomain.packHomeWidgetLayout(projection.visibleIds, sizes, columns, rows, false);
+    // A large footprint is four rows tall; retain it intact in compact mode.
+    if (!placements && rows === 3) { rows = 4; placements = window.NotchDomain.packHomeWidgetLayout(projection.visibleIds, sizes, columns, rows, false); }
+    if (!placements) throw new Error('Homepage preset projection failed.');
+    renderLayout = { placements, variants: Object.fromEntries(Object.entries(placements).map(([id, p]) => [id, window.NotchDomain.layoutVariantForPlacement(p)])) };
+  }
+  return { renderLayout, projection, columns, rows };
+}
+
 function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   if (!homeBento || !layout) throw new Error('A validated homepage layout is required.');
+  const { renderLayout, projection, columns, rows } = projectHomeLayoutForPanel(layout);
+  homeBento.style.setProperty('--home-grid-columns', String(columns));
+  homeBento.style.setProperty('--home-grid-rows', String(rows));
   resetHomeTilePointerMotion({ immediate: true });
   // 先采样当前可见位置（含进行中的 FLIP），再取消旧动画，避免先闪回再起步。
   const beforeState = reason === 'initial' || reason === 'rollback'
@@ -3887,8 +3910,8 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   const placeholder = document.getElementById('home-inbox-placeholder');
   if (placeholder) {
     const slot = homeInboxSavedPlacement;
-    const overlaps = slot && Object.values(layout.placements).some(p => p.column < slot.column + slot.width && p.column + p.width > slot.column && p.row < slot.row + slot.height && p.row + p.height > slot.row);
-    placeholder.hidden = !hiddenHomeModules.includes('inbox') || !slot || overlaps;
+    const overlaps = slot && Object.values(renderLayout.placements).some(p => p.column < slot.column + slot.width && p.column + p.width > slot.column && p.row < slot.row + slot.height && p.row + p.height > slot.row);
+    placeholder.hidden = !hiddenHomeModules.includes('inbox') || !slot || overlaps || slot.column + slot.width > columns || slot.row + slot.height > rows;
     if (!placeholder.hidden) placeholder.style.gridArea = `${slot.row + 1} / ${slot.column + 1} / span ${slot.height} / span ${slot.width}`;
   }
   const automaticLayout = !homeLayoutReadOnly && effectiveHomeHidden(hiddenHomeModules).length > 0;
@@ -3897,14 +3920,14 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
     const moduleId = tile.dataset.homeModule;
     const orderIndex = Math.max(0, homeOrder.indexOf(moduleId));
     const size = homeSizes[moduleId] || HOME_SIZE_DEFAULTS[moduleId];
-    const placement = layout.placements[moduleId];
+    const placement = projection.visibleIds.includes(moduleId) ? renderLayout.placements[moduleId] : null;
     tile.style.order = String(orderIndex);
     tile.dataset.widgetSize = size;
     tile.style.setProperty('--bento-index', String(orderIndex));
     tile.hidden = !placement;
     tile.setAttribute('aria-hidden', String(!placement));
     if (placement) {
-      tile.dataset.layoutVariant = layout.variants[moduleId];
+      tile.dataset.layoutVariant = renderLayout.variants[moduleId];
       tile.dataset.layoutColumn = String(placement.column);
       tile.dataset.layoutRow = String(placement.row);
       tile.dataset.layoutWidth = String(placement.width);
@@ -3954,7 +3977,9 @@ if (!HOME_ORDER_DEFAULTS.every((id) => homeOrder.includes(id))
   || homeOrder.length !== HOME_ORDER_DEFAULTS.length) {
   homeOrder = loadHomeOrder();
 }
-const introducedSunLayout = useWindowsHomeDefaults ? {
+let sunAlreadyKnown = false;
+try { sunAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'sun'); } catch {}
+const introducedSunLayout = (freshHomeProfile || sunAlreadyKnown) ? {
   order: homeOrder, sizes: homeSizes, hiddenIds: hiddenHomeModules, placements: null,
 } : window.NotchDomain.introduceHomeModule({
   order: homeOrder,
@@ -3981,7 +4006,7 @@ if (introducedSunLayout.placements) {
 }
 let almanacAlreadyKnown = false;
 try { almanacAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'almanac'); } catch {}
-const introducedAlmanacLayout = (almanacAlreadyKnown || useWindowsHomeDefaults) ? {
+const introducedAlmanacLayout = (freshHomeProfile || almanacAlreadyKnown) ? {
   order: homeOrder, sizes: homeSizes, hiddenIds: hiddenHomeModules,
   placements: homeWorkingLayout?.placements || null,
 } : window.NotchDomain.introduceHomeModule({
@@ -4009,7 +4034,7 @@ if (introducedAlmanacLayout.placements) {
 }
 let inboxAlreadyKnown = false;
 try { inboxAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'inbox'); } catch {}
-const introducedInboxLayout = inboxAlreadyKnown ? { sizes: homeSizes, placements: homeWorkingLayout?.placements, hiddenIds: effectiveHomeHidden(hiddenHomeModules) } : window.NotchDomain.normalizeHomeInboxLayout({
+const introducedInboxLayout = (freshHomeProfile || inboxAlreadyKnown) ? { sizes: homeSizes, placements: homeWorkingLayout?.placements, hiddenIds: effectiveHomeHidden(hiddenHomeModules) } : window.NotchDomain.normalizeHomeInboxLayout({
   order: homeOrder, sizes: homeSizes, placements: homeWorkingLayout?.placements,
   hiddenIds: effectiveHomeHidden(hiddenHomeModules), registry: HOME_MODULE_REGISTRY,
 });
@@ -4018,12 +4043,10 @@ const inboxHiddenChanged = !hiddenHomeModules.includes('inbox') && introducedInb
 if (inboxHiddenChanged) hiddenHomeModules.push('inbox');
 if (introducedInboxLayout.placements) homeWorkingLayout = { allowGaps: true, placements: introducedInboxLayout.placements };
 saveHomeLayout();
-if (repairWindowsDefaultHome || sunHiddenChanged || almanacHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
+if (sunHiddenChanged || almanacHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
 
 let initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
-  forcePack: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
-  sealGaps: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
-  persistSeal: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
+  forcePack: freshHomeProfile,
 });
 if (!initialHomeLayout) {
   // Repair once without entering safe mode: keep visibility prefs, reset packable sizes.
@@ -4045,13 +4068,24 @@ if (!initialHomeLayout) {
   console.error('Homepage layout validation failed; using read-only defaults.');
 }
 if (!initialHomeLayout) throw new Error('Default homepage layout validation failed.');
+if (freshHomeProfile) saveHomeLayout();
 applyHomeLayout(initialHomeLayout, { reason: 'initial' });
 
 function visibilitySnapshot() {
-  const effectiveHiddenIds = effectiveHomeHidden(homeLayoutReadOnly ? [] : hiddenHomeModules);
+  const capacity = homeCapacity(homeLayoutReadOnly ? [] : hiddenHomeModules);
+  const area = { mini: 2, small: 4, medium: 8, large: 16 };
+  capacity.blockedIds = HOME_MODULE_REGISTRY.filter(id => !capacity.visibleIds.includes(id) && (
+    (area[homeSizes[id]] || 8) > capacity.remaining
+    || !homeCapacity(hiddenHomeModules.filter(hidden => hidden !== id)).visibleIds.includes(id)
+  ));
+  const effectiveHiddenIds = HOME_MODULE_REGISTRY.filter(id => !capacity.visibleIds.includes(id));
   return {
     hiddenIds: [...effectiveHiddenIds],
-    visibleIds: HOME_MODULE_REGISTRY.filter((id) => !effectiveHiddenIds.includes(id)),
+    visibleIds: [...capacity.visibleIds],
+    order: [...homeOrder],
+    sizes: { ...homeSizes },
+    enabledIds: capacity.enabledIds,
+    capacity: { ...capacity, panelSize: homePanelSize },
     storedHiddenIds: [...hiddenHomeModules],
     automaticLayout: !homeLayoutReadOnly && effectiveHiddenIds.length > 0,
     unavailableIds: [...unavailableHomeModules],
@@ -4072,134 +4106,55 @@ function setHomeModuleVisible(moduleId, visible) {
 }
 function setHomeModuleVisibleCore(moduleId, visible, force = false) {
   const current = [...hiddenHomeModules];
-  if (unavailableHomeModules.includes(moduleId)) return { ok: false, changed: false, error: 'unsupported', hiddenIds: current, persisted: homeVisibilityPersisted };
-  const currentlyVisible = visibilitySnapshot().visibleIds;
-  if (!visible && currentlyVisible.includes(moduleId) && currentlyVisible.length === 1) {
-    return { ok: false, changed: false, error: 'at_least_one_required', hiddenIds: current, persisted: homeVisibilityPersisted };
-  }
-  if (homeLayoutReadOnly) {
-    return { ok: false, changed: false, error: 'layout_read_only', hiddenIds: current, persisted: homeVisibilityPersisted };
-  }
-  const next = window.NotchDomain.updateHomeModuleVisibility(
-    current,
-    HOME_MODULE_REGISTRY,
-    moduleId,
-    visible
-  );
+  const failed = error => ({ ok: false, changed: false, error, hiddenIds: current, persisted: homeVisibilityPersisted });
+  if (unavailableHomeModules.includes(moduleId)) return failed('unsupported');
+  if (homeLayoutReadOnly) return failed('layout_read_only');
+  const before = homeCapacity();
+  if (!visible && before.visibleIds.includes(moduleId) && before.visibleIds.length === 1) return failed('at_least_one_required');
+  const next = window.NotchDomain.updateHomeModuleVisibility(current, HOME_MODULE_REGISTRY, moduleId, visible);
   if (!next.ok) return { ...next, changed: false, persisted: homeVisibilityPersisted };
-  const changed = force || JSON.stringify(next.hiddenIds) !== JSON.stringify(current);
-  if (!changed) {
-    return { ok: true, changed: false, hiddenIds: current, persisted: homeVisibilityPersisted };
+  if (moduleId === 'recorder' && !visible && window.NotchWorkspace?.isRecordingActive?.()) return failed('recording_active');
+  if (visible && !before.visibleIds.includes(moduleId)) {
+    const area = { mini: 2, small: 4, medium: 8, large: 16 };
+    const after = homeCapacity(next.hiddenIds);
+    if ((area[homeSizes[moduleId]] || 8) > before.remaining || !after.visibleIds.includes(moduleId)) return failed('capacity_exceeded');
   }
-  if (moduleId === 'recorder' && visible === false
-    && window.NotchWorkspace?.isRecordingActive?.()) {
-    return { ok: false, changed: false, error: 'recording_active', hiddenIds: current, persisted: homeVisibilityPersisted };
-  }
-  const previousWorking = cloneHomeLayout(homeWorkingLayout);
-  const previousSizes = { ...homeSizes };
-  if (moduleId === 'inbox') {
-    const currentLayout = previousWorking || resolveValidatedHomeLayout(current);
-    if (!currentLayout) return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
-    const previousSlot = homeInboxSavedPlacement;
-    if (currentLayout.placements.inbox) homeInboxSavedPlacement = { ...currentLayout.placements.inbox };
-    const retained = Object.fromEntries(Object.entries(currentLayout.placements).filter(([id]) => id !== 'inbox'));
-    const result = window.NotchDomain.normalizeHomeInboxLayout({
-      order: homeOrder, sizes: homeSizes, placements: retained,
-      hiddenIds: effectiveHomeHidden(next.hiddenIds), registry: HOME_MODULE_REGISTRY,
-      preservePositions: true, preferredInboxPlacement: homeInboxSavedPlacement,
-    });
-    const visibleIds = HOME_MODULE_REGISTRY.filter(id => !effectiveHomeHidden(next.hiddenIds).includes(id));
-    const layout = { allowGaps: true, placements: result.placements,
-      variants: Object.fromEntries(Object.entries(result.placements || {}).map(([id, item]) => [id, window.NotchDomain.layoutVariantForPlacement(item)])) };
-    if ((visible && result.hiddenIds.includes('inbox')) || !window.NotchDomain.validateHomeWidgetLayout(layout, visibleIds, 12, 4)) {
-      homeInboxSavedPlacement = previousSlot;
-      return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
-    }
-    try {
-      if (!visible && document.getElementById('home-inbox')?.contains(document.activeElement)) document.activeElement.blur();
-      hiddenHomeModules = next.hiddenIds;
-      homeSizes = result.sizes;
-      homeWorkingLayout = cloneHomeLayout(layout);
-      applyHomeLayout(layout, { reason: 'visibility' });
-    } catch {
-      hiddenHomeModules = current; homeSizes = previousSizes;
-      homeWorkingLayout = previousWorking; homeInboxSavedPlacement = previousSlot;
-      try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch {}
-      return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
-    }
-    const visibilityPersisted = saveHiddenHomeModules();
-    const layoutPersisted = saveHomeLayout();
-    const persisted = visibilityPersisted && layoutPersisted;
-    document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
-    return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
-  }
-  const areaOf = { mini: 2, small: 4, medium: 8, large: 16 };
-  homeWorkingLayout = null;
-  let preferredIds = [];
-  let layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, homeSizes, {
-    forcePack: true,
-    sealGaps: true,
-  });
-  let fittedSizes = false;
-  if (!layout && visible === true) {
-    const visibleIds = HOME_MODULE_REGISTRY.filter((id) => !next.hiddenIds.includes(id));
-    const visibleDefaults = Object.fromEntries(visibleIds.map((id) => [id, HOME_SIZE_DEFAULTS[id] || 'medium']));
-    const visibleSizes = Object.fromEntries(visibleIds.map((id) => (
-      [id, previousSizes[id] || HOME_SIZE_DEFAULTS[id] || 'medium']
-    )));
-    const fittedVisible = window.NotchDomain.normalizeHomeWidgetSizes(
-      visibleSizes,
-      visibleDefaults,
-      moduleId,
-      48
-    );
-    preferredIds = visibleIds.filter((id) => (
-      id !== moduleId && (areaOf[fittedVisible[id]] || 0) < (areaOf[visibleSizes[id]] || 0)
-    ));
-    const fitted = { ...previousSizes, ...fittedVisible };
-    homeWorkingLayout = null;
-    homeSizes = fitted;
-    layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, fitted, {
-      forcePack: true,
-      preferredIds,
-      sealGaps: true,
-    });
-    if (layout) {
-      fittedSizes = JSON.stringify(homeSizes) !== JSON.stringify(previousSizes);
-    } else {
-      homeSizes = previousSizes;
-    }
-  }
-  const currentLayout = previousWorking
-    || resolveValidatedHomeLayout(current, homeOrder, previousSizes, { forcePack: true });
-  if (!layout || !currentLayout) {
-    homeSizes = previousSizes;
-    homeWorkingLayout = previousWorking;
-    return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
-  }
-  if (moduleId === 'mirror' && visible === false) stopMirror();
+  if (!force && JSON.stringify(next.hiddenIds) === JSON.stringify(current)) return { ok: true, changed: false, hiddenIds: current, persisted: homeVisibilityPersisted };
+  const previous = cloneHomeLayout(homeWorkingLayout);
+  const previousSlot = homeInboxSavedPlacement;
+  if (previous?.placements.inbox) homeInboxSavedPlacement = { ...previous.placements.inbox };
+  // Preserve selected footprints. Visibility changes may repack positions, but
+  // never shrink another tile to admit a new module or fill unused capacity.
+  const layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, homeSizes);
+  if (!layout) { homeWorkingLayout = previous; return failed('layout_invalid'); }
   try {
-    const activeElement = document.activeElement;
-    const changingTile = homeTiles.find((tile) => tile.dataset.homeModule === moduleId);
-    if (visible === false && changingTile?.contains(activeElement)) activeElement.blur();
     hiddenHomeModules = next.hiddenIds;
+    if (!visible && document.getElementById('home-' + moduleId)?.contains(document.activeElement)) document.activeElement.blur();
+    if (moduleId === 'mirror' && !visible) stopMirror();
     applyHomeLayout(layout, { reason: 'visibility' });
-  } catch (error) {
-    hiddenHomeModules = current;
-    homeSizes = previousSizes;
-    homeWorkingLayout = previousWorking;
-    try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch (rollbackError) {}
-    return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
+  } catch {
+    hiddenHomeModules = current; homeWorkingLayout = previous; homeInboxSavedPlacement = previousSlot;
+    try { applyHomeLayout(previous, { reason: 'rollback' }); } catch {}
+    return failed('dom_apply_failed');
   }
-  const visibilityPersisted = saveHiddenHomeModules();
-  const layoutPersisted = fittedSizes || JSON.stringify(homeSizes) !== JSON.stringify(previousSizes) ? saveHomeLayout() : true;
-  const persisted = visibilityPersisted && layoutPersisted;
-  const detail = visibilitySnapshot();
-  document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail }));
+  const persisted = saveHiddenHomeModules() && saveHomeLayout();
+  document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
   return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
 }
 
 window.NotchHome = Object.freeze({
+  setPanelSize(value) {
+    const next = window.NotchPlatform.layout.normalizePanelSize(value);
+    if (homePanelSize === next) return;
+    document.dispatchEvent(new CustomEvent('notch:cancel-home-layout-edit'));
+    homePanelSize = next;
+    document.documentElement.dataset.panelSize = next;
+    if (homeContextMenu) homeContextMenu.hidden = true;
+    closeTodoEditor();
+    applyHomeLayout(homeWorkingLayout, { reason: 'panel-size' });
+    if (!homeCapacity().visibleIds.includes('mirror')) stopMirror();
+    document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
+  },
   getVisibility: visibilitySnapshot,
   isVisible: (moduleId) => visibilitySnapshot().visibleIds.includes(String(moduleId || '')),
   setModuleVisible: setHomeModuleVisible,
@@ -4219,6 +4174,7 @@ document.getElementById('home-inbox-placeholder')?.addEventListener('click', asy
 document.dispatchEvent(new CustomEvent('notch:home-modules-changed', {
   detail: visibilitySnapshot(),
 }));
+document.documentElement.dataset.panelSize = homePanelSize;
 if (homeLayoutReadOnly) document.dispatchEvent(new CustomEvent('notch:home-layout-error'));
 
 if (homeBento) {
@@ -4255,7 +4211,8 @@ if (homeBento) {
       : '';
     homeContextMenu.querySelectorAll('[data-home-ctx-size]').forEach((btn) => {
       const value = btn.dataset.homeCtxSize;
-      const enabled = Boolean(contextModuleId) && !homeLayoutReadOnly;
+      const fits = homeCapacity(hiddenHomeModules, homeOrder, { ...homeSizes, [contextModuleId]: value }).visibleIds.includes(contextModuleId);
+      const enabled = Boolean(contextModuleId) && !homeLayoutReadOnly && fits;
       btn.disabled = !enabled;
       btn.setAttribute('aria-pressed', String(enabled && value === size));
       btn.hidden = !contextModuleId;
@@ -4310,7 +4267,6 @@ if (homeBento) {
 
   document.addEventListener('notch:edit-home-layout', () => setHomeLayoutEditing(true));
   const setHomeLayoutEditing = (editing, { silent = false, action = 'enter' } = {}) => {
-    if (editing && innerWidth < 980) { showStatusToast(pomeLocaleRendererApp.t('ux.layout.widen')); return; }
     resetHomeTilePointerMotion({ immediate: true });
     const next = Boolean(editing) && !homeLayoutReadOnly;
     const wasEditing = homeLayoutEditing;
@@ -4360,6 +4316,9 @@ if (homeBento) {
     }
   };
   setHomeLayoutEditing(false, { silent: true });
+  document.addEventListener('notch:cancel-home-layout-edit', () => {
+    if (homeLayoutEditing) setHomeLayoutEditing(false, { silent: true, action: 'cancel' });
+  });
 
   const clearDropTarget = () => {
     homeTiles.forEach((tile) => tile.classList.remove('layout-drop-target'));
@@ -4383,9 +4342,7 @@ if (homeBento) {
     const next = window.NotchDomain.swapHomeWidgetPlacements(current, sourceId, targetId, { order: homeOrder });
     if (!next) return false;
 
-    const visibleIds = HOME_MODULE_REGISTRY.filter(
-      (id) => !effectiveHomeHidden(hiddenHomeModules).includes(id)
-    );
+    const visibleIds = Object.keys(current.placements);
     if (!window.NotchDomain.validateHomeWidgetLayout(next, visibleIds, 12, 4)) return false;
 
     // The gap filler can resize siblings only; exchanged cards keep their saved sizes.
@@ -4439,20 +4396,25 @@ if (homeBento) {
     if (!targetId) { clearDisplacePreview(); return; }
     const original = dragState.originLayout;
     if (!dragState.previewPlans.has(targetId)) {
-      dragState.previewPlans.set(targetId, window.NotchDomain.swapHomeWidgetPlacements(
-        original, sourceId, targetId, { order: dragState.originOrder }
-      ));
+      const plan = window.NotchDomain.swapHomeWidgetPlacements(original, sourceId, targetId, { order: dragState.originOrder });
+      const nextSizes = { ...homeSizes };
+      if (plan) Object.entries(plan.placements).forEach(([id, p]) => {
+        if (id !== sourceId && id !== targetId) nextSizes[id] = sizeFromPlacement(p);
+      });
+      const projected = plan ? projectHomeLayoutForPanel(plan, swappedOrderFrom(dragState.originOrder, sourceId, targetId), nextSizes).renderLayout : null;
+      dragState.previewPlans.set(targetId, projected);
     }
     const preview = dragState.previewPlans.get(targetId);
     if (!preview) { clearDisplacePreview(); return; }
+    const origin = dragState.originRenderLayout;
     const targetTile = homeBento.querySelector(`[data-home-module="${targetId}"]`);
     if (!targetTile) return;
     const { pitchX, pitchY } = dragState;
     homeTiles.forEach((item) => {
       const id = item.dataset.homeModule;
-      if (id === sourceId || !original.placements[id] || !preview.placements[id]) return;
-      const dx = (preview.placements[id].column - original.placements[id].column) * pitchX;
-      const dy = (preview.placements[id].row - original.placements[id].row) * pitchY;
+      if (item.hidden || id === sourceId || !origin.placements[id] || !preview.placements[id]) return;
+      const dx = (preview.placements[id].column - origin.placements[id].column) * pitchX;
+      const dy = (preview.placements[id].row - origin.placements[id].row) * pitchY;
       item.classList.toggle('layout-displacing', Boolean(dx || dy));
       if (dx || dy) {
         item.style.setProperty('--home-displace-x', `${dx}px`);
@@ -4520,8 +4482,8 @@ if (homeBento) {
     if (nextTargetId !== dragState.previewTargetId) {
       previewDisplaceTarget(tile.dataset.homeModule, nextTargetId);
     }
-    tile.style.setProperty('--home-drag-x', `${clientX - dragState.startX}px`);
-    tile.style.setProperty('--home-drag-y', `${clientY - dragState.startY}px`);
+    tile.style.setProperty('--home-drag-x', `${dragState.offsetX + clientX - dragState.startX}px`);
+    tile.style.setProperty('--home-drag-y', `${dragState.offsetY + clientY - dragState.startY}px`);
   };
 
   const flushHomeDragFrame = () => {
@@ -4532,6 +4494,7 @@ if (homeBento) {
 
   const applyContextSize = (moduleId, requested) => {
     if (!moduleId || homeLayoutReadOnly) return;
+    if (!homeCapacity(hiddenHomeModules, homeOrder, { ...homeSizes, [moduleId]: requested }).visibleIds.includes(moduleId)) return;
     const previousSizes = homeSizes;
     const previousLayout = cloneHomeLayout(homeWorkingLayout);
     homeSizes = window.NotchDomain.normalizeHomeWidgetSizes({
@@ -4607,6 +4570,7 @@ if (homeBento) {
       tile.classList.remove('is-dragging', 'hit-test-off');
       tile.style.removeProperty('--home-drag-x');
       tile.style.removeProperty('--home-drag-y');
+      tile.style.removeProperty('transform-origin');
       homeBento.classList.remove('layout-dragging');
       suppressHomeClickUntil = Date.now() + 280;
     } else {
@@ -4680,6 +4644,7 @@ if (homeBento) {
     tile.classList.remove('is-dragging', 'hit-test-off');
     tile.style.removeProperty('--home-drag-x');
     tile.style.removeProperty('--home-drag-y');
+    tile.style.removeProperty('transform-origin');
     homeBento.classList.remove('layout-dragging');
     dragState = null;
     suppressHomeClickUntil = Date.now() + 280;
@@ -4711,17 +4676,28 @@ if (homeBento) {
       pendingLongPress = null;
       return;
     }
+    const liftedRect = tile.getBoundingClientRect();
     cancelHomeLayoutMotion();
     const originRects = captureOriginRects();
+    const baseRect = originRects.get(tile.dataset.homeModule);
+    // Preserve the visible grip if the preceding landing is still in flight.
+    const offsetX = liftedRect.left - baseRect.left;
+    const offsetY = liftedRect.top - baseRect.top;
+    tile.style.transformOrigin = `${startX - liftedRect.left}px ${startY - liftedRect.top}px`;
+    tile.style.setProperty('--home-drag-x', `${offsetX}px`);
+    tile.style.setProperty('--home-drag-y', `${offsetY}px`);
     const bounds = homeBento.getBoundingClientRect();
     const style = getComputedStyle(homeBento);
     const columnGap = parseFloat(style.columnGap) * bounds.width / homeBento.offsetWidth;
     const rowGap = parseFloat(style.rowGap) * bounds.height / homeBento.offsetHeight;
     dragState = {
-      tile, target: null, pointerId, startX, startY,
+      tile, target: null, pointerId, startX, startY, offsetX, offsetY,
       originOrder: [...homeOrder], originRects,
       originLayout: cloneHomeLayout(homeWorkingLayout), previewTargetId: null,
-      previewPlans: new Map(), pitchX: (bounds.width + columnGap) / 12, pitchY: (bounds.height + rowGap) / 4,
+      originRenderLayout: projectHomeLayoutForPanel(homeWorkingLayout).renderLayout,
+      previewPlans: new Map(),
+      pitchX: (bounds.width + columnGap) / Number(style.getPropertyValue('--home-grid-columns') || 12),
+      pitchY: (bounds.height + rowGap) / Number(style.getPropertyValue('--home-grid-rows') || 4),
     };
     homeBento.classList.add('layout-dragging');
     tile.classList.add('is-dragging');
@@ -4736,9 +4712,7 @@ if (homeBento) {
     const tile = event.target.closest('[data-home-module]');
     if (!tile || tile.hidden || !homeBento.contains(tile)) return;
     // 编辑布局时整卡可拖（含随笔记 textarea、镜子 button、工具条）
-    if (event.target.closest('input, textarea, select, [contenteditable]')) {
-      event.preventDefault();
-    }
+    event.preventDefault();
 
     if (pendingLongPress) clearTimeout(pendingLongPress.timer);
     // Short delay so click/press still feels intentional, but whole-tile drag in edit mode
@@ -4889,6 +4863,7 @@ function setMirrorZoom(value) {
 }
 
 function stopMirror() {
+  window.notchAPI?.setOwnCameraState?.([]);
   mirrorGeneration += 1;
   if (mirrorStream) {
     mirrorStream.getTracks().forEach((track) => track.stop());
@@ -4951,6 +4926,7 @@ async function startMirror() {
       return;
     }
     mirrorStream = stream;
+    window.notchAPI?.setOwnCameraState?.(stream.getVideoTracks().map(track => track.label));
     mirrorVideo.srcObject = stream;
     await mirrorVideo.play();
     // stop / restart may happen while permission, capture or play is pending.

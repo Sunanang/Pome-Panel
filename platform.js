@@ -9,8 +9,11 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
     return { testMode, ignoreInheritedTestState: packaged && !testMode };
   }
 
-  function windowLayer(platform, { notification = false } = {}) {
-    return { level: platform === 'darwin' ? 'status' : 'floating', relativeLevel: notification ? 1 : 0 };
+  function windowLayer(platform, { notification = false, typingFocus = false } = {}) {
+    // macOS candidate windows can sit below status-level panels. Yield while
+    // editing, retaining always-on-top and all-Spaces visibility.
+    const level = platform === 'darwin' && (!typingFocus || notification) ? 'status' : 'floating';
+    return { level, relativeLevel: notification ? 1 : 0 };
   }
   // ============ 能力层 v2（P0-1） ============
   // 纯数据，主进程与渲染层共享：能力层只声明"能不能做 / 用什么参数"，
@@ -21,7 +24,7 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
     const win = platform === 'win32';
     return {
       platform,
-      homeDefaults: { showSun: win, fillGrid: win },
+      homeDefaults: { showSun: true, fillGrid: false },
       layout: {
         areaKind: win ? 'workArea' : 'bounds', // 夹紧 / 侧边停靠的参考区域
         topInsetKind: mac ? 'menuBar' : 'none',
@@ -35,6 +38,7 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
         firstRunAutoLaunch: mac || win,
         permissionSelfCheck: mac, // 辅助功能 / 屏幕录制自检，Mac 专属
         mediaAccessStatus: mac || win,
+        automaticMeetingMode: mac || win,
         // P4 / D16：设置页「实验功能」里的 Windows 原生能力开关本身只在 Windows 上存在，
         // 与开关当前值无关（否则关掉之后就再也找不到它了）。
         winNativeSetting: win,
@@ -189,6 +193,15 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
   // 与渲染层结构常量对应：panel padding-top(--s-2 8) + 顶栏(--topbar-h) + panels margin-top(--s-3 12)
   // + panel padding-bottom(--s-4 16)。
   const EXPANDED_CHROME_Y = 98;
+  const PANEL_SIZE_PRESETS = Object.freeze({
+    standard: Object.freeze({ width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT, capacity: 48 }),
+    medium: Object.freeze({ width: 1040, panelHeight: 580 - EXPANDED_CHROME_Y, capacity: 36 }),
+    compact: Object.freeze({ width: 880, panelHeight: 520 - EXPANDED_CHROME_Y, capacity: 24 }),
+  });
+  function normalizePanelSize(value) {
+    return typeof value === 'string' && Object.hasOwn(PANEL_SIZE_PRESETS, value) ? value : 'standard';
+  }
+  function panelSizePreset(value) { return PANEL_SIZE_PRESETS[normalizePanelSize(value)]; }
   const SCREEN_MARGIN = 24; // 尺寸超屏时保留的安全边
   const PANEL_TOP_SIDE_ALIGN_PX = 120;
   const WINDOWS_LEGACY_EXPANDED_HEIGHT = 616; // P1-2 统一为 638 前的 Windows 旧值
@@ -209,10 +222,11 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
   const LAYOUT_TAB_IDS = ['home', 'todo', 'notes', 'clip', 'links', 'recordings', 'credentials', 'settings'];
 
   // 所有 Tab 共用同一展开尺寸，切换内容时不改变原生窗口边界。
-  function tabSizes() {
+  function tabSizes(preset = 'standard') {
+    const { width, panelHeight } = panelSizePreset(preset);
     const sizes = {};
     LAYOUT_TAB_IDS.forEach((id) => {
-      sizes[id] = { width: EXPANDED_WIDTH, panelHeight: EXPANDED_PANEL_HEIGHT };
+      sizes[id] = { width, panelHeight };
     });
     return sizes;
   }
@@ -501,6 +515,7 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
       menuBarHeight: topInset(ctx), // P1-3：Mac 为菜单栏高，Windows 恒 0
       chromeY: EXPANDED_CHROME_Y,
       tabSizes: ctx.tabSizes || DEFAULT_TAB_SIZES,
+      panelSize: normalizePanelSize(ctx.panelSize),
       dockEdge: edge,
       dockAlign: align,
       collapsedWidth: collapsed.width,
@@ -510,6 +525,9 @@ const pomeLocalePlatform = typeof module === 'object' && module.exports ? requir
   }
 
   const layout = {
+    panelSizePresets: PANEL_SIZE_PRESETS,
+    normalizePanelSize,
+    panelSizePreset,
     constants: LAYOUT_CONSTANTS,
     tabSizes,
     tabIds: LAYOUT_TAB_IDS,

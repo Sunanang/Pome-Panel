@@ -167,6 +167,7 @@ function buildWorkspaceView(entities, accountKey) {
       commands.push({
         id: String(payload.id || (id.startsWith('command:') ? id.slice('command:'.length) : id)),
         text: clipText(text, 2000),
+        comment: clipText(String(payload.comment || ''), 1000),
         createdAt: Number(payload.createdAt) || 0,
       });
       continue;

@@ -275,3 +275,13 @@ test('Grok honors custom GROK_HOME for detection, connect, repair and disconnect
  fs.rmSync(path.join(home,'.grok'),{recursive:true});
  assert.equal((await service.status('grok')).detected,true,'custom home alone is sufficient');
 });
+
+test('Codex honors CODEX_HOME without touching the default config', async t => {
+ const {home,files}=fixture(t), custom=path.join(home,'custom codex'); fs.mkdirSync(custom);
+ fs.writeFileSync(files.codex,'# default remains untouched\n');
+ const service=createAiSourceHooks({homeDir:home,env:{CODEX_HOME:custom},runtimeCheck:()=>true});
+ assert.equal((await service.status('codex')).filePath,path.join(custom,'config.toml'));
+ const preview=await service.preview('codex'); assert.equal((await service.apply(preview.token)).ok,true);
+ assert.equal((await service.status('codex')).state,'connected');
+ assert.equal(fs.readFileSync(files.codex,'utf8'),'# default remains untouched\n');
+});

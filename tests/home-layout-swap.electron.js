@@ -111,6 +111,39 @@ async function auditDragScheduling(win) {
   console.log('Homepage drag: frame coalescing, cached previews, actual release target, cancelled queued frames, reduced motion and stable landing passed');
 }
 
+async function auditDragAnchor(win) {
+  const js=code=>win.webContents.executeJavaScript(code);
+  await js(`document.getElementById('home-layout-cancel').click();
+    const placements=${JSON.stringify(fixtures[0])};
+    homeSizes={...homeSizes,...Object.fromEntries(Object.entries(placements).map(([id,p])=>[id,NotchDomain.sizeNameFromPlacement(p)]))};
+    hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!placements[id]);
+    homeWorkingLayout={allowGaps:false,placements,variants:{}};
+    applyHomeLayout(homeWorkingLayout,{reason:'initial'});
+    document.getElementById('home-layout-edit').click();document.querySelector('#ui-capsule-hint button')?.click();dismissStatusToast(false)`);
+  const result=await js(`(async()=>{
+    const tile=document.getElementById('home-recorder');tile.setPointerCapture=()=>{};tile.hasPointerCapture=()=>false;
+    // A second drag can begin while the preceding landing is still in flight.
+    const motion=tile.animate([{transform:'translateY(90px)'},{transform:'translateY(0)'}],{duration:1500,fill:'both'});
+    motion.pause();motion.currentTime=0;homeLayoutMotionAnimations.push(motion);
+    const before=tile.getBoundingClientRect(),target=document.getElementById('home-cursor').getBoundingClientRect();
+    const start={clientX:before.left+12,clientY:before.top+18};
+    const end={clientX:target.left+12,clientY:target.top+18};
+    const pointer={bubbles:true,cancelable:true,isPrimary:true,pointerId:910,button:0,buttons:1};
+    tile.dispatchEvent(new PointerEvent('pointerdown',{...pointer,...start}));
+    homeBento.dispatchEvent(new PointerEvent('pointermove',{...pointer,...end}));
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    const after=tile.getBoundingClientRect(),scale=parseFloat(getComputedStyle(homeBento).getPropertyValue('--home-drag-scale'));
+    return {dx:after.left+12*scale-end.clientX,dy:after.top+18*scale-end.clientY,dragging:tile.classList.contains('is-dragging'),before:{x:before.x,y:before.y},after:{x:after.x,y:after.y},start,end,transform:getComputedStyle(tile).transform,origin:getComputedStyle(tile).transformOrigin,css:tile.style.cssText};
+  })()`);
+  assert.equal(result.dragging,true);assert(Math.abs(result.dx)<1 && Math.abs(result.dy)<1,`card must retain its pointer grip across target preview and an interrupted landing: ${JSON.stringify(result)}`);
+  const shots=process.env.UI_LIFECYCLE_SHOTS||path.join(__dirname,'../dist.noindex/ui-lifecycle');fs.mkdirSync(shots,{recursive:true});
+  await new Promise(r=>setTimeout(r,260));
+  await js('dismissStatusToast(false)');
+  fs.writeFileSync(path.join(shots,'drag-pointer-anchor.png'),(await win.webContents.capturePage()).toPNG());
+  await js(`window.dispatchEvent(new Event('blur'));document.getElementById('home-layout-cancel').click()`);
+  console.log('Dragged card retains its grip when entering a target during a preceding landing');
+}
+
 async function auditUiLifecycle(win) {
   const js = code => win.webContents.executeJavaScript(code);
   const shots = process.env.UI_LIFECYCLE_SHOTS || path.join(__dirname, '../dist.noindex/ui-lifecycle');
@@ -298,6 +331,7 @@ async function main() {
     assert.equal(failure.toast,'空间不够，无法交换');
     assert.equal(failure.errorHidden,true,'space constraints use a short toast');
     assert.equal(failure.dragging,false); assert.equal(failure.placeholder,false);
+    await auditDragAnchor(win);
     await auditDragScheduling(win);
     await auditUiLifecycle(win);
     assert.deepEqual(errors,[]);

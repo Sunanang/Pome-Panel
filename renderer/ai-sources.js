@@ -17,6 +17,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     ? pomeLocaleRendererAiSources.t('sources.claudeRestart')
     : pomeLocaleRendererAiSources.t("copy.configurationSavedQuitCompletelyThenReopenIt.507666", { arg1: labels[source] });
   let hookRows = [];
+  let listener = null;
   let manusListener = null;
   let ready = false, busy = false, plan = null, anchor = null, checkedAt = 0;
   let dismissed = [];
@@ -275,7 +276,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     if (row.hookable) {
       if (row.state === 'connected') {
         if (row.attentionHookMissing || row.summaryHookMissing) definitions.push(['repair', 'copy.repair.37a693']);
-        definitions.push(['disconnect', 'copy.disconnect.f33ac0']);
+        definitions.push(['test', 'notifications.test'], ['disconnect', 'copy.disconnect.f33ac0']);
       } else {
         definitions.push(row.state === 'error' ? ['repair', 'copy.repair.37a693'] : ['connect', 'copy.connect.f3b392']);
       }
@@ -287,7 +288,13 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     definitions.forEach(([action, key], index) => {
       let button = actions.querySelector(`[data-source-action="${action}"]`);
       if (!button) {
-        button = makeButton('', event => void request(row.source, action, event.currentTarget));
+        button = makeButton('', async event => {
+          if (action !== 'test') return void request(row.source, action, event.currentTarget);
+          button.disabled = true;
+          try { const result = await api.testAiSource(row.source); status.textContent = result.message || ''; }
+          catch { status.textContent = pomeLocaleRendererAiSources.t('notifications.listenerUnavailable'); }
+          finally { button.disabled = false; }
+        });
         button.dataset.sourceAction = action;
       }
       button.textContent = pomeLocaleRendererAiSources.t(key);
@@ -388,6 +395,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         const response = await api.getAiSources();
         if (!response?.ok) throw new Error(response?.message || pomeLocaleRendererAiSources.t("copy.couldnTReadConnectionStatus.9412ff"));
         hookRows = response.sources;
+        listener = response.listener || null;
         for (const source of restartSources) {
           if (!hookRows.some(row => row.source === source && row.state === 'connected')) restartSources.delete(source);
         }
@@ -453,11 +461,12 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     void refreshTokenStatuses();
   });
   api?.onManusCompletionStatus?.(applyManusCompletionStatus);
+  api?.onNotificationListenerChanged?.(state => { listener = state; announce(); });
   window.NotchAiSources = Object.freeze({ refresh, request, openSettings, dismiss, icons, compactPath,
     getState: () => ({
       sources: mergedRows().filter(row => row.hookable || row.source === 'manus').map(row => ({ ...row })),
       providers: mergedRows().map((row) => ({ ...row })),
-      ready,
+      ready, listener,
       suggestion: hookRows.find((row) => row.state === 'disconnected' && !dismissed.includes(row.source)),
     }) });
   try {

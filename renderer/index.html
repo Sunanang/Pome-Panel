@@ -512,6 +512,15 @@
                     <div><span><span data-i18n="copy.panelPosition.f71d2a">面板位置</span></span><strong><span data-i18n="copy.dragWhileCollapsedClickToExpand.d4d144">收起时可拖动；点一下展开</span></strong></div>
                     <button id="settings-reset-panel-position" type="button"><span data-i18n="copy.resetToTop.700e4b">重置到顶部</span></button>
                   </div>
+                  <div class="settings-panel-size-row" id="settings-panel-size-row">
+                    <span id="settings-panel-size-label" data-i18n="settings.panelSize.title">面板尺寸</span>
+                    <div id="settings-panel-size" class="settings-panel-size-control" role="group" aria-labelledby="settings-panel-size-label">
+                      <button type="button" data-panel-size="standard" aria-pressed="true" data-i18n="settings.panelSize.standard">标准</button>
+                      <button type="button" data-panel-size="medium" aria-pressed="false" data-i18n="settings.panelSize.medium">适中</button>
+                      <button type="button" data-panel-size="compact" aria-pressed="false" data-i18n="settings.panelSize.compact">紧凑</button>
+                    </div>
+                    <p data-i18n="settings.panelSize.hint">本机保存，与首页卡片尺寸无关</p>
+                  </div>
                   <label class="settings-device-row settings-default-tab-row settings-select-row">
                     <div><span><span data-i18n="copy.defaultPage.2ce591">默认展开页</span></span><strong><span data-i18n="copy.shownWheneverThePanelOpens.a3c1cd">每次唤出面板时显示</span></strong></div>
                     <select id="settings-default-tab" aria-label="默认展开页" data-i18n-aria-label="copy.defaultPage.2ce591">
@@ -543,6 +552,18 @@
                     <i aria-hidden="true"></i>
                   </label>
                   <p class="settings-weather-attribution"><span data-i18n="settings.weather.attribution">本应用的天气数据由</span> <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> <span data-i18n="settings.weather.provided">提供。</span></p>
+                  <label class="settings-device-row settings-meeting-mode-row">
+                    <div><span data-i18n="notifications.manualMeetingMode">手动会议模式</span><strong data-i18n="notifications.meetingHint">暂停顶部提示，消息继续保存；退出后恢复提醒</strong></div>
+                    <input id="settings-meeting-mode" type="checkbox" aria-label="会议模式" data-i18n-aria-label="notifications.meetingMode"/>
+                    <i aria-hidden="true"></i>
+                  </label>
+                  <label class="settings-device-row settings-meeting-mode-row" id="settings-auto-meeting-row">
+                    <div><span data-i18n="notifications.autoMeetingMode">自动会议模式</span><strong data-i18n="notifications.autoMeetingHint">摄像头、投屏共享或系统勿扰触发时暂停；全部解除约 30 秒后恢复</strong></div>
+                    <input id="settings-auto-meeting-mode" type="checkbox" aria-label="自动会议模式" data-i18n-aria-label="notifications.autoMeetingMode"/>
+                    <i aria-hidden="true"></i>
+                  </label>
+                  <div class="settings-meeting-status" id="settings-meeting-status" role="status" aria-live="polite"></div>
+                  <p class="settings-weather-attribution" id="settings-meeting-coverage" data-i18n="notifications.meetingCoverage">共享检测覆盖系统镜像及可识别的共享控件；权限不足或无法读取时显示「无法检测」，已触发的暂停会保留，可关闭自动模式恢复。</p>
                   <label class="settings-device-row settings-task-notifications-row">
                     <div><span><span data-i18n="settings.notifications.topBubble">顶部气泡提醒</span></span><strong><span data-i18n="settings.notifications.topBubbleHint">AI 完成、等待与待办到期时在顶部显示</span></strong></div>
                     <input id="settings-task-notifications" type="checkbox" aria-label="顶部气泡提醒" data-i18n-aria-label="settings.notifications.topBubble"/>

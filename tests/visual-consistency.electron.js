@@ -96,7 +96,11 @@ async function run(c) {
     assert.equal(state.count,count); assert(state.motion&&state.content,filter+' animates both the selection and results');
     if(filter==='image')await shot('clipboard-filter-motion'); await sleep(230);
   }
-  await click('.clip-filter[data-filter="text"]',0);await click('.clip-filter[data-filter="image"]',0);await click('.clip-filter[data-filter="faved"]',0);await sleep(250);
+  await click('.clip-filter[data-filter="text"]',0);await click('.clip-filter[data-filter="image"]',0);await click('.clip-filter[data-filter="faved"]',0);
+  // Wait for the actual compositor timeline; a fixed 250 ms can sample an
+  // unfinished transition on a busy software renderer. The suite watchdog
+  // still rejects an animation that never completes.
+  await js(`Promise.allSettled(document.querySelector('.clip-filter-indicator').getAnimations().map(a=>a.finished))`);
   assert.equal(await js(`document.querySelector('.clip-filter-indicator').getAnimations().filter(a=>a.playState==='running').length`),0,'rapid filter changes leave no stale animations');
   const before=await js('JSON.stringify({history:clipHistory,favorites:clipFavorites})');
   await c.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});

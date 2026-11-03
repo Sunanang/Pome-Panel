@@ -185,6 +185,7 @@ async function run(c) {
     await until(`!document.querySelector('[data-settings-feature=${id}]').disabled && document.querySelector('[data-settings-feature=${id}]').checked===${before}`);
     await until(`document.getElementById('tab-button-${id}').hidden===${!before}`);
   }
+  await js(`hiddenHomeModules=[...new Set([...hiddenHomeModules,'windows'])];saveHiddenHomeModules();document.dispatchEvent(new CustomEvent('notch:home-modules-changed',{detail:NotchHome.getVisibility()}));`);
   const visible = await js('NotchHome.getVisibility().visibleIds');
   // Actual settings inputs dispatch through NotchHome, independently of feature IPC.
   await js(`document.querySelector('[data-settings-home-module=note]').click()`);
@@ -199,7 +200,7 @@ async function run(c) {
     await until(`!NotchHome.isVisible('${id}')`);
   }
   await js(`document.querySelector('[data-settings-home-module=${visible[0]}]').click()`);
-  await until(`document.querySelector('[data-settings-home-module=${visible[0]}]').checked && !document.querySelector('[data-settings-home-module=${visible[0]}]').disabled`);
+  await until(`document.querySelector('[data-settings-home-module=${visible[0]}]').checked && document.querySelector('[data-settings-home-module=${visible[0]}]').disabled`);
   assert.equal(await js('NotchHome.getVisibility().visibleIds.length'),1);
   assert.equal((await js(`NotchHome.setModuleVisible('${visible[0]}',false)`)).error,'at_least_one_required');
   assert.deepEqual((await js('notchAPI.getAppSettings()')).features,featureBefore);

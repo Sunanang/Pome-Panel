@@ -422,3 +422,11 @@ test('a device already showing duplicates heals NAS by deleting the loser', () =
   });
   assert.deepEqual(plan.toPush.map((entity) => [entity.entityId, entity.op]), [['command:b1', 'delete']]);
 });
+
+test('command comments survive projection, sync and backup storage', () => {
+ const command={id:'annotated',text:'npm test',comment:'Regression checks',createdAt:123};
+ const built=buildWorkspaceEntities({commands:[command]},{});
+ const projected=projectWorkspaceEntities(built.entities).snapshot;
+ assert.deepEqual(projected.commands,[command]);
+ assert.equal(JSON.parse(workspaceProjectionToStorage({},projected)['notch-home-commands'])[0].comment,command.comment);
+});

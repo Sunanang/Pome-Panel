@@ -44,7 +44,9 @@ function start({ profile = '', notifications = '', permissionError = false } = {
   const events = [];
   const context = {
     process: { env: { TODO_TEST_USER_DATA: profile, POME_PACKAGED_TEST_MODE: '1', POME_TEST_NOTIFICATIONS: notifications } },
-    app: { isPackaged: true }, isQuitting: false,
+    app: { isPackaged: true, on: () => {} }, isQuitting: false,
+    readAppSettings: () => ({ autoMeetingMode: true }),
+    meetingMonitor: { setEnabled: () => {}, start: () => events.push('meeting-monitor') },
     startTaskNotificationServer: () => events.push('notify'), createTray: () => events.push('tray'),
     setImmediate: fn => fn(), promptForMissingPermissions: async () => {
       events.push('permissions'); if (permissionError) throw Error('fixture');
@@ -65,7 +67,7 @@ test('packaged test profiles do not enable real desktop services or permission p
 test('permission self-check failure is handled and keeps startup recovery available', async () => {
   const events = start({ permissionError: true });
   await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(events, ['notify', 'tray', 'permissions', 'error', 'recover']);
+  assert.deepEqual(events, ['notify', 'tray', 'permissions', 'meeting-monitor', 'error', 'recover']);
 });
 
 test('notifications remain one level above the panel on both desktop platforms', () => {
@@ -79,4 +81,42 @@ test('notifications remain one level above the panel on both desktop platforms',
     vm.runInContext(source.match(/const notificationLayer = [^;]+;/)[0]+'\n'+source.match(/notificationWindow\.setAlwaysOnTop\(true,[^;]+;/)[0], context);
     assert.equal(notification[1], panel[1]); assert.equal(notification[2], 1);
   }
+});
+
+test('macOS yields only the editing panel layer to IME candidates', () => {
+  const { windowLayer } = require('../platform');
+  assert.equal(windowLayer('darwin').level, 'status');
+  assert.equal(windowLayer('darwin', { typingFocus: true }).level, 'floating');
+  assert.deepEqual(windowLayer('darwin', { notification: true, typingFocus: true }), { level: 'status', relativeLevel: 1 });
+  assert.equal(windowLayer('win32', { typingFocus: true }).level, 'floating');
+});
+
+test('layer reapplication respects editing, collapse and active system prompts', () => {
+  const layers = [];
+  const scope = vm.createContext({ platformPolicy: require('../platform'), process: { platform: 'darwin' },
+    currentMode: 'expanded', typingFocusActive: true, mediaPermissionRequests: 0,
+    mainWindow: { isDestroyed: () => false, setAlwaysOnTop: (...args) => layers.push(args), setVibrancy() {} } });
+  vm.runInContext(source.slice(source.indexOf('function applyMainWindowLayer()'), source.indexOf("ipcMain.handle('window:set-typing-focus'")), scope);
+  scope.applyMainWindowLayer();
+  assert.deepEqual(layers.at(-1), [true, 'floating']);
+  scope.currentMode = 'collapsed'; scope.applyMainWindowLayer();
+  assert.deepEqual(layers.at(-1), [true, 'status']);
+  scope.currentMode = 'expanded'; scope.typingFocusActive = false; scope.applyMainWindowLayer();
+  assert.deepEqual(layers.at(-1), [true, 'status']);
+  scope.mediaPermissionRequests = 1; scope.applyMainWindowLayer();
+  assert.equal(layers.length, 3);
+});
+
+test('typing focus IPC accepts only the live panel main frame', () => {
+  let handler, updates = 0;
+  const contents = { mainFrame: {} };
+  const scope = vm.createContext({ ipcMain: { handle: (_channel, fn) => { handler = fn; } },
+    mainWindow: { isDestroyed: () => false, webContents: contents }, typingFocusActive: false,
+    cameraBlurDeferred: false, applyMainWindowLayer: () => updates++ });
+  vm.runInContext(source.slice(source.indexOf("ipcMain.handle('window:set-typing-focus'"), source.indexOf("ipcMain.handle('settings:get'")), scope);
+  assert.equal(handler({ sender: {}, senderFrame: contents.mainFrame }, true), false);
+  assert.equal(handler({ sender: contents, senderFrame: {} }, true), false);
+  assert.equal(updates, 0);
+  assert.equal(handler({ sender: contents, senderFrame: contents.mainFrame }, true), true);
+  assert.equal(updates, 1);
 });

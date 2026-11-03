@@ -19,6 +19,7 @@ async function run(c){
  assert.equal(await js(`document.getElementById('home-inbox-read-all').hidden`),true,'N3: empty hides read-all');await capture('empty-none');
  const tabReady=await js(`(async()=>{const original=ipcSetTab;let release;ipcSetTab=()=>new Promise(resolve=>{release=resolve});try{const switching=setActiveTab('notes');await new Promise(resolve=>requestAnimationFrame(resolve));const input=document.getElementById('notes-search'),r=input.getBoundingClientRect();const ready=document.querySelector('.tab-panel.active').id==='tab-notes' && !input.closest('.tab-panel').inert && document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===input;release();await switching;return ready;}finally{ipcSetTab=original;await setActiveTab('home');}})()`);assert.equal(tabReady,true,'first input must work before a slow native tab IPC replies');
 
+ await js(`hiddenHomeModules=[...new Set([...hiddenHomeModules,'windows'])];saveHiddenHomeModules();`);
  const initial=await js(`({sizes:{...homeSizes},hidden:[...hiddenHomeModules],layout:JSON.parse(JSON.stringify(homeWorkingLayout))})`);
  for(const size of ['mini','small']){
   await js(`homeSizes={...homeSizes,inbox:'${size}'};hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!['music','inbox'].includes(id));homeWorkingLayout=NotchDomain.resolveHomeWidgetLayout(homeOrder,homeSizes,hiddenHomeModules);applyHomeLayout(homeWorkingLayout,{reason:'initial'})`);

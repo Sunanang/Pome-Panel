@@ -398,6 +398,7 @@ function buildWorkspaceEntities(snapshot, { accountKey = null } = {}) {
     pushEntity(entities, COLLECTIONS.COMMANDS, `command:${command.id}`, {
       id: String(command.id),
       text,
+      comment: String(command.comment || '').trim().slice(0, 1000),
       createdAt: Number(command.createdAt) || 0,
     });
   }
@@ -696,6 +697,7 @@ function projectWorkspaceEntities(entities, { accountKey = null } = {}) {
       snapshot.commands.push({
         id: String(payload.id || id.slice('command:'.length)),
         text,
+        comment: String(payload.comment || '').trim().slice(0, 1000),
         createdAt: Number(payload.createdAt) || 0,
       });
       continue;

@@ -144,6 +144,19 @@ test('media permission prompts restore the window layer when the system request 
   assert.deepEqual(deltas, [1, -1]);
 });
 
+test('permission completion resolves the latest editing layer instead of restoring a stale status layer', async () => {
+  let typing = false, restored;
+  const owner = { isDestroyed: () => false, isAlwaysOnTop: () => true,
+    setAlwaysOnTop: (enabled, level) => { if (enabled) restored = level; }, focus() {} };
+  const coordinator = createForegroundMediaPermissionCoordinator({
+    getWindowLayer: () => require('../platform').windowLayer('darwin', { typingFocus: typing }),
+  });
+  await coordinator.run({ owner, request: async () => { typing = true; return true; } });
+  assert.equal(restored, 'floating');
+  await coordinator.run({ owner, request: async () => { typing = false; return false; } });
+  assert.equal(restored, 'status');
+});
+
 test('overlapping media prompts stay below system UI until every request settles', async () => {
   let alwaysOnTop = true;
   const restoredLevels = [];
