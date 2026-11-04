@@ -1608,6 +1608,7 @@
   "ux.recordings.view": "View in Recordings",
   "copy.noMicrophoneDeviceFound.a4c8e1": "No microphone found · Plug one in and try again",
   "commands.comment": "Comment",
+  "commands.deleteChanged": "The command changed. Its updated content was kept; review it before deleting.",
   "commands.commentPlaceholder": "Note ≤6 chars",
   "commands.addComment": "Add comment…",
   "notifications.meetingMode": "Meeting mode",

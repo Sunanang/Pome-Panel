@@ -21,13 +21,22 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
   }
 
-  function loadJson(key, fallback) {
+  function loadList(key) {
     try {
       const parsed = JSON.parse(localStorage.getItem(key));
-      return parsed == null ? fallback : parsed;
+      // Valid JSON can still have the wrong shape. Do not rewrite its bytes
+      // during startup or let one malformed collection disable the workspace.
+      return Array.isArray(parsed) ? parsed : [];
     } catch (error) {
-      return fallback;
+      return [];
     }
+  }
+
+  function normalizeLinkGroups(value) {
+    return (Array.isArray(value) ? value : [])
+      .filter(group => group && typeof group === 'object' && !Array.isArray(group))
+      .map(group => ({ ...group, links: (Array.isArray(group.links) ? group.links : [])
+        .filter(link => link && typeof link === 'object' && !Array.isArray(link) && typeof link.url === 'string') }));
   }
 
   function saveJson(key, value) {
@@ -59,7 +68,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const commandInput = document.getElementById('command-add');
   const commandList = document.getElementById('command-list');
   const commandBulkDelete = document.getElementById('command-bulk-delete');
-  let commands = loadJson(COMMANDS_KEY, [])
+  let commands = loadList(COMMANDS_KEY)
     .map((item) => Domain.createCommand(item && item.text, item && item.id, item && item.createdAt, item && item.comment))
     .filter(Boolean);
   let commandSelection = new Set();
@@ -161,6 +170,30 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     saveJson(COMMANDS_KEY, commands);
   }
 
+  function commandTextButton(command) {
+    const button = document.createElement('button');
+    button.className = 'command-text'; button.type = 'button';
+    button.dataset.action = 'edit-command'; button.textContent = command.text;
+    return button;
+  }
+
+  function commandCommentButton(command) {
+    const button = document.createElement('button'); button.type = 'button';
+    button.className = `command-comment${command.comment ? '' : ' is-empty'}`;
+    button.dataset.action = 'edit-comment'; button.textContent = command.comment || '+';
+    pomeLocaleRendererWorkspace.bind(button, 'ariaLabel', () => command.comment || pomeLocaleRendererWorkspace.t('commands.addComment'));
+    return button;
+  }
+
+  function commandUnchanged(current, preview) {
+    return current && current.id === preview.id && current.text === preview.text
+      && (current.comment || '') === (preview.comment || '') && current.createdAt === preview.createdAt;
+  }
+
+  function notifyCommandDeleteChanged() {
+    if (typeof showStatusToast === 'function') showStatusToast(pomeLocaleRendererWorkspace.t('commands.deleteChanged'), { kind: 'warning' });
+  }
+
   function renderCommands() {
     if (!commandList) return;
     hideCommandTooltip();
@@ -184,11 +217,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       row.className = `command-item${commandSelection.has(command.id) ? ' multi-selected' : ''}`;
       row.dataset.id = command.id;
 
-      const textButton = document.createElement('button');
-      textButton.className = 'command-text';
-      textButton.type = 'button';
-      textButton.dataset.action = 'edit-command';
-      textButton.textContent = command.text;
+      const textButton = commandTextButton(command);
 
       const actions = document.createElement('div');
       actions.className = 'command-actions';
@@ -205,12 +234,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       remove.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.deleteCommand.ebd35b"));
       remove.innerHTML = DELETE_ICON;
       actions.append(copy, remove);
-      const comment = document.createElement('button'); comment.type = 'button';
-      comment.className = `command-comment${command.comment ? '' : ' is-empty'}`;
-      comment.dataset.action = 'edit-comment';
-      comment.textContent = command.comment || '+';
-      pomeLocaleRendererWorkspace.bind(comment, 'ariaLabel', () => command.comment || pomeLocaleRendererWorkspace.t('commands.addComment'));
-      row.append(textButton, comment, actions);
+      row.append(textButton, commandCommentButton(command), actions);
       commandList.appendChild(row);
     });
   }
@@ -249,12 +273,15 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       if (finished) return;
       finished = true;
       const value = input.value.trim();
-      if (save && (value || field === 'comment') && value !== command[field]) {
+      if (save && commands.includes(command) && (value || field === 'comment') && value !== (command[field] || '')) {
         if (field === 'comment' && !value) delete command.comment;
         else command[field] = value;
         persistCommands();
       }
-      renderCommands();
+      // Blur runs during pointerdown, before the subsequent click. Replacing
+      // the whole list here detaches its target and swallows copy/delete/edit.
+      const editor = field === 'comment' ? input.parentElement : input;
+      editor.replaceWith(field === 'comment' ? commandCommentButton(command) : commandTextButton(command));
     };
     input.addEventListener('blur', () => finish(true));
     input.addEventListener('keydown', (event) => {
@@ -307,7 +334,11 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       if (action.dataset.action === 'edit-command') editCommand(row);
       if (action.dataset.action === 'edit-comment') editCommand(row, 'comment');
       if (action.dataset.action === 'delete-command') {
-        if (!await window.PomeDeleteConfirm.open({titleKey:'copy.deleteCommand.ebd35b',items:[command.text]})) return;
+        const preview = { ...command };
+        if (!await window.PomeDeleteConfirm.open({titleKey:'copy.deleteCommand.ebd35b',items:[preview.text]})) return;
+        const current = commands.find(item => item.id === preview.id);
+        if (!current) return;
+        if (!commandUnchanged(current, preview)) { notifyCommandDeleteChanged(); return; }
         commands = commands.filter((item) => item.id !== command.id);
         commandSelection.delete(command.id);
         persistCommands();
@@ -325,14 +356,17 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   }
   commandBulkDelete?.addEventListener('click', async () => {
     if (!commandSelection.size) return;
-    const targets = commands.filter(command => commandSelection.has(command.id));
+    const targets = commands.filter(command => commandSelection.has(command.id)).map(command => ({ ...command }));
     if (!await window.PomeDeleteConfirm.open({items:targets.map(command => command.text)})) return;
-    const ids = new Set(targets.map(command => command.id));
+    const previews = new Map(targets.map(command => [command.id, command]));
+    const ids = new Set(commands.filter(command => previews.has(command.id) && commandUnchanged(command, previews.get(command.id))).map(command => command.id));
+    const changed = commands.some(command => previews.has(command.id) && !ids.has(command.id));
     commands = commands.filter((command) => !ids.has(command.id));
     commandSelection.clear();
     commandSelectionAnchor = null;
-    persistCommands();
+    if (ids.size) persistCommands();
     renderCommands();
+    if (changed) notifyCommandDeleteChanged();
   });
 
   // ============ 链接收藏夹 ============
@@ -340,8 +374,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const linkBulkDelete = document.getElementById('link-bulk-delete');
   const linkGroupsEl = document.getElementById('link-groups');
   const linksStatus = document.getElementById('links-status');
-  let linkGroups = loadJson(LINKS_KEY, []);
-  if (!Array.isArray(linkGroups)) linkGroups = [];
+  let linkGroups = normalizeLinkGroups(loadList(LINKS_KEY));
   let linkSelection = new Set();
   let linkSelectionAnchor = null;
   let addingLinkGroupId = '';
@@ -996,7 +1029,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const settingsWinNative = document.getElementById('settings-win-native');
   const settingsInlineNote = document.getElementById('settings-inline-note');
 
-  let recordings = loadJson(RECORDINGS_KEY, []).map(Domain.createRecording).filter(Boolean);
+  let recordings = loadList(RECORDINGS_KEY).map(Domain.createRecording).filter(Boolean);
   let selectedRecordingId = recordings[0] && recordings[0].id;
   let recordingSelection = new Set();
   let recordingSelectionAnchor = selectedRecordingId || null;
@@ -3823,7 +3856,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   const windowsCount=document.createElement('span');windowsCount.className='windows-count';windowsCount.hidden=true;
   document.querySelector('.home-windows .tile-label')?.after(windowsCount);
   let windows = [];
-  let hiddenWindows = new Set(loadJson(HIDDEN_WINDOWS_KEY, []).filter((item) => typeof item === 'string'));
+  let hiddenWindows = new Set(loadList(HIDDEN_WINDOWS_KEY).filter((item) => typeof item === 'string'));
   let windowsLoading = false;
   let focusingWindowId = null;
   let workspaceTab = document.querySelector('.tab.active')?.dataset.tab || 'home';
@@ -4694,7 +4727,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   document.addEventListener('nas-sync:workspace-projection', (event) => {
     const detail = event && event.detail ? event.detail : {};
     if (Array.isArray(detail.links)) {
-      linkGroups = detail.links;
+      linkGroups = normalizeLinkGroups(detail.links);
       persistLinks();
       renderLinkGroups();
     }

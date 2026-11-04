@@ -1569,6 +1569,7 @@
   "ux.recordings.view": "前往錄音查看",
   "copy.noMicrophoneDeviceFound.a4c8e1": "未偵測到麥克風 · 請接上麥克風後再試",
   "commands.comment": "備註",
+  "commands.deleteChanged": "指令已更新，已保留新內容。請重新確認刪除。",
   "commands.commentPlaceholder": "備註 ≤6字",
   "commands.addComment": "新增備註…",
   "notifications.meetingMode": "會議模式",

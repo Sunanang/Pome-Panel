@@ -1,0 +1,9 @@
+{
+  "phase": "links",
+  "baseline": true,
+  "ready": false,
+  "errors": [
+    "Uncaught TypeError: Cannot read properties of null (reading 'links')"
+  ],
+  "rawPreserved": true
+}

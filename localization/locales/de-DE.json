@@ -1602,6 +1602,7 @@
   "ux.recordings.view": "In Aufzeichnungen ansehen",
   "copy.noMicrophoneDeviceFound.a4c8e1": "Kein Mikrofon gefunden · Schließen Sie eines an und versuchen Sie es erneut",
   "commands.comment": "Kommentar",
+  "commands.deleteChanged": "Der Befehl wurde geändert. Der neue Inhalt bleibt erhalten. Bitte vor dem Löschen erneut prüfen.",
   "commands.commentPlaceholder": "Notiz ≤6 Zeichen",
   "commands.addComment": "Kommentar hinzufügen…",
   "notifications.meetingMode": "Besprechungsmodus",
