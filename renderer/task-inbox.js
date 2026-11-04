@@ -175,13 +175,20 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
         const iconWrap = document.createElement('span'); iconWrap.className = 'home-inbox-source-wrap'; iconWrap.dataset.source = sources[row.source] ? row.source : 'other';
         const icon = document.createElement('img'); icon.src = source.icon; icon.alt = ''; icon.className = 'home-inbox-source'; icon.dataset.source = iconWrap.dataset.source;
         const copy = document.createElement('span'); copy.className = 'home-inbox-copy';
-        const title = document.createElement('strong'); pomeLocaleRendererTaskInbox.bind(title, 'textContent', titleText); copy.append(title);
+        const wide = variant === 'wide' || variant === 'full';
+        const headline = wide ? document.createElement('span') : copy;
+        if (wide) { headline.className = 'home-inbox-headline'; copy.append(headline); }
+        const title = document.createElement('strong'); pomeLocaleRendererTaskInbox.bind(title, 'textContent', titleText); headline.append(title);
         if (recordStatus(row) !== 'completed') {
           const state = document.createElement('small'); state.className = 'home-inbox-event-status';
-          state.textContent = statusLabels[recordStatus(row)]; copy.append(state);
+          state.textContent = statusLabels[recordStatus(row)]; headline.append(state);
         }
         if (size === 'large' || ['wide', 'tall', 'full'].includes(variant)) {
-          const summary = document.createElement('small'); summary.textContent = row.project || source.label; copy.append(summary);
+          const summary = document.createElement('small');
+          if (['wide', 'tall', 'full'].includes(variant)) summary.className = 'home-inbox-summary';
+          summary.textContent = variant && ['wide', 'tall', 'full'].includes(variant) && row.completionSummary && row.completionSummary !== titleText()
+            ? row.completionSummary : row.project || source.label;
+          copy.append(summary);
         }
         const time = document.createElement('time'); time.dateTime = new Date(row.receivedAt).toISOString(); time.textContent = relativeTime(row.receivedAt);
         const dot = document.createElement('i'); dot.className = 'home-inbox-dot'; dot.setAttribute('aria-hidden', 'true');

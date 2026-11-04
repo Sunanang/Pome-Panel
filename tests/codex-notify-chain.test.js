@@ -10,6 +10,9 @@ const { createAiSourceHooks, readConfig, originalNotify, codexNotifyChain } = re
 
 const sky = (previous, executable = '/fixture/SkyComputerUseClient') => [executable, 'turn-ended', '--previous-notify', JSON.stringify(previous)];
 const pome = previous => ['/usr/bin/env', 'ELECTRON_RUN_AS_NODE=1', '/fixture/Pome', '/fixture/codex-notify.js', '--pome-panel-hook=codex', `--pome-forward=${Buffer.from(JSON.stringify(previous)).toString('base64url')}`];
+// A child may have created the file but not finished its last JSONL write yet.
+// Only complete lines are observable records; retry the unfinished tail.
+const completedLines = file => fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').slice(0, -1).filter(Boolean).map(JSON.parse) : [];
 function fixture(t, platform = process.platform) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pome-codex-chain-'));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
@@ -149,8 +152,8 @@ for (const transport of ['stub', 'http']) test(`repaired chain delivers once and
   });
   let rows = [];
   for (let i = 0; i < 200; i++) {
-    if (transport === 'stub' && fs.existsSync(receipt)) seen.splice(0, seen.length, ...fs.readFileSync(receipt, 'utf8').trim().split('\n').map(JSON.parse));
-    if (fs.existsSync(calls)) rows = fs.readFileSync(calls, 'utf8').trim().split('\n').map(JSON.parse);
+    if (transport === 'stub') seen.splice(0, seen.length, ...completedLines(receipt));
+    rows = completedLines(calls);
     if (seen.length && rows.some(row => row.original) && rows.some(row => row.helperDone)) break;
     await new Promise(resolve => setTimeout(resolve, 10));
   }

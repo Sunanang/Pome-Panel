@@ -14,6 +14,7 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
   let manualOpen = false;
   let arcSeq = 0;
   let timer = 0;
+  let currentArcModel = null;
   const Weather = window.PomeWeather;
   let weatherData = null;
   let weatherEffectsEnabled = true;
@@ -113,10 +114,11 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
     return left[1] + ((right[1] - left[1]) * (minute - left[0])) / span;
   }
 
-  function arcSvg(model, size) {
+  function arcSvg(model, size, aspect = 0) {
     const spec = Sun.ARC[size] || Sun.ARC.medium;
     const id = `sunarc${arcSeq += 1}`;
-    const { w, h, hy, kUp, clamp } = spec;
+    const { h, hy, kUp, clamp } = spec;
+    const w = Math.max(spec.w, aspect * h);
     const start = model.arc.start;
     const end = model.arc.end;
     const span = Math.max(1, end - start);
@@ -359,7 +361,15 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
         ? '<b>--</b>'
         : ("<b>" + (delta.sign) + (delta.minutes) + "<i><span data-i18n=\"copy.min.b6a993\">" + (pomeLocaleRendererSunWidget.t("copy.min.b6a993")) + "</span></i>" + (delta.seconds ? ((delta.seconds) + "<i><span data-i18n=\"copy.sec.9dcdc2\">" + (pomeLocaleRendererSunWidget.t("copy.sec.9dcdc2")) + "</span></i>") : '') + "</b>");
       const arcSize = size === 'medium' || size === 'large' ? 'large' : 'medium';
-      return ("<div class=\"sun-head\"><span class=\"tile-label\"><span data-i18n=\"copy.sunriseSunset.224064\">" + (pomeLocaleRendererSunWidget.t("copy.sunriseSunset.224064")) + "</span></span>" + right + "</div>\n        <div class=\"sun-hero\">" + (countdownBlock(model)) + "<div class=\"sun-daylen\"><span><span data-i18n=\"copy.daylightDuration.261de2\">" + (pomeLocaleRendererSunWidget.t("copy.daylightDuration.261de2")) + "</span></span>" + (length) + "</div></div>\n        <div class=\"sun-arc-wrap\">" + (arcSvg(model, arcSize)) + "</div>\n        <ul class=\"sun-next-list\">" + (rows) + "</ul>\n        <div class=\"sun-stats\">\n          <div><span><span data-i18n=\"copy.daylightDuration.261de2\">" + (pomeLocaleRendererSunWidget.t("copy.daylightDuration.261de2")) + "</span></span>" + (length) + "</div>\n          <div><span><span data-i18n=\"copy.comparedWithYesterday.4a18fa\">" + (pomeLocaleRendererSunWidget.t("copy.comparedWithYesterday.4a18fa")) + "</span></span>" + (deltaHtml) + "</div>\n          <div><span><span data-i18n=\"copy.sunriseTomorrow.f333d2\">" + (pomeLocaleRendererSunWidget.t("copy.sunriseTomorrow.f333d2")) + "</span></span><b>" + (escapeHtml(model.tomorrow.sunrise || '--:--')) + "</b></div>\n        </div>");
+      return `<div class="sun-head"><span class="tile-label">${pomeLocaleRendererSunWidget.t("copy.sunriseSunset.224064")}</span>${right}</div>
+        <div class="sun-hero">${countdownBlock(model)}</div>
+        <div class="sun-arc-wrap">${arcSvg(model, arcSize)}</div>
+        <ul class="sun-next-list">${rows}</ul>
+        <div class="sun-stats">
+          <div><span>${pomeLocaleRendererSunWidget.t("copy.daylightDuration.261de2")}</span>${length}</div>
+          <div><span>${pomeLocaleRendererSunWidget.t("copy.comparedWithYesterday.4a18fa")}</span>${deltaHtml}</div>
+          <div><span>${pomeLocaleRendererSunWidget.t("copy.sunriseTomorrow.f333d2")}</span><b>${escapeHtml(model.tomorrow.sunrise || '--:--')}</b></div>
+        </div>`;
     }
     if (layoutSize === 'medium') {
       const nextKey = model.next && model.next.key;
@@ -425,12 +435,27 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
 
   window.addEventListener('pome:language-changed', () => { render(); });
 
+  function syncWideArc() {
+    if (tile.dataset.layoutVariant !== 'wide' || tile.hidden || !currentArcModel) return;
+    const wrap = tile.querySelector('.sun-arc-wrap'), svg = wrap?.querySelector('.sun-arc');
+    if (!svg) return;
+    const style = getComputedStyle(wrap);
+    const height = wrap.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    if (height <= 0) return;
+    const size = resolveSunContentSize(tile.dataset.widgetSize || 'medium', 'wide');
+    const aspect = wrap.clientWidth / height, spec = Sun.ARC[size] || Sun.ARC.medium;
+    if (Math.abs(svg.viewBox.baseVal.width - Math.max(spec.w, spec.h * aspect)) < .1) return;
+    wrap.innerHTML = arcSvg(currentArcModel, size, aspect);
+    requestAnimationFrame(syncGlow);
+  }
+
   function render() {
     const size = tile.dataset.widgetSize || 'medium';
     const variant = tile.dataset.layoutVariant || '';
     const skySize = (variant === 'tall' || variant === 'full') ? 'large'
       : (variant === 'wide' && size === 'mini') ? 'medium' : size;
     if (!location) {
+      currentArcModel = null;
       tile.dataset.phase = 'night';
       tile.dataset.skySide = 'west';
       tile.innerHTML = `<div class="sun-sky" aria-hidden="true"><img src="${Sun.skyAsset(skySize, 'night')}" alt="" draggable="false"></div>${emptyHtml(size)}`;
@@ -441,11 +466,13 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
         timeZone: timeZoneFor(location),
         now: nowDate(),
       });
+      currentArcModel = model;
       tile.dataset.phase = model.phase;
       tile.dataset.skySide = model.skySide;
       tile.innerHTML = `<div class="sun-sky" aria-hidden="true"><img src="${Sun.skyAsset(skySize, model.phase)}" alt="" draggable="false"></div>${renderBody(model, size, variant)}`;
       requestAnimationFrame(syncGlow);
     }
+    syncWideArc();
     syncWeatherEffects();
     fitWeatherHeader();
     // Narrow translated table labels may ellipsize; keep the complete
@@ -663,11 +690,18 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
   }, true);
   window.addEventListener('focus', () => { render(); requestWeatherOnWake(); });
 
+  const layoutKey = () => [tile.dataset.widgetSize, tile.dataset.layoutVariant || '', tile.hidden].join('/');
+  let observedLayout = layoutKey();
   const sizeObserver = new MutationObserver(() => {
+    const next = layoutKey();
+    if (next === observedLayout) return;
+    observedLayout = next;
     if (tile.hidden) closePanel();
     render();
   });
   sizeObserver.observe(tile, { attributes: true, attributeFilter: ['data-widget-size', 'data-layout-variant', 'hidden'] });
+  const arcResizeObserver = new ResizeObserver(syncWideArc);
+  arcResizeObserver.observe(tile);
   const surfaceObserver = new MutationObserver(() => {
     if (panelOpen && !canShowPanel()) closePanel();
     syncWeatherEffects();
@@ -681,7 +715,7 @@ const pomeLocaleRendererSunWidget = typeof module === 'object' && module.exports
   });
   weatherVisibility.observe(tile);
   window.addEventListener('pagehide', () => {
-    weatherEffects.destroy(); weatherVisibility.disconnect(); window.clearTimeout(timer);
+    weatherEffects.destroy(); weatherVisibility.disconnect(); arcResizeObserver.disconnect(); window.clearTimeout(timer);
   });
 
   window.PomeSun = Object.freeze({

@@ -1,0 +1,94 @@
+[
+  {
+    "name": "almanac-unstretched-mini",
+    "geometry": true,
+    "pixels": true
+  },
+  {
+    "name": "almanac-unstretched-small",
+    "geometry": true,
+    "pixels": true
+  },
+  {
+    "name": "almanac-unstretched-medium",
+    "geometry": true,
+    "pixels": true
+  },
+  {
+    "name": "almanac-unstretched-large",
+    "geometry": true,
+    "pixels": true
+  },
+  {
+    "name": "sun-unstretched-mini",
+    "geometry": true,
+    "pixels": true
+  },
+  {
+    "name": "sun-unstretched-small",
+    "geometry": true,
+    "pixels": true
+  },
+  {
+    "name": "sun-unstretched-medium",
+    "geometry": true,
+    "pixels": true
+  },
+  {
+    "name": "sun-unstretched-large",
+    "geometry": true,
+    "pixels": true
+  },
+  {
+    "name": "cursor-unstretched-mini",
+    "geometry": true,
+    "icons": true,
+    "brandColorsIntentional": true
+  },
+  {
+    "name": "cursor-unstretched-small",
+    "geometry": true,
+    "icons": true,
+    "brandColorsIntentional": true
+  },
+  {
+    "name": "cursor-unstretched-medium",
+    "geometry": true,
+    "icons": true,
+    "brandColorsIntentional": true
+  },
+  {
+    "name": "cursor-unstretched-large",
+    "geometry": true,
+    "icons": true,
+    "brandColorsIntentional": true
+  },
+  {
+    "name": "inbox-unstretched-mini",
+    "geometry": true,
+    "styles": true,
+    "dom": true,
+    "pixels": false
+  },
+  {
+    "name": "inbox-unstretched-small",
+    "geometry": true,
+    "styles": true,
+    "dom": true,
+    "pixels": false
+  },
+  {
+    "name": "inbox-unstretched-medium",
+    "geometry": true,
+    "styles": true,
+    "dom": true,
+    "pixels": false
+  },
+  {
+    "name": "inbox-unstretched-large",
+    "geometry": true,
+    "styles": true,
+    "dom": true,
+    "pixels": false
+  }
+]
