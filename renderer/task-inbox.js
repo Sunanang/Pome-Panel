@@ -25,7 +25,17 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
   }));
   const statusLabels = { get completed() { return pomeLocaleRendererTaskInbox.t("copy.completed.f28461"); }, get failed() { return pomeLocaleRendererTaskInbox.t("copy.failed.01ad2b"); }, get awaiting() { return pomeLocaleRendererTaskInbox.t("copy.awaitingConfirmation.e5d218"); }, get due() { return pomeLocaleRendererTaskInbox.t("copy.dueSoon.ea0afa"); } };
   const recordStatus = row => statusLabels[row?.status] ? row.status : 'completed';
-  function pageSizeForWidget() { return { mini: 1, small: 3, medium: 5, large: 10 }[tile.dataset.widgetSize] || 5; }
+  function pageSizeForWidget() {
+    const size = tile.dataset.widgetSize || 'medium';
+    const variant = tile.dataset.layoutVariant || '';
+    const base = { mini: 1, small: 3, medium: 5, large: 10 }[size] || 5;
+    if (variant === 'tall' || variant === 'full') {
+      if (size === 'small') return Math.max(base, 6);
+      if (size === 'medium') return Math.max(base, 8);
+      if (size === 'mini') return Math.max(base, 3);
+    }
+    return base;
+  }
   let rows = [], total = 0, unread = 0, page = 0;
   let busy = false, editing = false, opening = false, resetScroll = false, queued = false, failure = null, failureGeneration = 0;
   let highlightTimer, paintSignature = ''; 
@@ -124,8 +134,9 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
   function paint() {
     if (failure) { updateBadge(); return; }
     const size = tile.dataset.widgetSize || 'medium';
+    const variant = tile.dataset.layoutVariant || '';
     const sourceState = window.NotchAiSources?.getState() || { sources: [], ready: false };
-    const signature = JSON.stringify([size,page,total,unread,Math.floor(Date.now()/60000),rows,sourceState]);
+    const signature = JSON.stringify([size,variant,page,total,unread,Math.floor(Date.now()/60000),rows,sourceState]);
     if (signature === paintSignature) { updateBadge(); return; }
     paintSignature = signature;
     const limit = pageSizeForWidget();
@@ -169,7 +180,7 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
           const state = document.createElement('small'); state.className = 'home-inbox-event-status';
           state.textContent = statusLabels[recordStatus(row)]; copy.append(state);
         }
-        if (size === 'large') {
+        if (size === 'large' || ['wide', 'tall', 'full'].includes(variant)) {
           const summary = document.createElement('small'); summary.textContent = row.project || source.label; copy.append(summary);
         }
         const time = document.createElement('time'); time.dateTime = new Date(row.receivedAt).toISOString(); time.textContent = relativeTime(row.receivedAt);
@@ -285,11 +296,15 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
   document.addEventListener('notch:home-layout-applied', paint);
   document.addEventListener('notch:ai-sources-changed', paint);
   let lastWidgetSize = tile.dataset.widgetSize;
+  let lastLayoutVariant = tile.dataset.layoutVariant || '';
   new MutationObserver(() => {
-    if (tile.dataset.widgetSize === lastWidgetSize) return;
-    lastWidgetSize = tile.dataset.widgetSize;
+    const size = tile.dataset.widgetSize;
+    const variant = tile.dataset.layoutVariant || '';
+    if (size === lastWidgetSize && variant === lastLayoutVariant) return;
+    lastWidgetSize = size;
+    lastLayoutVariant = variant;
     page = 0; resetScroll = true; paintSignature = ''; void refresh();
-  }).observe(tile,{attributes:true,attributeFilter:['data-widget-size']});
+  }).observe(tile,{attributes:true,attributeFilter:['data-widget-size','data-layout-variant']});
   api?.onTaskInboxError?.(error => {
     if (error.error === 'event_rejected') { status.textContent = error.message; window.showStatusToast?.(error.message); return; }
     showFailure(error); window.showStatusToast?.(failure.recoverable ? pomeLocaleRendererTaskInbox.t("copy.theInboxIsDamagedBackItUp.c1d086") : pomeLocaleRendererTaskInbox.t("copy.couldnTReadTheInboxReceivingIs.2db66f"));

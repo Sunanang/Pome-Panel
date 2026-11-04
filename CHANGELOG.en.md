@@ -6,6 +6,7 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Home almanac, sunrise/sunset, AI usage, and inbox adapt to `data-layout-variant` (wide / tall / full) after medium/compact fill so content no longer sits left or leaves empty space; AI usage progress rings use distinct brand colors per provider while icons stay unchanged.
 - Preserve ordinary Codex notifiers that contain literal Pome arguments, and reject connection tests if notify changes during the status check. Omit full input and bound result text on the Pome transport to prevent large normal events exceeding the receiver limit; original notifiers still receive the complete JSON. Show configuration error details and remove repeated chain parsing, unused preview state and an unread test stderr pipe.
 
 - Repair Codex notify chains wrapped by Computer Use. Detect nested Pome hooks and offer repair; connect/repair keeps one outer Pome hook while preserving Computer Use and other original notifiers, collapsing duplicate Computer Use wrappers with identical paths and options. Repeated repair is idempotent, disconnect removes nested Pome hooks, and invalid or excessively nested chains refuse writes. Existing previews, backups and concurrent-edit checks remain in place.

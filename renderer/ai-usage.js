@@ -15,7 +15,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   const animation = A.createValueStore();
   const visualStates = new Map();
   let lastRequest = null;
-  let renderedSize = null, renderedOrder = '';
+  let renderedSize = null, renderedOrder = '', renderedVariant = '';
   let pinnedDetails = null;
   let hoverDetailsTimer = null;
   let hoverDetailsId = null; // pending or currently hovered provider
@@ -391,10 +391,15 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     }
   }
   function animateModels(models) {
-    const palette = getComputedStyle(tile);
-    const rgb = token => (palette.getPropertyValue(token).trim().match(/[a-f0-9]{2}/gi) || []).map(n => parseInt(n, 16));
+    const tilePalette = getComputedStyle(tile);
+    const rgbFrom = (palette, token) => (palette.getPropertyValue(token).trim().match(/[a-f0-9]{2}/gi) || []).map(n => parseInt(n, 16));
     function animateTone(key, level, nodes, reduced, delay = 0) {
       const tone = level === 'warn' ? 'warn' : level === 'critical' ? 'crit' : 'ok';
+      const palette = nodes[0] ? getComputedStyle(nodes[0]) : tilePalette;
+      const rgb = token => {
+        const value = rgbFrom(palette, token);
+        return value.length ? value : rgbFrom(tilePalette, token);
+      };
       for (const channel of ['a', 'b', 'text']) {
         const base = channel === 'text' ? [238,238,240] : rgb(`--q-ok-${channel}`);
         const target = channel === 'text' ? tone === 'ok' ? base : rgb(`--q-${tone}-t`) : rgb(`--q-${tone}-${channel}`);
@@ -444,8 +449,26 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       el.querySelectorAll('[data-state-fade]').forEach(node => fadeState(node, `${m.id}/label/${node.className}`, `${m.status}/${Boolean(m.bottleneck?.badge)}`));
     }
   }
+  function layoutForVariant(size, variant) {
+    const layout = D.dashboard(state, size);
+    const n = layout.shown.length;
+    if (variant === 'wide') {
+      const columns = Math.max(1, n);
+      const ringSize = Math.max(layout.ringSize, size === 'mini' ? 36 : size === 'small' ? 48 : layout.ringSize);
+      return { ...layout, columns, rows: 1, ringSize };
+    }
+    if (variant === 'tall' || variant === 'full') {
+      const columns = Math.min(2, Math.max(1, n));
+      const ringSize = Math.max(layout.ringSize, size === 'mini' ? 40 : size === 'small' ? 56 : size === 'medium' ? 72 : layout.ringSize);
+      return { ...layout, columns, rows: Math.ceil(n / columns), ringSize };
+    }
+    return layout;
+  }
+
   function render() {
-    const size = tile.dataset.widgetSize || 'small', layout = D.dashboard(state, size);
+    const size = tile.dataset.widgetSize || 'small';
+    const variant = tile.dataset.layoutVariant || '';
+    const layout = layoutForVariant(size, variant);
     const ids = layout.ids;
     // Keep hidden compact sources cached, but release detached DOM sinks and
     // pending frames as soon as a source is disconnected.
@@ -471,10 +494,10 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       && byId(`${openDetailsId}-usage-rows`)?.matches(':popover-open') ? openDetailsId : null;
     const focused = tile.contains(document.activeElement) ? document.activeElement?.dataset.quotaSettings : undefined;
     const order = visible.map(m => m.id).join('/');
-    const sameLayout = renderedSize === size && renderedOrder === order;
+    const sameLayout = renderedSize === size && renderedOrder === order && renderedVariant === variant;
     if (!sameLayout) animation.prune(key => !key.endsWith('/position'));
     const oldRings = sameLayout ? new Map([...providers.querySelectorAll('.ai-usage-provider')].map(el => [el.dataset.provider, el.querySelector('.q-ring').getBoundingClientRect()])) : new Map();
-    renderedSize = size; renderedOrder = order;
+    renderedSize = size; renderedOrder = order; renderedVariant = variant;
     const scroll = providers.scrollTop;
     const rowScroll = new Map([...providers.querySelectorAll('.cursor-usage-rows')].map(el => [el.id, el.scrollTop]));
     providers.style.setProperty('--q-columns', layout.columns);
@@ -573,7 +596,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     if (action) { event.stopPropagation(); void openSettings(action.dataset.quotaSettings || undefined); }
   });
   tile.querySelector('.ai-open-settings')?.addEventListener('click', () => openSettings());
-  new MutationObserver(render).observe(tile, { attributes: true, attributeFilter: ['data-widget-size'] });
+  new MutationObserver(render).observe(tile, { attributes: true, attributeFilter: ['data-widget-size', 'data-layout-variant'] });
   new ResizeObserver(() => syncGeometry()).observe(tile);
   const usageVisible = () => document.visibilityState === 'visible' && document.documentElement.dataset.windowVisible !== 'false' && document.getElementById('app')?.classList.contains('expanded')
     && document.getElementById('tab-button-home')?.classList.contains('active') && !tile.hidden;

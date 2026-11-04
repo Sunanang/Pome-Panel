@@ -180,3 +180,50 @@
 #home-cursor[data-widget-size='mini'] .q-more-ring { align-self:start; justify-self:center; width:30px; height:30px; margin:0; border-radius:50%; font-size:10px; }
 #home-cursor .q-fade-previous { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:var(--bg-base); pointer-events:none; }
 @media (prefers-reduced-motion:reduce) { #home-cursor :is(.q-ring-value,.cursor-usage-track>i) { will-change:auto; } }
+
+
+/* Per-provider progress ring brand colors (ok state). Icons stay unchanged. */
+#home-cursor .ai-usage-provider[data-provider='cursor'] {
+  --q-ok-a: #9b7cff; --q-ok-b: #6ea8ff;
+  --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
+}
+#home-cursor .ai-usage-provider[data-provider='codex'] {
+  --q-ok-a: #30d978; --q-ok-b: #65d9a1;
+  --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
+}
+#home-cursor .ai-usage-provider[data-provider='claude'] {
+  --q-ok-a: #ff9f6b; --q-ok-b: #ff7a45;
+  --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
+}
+#home-cursor .ai-usage-provider[data-provider='grokbot'] {
+  --q-ok-a: #7aa2ff; --q-ok-b: #9b7cff;
+  --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
+}
+#home-cursor .ai-usage-provider[data-provider='grok'] {
+  --q-ok-a: #6ea8ff; --q-ok-b: #8b7cff;
+  --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
+}
+#home-cursor .ai-usage-provider[data-provider='copilot'] {
+  --q-ok-a: #3dd6f5; --q-ok-b: #5eb8ff;
+  --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
+}
+#home-cursor .ai-usage-provider[data-provider='antigravity'] {
+  --q-ok-a: #4f8cff; --q-ok-b: #6bb0ff;
+  --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
+}
+#home-cursor .ai-usage-provider[data-provider='manus'] {
+  --q-ok-a: #f472b6; --q-ok-b: #5ed0c8;
+  --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
+}
+/* Neutral fallback for any future / unknown provider id. */
+#home-cursor .ai-usage-provider:not([data-provider='cursor']):not([data-provider='codex']):not([data-provider='claude']):not([data-provider='grokbot']):not([data-provider='grok']):not([data-provider='copilot']):not([data-provider='antigravity']):not([data-provider='manus']) {
+  --q-ok-a: #9aa3b2; --q-ok-b: #c5ccd8;
+  --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
+}
+/* Warn/critical keep alert ring colors over brand palette. */
+#home-cursor .ai-usage-provider[data-level='warn'] {
+  --q-ring-color-a: var(--q-warn-a); --q-ring-color-b: var(--q-warn-b);
+}
+#home-cursor .ai-usage-provider[data-level='critical'] {
+  --q-ring-color-a: var(--q-crit-a); --q-ring-color-b: var(--q-crit-b);
+}
