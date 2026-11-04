@@ -137,6 +137,25 @@ async function main() {
     await place('cursor','medium','wide',600,248);
     assert.equal(await js(`(()=>{const card=document.getElementById('ai-provider-codex');return !card.querySelector('.q-ring')&&card.querySelector('.q-adaptive-empty').checkVisibility()&&card.querySelector('.q-inline-rows [data-pool="secondary"]').checkVisibility()})()`),true,'secondary pool retained when primary has no numeric gauge');
     await shot('cursor','wide-unlimited-primary-secondary',aiOutput);
+    // Equal percentages expose the whole palette without quota differences
+    // changing the arc length. Synthetic numeric pools exercise all eight rings.
+    const paletteData = Object.fromEntries(require('../aiProviderCatalog').usageProviders().map(({id}) => [id, {
+      ok:true, detected:true, fetchedAt:new Date(now).toISOString(),
+      auto:{percent:18,windowMinutes:300,resetsAt:future},
+      other:{percent:18,windowMinutes:300,resetsAt:future},
+      primary:{percent:18,windowMinutes:300,resetsAt:future},
+      windows:[{id:'primary',label:'Quota',percent:18,windowMinutes:300,resetsAt:future}],
+    }]));
+    await supply(0,paletteData);await place('cursor','medium','wide',980,248);
+    const palette = await js(`Array.from(document.querySelectorAll('#ai-usage-providers .ai-usage-provider'),card=>({id:card.dataset.provider,stops:Array.from(card.querySelectorAll('linearGradient stop'),stop=>getComputedStyle(stop).stopColor),visible:card.querySelector('.q-ring').checkVisibility()}))`);
+    assert.equal(palette.length,8);assert(palette.every(card=>card.visible&&card.stops[0]!==card.stops[1]));
+    assert.equal(new Set(palette.map(card=>card.stops.join('/'))).size,8,'eight distinct normal gradients');
+    assert.equal(await js(`(()=>{const tile=document.getElementById('home-cursor').getBoundingClientRect();return Array.from(document.querySelectorAll('#ai-usage-providers .q-ring')).every(node=>{const r=node.getBoundingClientRect();return r.left>=tile.left&&r.right<=tile.right&&r.top>=tile.top&&r.bottom<=tile.bottom})})()`),true,'all eight palette samples fit the captured tile');
+    await shot('cursor','palette-eight-sources',aiOutput);
+    await supply(4,{grokbot:paletteData.grokbot});await place('cursor','medium','wide',960,248);
+    await shot('cursor','palette-wide-secondary',aiOutput);
+    await supply(0,Object.fromEntries(['grok','copilot','antigravity','manus'].map(id=>[id,paletteData[id]])));
+    await place('cursor','medium','wide',960,248);await shot('cursor','palette-wide-other-four',aiOutput);
   }
   // Rendering an unchanged layout marker must not recreate the solar SVG.
   if(phase==='review'){

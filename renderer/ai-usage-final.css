@@ -182,37 +182,38 @@
 @media (prefers-reduced-motion:reduce) { #home-cursor :is(.q-ring-value,.cursor-usage-track>i) { will-change:auto; } }
 
 
-/* Per-provider progress ring brand colors (ok state). Icons stay unchanged. */
+/* Distinct, softly saturated two-hue palettes for normal quota states.
+   Keep comparable brightness across providers; warning/critical override below. */
 #home-cursor .ai-usage-provider[data-provider='cursor'] {
-  --q-ok-a: #9b7cff; --q-ok-b: #6ea8ff;
+  --q-ok-a: #a78bfa; --q-ok-b: #e59acb;
   --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
 }
 #home-cursor .ai-usage-provider[data-provider='codex'] {
-  --q-ok-a: #30d978; --q-ok-b: #65d9a1;
+  --q-ok-a: #55c78f; --q-ok-b: #72c9dc;
   --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
 }
 #home-cursor .ai-usage-provider[data-provider='claude'] {
-  --q-ok-a: #ff9f6b; --q-ok-b: #ff7a45;
+  --q-ok-a: #e49a74; --q-ok-b: #e9cf85;
   --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
 }
 #home-cursor .ai-usage-provider[data-provider='grokbot'] {
-  --q-ok-a: #7aa2ff; --q-ok-b: #9b7cff;
+  --q-ok-a: #c4be79; --q-ok-b: #7dbca0;
   --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
 }
 #home-cursor .ai-usage-provider[data-provider='grok'] {
-  --q-ok-a: #6ea8ff; --q-ok-b: #8b7cff;
+  --q-ok-a: #a0adbf; --q-ok-b: #d2e4ed;
   --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
 }
 #home-cursor .ai-usage-provider[data-provider='copilot'] {
-  --q-ok-a: #3dd6f5; --q-ok-b: #5eb8ff;
+  --q-ok-a: #58c4d1; --q-ok-b: #779ae6;
   --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
 }
 #home-cursor .ai-usage-provider[data-provider='antigravity'] {
-  --q-ok-a: #4f8cff; --q-ok-b: #6bb0ff;
+  --q-ok-a: #7b8ae5; --q-ok-b: #b59beb;
   --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
 }
 #home-cursor .ai-usage-provider[data-provider='manus'] {
-  --q-ok-a: #f472b6; --q-ok-b: #5ed0c8;
+  --q-ok-a: #d7869e; --q-ok-b: #edb99b;
   --q-ring-color-a: var(--q-ok-a); --q-ring-color-b: var(--q-ok-b);
 }
 /* Neutral fallback for any future / unknown provider id. */

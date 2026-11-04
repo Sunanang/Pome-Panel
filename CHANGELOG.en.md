@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Refresh all eight AI quota palettes with softly saturated two-hue gradients, clearer provider separation and more visible transitions; preserve icons, secondary quotas and warning overrides.
+
 - Repair stretched Home widgets: AI usage evenly distributes visible providers in wide mode and uses at most two columns in tall mode, with readable rings, independent secondary quota bars (including Cursor Other and Codex weekly), and centered failures without empty gauges. Preserve brand/alert colors, icons and unstretched layouts. Remove the tall almanac gap and duplicate daylight duration, separate inbox titles from actual summaries, and avoid redundant layout rendering.
 - Preserve ordinary Codex notifiers that contain literal Pome arguments, and reject connection tests if notify changes during the status check. Omit full input and bound result text on the Pome transport to prevent large normal events exceeding the receiver limit; original notifiers still receive the complete JSON. Show configuration error details and remove repeated chain parsing, unused preview state and an unread test stderr pipe.
 
