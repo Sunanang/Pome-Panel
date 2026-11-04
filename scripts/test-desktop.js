@@ -123,6 +123,7 @@ for (const file of [
   'renderer/ui-simplify-domain.js',
   'renderer/ui-simplify.js',
   'renderer/experience.js',
+  'renderer/settings-navigation.js',
   'renderer/note-view.js',
   'renderer/note-flight.js',
   'tests/notes-workflow.electron.js',

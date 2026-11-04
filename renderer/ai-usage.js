@@ -110,7 +110,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     }
     if (byId('tab-settings').getAttribute('aria-hidden') !== 'false') return;
     const card = byId(registry.get(provider)?.settingsCard || 'settings-ai-sources');
-    card?.scrollIntoView({ block: provider ? 'center' : 'start', behavior: 'instant' });
+    window.NotchSettings?.reveal(card, { block: provider ? 'center' : 'start' });
     window.NotchUi?.openManual(provider);
     card?.querySelector('input')?.focus({ preventScroll: true });
   }

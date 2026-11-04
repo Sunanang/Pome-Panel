@@ -1636,5 +1636,9 @@
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · Not enough space. Replace a widget or change panel size.",
   "settings.panelSize.saveFailed": "Could not save panel size. Try again.",
   "sources.codexNotifyWrapped": "A nested Pome hook was found in the Codex notification chain. Repair it to preserve Computer Use and the original notifier.",
-  "sources.codexNotifyInvalidChain": "The Codex notification chain is invalid or nested too deeply. Configuration was not changed. Check notify."
+  "sources.codexNotifyInvalidChain": "The Codex notification chain is invalid or nested too deeply. Configuration was not changed. Check notify.",
+  "settings.nav.common": "General",
+  "settings.nav.appearance": "Appearance",
+  "settings.nav.data": "Data",
+  "settings.data.local": "Local data"
 }

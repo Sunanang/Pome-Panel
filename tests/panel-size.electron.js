@@ -41,7 +41,7 @@ async function run(c){
    ['compact',880,520,18,['sun','pomodoro','cursor','almanac']],
  ]){
    await tab('settings');
-   await js(`document.querySelector('[data-panel-size="${preset}"]').scrollIntoView({block:'center'}); document.querySelector('#settings-panel-size [data-panel-size="${preset}"]').click()`);
+   await js(`NotchSettings.reveal(document.querySelector('[data-panel-size="${preset}"]'),{block:'center'}); document.querySelector('#settings-panel-size [data-panel-size="${preset}"]').click()`);
    await until(async()=> (await js('notchAPI.getAppSettings()')).panelSize===preset,preset+' saved');
    await until(()=>js(`document.documentElement.dataset.panelSize===${JSON.stringify(preset)}`),'render preset');
    assert.deepEqual(win.getContentSize(),[width,height]);
@@ -49,7 +49,7 @@ async function run(c){
    const row=await js(`(()=>{const block=document.getElementById('settings-panel-size-row'),controls=document.getElementById('settings-panel-size'),language=document.getElementById('settings-language');const b=block.getBoundingClientRect(),l=language.getBoundingClientRect(),r=controls.getBoundingClientRect();return {overlap:b.top<l.bottom&&b.bottom>l.top,contained:r.left>=b.left&&r.right<=b.right,selected:controls.querySelectorAll('[aria-pressed="true"]').length}})()`);
    assert.equal(row.overlap,false);assert.equal(row.contained,true);assert.equal(row.selected,1);
    await shot(preset+'-settings');
-   await js('document.getElementById("settings-home-module-status").parentElement.scrollIntoView({block:"start"})');
+   await js('NotchSettings.reveal(document.getElementById("settings-home-module-status").parentElement,{block:"start"})');
    await until(()=>js('document.getElementById("settings-home-module-status").dataset.state==="warning"'),'capacity warning');
    const controls=await js(`Object.fromEntries([...document.querySelectorAll('[data-settings-home-module]')].map(e=>[e.dataset.settingsHomeModule,{checked:e.checked,disabled:e.disabled}]))`);
    if(preset==='compact'){

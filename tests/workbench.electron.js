@@ -270,7 +270,7 @@ async function run(c) {
         const selectors={todo:'#todo-add-category',notes:'#notes-search',links:'#link-add',recordings:'#recording-new',credentials:'#credential-save',settings:'.settings-auto-launch-row'};
         const target=panel.querySelector(selectors['${name}']);target?.scrollIntoView({block:'nearest',inline:'nearest'});
         const r=target?.getBoundingClientRect(),hit=r&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
-        const cards=[...panel.querySelectorAll('.settings-column > .settings-card')].map(e=>e.getBoundingClientRect()).filter(r=>r.width>0&&r.height>0);
+        const cards=[...panel.querySelectorAll('.settings-group:not([hidden]) > .settings-card')].map(e=>e.getBoundingClientRect()).filter(r=>r.width>0&&r.height>0);
         const cardsOverlap=cards.some((a,i)=>cards.slice(i+1).some(b=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>2&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>2));
         return {width:innerWidth,height:innerHeight,cardsOverlap,overflow:document.documentElement.scrollWidth>innerWidth+1||panel.scrollWidth>panel.clientWidth+1,actionVisible:!!r&&r.width>0&&r.height>0&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1,hittable:!!hit&&(hit===target||target.contains(hit))};
       })()`);

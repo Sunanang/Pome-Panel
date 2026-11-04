@@ -1,0 +1,31 @@
+{
+  "node": {
+    "total": 1108,
+    "passed": 1106,
+    "skipped": 2,
+    "failed": 0
+  },
+  "nativePassed": [
+    "settings-slim",
+    "nas-settings-card",
+    "ai-sources",
+    "panel-size",
+    "ui-simplify",
+    "experience",
+    "visual-consistency",
+    "localization",
+    "meeting-mode",
+    "notification-listener",
+    "manus-completion",
+    "codex-notify-chain",
+    "user-data-directory",
+    "sun-weather",
+    "workbench"
+  ],
+  "realToolConfigsUnchanged": true,
+  "originalStaticSettingsIdsPreserved": 106,
+  "windowsMachineVerified": false,
+  "installedAppReplaced": false,
+  "packaged": false,
+  "realNasModified": false
+}

@@ -1630,5 +1630,9 @@
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · 容量不足。ウィジェットを入れ替えるかパネルサイズを変更してください。",
   "settings.panelSize.saveFailed": "パネルサイズを保存できませんでした。再試行してください。",
   "sources.codexNotifyWrapped": "Codex の通知チェーンに入れ子の Pome フックが見つかりました。修復して Computer Use と元の通知コマンドを保持してください。",
-  "sources.codexNotifyInvalidChain": "Codex の通知チェーンが無効か、入れ子が深すぎます。設定は変更されていません。notify を確認してください。"
+  "sources.codexNotifyInvalidChain": "Codex の通知チェーンが無効か、入れ子が深すぎます。設定は変更されていません。notify を確認してください。",
+  "settings.nav.common": "一般",
+  "settings.nav.appearance": "外観",
+  "settings.nav.data": "データ",
+  "settings.data.local": "ローカルデータ"
 }

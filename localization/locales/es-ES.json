@@ -1630,5 +1630,9 @@
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · Espacio insuficiente. Sustituye un widget o cambia el tamaño del panel.",
   "settings.panelSize.saveFailed": "No se pudo guardar el tamaño. Inténtalo de nuevo.",
   "sources.codexNotifyWrapped": "Se encontró un hook de Pome anidado en la cadena de notificaciones de Codex. Repárelo para conservar Computer Use y el notificador original.",
-  "sources.codexNotifyInvalidChain": "La cadena de notificaciones de Codex no es válida o está demasiado anidada. No se modificó la configuración. Revise notify."
+  "sources.codexNotifyInvalidChain": "La cadena de notificaciones de Codex no es válida o está demasiado anidada. No se modificó la configuración. Revise notify.",
+  "settings.nav.common": "General",
+  "settings.nav.appearance": "Apariencia",
+  "settings.nav.data": "Datos",
+  "settings.data.local": "Datos locales"
 }

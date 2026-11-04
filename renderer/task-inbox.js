@@ -291,7 +291,7 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     if (tile.hidden || window.NotchHome?.isVisible('inbox') === false) {
       await setActiveTab('settings');
       const input = document.querySelector('[data-settings-home-module="inbox"]');
-      input?.closest('.settings-home-modules-card')?.scrollIntoView({block:'center'}); input?.focus({preventScroll:true});
+      window.NotchSettings?.reveal(input?.closest('.settings-home-modules-card'), {block:'center'}); input?.focus({preventScroll:true});
       window.showStatusToast?.(pomeLocaleRendererTaskInbox.t("copy.aiActivityIsnTVisibleEnableIt.a4876a")); return;
     }
     await setActiveTab('home'); tile.scrollIntoView({block:'nearest'});

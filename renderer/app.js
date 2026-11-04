@@ -4195,7 +4195,7 @@ window.NotchHome = Object.freeze({
 document.getElementById('home-inbox-placeholder')?.addEventListener('click', async () => {
   await setActiveTab('settings');
   const input = document.querySelector('[data-settings-home-module="inbox"]');
-  input?.scrollIntoView({ block: 'center' }); input?.focus({ preventScroll: true });
+  window.NotchSettings?.reveal(input, { block: 'center' }); input?.focus({ preventScroll: true });
 });
 
 document.dispatchEvent(new CustomEvent('notch:home-modules-changed', {

@@ -138,7 +138,7 @@ async function run(contents) {
     assert.equal(JSON.parse(fs.readFileSync(path.join(legacy, 'workspace.json'))).localStorage['notch-home-note'], 'other app changed');
   }
   await js('setMode(true)'); await sleep(650); await js('setActiveTab("settings")'); await sleep(150);
-  await js('document.getElementById("settings-workspace-path").scrollIntoView({block:"center"})'); await sleep(100);
+  await js('NotchSettings.reveal(document.getElementById("settings-workspace-path"),{block:"center"})'); await sleep(100);
   assert.equal(await js('document.getElementById("settings-workspace-path").title'), workspace.path);
   const output = process.env.POME_PROFILE_SCREENSHOTS || path.join(__dirname, '../dist.noindex/profile-directory');
   fs.mkdirSync(output, { recursive: true });

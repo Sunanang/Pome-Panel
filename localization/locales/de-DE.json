@@ -1630,5 +1630,9 @@
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · Nicht genug Platz. Widget ersetzen oder Panelgröße ändern.",
   "settings.panelSize.saveFailed": "Panelgröße konnte nicht gespeichert werden. Erneut versuchen.",
   "sources.codexNotifyWrapped": "In der Codex-Benachrichtigungskette wurde ein verschachtelter Pome-Hook gefunden. Reparieren Sie ihn, um Computer Use und den ursprünglichen Benachrichtigungsbefehl beizubehalten.",
-  "sources.codexNotifyInvalidChain": "Die Codex-Benachrichtigungskette ist ungültig oder zu tief verschachtelt. Die Konfiguration wurde nicht geändert. Prüfen Sie notify."
+  "sources.codexNotifyInvalidChain": "Die Codex-Benachrichtigungskette ist ungültig oder zu tief verschachtelt. Die Konfiguration wurde nicht geändert. Prüfen Sie notify.",
+  "settings.nav.common": "Allgemein",
+  "settings.nav.appearance": "Darstellung",
+  "settings.nav.data": "Daten",
+  "settings.data.local": "Lokale Daten"
 }

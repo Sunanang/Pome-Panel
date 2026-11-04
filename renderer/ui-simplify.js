@@ -42,7 +42,11 @@
     if (!section) continue;
     const manual = details('ui.token.manual', `ui-token-manual-${id}`);
     const row = input.closest('.settings-cursor-token-row'), status = el(`settings-${id}-token-status`);
-    const brief = document.createElement('div'); brief.className = 'ui-token-brief';
+    const brief = document.createElement('div'); brief.className = 'ui-token-brief'; brief.dataset.source = id;
+    const provider = window.NotchAiProviders.get(id);
+    const icon = document.createElement('img'); icon.className = 'ai-source-icon'; icon.src = provider.icon; icon.alt = '';
+    const name = document.createElement('strong'); name.textContent = provider.label;
+    brief.append(icon, name);
     if (status) brief.append(status);
     const fetch = el(`settings-${id}-token-fetch`);
     if (fetch) { text(fetch, 'ui.token.acquire'); fetch.classList.add('primary'); brief.append(fetch); }
@@ -55,27 +59,31 @@
   api?.onCodexTokenChanged?.(() => { delete usage.codex; });
   api?.onAiProviderTokenChanged?.(s => { if (s?.providerId) delete usage[s.providerId]; });
 
-  // Keep all existing NAS controls and handlers; only move the secondary view.
+  // NAS keeps every control expanded. Put existing diagnostic hints in their
+  // own section; pairing validation stays beside the pairing fields.
   const card = el('settings-nas-sync-card');
-  const nasDetails = details('ui.nas.troubleshoot', 'ui-nas-troubleshoot');
+  const nasDetails = document.createElement('section'); nasDetails.id = 'ui-nas-troubleshoot';
+  const nasTitle = document.createElement('h4'); nasTitle.className = 'settings-nas-section-title';
+  text(nasTitle, 'ui.nas.troubleshoot'); nasDetails.append(nasTitle);
   const summary = document.createElement('div'); summary.className = 'ui-nas-summary';
   const status = el('settings-nas-sync-status');
   const message = document.createElement('p'); message.id = 'ui-nas-message';
   const main = button('ui.nas.connect', () => {
     const state = window.__pomeNasUi || {};
     if (!state.bound && state.offline) el('settings-nas-pair-submit')?.click();
-    else if (!state.bound) { nasDetails.open = true; el('settings-nas-sync-base-url')?.focus(); }
+    else if (!state.bound) { window.NotchSettings?.reveal('settings-nas-sync-base-url'); el('settings-nas-sync-base-url')?.focus(); }
     else if (state.paused) el('settings-nas-recovery')?.click();
-    else if (state.needsAttention) { nasDetails.open = true; el('settings-nas-status-hint')?.scrollIntoView({ block: 'nearest' }); }
+    else if (state.needsAttention) { window.NotchSettings?.reveal('settings-nas-status-hint', { block: 'nearest' }); }
     else if (state.offline) el('settings-nas-sync-retry')?.click();
     else el('settings-nas-sync-open')?.click();
   }, true); main.id = 'ui-nas-main';
   summary.append(status, message, main);
   const heading = card.querySelector('.settings-card-heading');
-  for (const child of [...card.children]) if (child !== heading) nasDetails.append(child);
-  card.append(summary, nasDetails);
+  heading.after(summary);
+  for (const id of ['settings-nas-status-hint', 'settings-nas-endpoint-hint']) nasDetails.append(el(id));
+  card.append(nasDetails);
   const copyNas = button('ui.copyDiagnostic', () => copyDiagnostic(nasDiagnostic()));
-  nasDetails.append(copyNas);
+  summary.append(copyNas);
   function nasDiagnostic() {
     return ['NAS', window.__pomeNasUi?.code, ...['settings-nas-sync-hint','settings-nas-status-hint','settings-nas-endpoint-hint'].map(id => el(id)?.textContent)].filter(Boolean).join('\n');
   }
@@ -151,7 +159,7 @@
     text(errorMessage, problem); text(fix, options.repairActionKey || (layoutProblem ? 'ux.settings.display' : options.scope === 'nas' ? 'ux.nas.connection' : options.scope?.startsWith('token:') || options.scope?.startsWith('source:') || !options.onRepair ? 'copy.openSettings.93112c' : 'ui.retry')); text(repairCopy, options.repairKey || (layoutProblem ? 'ui.error.layoutRepair' : 'ui.error.repair'));
     raw.textContent = D.diagnostic(value);
     const source = ['claude','codex','cursor','manus','grok','copilot'].find(id => value.toLowerCase().includes(id));
-    repair = options.onRepair || (layoutProblem ? () => { void setActiveTab('settings').then(() => el('settings-home-module-list')?.scrollIntoView({ block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
+    repair = options.onRepair || (layoutProblem ? () => { void setActiveTab('settings').then(() => window.NotchSettings?.reveal('settings-home-module-list', { block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
     text(copy, 'ui.copyDiagnostic'); errorDetails.open = false;
     setErrorVisible(el('app').classList.contains('expanded'));
   }
@@ -218,7 +226,7 @@
     } else {
       const p = document.createElement('p'); text(p, 'ui.welcome.optional'); body.append(p);
       for (const [key, target] of [['ui.nas.connect', 'settings-nas-sync-card'], ['ui.welcome.ai', 'settings-ai-sources']]) {
-        body.append(button(key, async () => { if (!await finishWelcome()) return; await setActiveTab('settings'); el(target)?.scrollIntoView({ block: 'start' }); if (target.includes('nas')) nasDetails.open = true; }));
+        body.append(button(key, async () => { if (!await finishWelcome()) return; await setActiveTab('settings'); window.NotchSettings?.reveal(target, { block: 'start' }); }));
       }
     }
     const scrollHint=document.createElement('small');scrollHint.className='welcome-scroll-hint';text(scrollHint,'ux.welcome.scroll');body.append(scrollHint);

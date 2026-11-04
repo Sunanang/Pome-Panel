@@ -12,7 +12,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   const tokenHost = document.getElementById('settings-ai-provider-tokens');
   const dismissKey = 'notch-ai-source-dismissed-v1';
   const restartSources = new Set();
-  const TOKEN_PROVIDERS = new Set(['copilot', 'grok', 'antigravity', 'manus']);
+  const TOKEN_PROVIDERS = new Set(['grok', 'copilot', 'antigravity', 'manus']);
   const restartMessage = source => source === 'claude'
     ? pomeLocaleRendererAiSources.t('sources.claudeRestart')
     : pomeLocaleRendererAiSources.t("copy.configurationSavedQuitCompletelyThenReopenIt.507666", { arg1: labels[source] });
@@ -56,11 +56,12 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   function openSettings(source) {
     void setActiveTab('settings').then(() => {
       const row = list.querySelector(`[data-source="${source || 'codex'}"]`);
-      const target = source ? row : el('settings-ai-sources');
-      target?.scrollIntoView({ block: source ? 'center' : 'start' });
+      const token = source && el(catalog.get(source)?.settingsCard);
+      const target = token || (source ? row : el('settings-ai-sources'));
+      window.NotchSettings?.reveal(target, { block: source ? 'center' : 'start' });
       const focusRow = source ? row : list.querySelector('[data-source="codex"]') || row;
       window.NotchUi?.openManual(source || "codex");
-      const input = focusRow?.querySelector('input[type="password"], input:not([type="checkbox"])');
+      const input = token?.querySelector('input[type="password"], input:not([type="checkbox"])');
       (input || focusRow?.querySelector('.ai-source-actions button') || focusRow?.querySelector('button'))
         ?.focus({ preventScroll: true });
     });
@@ -309,7 +310,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     }
   }
   function render() {
-    const order = ['cursor', 'codex', 'grokbot', 'claude'];
+    const order = ['cursor', 'codex', 'grokbot', 'claude', 'grok', 'copilot', 'antigravity', 'manus'];
     const rank = source => order.includes(source) ? order.indexOf(source) : order.length;
     const rows = mergedRows().sort((a, b) => rank(a.source) - rank(b.source));
     const connectable = rows.filter((row) => row.hookable || row.source === 'manus');
@@ -326,10 +327,9 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         const copy = document.createElement('div'); copy.className = 'ai-source-copy';
         const actions = document.createElement('div'); actions.className = 'ai-source-actions';
         main.append(icon, copy, actions); item.append(main);
-        // Existing Cursor/Codex listeners retain their input nodes and IDs.
-        const token = el(catalog.get(row.source)?.settingsCard);
-        if (token) item.append(token);
-        else if (['claude', 'grokbot'].includes(row.source)) {
+        // Token forms stay below the complete source list, without recreating
+        // inputs on refresh. Local-only usage notes still belong to their row.
+        if (['claude', 'grokbot'].includes(row.source)) {
           const note = document.createElement('p'); note.className = 'ai-source-local-quota';
           note.id = catalog.get(row.source).settingsCard;
           item.append(note);

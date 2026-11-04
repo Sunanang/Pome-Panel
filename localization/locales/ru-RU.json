@@ -1652,5 +1652,9 @@
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · Недостаточно места. Замените виджет или измените размер панели.",
   "settings.panelSize.saveFailed": "Не удалось сохранить размер панели. Повторите попытку.",
   "sources.codexNotifyWrapped": "В цепочке уведомлений Codex найден вложенный хук Pome. Восстановите подключение, чтобы сохранить Computer Use и исходную команду уведомлений.",
-  "sources.codexNotifyInvalidChain": "Цепочка уведомлений Codex некорректна или имеет слишком много уровней вложенности. Конфигурация не изменена. Проверьте notify."
+  "sources.codexNotifyInvalidChain": "Цепочка уведомлений Codex некорректна или имеет слишком много уровней вложенности. Конфигурация не изменена. Проверьте notify.",
+  "settings.nav.common": "Основные",
+  "settings.nav.appearance": "Оформление",
+  "settings.nav.data": "Данные",
+  "settings.data.local": "Локальные данные"
 }

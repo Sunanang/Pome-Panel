@@ -48,7 +48,8 @@ async function run(c) {
   await js('document.getElementById("settings-cursor-token").value="unsaved-token-draft"');
   const enBody = await js('document.body.innerText');
   fs.writeFileSync(path.join(output, 'english-settings.txt'), enBody);
-  assert(enBody.includes('NAS sync')); assert(enBody.includes('Language'));
+  assert(enBody.includes('General')); assert(enBody.includes('Language'));
+  await js("NotchSettings.select('nas')");assert((await js('document.body.innerText')).includes('NAS sync'));await js("NotchSettings.select('common')");
   assert.equal(await js('document.getElementById("settings-nas-sync-open").disabled'), true);
   await js('window.notchAPI.setLanguage("zh-CN")');
   await until('document.documentElement.lang === "zh-CN"');
@@ -62,20 +63,21 @@ async function run(c) {
     await until(`document.documentElement.lang===${JSON.stringify(id)}`);
     assert.equal(JSON.parse(fs.readFileSync(path.join(profile, 'app-settings.json'))).language, id);
     assert.equal(await js('document.getElementById("settings-cursor-token").value'), 'unsaved-token-draft');
-    await js('document.querySelectorAll(".settings-column").forEach(column => column.scrollTop=0)');
+    await js("NotchSettings.select('common');document.getElementById('settings-content').scrollTop=0");
     await sleep(100);
     assert.equal(await js('document.documentElement.scrollWidth <= innerWidth'), true, id + ' page stays within viewport');
     fs.writeFileSync(path.join(output, `${id}-settings.png`), (await c.capturePage()).toPNG());
-    await js('document.getElementById("settings-language").scrollIntoView({block:"center"})'); await sleep(80);
+    await js('NotchSettings.reveal(document.getElementById("settings-language"),{block:"center"})'); await sleep(80);
     assert.equal(await js('(()=>{const r=document.getElementById("settings-language").getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight})()'), true, id + ' language control visible');
     fs.writeFileSync(path.join(output, `${id}-language.png`), (await c.capturePage()).toPNG());
   }
-  await js('document.querySelectorAll(".settings-column").forEach(column => column.scrollTop=0)');
+  await js("NotchSettings.select('common');document.getElementById('settings-content').scrollTop=0");
   await js('window.notchAPI.setLanguage("en-US")'); await until('document.documentElement.lang === "en-US"');
   await js('window.notchAPI.setTranscriptionConfig({region:"beijing",transcriptionLanguage:"en",llmBaseUrl:"https://api.deepseek.com"})');
   await js('window.notchAPI.setLanguage("zh-CN")'); await until('document.documentElement.lang === "zh-CN"');
   assert.equal((await js('window.notchAPI.getTranscriptionConfig()')).transcriptionLanguage, 'en');
   await js('window.notchAPI.setLanguage("en-US")'); await until('document.documentElement.lang === "en-US"');
+  await js("NotchSettings.select('nas')");
   bound = true; state = 'synced';
   c.send('sync:status', { bound, recovery: { paused } });
   await until('document.getElementById("settings-nas-content-results").textContent.includes("Last sync confirmed")');

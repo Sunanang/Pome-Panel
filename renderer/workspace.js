@@ -2074,7 +2074,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   // success and as a fallback when that surface is unavailable.
   function setNasSyncHint(message, kind = '', { messageKey = 'ui.error.nas', code = 'operation_failed' } = {}) {
     paintNasHint(settingsNasSyncHint, message, kind);
-    if (kind === 'error') window.NotchUi?.showError({ messageKey, repairKey: 'ui.error.nasRepair', diagnostic: `NAS: ${code}\n${message}`, scope: 'nas', inlineHint: settingsNasSyncHint, onRepair: () => { document.getElementById('ui-nas-troubleshoot').open = true; settingsNasSyncBaseUrl?.focus(); } });
+    if (kind === 'error') window.NotchUi?.showError({ messageKey, repairKey: 'ui.error.nasRepair', diagnostic: `NAS: ${code}\n${message}`, scope: 'nas', inlineHint: settingsNasSyncHint, onRepair: () => { void setActiveTab('settings').then(() => { window.NotchSettings?.reveal(settingsNasSyncBaseUrl); settingsNasSyncBaseUrl?.focus(); }); } });
     else if (kind === 'success') window.NotchUi?.clearError('nas');
   }
 
@@ -2851,28 +2851,34 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   function describeBackupCounts(counts) {
     return pomeLocaleRendererWorkspace.t("copy.tasksCategoryNamesNotesPlusHomeNote.e0512a", { arg1: (Object.values(counts.todos || {}).reduce((n, v) => n + v, 0)), arg2: (counts.categoryNames || 0), arg3: (counts.notes?.archive || 0), arg4: (counts.links?.items || 0), arg5: (counts.links?.groups || 0), arg6: (counts.commands || 0), arg7: (counts.clipboard?.history || 0), arg8: (counts.clipboard?.favorites || 0), arg9: (counts.recordings || 0) });
   }
+  // The Data group shares these original backup handlers. Keep their existing
+  // feedback visible even while the NAS group is hidden.
+  function setBackupHint(message, kind = '') {
+    if (window.NotchSettings?.getGroup() === 'data') setSettingsNote(message, kind === 'error');
+    else setNasStatusHint(message, kind);
+  }
   if (settingsNasExportBackup) {
     settingsNasExportBackup.addEventListener('click', async () => {
       if (!window.notchAPI || typeof window.notchAPI.syncExportTodosBackup !== 'function') return;
       const result = await window.notchAPI.syncExportTodosBackup();
       if (!result || !result.ok) {
         if (result && result.error === 'cancelled') return;
-        setNasStatusHint(result?.message || pomeLocaleRendererWorkspace.t("copy.exportFailed.6e4445"), 'error');
+        setBackupHint(result?.message || pomeLocaleRendererWorkspace.t("copy.exportFailed.6e4445"), 'error');
         return;
       }
-      setNasStatusHint(pomeLocaleRendererWorkspace.t("copy.backupExported.ad4578"), 'success');
+      setBackupHint(pomeLocaleRendererWorkspace.t("copy.backupExported.ad4578"), 'success');
       if (typeof showStatusToast === 'function') showStatusToast(pomeLocaleRendererWorkspace.t("copy.localBackupExportedCredentialsAndAiKeys.27df18"));
     });
   }
   if (settingsNasRestoreBackup) {
     settingsNasRestoreBackup.addEventListener('click', async () => {
       const preview = await window.notchAPI.backupPreview();
-      if (!preview.ok) { if (preview.error !== 'cancelled') setNasStatusHint(preview.message || pomeLocaleRendererWorkspace.t("copy.verificationFailed.a096c1"), 'error'); return; }
+      if (!preview.ok) { if (preview.error !== 'cancelled') setBackupHint(preview.message || pomeLocaleRendererWorkspace.t("copy.verificationFailed.a096c1"), 'error'); return; }
       const detail = pomeLocaleRendererWorkspace.t("copy.currentDataBackupDataOrdinaryDataAnd.847c9a", { arg1: (describeBackupCounts(preview.currentCounts)), arg2: (describeBackupCounts(preview.manifest.collections)), arg3: (preview.paired ? pomeLocaleRendererWorkspace.t("copy.nasSyncWillPauseAfterRestoringReview.3d4ccd") : '') });
       const confirmed = await window.notchAPI.confirm({ title: pomeLocaleRendererWorkspace.t("copy.restoreData.07c6e3"), message: pomeLocaleRendererWorkspace.t("copy.backupVerifiedReplaceTheCurrentOrdinaryData.814111"), detail });
       if (!confirmed) return;
       const result = await window.notchAPI.backupRestore(preview.previewId);
-      if (!result.ok) setNasStatusHint(result.message || pomeLocaleRendererWorkspace.t("copy.restoreFailed.89281a"), 'error');
+      if (!result.ok) setBackupHint(result.message || pomeLocaleRendererWorkspace.t("copy.restoreFailed.89281a"), 'error');
     });
   }
   if (settingsNasEndpointList) {
@@ -3761,7 +3767,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       pomeLocaleRendererWorkspace.bind(heading, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.currentWindowsUnavailable.d6a9a7")));
       const hint = document.createElement('span');
       pomeLocaleRendererWorkspace.bind(hint, "textContent", () => (pomeLocaleRendererWorkspace.t('ui.windows.hint')));
-      const repairNative = () => { void setActiveTab('settings').then(() => settingsWinNativeRow?.scrollIntoView({ block: 'center' })); };
+      const repairNative = () => { void setActiveTab('settings').then(() => window.NotchSettings?.reveal(settingsWinNativeRow, { block: 'center' })); };
       const enable = document.createElement('button'); enable.type = 'button'; enable.className = 'workspace-button compact primary'; enable.id = 'ui-enable-win-native';
       pomeLocaleRendererWorkspace.bind(enable, 'textContent', () => pomeLocaleRendererWorkspace.t('ui.windows.enable'));
       enable.addEventListener('click', async () => {

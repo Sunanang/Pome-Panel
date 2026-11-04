@@ -45,7 +45,7 @@ async function run(contents) {
   await until(() => js(`document.querySelector('.ai-source-row[data-source="codex"] .ai-source-repair-hint')?.textContent.includes('Computer Use')`), 'wrapped hint');
   assert.equal(await js(`document.querySelector('.ai-source-row[data-source="codex"]').dataset.state`), 'error');
   const before = fs.readFileSync(config, 'utf8');
-  await js(`document.querySelector('.ai-source-row[data-source="codex"]').scrollIntoView({block:'center'})`);
+  await js(`NotchSettings.reveal(document.querySelector('.ai-source-row[data-source="codex"]'),{block:'center'})`);
   await capture('01-wrapped-needs-repair');
   await js(`document.querySelector('.ai-source-row[data-source="codex"] [data-source-action="repair"]').click()`);
   await until(() => js('document.getElementById("ai-source-confirm").open'), 'repair preview');

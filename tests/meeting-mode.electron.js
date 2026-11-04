@@ -45,7 +45,7 @@ async function run(contents) {
     await until(() => js('isExpanded && !modeBusy'), 'expanded capture');
     await js('setActiveTab("settings")');
     await until(() => js('!tabBusy && document.getElementById("tab-settings").classList.contains("active")'), 'settings visible');
-    await js('document.getElementById("settings-auto-meeting-mode").scrollIntoView({block:"center"})');
+    await js('NotchSettings.reveal(document.getElementById("settings-auto-meeting-mode"),{block:"center"})');
     await sleep(250);
     assert.equal(await js('getComputedStyle(document.getElementById("settings-meeting-status")).display !== "none" && document.getElementById("settings-meeting-status").getBoundingClientRect().width > 200 && document.getElementById("settings-meeting-status").getBoundingClientRect().height > 10'), true);
     fs.writeFileSync(path.join(output, name + '.png'), (await panel.capturePage()).toPNG());
@@ -55,7 +55,7 @@ async function run(contents) {
   await js("setMode(true)"); await sleep(600);
   await js("document.querySelector('#ui-capsule-hint button')?.click(); setActiveTab('settings')");
   sample(0, { camera: false, sharing: false, focus: false });
-  await js("document.getElementById('settings-auto-meeting-mode').scrollIntoView({block:'center'})");
+  await js("NotchSettings.reveal(document.getElementById('settings-auto-meeting-mode'),{block:'center'})");
   assert.equal((await state()).autoMeetingMode, true);
   await capture('automatic-idle');
   sample(1000, { camera: true, sharing: false, focus: false });
@@ -105,7 +105,7 @@ async function run(contents) {
   assert.equal((await state()).autoMeetingMode, false);
   assert.equal((await state()).meetingMode, false);
   assert.equal((await state()).taskNotifications, false);
-  await js('setActiveTab("settings"); document.getElementById("settings-auto-meeting-mode").scrollIntoView({block:"center"})');
+  await js('setActiveTab("settings"); NotchSettings.reveal(document.getElementById("settings-auto-meeting-mode"),{block:"center"})');
   await capture('automatic-off');
 }
 require('../main.js');

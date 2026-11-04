@@ -199,9 +199,9 @@ async function run(c) {
   }
   await js('PomeSun.render();setActiveTab("settings")');await sleep(250);
   assert.equal(await js('document.getElementById("settings-weather-effects").checked'),true);
-  assert.equal(await js('document.querySelector(".settings-device-card #settings-weather-effects")!==null'),true);
+  assert.equal(await js('document.querySelector(".settings-appearance-card #settings-weather-effects")!==null'),true);
   assert.equal(await js('document.querySelector(".settings-weather-attribution a").href'),'https://open-meteo.com/');
-  await js('document.getElementById("settings-weather-effects").scrollIntoView({block:"center"})');await capture('settings',false);
+  await js('NotchSettings.reveal(document.getElementById("settings-weather-effects"),{block:"center"})');await capture('settings',false);
   rejectWeatherSetting=true;
   await js('document.querySelector(".settings-weather-effects-row").click()');
   await until('!document.getElementById("settings-weather-effects").disabled && document.getElementById("settings-weather-effects").checked');

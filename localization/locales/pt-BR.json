@@ -1630,5 +1630,9 @@
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · Espaço insuficiente. Substitua um widget ou altere o tamanho do painel.",
   "settings.panelSize.saveFailed": "Não foi possível salvar o tamanho. Tente novamente.",
   "sources.codexNotifyWrapped": "Foi encontrado um hook do Pome aninhado na cadeia de notificações do Codex. Repare para preservar o Computer Use e o comando de notificação original.",
-  "sources.codexNotifyInvalidChain": "A cadeia de notificações do Codex é inválida ou está muito aninhada. A configuração não foi alterada. Verifique notify."
+  "sources.codexNotifyInvalidChain": "A cadeia de notificações do Codex é inválida ou está muito aninhada. A configuração não foi alterada. Verifique notify.",
+  "settings.nav.common": "Geral",
+  "settings.nav.appearance": "Aparência",
+  "settings.nav.data": "Dados",
+  "settings.data.local": "Dados locais"
 }

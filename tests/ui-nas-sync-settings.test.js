@@ -214,16 +214,11 @@ test('content details use each content type timestamp, retain partial errors and
   assert.equal(settingsUi.contentResultRows({}, false).every(row => row.time === '—' && row.message === '仅本机 · 未配对 NAS'), true);
 });
 
-test('NAS card markup removes standalone cards and retains recovery outside collapsed details', () => {
+test('NAS stays in its own group with connection and content sections expanded', () => {
   assert.doesNotMatch(html, /settings-nas-endpoints|settings-nas-pair-card|settings-nas-endpoint-list|添加 endpoint|绑定本机/);
-  const secondary = html.slice(html.indexOf('settings-column settings-column-secondary'));
-  const primary = html.slice(html.indexOf('settings-column settings-column-primary'), html.indexOf('settings-column settings-column-secondary'));
-  assert(primary.indexOf('settings-ai-sources-card') < primary.indexOf('settings-api-card'));
-  assert(primary.indexOf('settings-api-card') < primary.indexOf('settings-mirror-card'));
-  assert.doesNotMatch(secondary, /settings-mirror-card/);
-  assert(secondary.indexOf('settings-device-card') < secondary.indexOf('settings-display-card'));
-  assert(secondary.indexOf('settings-display-card') < secondary.indexOf('id="settings-nas-sync-card"'));
-  const advanced = secondary.match(/<details[^>]*id="settings-nas-advanced"[\s\S]*?<\/details>/)?.[0];
-  assert(advanced); assert.doesNotMatch(advanced, /\sopen(?:\s|>)/); assert.doesNotMatch(advanced, /上次同步|last-sync/);
-  assert(secondary.indexOf('id="settings-nas-recovery"') < secondary.indexOf('id="settings-nas-details"'));
+  assert.match(html, /id="settings-group-nas"/);
+  assert.match(html, /<section[^>]*id="settings-nas-advanced"/);
+  assert.match(html, /<section[^>]*id="settings-nas-details"/);
+  assert.doesNotMatch(html, /<details[^>]*id="settings-nas-(?:advanced|details)"/);
+  assert(html.indexOf('id="settings-nas-recovery"') < html.indexOf('id="settings-nas-details"'));
 });

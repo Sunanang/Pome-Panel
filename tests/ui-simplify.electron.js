@@ -303,7 +303,7 @@ async function run(c){
  // Expanded diagnostics occupy their own region; controls can be scrolled into view above it.
  await js(`document.getElementById('ui-error-details').open=true`);
  for(const selector of ['[data-settings-home-module=pomodoro]','[data-settings-home-module=cursor]']){
-  const accessible=await js(`(async()=>{const input=document.querySelector(${JSON.stringify(selector)}),control=input.closest('label')||input;control.scrollIntoView({block:'center'});await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const b=control.getBoundingClientRect(),bar=document.getElementById('ui-error-bar').getBoundingClientRect(),panels=document.getElementById('panels').getBoundingClientRect(),hit=document.elementFromPoint(b.left+b.width/2,b.top+b.height/2);return {separate:panels.bottom<=bar.top+1,reachable:hit===control||control.contains(hit),visible:b.top>=panels.top-1&&b.bottom<=panels.bottom+1};})()`);
+  const accessible=await js(`(async()=>{const input=document.querySelector(${JSON.stringify(selector)}),control=input.closest('label')||input;NotchSettings.reveal(control,{block:'center'});await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const b=control.getBoundingClientRect(),bar=document.getElementById('ui-error-bar').getBoundingClientRect(),panels=document.getElementById('panels').getBoundingClientRect(),hit=document.elementFromPoint(b.left+b.width/2,b.top+b.height/2);return {separate:panels.bottom<=bar.top+1,reachable:hit===control||control.contains(hit),visible:b.top>=panels.top-1&&b.bottom<=panels.bottom+1};})()`);
   assert.equal(accessible.separate,true);assert.equal(accessible.reachable,true,selector);assert.equal(accessible.visible,true,selector);
  }
  await capture('error-controls-accessible');
@@ -433,7 +433,7 @@ async function run(c){
   assert.equal(await js(`document.querySelector('#ui-home-presets,[data-preset]')`),null,'language changes cannot recreate presets');
   assert.equal(await js(`JSON.stringify(homeWorkingLayout)`),savedLayout,'settings repaint preserves the saved layout');
  }
- await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'));document.getElementById('settings-home-module-list').scrollIntoView({block:'center'})`);
+ await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'));NotchSettings.reveal(document.getElementById('settings-home-module-list'),{block:'center'})`);
  await capture('home-modules-no-presets');
  const moduleBounds=await js(`(()=>{const grid=document.getElementById('settings-home-module-list'),r=grid.getBoundingClientRect(),heading=grid.previousElementSibling.getBoundingClientRect();return {x:r.x,y:heading.y,width:r.width,height:r.bottom-heading.y,dpr:devicePixelRatio}})()`);
  fs.writeFileSync(path.join(output,'home-modules-no-presets-crop.png'),(await c.capturePage()).crop({x:Math.round(moduleBounds.x*moduleBounds.dpr),y:Math.round(moduleBounds.y*moduleBounds.dpr),width:Math.round(moduleBounds.width*moduleBounds.dpr),height:Math.round(moduleBounds.height*moduleBounds.dpr)}).toPNG());

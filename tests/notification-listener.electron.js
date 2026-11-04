@@ -52,7 +52,7 @@ async function run(c){
  await sleep(500);await js('dismissStatusToast(false)');fs.writeFileSync(path.join(output,'home-listening-comments.png'),(await panel.capturePage()).toPNG());
  await js(`setActiveTab('settings')`);await js(`document.getElementById('settings-meeting-mode').click()`);
  await until(()=>js('(async()=> (await notchAPI.getAppSettings()).meetingMode)()'),'meeting enabled');
- await js(`document.getElementById('settings-meeting-mode').scrollIntoView({block:'center'})`);await sleep(400);
+ await js(`NotchSettings.reveal(document.getElementById('settings-meeting-mode'),{block:'center'})`);await sleep(400);
  fs.writeFileSync(path.join(output,'meeting-mode.png'),(await panel.capturePage()).toPNG());
  await js(`setActiveTab('home')`);
  assert.equal(await js("document.querySelector('.home-inbox-listener').textContent"),'会议模式');

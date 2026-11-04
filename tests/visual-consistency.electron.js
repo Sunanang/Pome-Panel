@@ -72,7 +72,7 @@ async function run(c) {
     assert.equal(await js(`document.querySelector('.link-list').scrollWidth<=document.querySelector('.link-list').clientWidth+1`),true);
     await shot('links-'+width);
     c.sendInputEvent({type:'mouseMove',x:10,y:10}); await sleep(30);
-    const scroll=await js(`(()=>{const names=['.link-list','.link-groups','.window-list','.notes-list','.recording-list','.credential-list','.settings-column-primary','.todo-list'];return names.map(s=>{const e=document.querySelector(s),bar=getComputedStyle(e,'::-webkit-scrollbar');return {selector:s,width:bar.width,height:bar.height,thumb:getComputedStyle(e,'::-webkit-scrollbar-thumb').backgroundColor,standard:getComputedStyle(e).scrollbarWidth}})})()`);
+    const scroll=await js(`(()=>{const names=['.link-list','.link-groups','.window-list','.notes-list','.recording-list','.credential-list','#settings-content','.todo-list'];return names.map(s=>{const e=document.querySelector(s),bar=getComputedStyle(e,'::-webkit-scrollbar');return {selector:s,width:bar.width,height:bar.height,thumb:getComputedStyle(e,'::-webkit-scrollbar-thumb').backgroundColor,standard:getComputedStyle(e).scrollbarWidth}})})()`);
     // A hovered scroll container can expose its hover thumb color even when
     // querying the pseudo element. Compare all states to the shared palette.
     const palette=await js(`(()=>{const e=document.createElement('div');e.style.cssText='position:fixed;visibility:hidden';document.body.append(e);try{return ['--scrollbar-thumb','--scrollbar-thumb-hover','--scrollbar-thumb-active'].map(v=>{e.style.backgroundColor='var('+v+')';return getComputedStyle(e).backgroundColor})}finally{e.remove()}})()`);

@@ -79,7 +79,7 @@ async function run(content) {
   await until("document.getElementById('settings-manus-completion-enabled').checked && !document.getElementById('settings-manus-completion-enabled').disabled");
   await controller.tick();
   await until("document.querySelector('.ai-source-row[data-source=manus]').dataset.state==='connected'");
-  await js("document.getElementById('settings-manus-token-card').scrollIntoView({block:'center'})");
+  await js("NotchSettings.reveal(document.getElementById('settings-manus-token-card'),{block:'center'})");
   await delay(250);
   fs.writeFileSync(path.join(output, 'settings-connected.png'), (await content.capturePage()).toPNG());
   const startedAt = clock;
@@ -147,7 +147,7 @@ async function run(content) {
   await until("document.getElementById('settings-manus-completion-status').textContent===PomeI18n.t('providers.manus.networkError')");
   await js("setActiveTab('settings')");
   await until("activeTab==='settings' && !tabBusy");
-  await js("document.getElementById('settings-manus-token-card').scrollIntoView({block:'center'})");
+  await js("NotchSettings.reveal(document.getElementById('settings-manus-token-card'),{block:'center'})");
   await delay(200);
   fs.writeFileSync(path.join(output, 'settings-offline.png'), (await content.capturePage()).toPNG());
   const preview = await js('notchAPI.previewManusCompletion()'); assert.equal(preview.ok, true);

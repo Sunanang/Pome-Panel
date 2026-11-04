@@ -1630,5 +1630,9 @@
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · Espace insuffisant. Remplacez un widget ou changez la taille du panneau.",
   "settings.panelSize.saveFailed": "Impossible d’enregistrer la taille. Réessayez.",
   "sources.codexNotifyWrapped": "Un hook Pome imbriqué a été trouvé dans la chaîne de notifications Codex. Réparez-le pour conserver Computer Use et la commande de notification initiale.",
-  "sources.codexNotifyInvalidChain": "La chaîne de notifications Codex est invalide ou trop imbriquée. La configuration n’a pas été modifiée. Vérifiez notify."
+  "sources.codexNotifyInvalidChain": "La chaîne de notifications Codex est invalide ou trop imbriquée. La configuration n’a pas été modifiée. Vérifiez notify.",
+  "settings.nav.common": "Général",
+  "settings.nav.appearance": "Apparence",
+  "settings.nav.data": "Données",
+  "settings.data.local": "Données locales"
 }

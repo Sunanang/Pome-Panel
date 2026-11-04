@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Reorganize Settings into six sidebar groups with one scrolling content pane. Preserve controls, state, wording and confirmations, and map existing links to their groups. Place recording configuration and six token forms below the AI source list; separate local data, export and restore cards with visible backup feedback. Keep NAS connection, sync details and troubleshooting expanded without changing conditional actions, and keep weather attribution directly below its switch without a divider.
+
 - Refresh all eight AI quota palettes with softly saturated two-hue gradients, clearer provider separation and more visible transitions; preserve icons, secondary quotas and warning overrides.
 
 - Repair stretched Home widgets: AI usage evenly distributes visible providers in wide mode and uses at most two columns in tall mode, with readable rings, independent secondary quota bars (including Cursor Other and Codex weekly), and centered failures without empty gauges. Preserve brand/alert colors, icons and unstretched layouts. Remove the tall almanac gap and duplicate daylight duration, separate inbox titles from actual summaries, and avoid redundant layout rendering.

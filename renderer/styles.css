@@ -4100,17 +4100,8 @@ body.panel-dragging #app.collapsed .notch {
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
   gap: var(--s-3);
 }
-.settings-column {
-  min-width: 0;
-  min-height: 0;
-  display: grid;
-  gap: var(--s-3);
-}
-.settings-column-primary { grid-template-rows: 154px minmax(0, 1fr); }
-.settings-column-secondary { grid-template-rows: none; }
 .settings-card {
   min-width: 0;
   min-height: 0;
@@ -4221,8 +4212,6 @@ body.panel-dragging #app.collapsed .notch {
 .settings-inline-note.error { color: #ff746d !important; }
 
 @media (max-width: 900px) {
-  .settings-page { grid-template-columns: 1fr; overflow-y: auto; }
-  .settings-column { grid-template-rows: auto; }
 }
 
 /* 配置面板与录音列表修正 */
@@ -6212,38 +6201,6 @@ html[data-liquid-glass='1'] .home-bento > .home-almanac[data-layout-variant='ful
   flex-shrink: 0;
 }
 
-/* 设置左右栏都允许独立滚动，内容过长时不被截断。 */
-.settings-column-primary,
-.settings-column-secondary {
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 3px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
-}
-.settings-column-primary > .settings-card,
-.settings-column-secondary > .settings-card {
-  flex: 0 0 auto;
-}
-.settings-column-primary::-webkit-scrollbar,
-.settings-column-secondary::-webkit-scrollbar {
-  width: 4px;
-}
-.settings-column-primary::-webkit-scrollbar-track,
-.settings-column-secondary::-webkit-scrollbar-track {
-  background: transparent;
-}
-.settings-column-primary::-webkit-scrollbar-thumb,
-.settings-column-secondary::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-}
-.settings-column-primary::-webkit-scrollbar-thumb:hover,
-.settings-column-secondary::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.24);
-}
 .settings-home-modules-card { display: flex; flex-direction: column; }
 .settings-home-module-grid {
   margin-top: 14px;
@@ -7054,8 +7011,6 @@ body > .todo-date-popover,
 .settings-nas-sync-line .settings-nas-status-meta { flex:1; min-width:0; font-size:var(--fs-caption); color:var(--text-3); }
 .settings-nas-sync-line time, .settings-nas-sync-line strong { font-weight:500; color:var(--text-2); }
 .settings-nas-disclosure { border-top:1px solid var(--hairline-soft); margin-top:var(--s-3, 12px); padding-top:var(--s-2, 8px); }
-.settings-nas-disclosure > summary { cursor:pointer; color:var(--text-2); font:500 var(--fs-small) var(--font); padding:var(--s-1, 4px) 0; }
-.settings-nas-disclosure > summary:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; border-radius:var(--r-input); }
 .settings-nas-backup-actions { display:flex; justify-content:flex-end; margin-top:var(--s-2, 8px); }
 .settings-nas-content-row { display:grid; grid-template-columns:76px minmax(0, 1fr) auto; gap:var(--s-2, 8px); align-items:baseline; padding:var(--s-2, 8px) 0; font-size:var(--fs-caption); border-bottom:1px solid var(--hairline-soft); }
 .settings-nas-content-row > strong { font-weight:500; color:var(--text-2); }
@@ -7393,8 +7348,8 @@ html[data-platform="win32"] *::-webkit-scrollbar-corner {
 html[data-platform="win32"] :is(
   .window-list,
   .command-list,
-  .settings-column-primary,
-  .settings-column-secondary,
+  #settings-content,
+  .settings-sidebar,
   .home-cursor .q-inline-rows,
   .home-cursor .cursor-usage-rows,
   .home-cursor .ai-usage-providers,
@@ -8086,7 +8041,6 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
   --settings-connected: #36cf86;
   gap: 14px;
 }
-.settings-page .settings-column { gap: var(--settings-gap); }
 .settings-page .settings-card { padding: 16px 20px; background: #1b1b1d; }
 .settings-page .settings-status-list { margin: 12px 0 8px; }
 .settings-page .workspace-button.compact { min-height: 28px; padding: 4px 10px; border-radius: 10px; font-size: 11px; }
@@ -8154,8 +8108,7 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
 .ui-nas-summary { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
 .ui-nas-summary p { flex:1; min-width:120px; color:var(--text-3); }
 #ui-nas-troubleshoot { margin-top:14px; border-top:1px solid var(--hairline-soft); padding-top:10px; font-size:11px; }
-#ui-nas-troubleshoot > summary { cursor:pointer; color:var(--text-2); }
-#ui-nas-troubleshoot > :not(summary) { margin-top:10px; }
+#ui-nas-troubleshoot > :not(.settings-nas-section-title) { margin-top:10px; }
 .ui-quick-entry { font-size:9px; padding:3px 6px; min-height:22px; white-space:nowrap; }
 .ui-welcome { width:min(540px,calc(100vw - 48px)); max-height:calc(100vh - 36px); padding:24px; border-radius:var(--r-card,20px); border:1px solid var(--hairline-soft); background:var(--bg-base); color:var(--text-1); box-shadow:0 24px 80px #0008; }
 .ui-welcome::backdrop { background:#0005; backdrop-filter:blur(8px); }
