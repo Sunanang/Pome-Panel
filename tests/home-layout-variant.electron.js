@@ -75,13 +75,24 @@ async function main() {
     }
   }
   async function inspectAI(name, count) {
-    const report = await js(`(()=>{const grid=document.getElementById('ai-usage-providers');return {columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,cards:[...grid.querySelectorAll('.ai-usage-provider')].map(card=>{const ring=card.querySelector('.q-ring'),rect=card.getBoundingClientRect();return {id:card.dataset.provider,state:card.dataset.state,ring:ring?.checkVisibility()?ring.getBoundingClientRect().width:0,number:card.querySelector('[data-main-number]')?.checkVisibility()||false,bars:[...card.querySelectorAll('.cursor-usage-track')].filter(n=>n.checkVisibility()).length,color:card.querySelector('.q-gradient-start')?getComputedStyle(card.querySelector('.q-gradient-start')).stopColor:'',text:card.innerText,width:rect.width}})};})()`);
+    const report = await js(`(()=>{const grid=document.getElementById('ai-usage-providers');return {columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,cards:[...grid.querySelectorAll('.ai-usage-provider')].map(card=>{const ring=card.querySelector('.q-ring'),rect=card.getBoundingClientRect();return {id:card.dataset.provider,state:card.dataset.state,ring:ring?.checkVisibility()?ring.getBoundingClientRect().width:0,number:card.querySelector('[data-main-number]')?.checkVisibility()||false,bars:[...card.querySelectorAll('.cursor-usage-track')].filter(n=>n.checkVisibility()).length,main:card.dataset.quotaWindow,rowsScroll:!!card.querySelector('.q-inline-rows')&&card.querySelector('.q-inline-rows').scrollHeight>card.querySelector('.q-inline-rows').clientHeight,rows:[...card.querySelectorAll('.q-inline-rows .ai-quota-row')].map(row=>{const r=row.getBoundingClientRect(),track=row.querySelector('.cursor-usage-track');return {key:row.dataset.pool,text:row.innerText,kind:row.dataset.kind,visible:row.checkVisibility(),trackWidth:track.hidden?0:track.getBoundingClientRect().width,inside:r.left>=rect.left-1&&r.right<=rect.right+1&&r.top>=rect.top&&r.bottom<=rect.bottom}}),expected:[...card.querySelectorAll('.cursor-usage-rows[popover] .ai-quota-row')].filter(row=>row.dataset.pool!==card.dataset.quotaWindow).map(row=>row.dataset.pool),color:card.querySelector('.q-gradient-start')?getComputedStyle(card.querySelector('.q-gradient-start')).stopColor:'',text:card.innerText,width:rect.width}})};})()`);
     metrics[name].ai = report;
     if (phase !== 'review') return;
     assert.equal(report.cards.length, count, name + ': visible providers');
     assert.equal(report.columns, name.startsWith('wide') ? count : Math.min(2, count), name + ': columns');
     for (const card of report.cards) {
-      assert.equal(card.bars, 0, name + '/' + card.id + ': no duplicate bars');
+      const expected = card.state === 'error' ? [] : card.expected;
+      assert.deepEqual(card.rows.map(row => row.key), expected, name + '/' + card.id + ': retain every secondary pool, exclude only main gauge');
+      assert.equal(card.bars, card.rows.filter(row => row.kind === 'percent').length, name + '/' + card.id + ': visible secondary progress bars');
+      if (card.rows.length <= 3) assert.equal(card.rowsScroll, false, name + ': short quota list has no unnecessary scrollbar');
+      for (const row of card.rows) {
+        assert(row.visible && row.inside, name + '/' + card.id + '/' + row.key + ': secondary row fits card');
+        if (row.kind === 'percent') assert(row.trackWidth >= 8, name + ': readable secondary track');
+      }
+      if (card.id === 'cursor' && card.state !== 'error') assert(card.rows.some(row => row.key === 'other'), name + ': Cursor Other visible');
+      if (card.id === 'codex' && card.state !== 'error') assert(card.rows.some(row => row.key === 'secondary'), name + ': Codex weekly visible');
+      if (card.id === 'cursor' && card.state === 'ok') assert(card.rows.find(row => row.key === 'other').text.includes('80'), name + ': Cursor secondary value differs from main');
+      if (card.id === 'codex' && card.state === 'ok') assert(card.rows.find(row => row.key === 'secondary').text.includes('95'), name + ': Codex weekly value differs from main');
       if (card.state === 'error') { assert.equal(card.ring, 0, name + ': error has no empty ring'); assert(card.text.trim()); }
       else { assert(card.ring >= 56, name + '/' + card.id + ': ring >=56px, got ' + card.ring); assert(card.number, name + ': visible percentage'); }
     }
@@ -113,6 +124,19 @@ async function main() {
     assert.equal(await js(`[...document.querySelectorAll('#home-cursor .ai-usage-provider[data-state="ok"] .q-compact-caption')].every(n=>n.textContent.includes('重置'))`),true,'stretched mini retains reset captions');
     await supply(6);await place('cursor','medium','wide',404,248);await shot('cursor','wide-6-narrow',aiOutput);await inspectAI('wide-6-narrow',6);
     assert.equal(await js(`(()=>{const grid=document.getElementById('ai-usage-providers');grid.scrollLeft=grid.scrollWidth;const last=grid.lastElementChild.getBoundingClientRect(),r=grid.getBoundingClientRect();return last.right<=r.right+1&&grid.scrollWidth>grid.clientWidth})()`),true,'many providers remain reachable inside the card');
+    await supply(0, { antigravity: { ok:true, detected:true, fetchedAt:new Date(now).toISOString(), windows:Array.from({length:6},(_,i)=>({id:`model-${i}`,label:`Model ${i+1}`,percent:20+i*5,windowMinutes:300+i*60,resetsAt:future})) } });
+    await place('cursor','large','tall',320,510);
+    assert.equal(await js(`(()=>{const card=document.getElementById('ai-provider-antigravity'),rows=card.querySelector('.q-inline-rows');rows.scrollTop=rows.scrollHeight;const last=rows.lastElementChild.lastElementChild.getBoundingClientRect(),r=rows.getBoundingClientRect();return rows.querySelectorAll('.ai-quota-row').length===5&&rows.scrollHeight>rows.clientHeight&&last.bottom<=r.bottom+1&&card.querySelector('.q-ring').getBoundingClientRect().width>=56})()`),true,'all secondary model pools reachable through internal scrolling');
+    await shot('cursor','tall-multiple-secondary-pools',aiOutput);
+    await supply(2,{codex:{...data(2).codex,secondary:{percent:33,windowMinutes:10080,resetsAt:future}}});
+    await place('cursor','large','wide',600,248);
+    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-inline-rows [data-pool="secondary"] strong').textContent`),'67%','secondary value updates independently after refresh');
+    assert.equal(await js(`document.querySelector('#ai-provider-codex [data-main-number]').textContent`),'85%','refresh preserves separate primary value');
+    await shot('cursor','wide-secondary-refresh',aiOutput);
+    await supply(0,{codex:{...data(2).codex,primary:{unlimited:true,windowMinutes:300,resetsAt:future}}});
+    await place('cursor','medium','wide',600,248);
+    assert.equal(await js(`(()=>{const card=document.getElementById('ai-provider-codex');return !card.querySelector('.q-ring')&&card.querySelector('.q-adaptive-empty').checkVisibility()&&card.querySelector('.q-inline-rows [data-pool="secondary"]').checkVisibility()})()`),true,'secondary pool retained when primary has no numeric gauge');
+    await shot('cursor','wide-unlimited-primary-secondary',aiOutput);
   }
   // Rendering an unchanged layout marker must not recreate the solar SVG.
   if(phase==='review'){

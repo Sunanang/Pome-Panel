@@ -1,5 +1,7 @@
 # AI 额度拉伸回归
 
+此处保留第一轮验收图；副额度条被错误移除的问题已在[后续修复](../ai-secondary-quota-fix-shots/README.md)中恢复，以后续截图为准。
+
 这些图片直接来自 Electron，使用合成 Cursor / Codex / Grok Bot / Claude 数据，不是账号实时额度。
 
 - `wide-3-providers.png`、`wide-4-providers.png`：三／四来源横排，含失败来源。

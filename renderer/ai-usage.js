@@ -222,11 +222,12 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     return [t('quota.resetAt', { time })];
   }
   function provider(m, layout) {
-    const adaptive = layout.ringsOnly === true;
+    const adaptive = layout.adaptive === true;
     const error = m.status === 'error', caption = captionContent(adaptive ? { ...m, size: 'medium' } : m);
     const name = adaptive && layout.columns > 4 ? compactNames[m.id] || registry.get(m.id).label : registry.get(m.id).label;
     const hasGauge = !adaptive || (!error && m.remaining != null);
-    const hasBars = !adaptive && m.inlineRows.length > 0 && !error;
+    const inlineModel = adaptive ? { ...m, size: 'medium', inlineRows: m.rows.filter(row => row.key !== m.selected.key) } : m;
+    const hasBars = inlineModel.inlineRows.length > 0 && !error;
     const empty = adaptive && !hasGauge && !error
       ? `<p class="q-adaptive-empty"${['currency','credits'].includes(m.selected.kind) ? ' data-main-amount' : ''}>${escape(m.selected.kind !== 'percent' ? m.selected.display : errorCopy(m.data))}</p>` : '';
     const invalid = D.invalidToken(m.data), errorLabel = t(invalid ? 'quota.status.invalid' : 'quota.status.error');
@@ -238,7 +239,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       <button class="q-detail-toggle" data-quota-toggle="${m.id}" type="button" aria-controls="${m.id}-usage-rows" aria-expanded="false" aria-label="${escape(t('ui.quota.details', { source: registry.get(m.id).label }))}"></button>
       <div class="q-provider-body">
         <div class="ai-usage-source">${icon(m.id)}<b style="--q-name-length:${name.length}"${adaptive ? ` title="${escape(registry.get(m.id).label)}"` : ''}>${escape(name)}</b></div>
-        ${hasGauge ? `<div class="q-gauge-group">${ring(adaptive ? { ...m, size: 'medium' } : m, layout.ringSize)}${hasBars ? quotaRows(m, true) : ''}</div>` : empty}
+        ${hasGauge || hasBars ? `<div class="q-gauge-group">${hasGauge ? ring(adaptive ? { ...m, size: 'medium' } : m, layout.ringSize) : empty}${hasBars ? quotaRows(inlineModel, true) : ''}</div>` : empty}
         ${adaptive && error ? '' : `<div class="q-compact-caption" data-state-fade="${m.status}"${caption.title ? ` title="${escape(caption.title)}"` : ''}>${caption.html}</div>`}
         <p class="cursor-usage-footnote" id="${m.id}-usage-footnote">${error ? `<span>${escape(errorLabel)}</span>${repair}` : ''}</p>
       </div>${quotaRows(m)}
@@ -293,11 +294,30 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   function syncGeometry(layout = currentLayout, models = currentModels) {
     currentLayout = layout; currentModels = models;
     if (!layout || !models.length) return;
-    if (layout.ringsOnly) {
+    if (layout.adaptive) {
       tile.dataset.quotaTall = 'false';
-      const areas = [...tile.querySelectorAll('.q-gauge-group')].map(node => node.getBoundingClientRect());
-      if (!areas.length) return;
-      const available = Math.min(...areas.map(area => Math.min(area.width, area.height)));
+      const css = getComputedStyle(tile);
+      const line = parseFloat(css.getPropertyValue('--q-window-line'));
+      const gap = parseFloat(css.getPropertyValue('--q-window-gap'));
+      let minHeight = 112;
+      const areas = [...tile.querySelectorAll('.q-gauge-group')].map(node => {
+        const card = node.closest('.ai-usage-provider');
+        const count = node.querySelectorAll('.q-inline-rows .ai-quota-row').length;
+        const rows = Math.min(3, count);
+        // Font ink can extend below the line box. A single row must not gain
+        // a scrollbar; reserve the same painted height as the original layout.
+        const rowHeight = rows ? Math.max(rows * line + (rows - 1) * gap,
+          count <= 3 ? node.querySelector('.q-inline-content').scrollHeight : 0) : 0;
+        card.style.setProperty('--q-window-height', `${rowHeight}px`);
+        minHeight = Math.max(minHeight, 112 + rowHeight + (rows ? 8 : 0));
+        return { node, rowHeight };
+      });
+      tile.style.setProperty('--q-adaptive-min-height', `${minHeight}px`);
+      const available = Math.min(...areas.filter(({ node }) => node.querySelector('.q-ring')).map(({ node, rowHeight }) => {
+        const area = node.getBoundingClientRect();
+        return Math.min(area.width, area.height - rowHeight - (rowHeight ? 8 : 0));
+      }));
+      if (!Number.isFinite(available)) return;
       const diameter = Math.max(56, Math.floor(available * .68));
       tile.style.setProperty('--q-render-size', `${diameter}px`);
       tile.style.setProperty('--q-ring-font', `${diameter * .25}px`);
@@ -470,11 +490,11 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const n = layout.shown.length;
     if (variant === 'wide') {
       const columns = Math.max(1, n);
-      return { ...layout, columns, rows: 1, ringSize: 100, ringsOnly: true };
+      return { ...layout, columns, rows: 1, ringSize: 100, adaptive: true };
     }
     if (variant === 'tall' || variant === 'full') {
       const columns = Math.min(2, Math.max(1, n));
-      return { ...layout, columns, rows: Math.ceil(n / columns), ringSize: 120, ringsOnly: true };
+      return { ...layout, columns, rows: Math.ceil(n / columns), ringSize: 120, adaptive: true };
     }
     return layout;
   }
@@ -497,7 +517,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     byId('ai-usage-title').textContent = D.title();
     let more = byId('ai-usage-more');
     if (!more) { more = document.createElement('button'); more.id='ai-usage-more'; more.className='ai-usage-more'; more.type='button'; more.dataset.quotaSettings=''; tile.querySelector('.cursor-usage-head').insertBefore(more,byId('cursor-usage-refresh')); }
-    more.hidden = (!layout.ringsOnly && size !== 'small') || !layout.hidden.length;
+    more.hidden = (!layout.adaptive && size !== 'small') || !layout.hidden.length;
     more.textContent = `+${layout.hidden.length}`;
     more.setAttribute('aria-label',t('quota.moreSources',{count:layout.hidden.length}));
     tile.setAttribute('aria-label', D.title());
@@ -517,7 +537,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     providers.style.setProperty('--q-columns', layout.columns);
     providers.style.setProperty('--q-rows', layout.rows);
     providers.innerHTML = visible.map(m => provider(m, layout)).join('')
-      + (!layout.ringsOnly && size === 'mini' && layout.hidden.length ? `<button class="q-more-ring" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}" aria-label="${escape(t('quota.moreSources', { count: layout.hidden.length }))}">+${layout.hidden.length}</button>` : '');
+      + (!layout.adaptive && size === 'mini' && layout.hidden.length ? `<button class="q-more-ring" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}" aria-label="${escape(t('quota.moreSources', { count: layout.hidden.length }))}">+${layout.hidden.length}</button>` : '');
     openDetailsId = null; // The previous popover node was removed with the grid.
     providers.scrollTop = scroll;
     for (const [id, offset] of rowScroll) if (byId(id)) byId(id).scrollTop = offset;
@@ -671,7 +691,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       // Still refresh relative reset copy ("明天 …") once a minute without tearing the grid.
       for (const el of tile.querySelectorAll('.ai-usage-provider')) {
         const id = el.dataset.provider;
-        const m = model(id, currentLayout?.ringsOnly ? 'medium' : tile.dataset.widgetSize || 'small');
+        const m = model(id, currentLayout?.adaptive ? 'medium' : tile.dataset.widgetSize || 'small');
         const caption = el.querySelector('.q-compact-caption');
         if (caption) {
           const content = captionContent(m);
