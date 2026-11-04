@@ -1602,6 +1602,7 @@
   "ux.recordings.view": "In Aufzeichnungen ansehen",
   "copy.noMicrophoneDeviceFound.a4c8e1": "Kein Mikrofon gefunden · Schließen Sie eines an und versuchen Sie es erneut",
   "commands.comment": "Kommentar",
+  "commands.commentPlaceholder": "Notiz ≤6 Zeichen",
   "commands.addComment": "Kommentar hinzufügen…",
   "notifications.meetingMode": "Besprechungsmodus",
   "notifications.meetingHint": "Benachrichtigungen pausieren, Nachrichten weiter speichern. Nach dem Ausschalten fortsetzen.",

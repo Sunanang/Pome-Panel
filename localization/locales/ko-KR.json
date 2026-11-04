@@ -1602,6 +1602,7 @@
   "ux.recordings.view": "녹음에서 보기",
   "copy.noMicrophoneDeviceFound.a4c8e1": "마이크를 찾을 수 없습니다 · 연결한 뒤 다시 시도하세요",
   "commands.comment": "메모",
+  "commands.commentPlaceholder": "메모 6자 이내",
   "commands.addComment": "메모 추가…",
   "notifications.meetingMode": "회의 모드",
   "notifications.meetingHint": "상단 알림을 일시 중지하고 메시지는 저장합니다. 해제하면 알림이 재개됩니다.",

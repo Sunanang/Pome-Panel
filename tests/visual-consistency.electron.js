@@ -96,7 +96,12 @@ async function run(c) {
     assert.equal(state.count,count); assert(state.motion&&state.content,filter+' animates both the selection and results');
     if(filter==='image')await shot('clipboard-filter-motion'); await sleep(230);
   }
-  await click('.clip-filter[data-filter="text"]',0);await click('.clip-filter[data-filter="image"]',0);await click('.clip-filter[data-filter="faved"]',0);
+  for (const filter of ['text','image','faved']) {
+    await click('.clip-filter[data-filter="'+filter+'"]',0);
+    // Native input is queued separately from executeJavaScript. Consume each
+    // click before sampling its animation; interrupted animations stay <200ms.
+    await until(`clipFilter==='${filter}'`);
+  }
   // Wait for the actual compositor timeline; a fixed 250 ms can sample an
   // unfinished transition on a busy software renderer. The suite watchdog
   // still rejects an animation that never completes.

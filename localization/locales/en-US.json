@@ -1608,6 +1608,7 @@
   "ux.recordings.view": "View in Recordings",
   "copy.noMicrophoneDeviceFound.a4c8e1": "No microphone found · Plug one in and try again",
   "commands.comment": "Comment",
+  "commands.commentPlaceholder": "Note ≤6 chars",
   "commands.addComment": "Add comment…",
   "notifications.meetingMode": "Meeting mode",
   "notifications.meetingHint": "Pause top notifications; keep saving messages. Resume reminders when turned off.",

@@ -1602,6 +1602,7 @@
   "ux.recordings.view": "Ver em Gravações",
   "copy.noMicrophoneDeviceFound.a4c8e1": "Nenhum microfone encontrado · Conecte um e tente de novo",
   "commands.comment": "Comentário",
+  "commands.commentPlaceholder": "Nota ≤6 caracteres",
   "commands.addComment": "Adicionar comentário…",
   "notifications.meetingMode": "Modo reunião",
   "notifications.meetingHint": "Pausa os avisos e continua salvando mensagens. Desative para retomar.",

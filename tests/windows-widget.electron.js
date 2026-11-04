@@ -67,9 +67,13 @@ async function run(c){
   windowItems=windowItems.slice(0,8);await click('#windows-refresh');await js('notchAPI.setLanguage("en-US")');await until('document.documentElement.lang==="en-US"');await shot('04-english');
   windowItems[0].minimized=true;await click('#windows-refresh');assert.match(await js('document.querySelector(".window-item[data-id=terminal-0]").innerText'),/Minimized/);
   listFailure=true;await click('#windows-refresh');assert.equal(await js('document.querySelector("#ui-error-bar").hidden'),false);listFailure=false;await click('#windows-refresh');assert.equal(await js('document.querySelector("#ui-error-bar").hidden'),true);
+  // A lone card can stretch to Home's full height. Eight mini rows can fit
+  // without scrolling; overflow coverage needs enough rows for that layout too.
+  windowItems.push(...Array.from({length:14},(_,i)=>({id:'compact-'+i,pid:500,appName:'Code',title:'Compact workspace '+i,axWindowId:String(500+i)})));
+  await click('#windows-refresh');await until('document.querySelectorAll(".window-item").length===22');
   for(const size of ['mini','small']){
    const point=await js(`(()=>{const r=document.querySelector('.home-windows').getBoundingClientRect();return {x:r.x+32,y:r.y+20}})()`);c.sendInputEvent({type:'mouseDown',x:Math.round(point.x),y:Math.round(point.y),button:'right',clickCount:1});c.sendInputEvent({type:'mouseUp',x:Math.round(point.x),y:Math.round(point.y),button:'right',clickCount:1});await until(`!document.querySelector('#home-context-menu').hidden`);await click(`[data-home-ctx-size="${size}"]`);await sleep(400);
-   const dims=await js(`(()=>{const l=document.querySelector('#window-list'),r=l.getBoundingClientRect();return {width:r.width,cols:getComputedStyle(l).gridTemplateColumns.split(' ').length,rows:l.querySelectorAll('.window-item').length,scroll:l.scrollHeight>l.clientHeight}})()`);assert.equal(dims.cols,1,'small widget uses readable single-column rows');assert.equal(dims.rows,8);assert(dims.scroll,'all compact entries remain scrollable');await shot('07-'+size);
+   const dims=await js(`(()=>{const l=document.querySelector('#window-list'),r=l.getBoundingClientRect(),tile=l.closest('.home-windows'),style=getComputedStyle(tile);return {width:r.width,contentWidth:tile.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight),cols:getComputedStyle(l).gridTemplateColumns.split(' ').length,rows:l.querySelectorAll('.window-item').length,scroll:l.scrollHeight>l.clientHeight}})()`);assert.equal(dims.cols,dims.contentWidth<=290?1:2,'column count follows actual container width after Home stretches the footprint');assert.equal(dims.rows,22);assert(dims.scroll,'all compact entries remain scrollable');await shot('07-'+size);
   }
 
  }

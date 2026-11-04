@@ -1602,6 +1602,7 @@
   "ux.recordings.view": "録音で見る",
   "copy.noMicrophoneDeviceFound.a4c8e1": "マイクが見つかりません · 接続してから再試行してください",
   "commands.comment": "メモ",
+  "commands.commentPlaceholder": "メモ 6文字以内",
   "commands.addComment": "メモを追加…",
   "notifications.meetingMode": "会議モード",
   "notifications.meetingHint": "上部通知を一時停止し、メッセージを保存します。オフにすると通知を再開します。",

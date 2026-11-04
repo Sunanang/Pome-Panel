@@ -135,7 +135,8 @@ async function main() {
     assert.equal((await state('mirror')).transform,'none');
     await capture('08-layout-edit');
     assert.deepEqual(await js(`[HOME_ORDER_KEY,HOME_SIZES_KEY,HOME_PLACEMENTS_KEY,'notch-home-commands'].map(key=>localStorage.getItem(key))`),await js('hoverStored'));
-    assert.equal(await js(`document.querySelector('.command-text').title`),'先核实来源，再给出事实、风险和替代解释，保持独立判断。');
+    assert.equal(await js(`document.querySelector('.command-text').textContent`),'先核实来源，再给出事实、风险和替代解释，保持独立判断。');
+    assert.equal(await js(`document.querySelector('.command-text').title`),'','command detail uses the custom tooltip, without a native title');
     assert.deepEqual(errors,[]);
     console.log('Card hover: bounded 2/2.5/1 degree tilt without scale, frame coalescing, controls, focus, leave/cancel, reduced motion and edit isolation passed');
     console.log('Screenshots:',shots);

@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Use 30px single command rows with comment pills and a hover-only **+** for empty notes. Inline editing supports Enter/blur save, Escape cancel and clearing; the six-character counter is advisory, preserving legacy comments and clipboard/sync fields. Delayed glass tooltips reveal truncated content, flip within panel bounds, support Mini comments and stay hidden while editing or dragging. Preserve the card shell and size rules.
+
 - Reorganize Settings into six sidebar groups with one scrolling content pane. Preserve controls, state, wording and confirmations, and map existing links to their groups. Place recording configuration and six token forms below the AI source list; separate local data, export and restore cards with visible backup feedback. Keep NAS connection, sync details and troubleshooting expanded without changing conditional actions, and keep weather attribution directly below its switch without a divider.
 
 - Refresh all eight AI quota palettes with softly saturated two-hue gradients, clearer provider separation and more visible transitions; preserve icons, secondary quotas and warning overrides.

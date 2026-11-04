@@ -64,6 +64,98 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     .filter(Boolean);
   let commandSelection = new Set();
   let commandSelectionAnchor = null;
+  const commandTile = commandList?.closest('.home-commands');
+  const commandBento = commandTile?.closest('.home-bento');
+  const commandTooltip = document.createElement('div');
+  commandTooltip.id = 'command-tooltip';
+  commandTooltip.className = 'command-tooltip';
+  commandTooltip.setAttribute('role', 'tooltip');
+  commandTooltip.setAttribute('popover', 'manual');
+  document.body.appendChild(commandTooltip);
+  let commandHoverRow = null;
+  let commandTooltipTimer = null;
+
+  function hideCommandTooltip() {
+    clearTimeout(commandTooltipTimer);
+    commandTooltipTimer = null;
+    commandHoverRow?.removeAttribute('aria-describedby');
+    commandHoverRow = null;
+    if (commandTooltip.matches(':popover-open')) commandTooltip.hidePopover();
+  }
+
+  function commandTooltipAllowed(row) {
+    return row?.isConnected && row.checkVisibility() && !document.hidden
+      && !commandList.querySelector('.command-edit')
+      && commandBento?.dataset.layoutEditing !== 'true'
+      && !commandBento?.classList.contains('layout-motion-active')
+      && !commandBento?.classList.contains('layout-dragging')
+      && !commandTile?.classList.contains('is-dragging');
+  }
+
+  function showCommandTooltip(row) {
+    if (commandHoverRow !== row || !commandTooltipAllowed(row)) return;
+    const command = commands.find(item => item.id === row.dataset.id);
+    if (!command) return;
+    const mini = commandTile.dataset.widgetSize === 'mini' || commandTile.dataset.layoutVariant === 'mini';
+    const truncated = [...row.querySelectorAll('.command-text, .command-comment')]
+      .some(node => node.checkVisibility() && node.scrollWidth > node.clientWidth);
+    if (!truncated && !(mini && command.comment)) return;
+    const text = document.createElement('div');
+    text.className = 'command-tooltip-text';
+    text.textContent = command.text;
+    commandTooltip.replaceChildren(text);
+    if (command.comment) {
+      const note = document.createElement('div');
+      note.className = 'command-tooltip-comment';
+      note.textContent = command.comment;
+      commandTooltip.appendChild(note);
+    }
+    // A top-layer popover escapes the tile's scrolling/overflow clipping.
+    const panel = document.getElementById('panel').getBoundingClientRect();
+    const bounds = { left: Math.max(0, panel.left) + 6, top: Math.max(0, panel.top) + 6,
+      right: Math.min(innerWidth, panel.right) - 6, bottom: Math.min(innerHeight, panel.bottom) - 6 };
+    commandTooltip.style.maxWidth = `${Math.min(260, Math.max(0, bounds.right - bounds.left))}px`;
+    commandTooltip.style.maxHeight = `${Math.max(0, bounds.bottom - bounds.top)}px`;
+    commandTooltip.showPopover();
+    const anchor = row.getBoundingClientRect(), tip = commandTooltip.getBoundingClientRect();
+    const below = anchor.bottom + 6;
+    const top = below + tip.height <= bounds.bottom ? below : anchor.top - tip.height - 6;
+    commandTooltip.style.left = `${Math.max(bounds.left, Math.min(anchor.left, bounds.right - tip.width))}px`;
+    commandTooltip.style.top = `${Math.max(bounds.top, Math.min(top, bounds.bottom - tip.height))}px`;
+    row.setAttribute('aria-describedby', commandTooltip.id);
+  }
+
+  commandList?.addEventListener('pointerover', event => {
+    if (event.pointerType === 'touch') return;
+    const row = event.target.closest('.command-item');
+    if (!row || row === commandHoverRow) return;
+    hideCommandTooltip();
+    if (!commandTooltipAllowed(row)) return;
+    commandHoverRow = row;
+    commandTooltipTimer = setTimeout(() => showCommandTooltip(row), 450);
+  });
+  commandList?.addEventListener('pointerout', event => {
+    if (commandHoverRow && !commandHoverRow.contains(event.relatedTarget)) hideCommandTooltip();
+  });
+  commandList?.addEventListener('pointerdown', hideCommandTooltip);
+  commandList?.addEventListener('focusin', hideCommandTooltip);
+  document.addEventListener('scroll', hideCommandTooltip, true);
+  for (const name of ['notch:tabchange', 'notch:will-collapse', 'notch:modechange', 'notch:home-layout-applied', 'visibilitychange']) {
+    document.addEventListener(name, hideCommandTooltip);
+  }
+  window.addEventListener('resize', hideCommandTooltip);
+  window.addEventListener('blur', hideCommandTooltip);
+  const commandLayoutObserver = new MutationObserver(mutations => {
+    // Hover tilt also changes classes; only layout/drag changes invalidate the tip.
+    if (mutations.some(change => change.attributeName !== 'class') || !commandTooltipAllowed(commandHoverRow)) hideCommandTooltip();
+  });
+  if (commandBento) commandLayoutObserver.observe(commandBento, { attributes: true, attributeFilter: ['data-layout-editing', 'class'] });
+  if (commandTile) commandLayoutObserver.observe(commandTile, { attributes: true, attributeFilter: ['data-widget-size', 'data-layout-variant', 'hidden', 'class'] });
+  const commandResizeObserver = new ResizeObserver(hideCommandTooltip);
+  if (commandTile) commandResizeObserver.observe(commandTile);
+  window.addEventListener('pagehide', () => {
+    hideCommandTooltip(); commandLayoutObserver.disconnect(); commandResizeObserver.disconnect();
+  }, { once: true });
 
   function persistCommands() {
     saveJson(COMMANDS_KEY, commands);
@@ -71,6 +163,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
 
   function renderCommands() {
     if (!commandList) return;
+    hideCommandTooltip();
     commandList.replaceChildren();
     if (commandBulkDelete) {
       commandBulkDelete.hidden = commandSelection.size === 0;
@@ -95,7 +188,6 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       textButton.className = 'command-text';
       textButton.type = 'button';
       textButton.dataset.action = 'edit-command';
-      textButton.title = command.text;
       textButton.textContent = command.text;
 
       const actions = document.createElement('div');
@@ -113,13 +205,12 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       remove.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.deleteCommand.ebd35b"));
       remove.innerHTML = DELETE_ICON;
       actions.append(copy, remove);
-      const content = document.createElement('div'); content.className = 'command-content';
       const comment = document.createElement('button'); comment.type = 'button';
-      comment.className = 'command-comment'; comment.dataset.action = 'edit-comment';
-      comment.textContent = command.comment || pomeLocaleRendererWorkspace.t('commands.addComment');
-      comment.title = command.comment || comment.textContent;
-      content.append(textButton, comment);
-      row.append(content, actions);
+      comment.className = `command-comment${command.comment ? '' : ' is-empty'}`;
+      comment.dataset.action = 'edit-comment';
+      comment.textContent = command.comment || '+';
+      pomeLocaleRendererWorkspace.bind(comment, 'ariaLabel', () => command.comment || pomeLocaleRendererWorkspace.t('commands.addComment'));
+      row.append(textButton, comment, actions);
       commandList.appendChild(row);
     });
   }
@@ -127,13 +218,30 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   function editCommand(row, field = 'text') {
     const command = commands.find((item) => item.id === row.dataset.id);
     if (!command || row.querySelector('input')) return;
+    hideCommandTooltip();
     const button = row.querySelector(field === 'comment' ? '.command-comment' : '.command-text');
     const input = document.createElement('input');
     input.className = 'command-edit';
     input.value = command[field] || '';
     input.maxLength = field === 'comment' ? 1000 : 500;
-    input.setAttribute('aria-label', pomeLocaleRendererWorkspace.t(field === 'comment' ? 'commands.comment' : 'copy.commands.b85789'));
-    button.replaceWith(input);
+    pomeLocaleRendererWorkspace.bind(input, 'ariaLabel', () => pomeLocaleRendererWorkspace.t(field === 'comment' ? 'commands.comment' : 'copy.commands.b85789'));
+    if (field === 'comment') {
+      const editor = document.createElement('div');
+      editor.className = 'command-comment-editor';
+      pomeLocaleRendererWorkspace.bind(input, 'placeholder', () => pomeLocaleRendererWorkspace.t('commands.commentPlaceholder'));
+      const count = document.createElement('span');
+      count.className = 'command-comment-count';
+      count.setAttribute('aria-hidden', 'true');
+      const updateCount = () => {
+        const length = Array.from(input.value).length;
+        count.textContent = `${length}/6`;
+        count.classList.toggle('is-long', length > 6);
+      };
+      input.addEventListener('input', updateCount);
+      updateCount();
+      editor.append(input, count);
+      button.replaceWith(editor);
+    } else button.replaceWith(input);
     input.focus();
     input.select();
     let finished = false;
@@ -142,14 +250,19 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       finished = true;
       const value = input.value.trim();
       if (save && (value || field === 'comment') && value !== command[field]) {
-        command[field] = value; persistCommands();
+        if (field === 'comment' && !value) delete command.comment;
+        else command[field] = value;
+        persistCommands();
       }
       renderCommands();
     };
     input.addEventListener('blur', () => finish(true));
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' && !event.isComposing) finish(true);
-      if (event.key === 'Escape') finish(false);
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key === 'Enter' || event.key === 'Escape') {
+        event.preventDefault(); event.stopPropagation();
+        finish(event.key === 'Enter');
+      }
     });
   }
 

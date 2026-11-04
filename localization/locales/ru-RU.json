@@ -1624,6 +1624,7 @@
   "ux.recordings.view": "Открыть в записях",
   "copy.noMicrophoneDeviceFound.a4c8e1": "Микрофон не найден · Подключите его и попробуйте снова",
   "commands.comment": "Комментарий",
+  "commands.commentPlaceholder": "Заметка ≤6 знаков",
   "commands.addComment": "Добавить комментарий…",
   "notifications.meetingMode": "Режим встречи",
   "notifications.meetingHint": "Приостановить уведомления, сохраняя сообщения. Возобновить после отключения.",

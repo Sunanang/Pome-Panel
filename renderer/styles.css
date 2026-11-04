@@ -2659,10 +2659,14 @@ body.panel-dragging #app.collapsed .notch {
 
 .command-list { display: flex; flex-direction: column; gap: 5px; }
 .command-item {
+  --command-note-bg: rgba(255, 255, 255, .06);
+  --command-note-border: rgba(255, 255, 255, .09);
+  --command-note-color: #8a8a8a;
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  min-height: 37px;
+  gap: 6px;
+  min-height: 30px;
   padding: 3px 4px 3px 9px;
   border: 1px solid var(--hairline-soft);
   border-radius: var(--r-input);
@@ -2675,7 +2679,7 @@ body.panel-dragging #app.collapsed .notch {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  padding: 6px 0;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--text-2);
@@ -2686,7 +2690,65 @@ body.panel-dragging #app.collapsed .notch {
   white-space: nowrap;
   cursor: text;
 }
-.command-edit { flex: 1; min-width: 0; padding: 6px 0; border: 0; outline: none; background: transparent; color: var(--text-1); font: var(--fs-code) var(--font-mono); }
+.command-edit { flex: 1; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--text-1); font: var(--fs-code) var(--font-mono); }
+.command-item .command-actions { flex: 0 0 auto; margin-block: -2px; }
+.command-comment {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 56px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--command-note-border);
+  border-radius: 999px;
+  background: var(--command-note-bg);
+  color: var(--command-note-color);
+  font: 10px/16px var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+.command-comment.is-empty { display: none; width: 18px; padding: 0; border-style: dashed; cursor: pointer; }
+.command-item:is(:hover, :focus-within) .command-comment.is-empty { display: block; }
+.command-comment-editor {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 76px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--hairline);
+  border-radius: 5px;
+  background: var(--surface-1);
+}
+.command-comment-editor .command-edit { width: 0; font: 10px var(--font); }
+.command-comment-count { flex: 0 0 auto; color: var(--text-3); font: 8px var(--font-mono); }
+.command-comment-count.is-long { color: var(--p1); }
+.home-commands:is([data-widget-size='mini'], [data-layout-variant='mini']) .command-item :is(.command-comment, .command-comment-editor, .command-actions) { display: none; }
+.command-tooltip {
+  --command-tip-bg: rgba(26, 26, 28, .92);
+  --command-tip-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-width: 260px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--command-tip-bg);
+  box-shadow: var(--command-tip-shadow);
+  backdrop-filter: blur(20px);
+  color: var(--text-1);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+.command-tooltip:popover-open { animation: command-tooltip-in 140ms ease-out; }
+.command-tooltip-text { font: 11.5px/1.5 var(--font-mono); }
+.command-tooltip-comment { margin-top: 5px; color: rgba(255, 255, 255, .46); font: 10.5px/1.5 var(--font); }
+@keyframes command-tooltip-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .command-tooltip:popover-open { animation: none; } }
 .command-actions,
 .link-actions,
 .recording-transcript-head > div { display: flex; align-items: center; gap: 2px; }
@@ -8617,10 +8679,6 @@ html[data-panel-size] #tab-home .home-bento { overflow:hidden; }
 #content-delete-apply:hover { background: color-mix(in srgb, var(--p0) 86%, white); }
 .content-delete-actions button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 
-/* Command comments stay separate from the copied command. */
-.command-content { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
-.command-content .command-text { width:100%; text-align:left; }
-.command-comment { min-width:0; padding:0; border:0; background:none; color:var(--text-3); font:inherit; font-size:var(--fs-caption); text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:text; }
 .home-inbox-listener { margin-left:auto; color:var(--text-3); font-size:var(--fs-micro); white-space:nowrap; }
 .home-inbox-listener[data-error='true'] { color:var(--p0); }
 .home-inbox-head > strong { margin-right:auto; }
