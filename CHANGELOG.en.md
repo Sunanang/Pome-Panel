@@ -6,6 +6,12 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Preserve ordinary Codex notifiers that contain literal Pome arguments, and reject connection tests if notify changes during the status check. Omit full input and bound result text on the Pome transport to prevent large normal events exceeding the receiver limit; original notifiers still receive the complete JSON. Show configuration error details and remove repeated chain parsing, unused preview state and an unread test stderr pipe.
+
+- Repair Codex notify chains wrapped by Computer Use. Detect nested Pome hooks and offer repair; connect/repair keeps one outer Pome hook while preserving Computer Use and other original notifiers, collapsing duplicate Computer Use wrappers with identical paths and options. Repeated repair is idempotent, disconnect removes nested Pome hooks, and invalid or excessively nested chains refuse writes. Existing previews, backups and concurrent-edit checks remain in place.
+
+- Restore spacing and prevent row compression in commands with comments. Fill gaps in older Standard layouts, including floating recorder cards, while preserving full layouts and saved size preferences. Give editing actions their own row, fit Home above error messages across navigation, and keep charts clear of time labels. Prevent legacy Music sizing from overriding outer layout bounds and overlapping other cards.
+
 - Restore the right-aligned **Mark all read** action after adding listener status. Fill unused Home space in Medium and Compact using only the admitted widgets, preserving capacity truncation, logical footprints and saved preferences. Resizing or dragging in smaller presets no longer enlarges sibling size preferences to fill the standard canvas.
 
 - Add device-local Standard (1240×638), Medium (1040×580) and Compact (880×520) panel presets with startup restoration and repositioning along the saved dock edge. Home uses existing footprints and user order with capacities of 48/36/24; warnings and disabled choices stay in Home widget settings. Preserve widget UI and existing preferences without outer Home scrolling. New defaults prioritize Sun and Almanac and hide Music and Quick recording.

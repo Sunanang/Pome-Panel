@@ -3885,9 +3885,27 @@ function projectHomeLayoutForPanel(layout, order = homeOrder, sizes = homeSizes)
   let columns = homePanelSize === 'compact' ? 8 : homePanelSize === 'medium' ? 10 : 12;
   let rows = homePanelSize === 'compact' ? 3 : 4;
   let renderLayout = layout;
-  if (homePanelSize !== 'standard') {
+  const slot = homeInboxSavedPlacement;
+  const placeholderId = '__inbox-placeholder';
+  const showPlaceholder = homePanelSize === 'standard' && hiddenHomeModules.includes('inbox') && slot
+    && !Object.values(layout.placements).some(p => p.column < slot.column + slot.width && p.column + p.width > slot.column
+      && p.row < slot.row + slot.height && p.row + p.height > slot.row);
+  const viewOrder = showPlaceholder
+    ? order.filter(id => projection.visibleIds.includes(id) || id === 'inbox').map(id => id === 'inbox' ? placeholderId : id)
+    : projection.visibleIds;
+  const viewSizes = showPlaceholder ? { ...sizes, [placeholderId]: window.NotchDomain.sizeNameFromPlacement(slot) } : sizes;
+  const displayed = Object.keys(layout.placements).filter(id => projection.visibleIds.includes(id));
+  const fullStandard = homePanelSize === 'standard' && !showPlaceholder
+    && displayed.length === projection.visibleIds.length
+    && displayed.reduce((sum,id) => sum + layout.placements[id].width * layout.placements[id].height, 0) === 48;
+  if (fullStandard) {
+    // A full authored grid already fills the surface. Keep its exact origins.
+    renderLayout = { ...layout, rects: Object.fromEntries(displayed.map(id => {
+      const p = layout.placements[id];return [id,{x:p.column/12,y:p.row/4,width:p.width/12,height:p.height/4}];
+    })) };
+  } else {
     const preset=window.NotchPlatform.layout.panelSizePreset(homePanelSize);
-    renderLayout=window.NotchDomain.fitHomeWidgetView(projection.visibleIds,sizes,columns,rows,(preset.width-40)/preset.panelHeight);
+    renderLayout=window.NotchDomain.fitHomeWidgetView(viewOrder,viewSizes,columns,rows,(preset.width-40)/preset.panelHeight);
     if(!renderLayout)throw new Error('Homepage preset projection failed.');
     ({columns,rows}=renderLayout);
   }
@@ -3915,10 +3933,12 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   cancelHomeLayoutMotion();
   const placeholder = document.getElementById('home-inbox-placeholder');
   if (placeholder) {
-    const slot = homeInboxSavedPlacement;
-    const overlaps = slot && Object.values(renderLayout.placements).some(p => p.column < slot.column + slot.width && p.column + p.width > slot.column && p.row < slot.row + slot.height && p.row + p.height > slot.row);
-    placeholder.hidden = Boolean(renderLayout.rects) || !hiddenHomeModules.includes('inbox') || !slot || overlaps || slot.column + slot.width > columns || slot.row + slot.height > rows;
-    if (!placeholder.hidden) placeholder.style.gridArea = `${slot.row + 1} / ${slot.column + 1} / span ${slot.height} / span ${slot.width}`;
+    const rect = renderLayout.rects?.['__inbox-placeholder'];
+    placeholder.hidden = !rect;
+    if(rect) {
+      placeholder.style.gridColumn='1 / -1';placeholder.style.gridRow='1 / -1';
+      applyHomeFillRect(placeholder,rect);
+    }
   }
   const automaticLayout = !homeLayoutReadOnly && effectiveHomeHidden(hiddenHomeModules).length > 0;
   homeBento.dataset.layoutMode = homeLayoutReadOnly ? 'safe' : automaticLayout ? 'automatic' : 'preferred';
@@ -4346,7 +4366,7 @@ if (homeBento) {
     const current = cloneHomeLayout(homeWorkingLayout);
     if (!current?.placements?.[sourceId] || !current?.placements?.[targetId]) return false;
 
-    const next = window.NotchDomain.swapHomeWidgetPlacements(current, sourceId, targetId, { order: homeOrder, fillGaps: homePanelSize === 'standard' });
+    const next = window.NotchDomain.swapHomeWidgetPlacements(current, sourceId, targetId, { order: homeOrder, fillGaps: false });
     if (!next) return false;
 
     const visibleIds = Object.keys(current.placements);
@@ -4403,7 +4423,7 @@ if (homeBento) {
     if (!targetId) { clearDisplacePreview(); return; }
     const original = dragState.originLayout;
     if (!dragState.previewPlans.has(targetId)) {
-      const plan = window.NotchDomain.swapHomeWidgetPlacements(original, sourceId, targetId, { order: dragState.originOrder, fillGaps: homePanelSize === 'standard' });
+      const plan = window.NotchDomain.swapHomeWidgetPlacements(original, sourceId, targetId, { order: dragState.originOrder, fillGaps: false });
       const nextSizes = { ...homeSizes };
       if (plan) Object.entries(plan.placements).forEach(([id, p]) => {
         if (id !== sourceId && id !== targetId) nextSizes[id] = sizeFromPlacement(p);
@@ -4519,7 +4539,7 @@ if (homeBento) {
     homeWorkingLayout = null;
     const layout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
       forcePack: true,
-      sealGaps: homePanelSize === 'standard',
+      sealGaps: false,
       frozenIds: [moduleId],
     });
     if (!layout) {

@@ -1628,5 +1628,7 @@
   "settings.panelSize.compact": "コンパクト",
   "settings.panelSize.hint": "この端末に保存。ホームのカードサイズとは独立しています",
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · 容量不足。ウィジェットを入れ替えるかパネルサイズを変更してください。",
-  "settings.panelSize.saveFailed": "パネルサイズを保存できませんでした。再試行してください。"
+  "settings.panelSize.saveFailed": "パネルサイズを保存できませんでした。再試行してください。",
+  "sources.codexNotifyWrapped": "Codex の通知チェーンに入れ子の Pome フックが見つかりました。修復して Computer Use と元の通知コマンドを保持してください。",
+  "sources.codexNotifyInvalidChain": "Codex の通知チェーンが無効か、入れ子が深すぎます。設定は変更されていません。notify を確認してください。"
 }

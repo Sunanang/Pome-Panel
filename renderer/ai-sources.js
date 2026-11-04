@@ -353,6 +353,10 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         state.textContent = pomeLocaleRendererAiSources.t('settings.ai.apiManaged');
       }
       copy.append(heading, file);
+      if (row.state === 'error' && row.message) {
+        const hint = document.createElement('small'); hint.className = 'ai-source-repair-hint';
+        hint.textContent = row.message; copy.append(hint);
+      }
       if (row.state === 'connected' && restartSources.has(row.source)) {
         const hint = document.createElement('small'); hint.className = 'ai-source-restart-hint';
         hint.textContent = restartMessage(row.source); copy.append(hint);

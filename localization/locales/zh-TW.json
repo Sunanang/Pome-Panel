@@ -1595,5 +1595,7 @@
   "settings.panelSize.compact": "緊湊",
   "settings.panelSize.hint": "儲存於本機，與首頁卡片尺寸無關",
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · 容量不足，請替換模組或調整面板尺寸",
-  "settings.panelSize.saveFailed": "無法儲存面板尺寸，請重試"
+  "settings.panelSize.saveFailed": "無法儲存面板尺寸，請重試",
+  "sources.codexNotifyWrapped": "Codex 通知鏈中發現巢狀的 Pome 接入，請修復；將保留 Computer Use 與原通知命令。",
+  "sources.codexNotifyInvalidChain": "Codex 通知鏈損壞或巢狀層級過深，未修改設定。請檢查 notify 設定。"
 }

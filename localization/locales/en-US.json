@@ -1634,5 +1634,7 @@
   "settings.panelSize.compact": "Compact",
   "settings.panelSize.hint": "Saved on this device; independent of Home card sizes",
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · Not enough space. Replace a widget or change panel size.",
-  "settings.panelSize.saveFailed": "Could not save panel size. Try again."
+  "settings.panelSize.saveFailed": "Could not save panel size. Try again.",
+  "sources.codexNotifyWrapped": "A nested Pome hook was found in the Codex notification chain. Repair it to preserve Computer Use and the original notifier.",
+  "sources.codexNotifyInvalidChain": "The Codex notification chain is invalid or nested too deeply. Configuration was not changed. Check notify."
 }

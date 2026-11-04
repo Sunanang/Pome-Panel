@@ -99,7 +99,7 @@ curl -X POST http://127.0.0.1:43821/notify/codex \
   -d '{"title":"任务已完成","project":"my-project","task_id":"demo","event_id":"demo-completion-1"}'
 ```
 
-在「设置 → AI」检测并接入可 hook 的完成来源（Codex、Claude Code、Cursor、Grok、Copilot CLI、Antigravity）；同一列表展示其余家的额度能力与归属说明。Grok 写入 `$GROK_HOME/hooks/pome-panel.json`（未设置时为 `~/.grok/hooks/pome-panel.json`）的 Stop / StopFailure；按会话与 `promptId` 区分轮次和重试，忽略子代理及退出会话事件。Grok 来源名与图标在完成气泡和收件箱中保留，点击沿用终端打开方式；完成历史参与 NAS 同步及统一的最新 100 条裁剪。确认浮层列出修改文件、Pome 钩子内容和同目录的 `.pome-backup-时间戳` 备份；确认后先校验备份再原子写入。配置损坏时拒绝修改，预览过期或文件被外部编辑后需要重新确认。仅增删 Pome 标记项，其他配置、钩子和缩进保留；Codex 的原 `notify` 被继续转发，断开后还原。Codex 接入后需重启工具。
+在「设置 → AI」检测并接入可 hook 的完成来源（Codex、Claude Code、Cursor、Grok、Copilot CLI、Antigravity）；同一列表展示其余家的额度能力与归属说明。Grok 写入 `$GROK_HOME/hooks/pome-panel.json`（未设置时为 `~/.grok/hooks/pome-panel.json`）的 Stop / StopFailure；按会话与 `promptId` 区分轮次和重试，忽略子代理及退出会话事件。Grok 来源名与图标在完成气泡和收件箱中保留，点击沿用终端打开方式；完成历史参与 NAS 同步及统一的最新 100 条裁剪。确认浮层列出修改文件、Pome 钩子内容和同目录的 `.pome-backup-时间戳` 备份；确认后先校验备份再原子写入。配置损坏时拒绝修改，预览过期或文件被外部编辑后需要重新确认。仅增删 Pome 标记项，其他配置、钩子和缩进保留；Codex 的原 `notify` 被继续转发，断开后还原。Codex 接入后需重启工具。若 Computer Use 把 Pome 包进 `--previous-notify`，设置中的 Codex 行会提示修复通知链。点击「修复」并确认预览后，将移除已识别链条中的旧 Pome 层，仅保留一个最外层 Pome；Computer Use 与其它原通知命令继续转发，断开时也不会恢复旧 Pome。未识别的命令不拆解；链损坏或嵌套过深时拒绝修改。Codex 后续重启或更新若再次接管 notify，需要刷新状态并重新修复；Pome 不在后台反复改写工具配置。
 
 通知与收件箱保留 completed / failed / awaiting / due 状态。标题跳过空泛的“已完成”首行，摘要最多保留 4096 字符，省略只发生在显示层，悬停可读完整摘要。Codex 原生会话名按精确 thread ID 只读本机会话索引或 SQLite 元数据，与完成摘要分开保存；不存在时不伪造。打开来源软件失败时保留气泡、暂停倒计时并显示原因，可重试或点 × 关闭。
 

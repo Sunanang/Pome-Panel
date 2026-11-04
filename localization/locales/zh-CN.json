@@ -1595,5 +1595,7 @@
   "settings.panelSize.compact": "紧凑",
   "settings.panelSize.hint": "本机保存，与首页卡片尺寸无关",
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · 容量不足，请替换模块或调整面板尺寸",
-  "settings.panelSize.saveFailed": "无法保存面板尺寸，请重试"
+  "settings.panelSize.saveFailed": "无法保存面板尺寸，请重试",
+  "sources.codexNotifyWrapped": "Codex 通知链中发现嵌套的 Pome 接入，请修复；将保留 Computer Use 与原通知命令。",
+  "sources.codexNotifyInvalidChain": "Codex 通知链损坏或嵌套过深，未修改配置。请检查 notify 配置。"
 }

@@ -1,0 +1,98 @@
+{
+  "box": {
+    "x": 20,
+    "y": 82,
+    "width": 840,
+    "height": 422,
+    "top": 82,
+    "right": 860,
+    "bottom": 504,
+    "left": 20
+  },
+  "bounds": {
+    "x": 20,
+    "y": 82,
+    "width": 840,
+    "height": 422,
+    "top": 82,
+    "right": 860,
+    "bottom": 504,
+    "left": 20
+  },
+  "tiles": [
+    {
+      "id": "cursor",
+      "x": 20,
+      "y": 82,
+      "width": 274.6640625,
+      "height": 207,
+      "top": 82,
+      "right": 294.6640625,
+      "bottom": 289,
+      "left": 20
+    },
+    {
+      "id": "recorder",
+      "x": 585.328125,
+      "y": 82,
+      "width": 274.6640625,
+      "height": 207,
+      "top": 82,
+      "right": 859.9921875,
+      "bottom": 289,
+      "left": 585.328125
+    },
+    {
+      "id": "inbox",
+      "x": 302.6640625,
+      "y": 297,
+      "width": 557.328125,
+      "height": 207,
+      "top": 297,
+      "right": 859.9921875,
+      "bottom": 504,
+      "left": 302.6640625
+    },
+    {
+      "id": "note",
+      "x": 20,
+      "y": 297,
+      "width": 274.6640625,
+      "height": 207,
+      "top": 297,
+      "right": 294.6640625,
+      "bottom": 504,
+      "left": 20
+    },
+    {
+      "id": "commands",
+      "x": 302.6640625,
+      "y": 82,
+      "width": 274.6640625,
+      "height": 207,
+      "top": 82,
+      "right": 577.328125,
+      "bottom": 289,
+      "left": 302.6640625
+    }
+  ],
+  "coverage": 0.9999907871462265,
+  "gaps": [
+    5,
+    5
+  ],
+  "editing": false,
+  "edit": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+  },
+  "scroll": 422,
+  "client": 422,
+  "sun": null
+}

@@ -13,7 +13,8 @@ if (!payload._pome_test) {
   const encoded = args.find(value => value.startsWith('--pome-forward='));
   try {
     const command = encoded && JSON.parse(Buffer.from(encoded.slice('--pome-forward='.length), 'base64url').toString('utf8'));
-    if (Array.isArray(command) && command.length && !command.some(value => ['--pome-panel-hook=codex', 'pome-panel-hook=codex'].includes(value))) {
+    if (Array.isArray(command) && command.length && !command.some((value, index) => ['--pome-panel-hook=codex', 'pome-panel-hook=codex'].includes(value)
+      && /(?:^|[\\/])codex-notify\.js$/i.test(command[index - 1] || ''))) {
       const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
       const child = spawn(command[0], [...command.slice(1), raw], { env, detached: true, stdio: 'ignore', windowsHide: true });
       child.on('error', () => {}); child.unref();
@@ -22,10 +23,22 @@ if (!payload._pome_test) {
 }
 if (payload._pome_invalid_json) process.exit(0);
 if (!payload._pome_test) {
-  try { if (require('../aiEventPolicy').classifyAiEvent(payload, 'codex').category === 'ignore') process.exit(0); } catch {}
+  let ignored = false;
+  try { ignored = require('../aiEventPolicy').classifyAiEvent(payload, 'codex').category === 'ignore'; } catch {}
+  if (ignored) process.exit(0);
 }
 if (!payload._pome_test && !payload.session_title && !payload.sessionTitle) {
   try { payload.session_title = require('../codex-thread-metadata').readCodexThreadTitle(payload.thread_id || payload['thread-id'] || payload.session_id); } catch {}
+}
+// The receiver stores assistant results, not the user's complete input. Keep
+// forwarding the untouched raw JSON above, but do not let large prompts or
+// answers overflow the receiver's 64 KiB body limit before it can truncate them.
+delete payload['input-messages'];
+delete payload.input_messages;
+for (const key of ['last-assistant-message', 'last_assistant_message', 'lastAssistantMessage', 'completionSummary', 'completion_summary', 'title']) {
+  if (typeof payload[key] !== 'string') continue;
+  const characters = Array.from(payload[key]);
+  payload[key] = characters.length > 4096 ? characters.slice(0, 4095).join('') + '…' : payload[key];
 }
 const body = Buffer.from(JSON.stringify(payload));
 const request = http.request({ hostname: '127.0.0.1', port: Number(process.env.POME_NOTIFY_PORT) || 43821,

@@ -1650,5 +1650,7 @@
   "settings.panelSize.compact": "Компактный",
   "settings.panelSize.hint": "Сохраняется на этом устройстве; не влияет на размеры карточек",
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · Недостаточно места. Замените виджет или измените размер панели.",
-  "settings.panelSize.saveFailed": "Не удалось сохранить размер панели. Повторите попытку."
+  "settings.panelSize.saveFailed": "Не удалось сохранить размер панели. Повторите попытку.",
+  "sources.codexNotifyWrapped": "В цепочке уведомлений Codex найден вложенный хук Pome. Восстановите подключение, чтобы сохранить Computer Use и исходную команду уведомлений.",
+  "sources.codexNotifyInvalidChain": "Цепочка уведомлений Codex некорректна или имеет слишком много уровней вложенности. Конфигурация не изменена. Проверьте notify."
 }

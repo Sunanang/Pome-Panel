@@ -6,7 +6,7 @@
 .home-bento > .home-recorder[data-layout-variant] { padding-bottom:48px; }
 .home-bento > .home-recorder[data-layout-variant] .recorder-controls { bottom:14px; left:14px; }
 .home-bento > .home-commands[data-layout-variant] .command-add { display:block!important; flex:none; min-height:26px; margin:5px 0; }
-.home-bento > .home-commands[data-layout-variant] .command-list { display:block!important; min-height:0; flex:1; overflow:auto; }
+.home-bento > .home-commands[data-layout-variant] .command-list { display:flex!important; flex-direction:column; min-height:0; flex:1; overflow:auto; }
 .clip-item-text .clip-text { padding-right:calc(var(--clip-action-size)*2 + var(--clip-action-gap) + 8px); }
 .experience-search { min-width:100px; max-width:240px; border:1px solid var(--hairline-soft); border-radius:9px; background:var(--bg-card); color:var(--text-1); padding:7px 10px; font:inherit; font-size:12px; }
 .experience-search:focus,

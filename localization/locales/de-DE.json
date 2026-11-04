@@ -1628,5 +1628,7 @@
   "settings.panelSize.compact": "Kompakt",
   "settings.panelSize.hint": "Auf diesem Gerät gespeichert; unabhängig von den Startseitenkarten",
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · Nicht genug Platz. Widget ersetzen oder Panelgröße ändern.",
-  "settings.panelSize.saveFailed": "Panelgröße konnte nicht gespeichert werden. Erneut versuchen."
+  "settings.panelSize.saveFailed": "Panelgröße konnte nicht gespeichert werden. Erneut versuchen.",
+  "sources.codexNotifyWrapped": "In der Codex-Benachrichtigungskette wurde ein verschachtelter Pome-Hook gefunden. Reparieren Sie ihn, um Computer Use und den ursprünglichen Benachrichtigungsbefehl beizubehalten.",
+  "sources.codexNotifyInvalidChain": "Die Codex-Benachrichtigungskette ist ungültig oder zu tief verschachtelt. Die Konfiguration wurde nicht geändert. Prüfen Sie notify."
 }

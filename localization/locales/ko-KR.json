@@ -1628,5 +1628,7 @@
   "settings.panelSize.compact": "작게",
   "settings.panelSize.hint": "이 기기에 저장되며 홈 카드 크기와 별개입니다",
   "settings.panelSize.capacity": "{mode} {used}/{capacity} · 공간이 부족합니다. 위젯을 교체하거나 패널 크기를 변경하세요.",
-  "settings.panelSize.saveFailed": "패널 크기를 저장할 수 없습니다. 다시 시도하세요."
+  "settings.panelSize.saveFailed": "패널 크기를 저장할 수 없습니다. 다시 시도하세요.",
+  "sources.codexNotifyWrapped": "Codex 알림 체인에서 중첩된 Pome 훅을 찾았습니다. 복구하면 Computer Use와 기존 알림 명령을 유지합니다.",
+  "sources.codexNotifyInvalidChain": "Codex 알림 체인이 잘못되었거나 너무 깊게 중첩되어 있습니다. 설정은 변경되지 않았습니다. notify를 확인하세요."
 }

@@ -766,7 +766,7 @@ async function main() {
           const b = measurement.tiles[right].rect;
           const overlaps = a.left < b.right - 1 && a.right > b.left + 1
             && a.top < b.bottom - 1 && a.bottom > b.top + 1;
-          assert.equal(overlaps, false, '首页组件矩形不得重叠');
+          assert.equal(overlaps, false, '首页组件矩形不得重叠: '+JSON.stringify([measurement.tiles[left],measurement.tiles[right]]));
         }
       }
       assert.ok(measurement.sizeControls.every((control) => (
