@@ -8,7 +8,7 @@
   dialog.setAttribute('aria-describedby', 'content-delete-message');
   dialog.innerHTML = `<div class="content-delete-heading"><span class="content-delete-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12M10 10v6M14 10v6"/></svg></span><div><h2 id="content-delete-title"></h2><span id="content-delete-count"></span></div></div>
     <p id="content-delete-message"></p><ul class="content-delete-preview"></ul><p id="content-delete-more" hidden></p>
-    <div class="content-delete-actions"><button id="content-delete-cancel" type="button" autofocus></button><button id="content-delete-apply" type="button"></button></div>`;
+    <div class="content-delete-actions"><button id="content-delete-cancel" class="workspace-button" type="button" autofocus></button><button id="content-delete-apply" class="workspace-button danger" type="button"></button></div>`;
   document.body.append(dialog);
   const title = dialog.querySelector('h2'), message = dialog.querySelector('#content-delete-message');
   const count = dialog.querySelector('#content-delete-count'), preview = dialog.querySelector('ul');

@@ -327,14 +327,19 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         const copy = document.createElement('div'); copy.className = 'ai-source-copy';
         const actions = document.createElement('div'); actions.className = 'ai-source-actions';
         main.append(icon, copy, actions); item.append(main);
-        // Token forms stay below the complete source list, without recreating
-        // inputs on refresh. Local-only usage notes still belong to their row.
+        // Keep every form mounted; its disclosure belongs below this source's
+        // actions, including when provider discovery completes later.
         if (['claude', 'grokbot'].includes(row.source)) {
           const note = document.createElement('p'); note.className = 'ai-source-local-quota';
           note.id = catalog.get(row.source).settingsCard;
           item.append(note);
         }
         providerRows.set(row.source, item); list.append(item);
+      }
+      const token = el(catalog.get(row.source)?.settingsCard);
+      if (token?.classList.contains('ai-source-token')) {
+        const form = token.closest('.ai-token-details') || token;
+        if (form.parentElement !== item) item.append(form);
       }
       item.dataset.state = row.state;
       const copy = item.querySelector('.ai-source-copy'); copy.replaceChildren();
@@ -372,8 +377,8 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       if (!provider) continue;
       const input = el(`settings-${id}-token`);
       if (input) pomeLocaleRendererAiSources.bind(input, 'placeholder', () => pomeLocaleRendererAiSources.t('copy.pasteToken.8a1c2d', { arg1: provider.label }));
-      const save = tokenHost?.querySelector(`[data-provider-save="${id}"]`);
-      const clear = tokenHost?.querySelector(`[data-provider-clear="${id}"]`);
+      const save = input?.closest('.ai-source-token')?.querySelector(`[data-provider-save="${id}"]`);
+      const clear = input?.closest('.ai-source-token')?.querySelector(`[data-provider-clear="${id}"]`);
       if (save) pomeLocaleRendererAiSources.bind(save, 'textContent', () => pomeLocaleRendererAiSources.t('copy.save.a3030b'));
       if (clear) pomeLocaleRendererAiSources.bind(clear, 'textContent', () => pomeLocaleRendererAiSources.t('copy.clear.bce237'));
       if (id === 'grok' && el('settings-grok-team-label')) {

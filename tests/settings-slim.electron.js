@@ -48,12 +48,19 @@ async function run(c) {
   // unread badges and the animated indicator are independently updated state.
   const headerSignature = `(()=>{const h=document.querySelector('.topbar');return [h,...h.querySelectorAll('*')].map(e=>({tag:e.tagName,attrs:[...e.attributes].filter(a=>!(e.matches('.tab,.badge')&&['hidden','aria-hidden','aria-selected','aria-label','tabindex','title','data-dot','data-error'].includes(a.name))&&!(e.id==='tab-indicator'&&a.name==='style')).map(a=>[a.name,a.name==='class'?a.value.split(' ').filter(c=>c!=='active').sort().join(' '):a.value]).sort(([a],[b])=>a.localeCompare(b)),text:e.children.length||e.matches('.badge')?null:e.textContent}))})()`;
   const header = await js(headerSignature);
+  // A disclosure must handle its own native Space activation, not close Pome.
+  await js(`{const d=document.getElementById('ui-token-manual-cursor');d.open=false;d.querySelector('summary').scrollIntoView({block:'nearest'});d.querySelector('summary').focus()}`);
+  c.sendInputEvent({type:'keyDown',keyCode:'Space'});c.sendInputEvent({type:'keyUp',keyCode:'Space'});await delay(100);
+  assert.equal(await js('isExpanded'),true,'Space on Token settings does not collapse the panel');
+  assert.equal(await js("document.getElementById('ui-token-manual-cursor').open"),true,'Space opens the inline Token disclosure');
+  await js("document.getElementById('ui-token-manual-cursor').open=false;document.activeElement.blur();document.getElementById('settings-content').scrollTop=0");
+
   const structure = await js(`(()=>({
     groups:[...document.querySelectorAll('[data-settings-group]')].map(e=>({id:e.dataset.settingsGroup,cards:[...e.querySelectorAll(':scope>.settings-card')].map(card=>card.className)})),
     oldQuota:!!document.getElementById('settings-ai-usage-card'),
     obsolete:document.querySelectorAll('#settings-ai-sources .ai-source-matrix,#settings-ai-sources .ai-source-capabilities,#settings-ai-sources .ai-attention-section').length,
     testButtons:[...document.querySelectorAll('#settings-ai-sources button,#home-inbox button')].filter(e=>e.textContent==='发送测试').length,
-    tokens:[...document.querySelectorAll('#settings-ai-sources input[type=password]')].map(e=>({id:e.id,provider:e.id.replace('settings-','').replace('-token',''),visible:e.checkVisibility()})),
+    tokens:[...document.querySelectorAll('#settings-ai-sources input[type=password]')].map(e=>({id:e.id,provider:e.id.replace('settings-','').replace('-token',''),visible:e.checkVisibility(),row:e.closest('.ai-source-row')?.dataset.source})),
     features:document.querySelectorAll('.settings-display-card [data-settings-feature]').length,
     modules:document.querySelectorAll('.settings-display-card [data-settings-home-module]').length,
 
@@ -91,9 +98,14 @@ async function run(c) {
   assert.equal(await js(`(()=>{const props=['height','backgroundColor','borderRadius','color','colorScheme','appearance'];const base=getComputedStyle(document.getElementById('settings-language'));return ['pome-weather-unit','pome-interface-motion'].every(id=>{const s=getComputedStyle(document.getElementById(id));return props.every(p=>s[p]===base[p])})})()`),true,'weather and motion selects match device select chrome');
 
   assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI');
+  assert.equal(await js(`document.querySelectorAll('.ai-token-details > summary [id$="-token-status"]').length`),6,'all token status nodes survive locale updates');
   assert.equal(structure.oldQuota,false); assert.equal(structure.obsolete,0); assert.equal(structure.testButtons,0);
   assert.equal(structure.tokens.length,6);
-  for (const token of structure.tokens) { assert(token.provider && token.id.includes(token.provider)); assert.equal(token.visible,false); }
+  for (const token of structure.tokens) { assert(token.provider && token.id.includes(token.provider)); assert.equal(token.visible,false); assert.equal(token.row,token.provider,'Token stays with its own source'); }
+  const buttons=await js(`['settings-shortcut-change','settings-reset-panel-position','settings-workspace-open','settings-workspace-choose','settings-data-export','settings-data-restore','settings-cursor-token-save','settings-codex-token-clear'].map(id=>{const e=document.getElementById(id),s=getComputedStyle(e),label=getComputedStyle(e.firstElementChild||e);return {background:s.backgroundColor,radius:s.borderRadius,border:s.borderTopWidth,borderColor:s.borderTopColor,font:s.fontSize,labelFont:label.fontSize,color:s.color,minHeight:s.minHeight}})`);
+  for(const button of buttons)assert.deepEqual(button,buttons[0],'secondary actions share one style');
+  const selects=await js(`['settings-language','settings-default-tab','pome-weather-unit','pome-interface-motion','transcription-language','transcription-region'].map(id=>{const s=getComputedStyle(document.getElementById(id));return {background:s.backgroundColor,radius:s.borderRadius,border:s.borderTopColor,height:s.height,font:s.fontSize,arrow:s.backgroundImage,color:s.color}})`);
+  for(const select of selects)assert.deepEqual(select,selects[0],'select fields share one style across pages and dialogs');
   assert.equal(structure.features,6); assert.equal(structure.modules,11);
   assert.deepEqual(gridColumns,[2,2]);
   const luminance = color => {
@@ -121,6 +133,7 @@ async function run(c) {
   assert.equal(await js(`document.querySelector('[data-source=grokbot] .ai-source-actions').textContent`),'No setup needed');
   assert.equal(await js(`document.querySelector('[data-source=manus] .ai-source-actions').textContent`),'Configure the token and completion alerts below');
   assert.equal(await js(`document.getElementById('settings-ai-sources-title').textContent`),'AI');
+  assert.equal(await js(`document.querySelectorAll('.ai-token-details > summary [id$="-token-status"]').length`),6,'all token status nodes survive locale updates');
   assert.equal(await js(`document.querySelector('[data-provider-save=grok]')?.textContent`),'Save');
   await js(`document.getElementById('settings-grok-token').value='';notchAPI.setLanguage('zh-CN')`); await until(`document.documentElement.lang==='zh-CN'`);
   await until(`document.querySelector('[data-provider-save=grok]')?.textContent==='保存'`);
@@ -146,12 +159,22 @@ async function run(c) {
       assert.equal(geometry.active,group);assert.equal(geometry.selected,1);assert.equal(geometry.groupCount,1);assert.equal(geometry.overflow,false,preset+'/'+group+' horizontal overflow');assert(geometry.navVisible);
       assert(geometry.cardWidths.every(width=>Math.abs(width-geometry.cardWidths[0])<1),preset+'/'+group+' equal card widths');
       await js(`document.getElementById('settings-content').scrollTop=0`);
+      // Clear feedback generated by earlier fixture actions for the visual gallery.
+      if(output)await js("document.getElementById('settings-inline-note').textContent=''");
       if(group==='ai') {
         assert.deepEqual(await js(`[...document.querySelectorAll('.ai-source-row')].map(row=>row.dataset.source)`),['cursor','codex','grokbot','claude','grok','copilot','antigravity','manus']);
         assert.equal(await js(`[...document.querySelectorAll('.ai-source-main')].every(row=>getComputedStyle(row).display==='flex'&&getComputedStyle(row).flexDirection==='row'&&getComputedStyle(row.parentElement).paddingTop==='13px')`),true,'AI rows stay horizontal with 13px padding');
         assert.equal(await js(`document.querySelector('#settings-api-anchor').closest('[data-settings-group]').dataset.settingsGroup`),'ai');
       }
+      if(group==='common')assert.equal(await js(`(()=>{const rows=[...document.querySelectorAll('#settings-group-common .settings-device-row:not([hidden])')];return rows.slice(1).every(row=>getComputedStyle(row).borderTopWidth==='1px')})()`),true,'common rows including meeting and bubbles have separators');
+      if(group==='data')assert.equal(await js(`(()=>{const folder=document.querySelector('.settings-workspace-row');return getComputedStyle(folder).borderBottomWidth==='0px'&&[...document.querySelectorAll('.experience-backup')].every(card=>{const a=card.querySelector('.settings-backup-copy').getBoundingClientRect(),b=card.querySelector('button').getBoundingClientRect();return b.left>=a.right+10&&Math.abs((a.top+a.bottom-b.top-b.bottom)/2)<2})})()`),true,'data has no trailing divider; backup copy and action share a row');
       if(group==='appearance')assert.equal(await js(`(()=>{const row=document.querySelector('.settings-weather-effects-row'),note=row.nextElementSibling;return note.classList.contains('settings-weather-attribution')&&getComputedStyle(row).borderBottomWidth==='0px'&&getComputedStyle(note).borderTopWidth==='0px'&&getComputedStyle(note).borderBottomWidth==='0px'})()`),true,'weather attribution has no dividing hairline');
+      if(group==='data'){
+        await js("notchAPI.setLanguage('en-US')");await until("document.documentElement.lang==='en-US'");
+        assert.equal(await js(`Array.from(document.querySelectorAll('.experience-backup')).every(card=>{const a=card.querySelector('.settings-backup-copy').getBoundingClientRect(),b=card.querySelector('button').getBoundingClientRect();return b.left>=a.right+10&&Math.abs((a.top+a.bottom-b.top-b.bottom)/2)<2})`),true,'English backup cards keep copy and action on one row');
+        if(output){await js('document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))');fs.writeFileSync(path.join(output,preset+'-data-en.png'),(await c.capturePage()).toPNG());}
+        await js("notchAPI.setLanguage('zh-CN')");await until("document.documentElement.lang==='zh-CN'");
+      }
       if(group==='nas')assert.equal(await js(`['ui-nas-troubleshoot','settings-nas-advanced','settings-nas-details'].every(id=>document.getElementById(id).tagName==='SECTION'&&document.getElementById(id).checkVisibility())`),true,'NAS has no collapsed connection/content/troubleshooting sections');
       if(output) { fs.mkdirSync(output,{recursive:true}); c.invalidate();await delay(80);fs.writeFileSync(path.join(output,preset+'-'+group+'.png'),(await c.capturePage()).toPNG()); }
       matrix.push({preset,group,...geometry});

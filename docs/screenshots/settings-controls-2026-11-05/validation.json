@@ -1,0 +1,38 @@
+{
+  "node": {
+    "total": 1108,
+    "passed": 1106,
+    "skipped": 2,
+    "failed": 0
+  },
+  "electronRuns": 75,
+  "syntaxChecks": 136,
+  "fullSuite": "npm test exit 0",
+  "finalRelated": [
+    "settings-slim",
+    "command-comments",
+    "content-delete",
+    "workbench",
+    "security-recovery",
+    "metadata-races",
+    "visual-consistency"
+  ],
+  "variants": {
+    "actionHeight": 32,
+    "compactActionHeight": 30,
+    "selectHeight": 32,
+    "selectRadius": 9,
+    "iconRadius": 8
+  },
+  "checks": [
+    "source-owned collapsed token forms; status nodes and drafts survive locale/refresh",
+    "backup copy/action alignment across presets and English",
+    "common row separators and weather attribution exception",
+    "shared action/select computed styles",
+    "native Space opens disclosure without collapsing panel"
+  ],
+  "boundary": [
+    "macOS source Electron with isolated user data and mock credentials",
+    "Windows hardware and installed package not tested"
+  ]
+}

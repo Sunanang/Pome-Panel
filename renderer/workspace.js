@@ -4382,7 +4382,6 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       passwordCopy.dataset.credentialCopy = 'password';
       pomeLocaleRendererWorkspace.bind(passwordCopy, "textContent", () => (pomeLocaleRendererWorkspace.t("copy.copyPassword.c49aca")));
       passwordCopy.setAttribute('aria-label', pomeLocaleRendererWorkspace.t("copy.copyPassword.c49aca"));
-      const deleteAction = Domain.credentialRowAction({ requestedAction: 'delete' });
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.dataset.credentialDelete = 'true';
@@ -4392,6 +4391,8 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
       pomeLocaleRendererWorkspace.bind(editButton, 'textContent', () => pomeLocaleRendererWorkspace.t('ux.edit'));
       actions.append(editButton);
       actions.append(accountCopy, passwordCopy, remove);
+      actions.querySelectorAll('button').forEach(button => button.classList.add('workspace-button', 'compact'));
+      remove.classList.add('danger-text');
       if (credentialsReadFailed) actions.querySelectorAll('button').forEach(button => { button.disabled = true; });
       row.append(copy, actions);
       credentialList.appendChild(row);

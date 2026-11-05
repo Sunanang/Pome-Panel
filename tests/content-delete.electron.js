@@ -160,7 +160,9 @@ async function run(c) {
   await shift('.recording-item[data-id="recording-2"]');await shift('.recording-item[data-id="recording-3"]');
   await preview('#recording-bulk-delete','recording-bulk-confirm',recordings);await approve('#recording-bulk-delete',recordings);
   assert.equal(deletes.recordings.length,3,'each confirmed recording file is deleted once');
-  await js('setActiveTab("credentials")');await until('document.querySelectorAll(".credential-item").length===3');
+  await js('setActiveTab("credentials")');
+  assert.equal(await js(`Array.from(document.querySelectorAll('.credential-actions button')).every(b=>b.classList.contains('workspace-button')&&getComputedStyle(b).minHeight==='30px')`),true,'credential actions use shared compact controls');
+  await capture('credentials-actions');await until('document.querySelectorAll(".credential-item").length===3');
   const vault='document.getElementById("credential-list").textContent';
   const credential='.credential-item[data-id="credential-1"] [data-credential-delete]';
   await preview(credential,'credential-confirm',vault);await approve(credential,vault);

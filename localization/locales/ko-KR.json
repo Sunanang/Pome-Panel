@@ -1354,6 +1354,7 @@
   "ui.details": "세부정보 보기",
   "ui.hookSummary": "기존 구성을 유지하면서 Pome 알림을 추가하세요. 원할 때마다 연결을 끊으세요.",
   "ui.hookDisconnect": "Pome 알림만 제거하세요. 다른 모든 구성을 유지합니다.",
+  "ui.token.settings": "토큰 설정",
   "ui.token.manual": "수동으로 입력",
   "ui.token.acquire": "가져와 저장",
   "ui.token.localActive": "로컬 로그인 · 활성",

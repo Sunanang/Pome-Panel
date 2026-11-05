@@ -1354,6 +1354,7 @@
   "ui.details": "詳細を見る",
   "ui.hookSummary": "既存の構成を維持しながら、Pome アラートを追加します。いつでも好きなときに切断できます。",
   "ui.hookDisconnect": "Pome アラートのみを削除します。他のすべての設定はそのままにしておきます。",
+  "ui.token.settings": "Token 設定",
   "ui.token.manual": "手動で入力",
   "ui.token.acquire": "取得して保存",
   "ui.token.localActive": "ローカルサインイン · アクティブ",

@@ -1354,6 +1354,7 @@
   "ui.details": "Afficher les détails",
   "ui.hookSummary": "Ajoutez des alertes Pome tout en conservant votre configuration existante. Déconnectez-vous quand vous le souhaitez.",
   "ui.hookDisconnect": "Supprimez uniquement les alertes Pome. Conservez toutes les autres configurations.",
+  "ui.token.settings": "Paramètres du token",
   "ui.token.manual": "Entrez manuellement",
   "ui.token.acquire": "Récupérer et enregistrer",
   "ui.token.localActive": "Connexion locale · active",

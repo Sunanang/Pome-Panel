@@ -8105,7 +8105,6 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
 }
 .settings-page .settings-card { padding: 16px 20px; background: #1b1b1d; }
 .settings-page .settings-status-list { margin: 12px 0 8px; }
-.settings-page .workspace-button.compact { min-height: 28px; padding: 4px 10px; border-radius: 10px; font-size: 11px; }
 .settings-page .ai-source-scope { margin-top: 5px; }
 .settings-page .ai-source-list { margin-top: 10px; border-top: 1px solid var(--settings-rule); }
 .settings-page .ai-source-row { display: block; padding: 12px 0; }
@@ -8125,7 +8124,6 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
 .settings-page .ai-source-token { margin: 10px 0 0 40px; padding-top: 8px; border: 0; border-top: 1px solid rgba(255,255,255,.045); border-radius: 0; background: none; }
 .settings-page .ai-source-token .settings-cursor-token-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 0; }
 .settings-page .ai-source-token .settings-cursor-token-row input { min-width: 100px; flex: 1 1 115px; width: 0; height: 28px; font-size: 10px; padding: 4px 9px; border-radius: 9px; }
-.settings-page .ai-source-token .settings-cursor-token-row button { flex: 0 0 auto; min-height: 28px; padding: 4px 8px; font-size: 10px; }
 .settings-page .ai-source-token .settings-cursor-token-row > small { align-self: center; color: var(--text-4); font-size: 9px; }
 .settings-page .ai-source-token > p { margin-top: 5px; font-size: 9px; }
 .settings-page .ai-source-token > p:empty { display: none; }
@@ -8162,8 +8160,6 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
 .settings-page .ai-source-actions button.primary:hover { background: linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,.28)); }
 
 /* UI simplification: reuse the panel's liquid-glass tokens and typography. */
-.ui-token-brief { display:flex; align-items:center; gap:8px; justify-content:space-between; flex-wrap:wrap; }
-.ui-token-brief small { color:var(--text-3); font-size:10px; flex:1; }
 .ai-source-token > details { margin-top:7px; font-size:10px; color:var(--text-3); }
 .ai-source-token > details > summary { cursor:pointer; color:var(--text-2); margin-bottom:6px; }
 #settings-codex-local-status,#settings-codex-percent,#settings-codex-token-guide { display:none; }

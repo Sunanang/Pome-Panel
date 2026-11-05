@@ -1321,6 +1321,7 @@
   "ui.details": "檢視詳情",
   "ui.hookSummary": "只新增 Pome 的提醒配置，原有配置保留，可隨時斷開。",
   "ui.hookDisconnect": "只移除 Pome 的提醒，保留其他配置。",
+  "ui.token.settings": "Token 設定",
   "ui.token.manual": "手動填寫",
   "ui.token.acquire": "獲取並儲存",
   "ui.token.localActive": "本機登入 · 已生效",

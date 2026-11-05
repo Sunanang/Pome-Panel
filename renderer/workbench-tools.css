@@ -225,17 +225,7 @@
 #tab-credentials .credential-copy strong { font-size: var(--fs-body); }
 #tab-credentials .credential-copy code { color: var(--wb-text-muted, var(--text-3)); }
 #tab-credentials .credential-actions { flex-direction: row; align-items: center; gap: var(--s-1); opacity: 1; }
-#tab-credentials .credential-actions button {
-  min-height: 28px;
-  padding: var(--s-1) var(--s-2);
-  border-radius: var(--r-input);
-  color: var(--text-2);
-  font-size: var(--fs-small);
-  background: transparent;
-}
-#tab-credentials .credential-actions button[data-credential-delete] { color: var(--wb-text-muted, var(--text-3)); }
-#tab-credentials .credential-actions button:hover { background: var(--surface-2); color: var(--text-1); }
-#tab-credentials .credential-actions button[data-credential-delete]:hover { background: color-mix(in srgb, var(--p0) 12%, transparent); color: var(--p0); }
+#tab-credentials .credential-actions button { flex: 0 0 auto; }
 #tab-credentials .credential-item.editing {
   margin-top: var(--s-2);
   padding: var(--s-4);

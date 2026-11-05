@@ -1162,8 +1162,9 @@ notch.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (event) => {
   if (document.querySelector('dialog[open]')) return;
   const target = event.target instanceof Element ? event.target : null;
+  // Native controls keep their Space activation; only the background toggles Pome.
   const editable = Boolean(target && target.closest(
-    'input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video, .recording-player button, .notes-save, #note-save-btn, #notes-preview, .window-item, .windows-refresh, .windows-hidden'
+    'button, summary, a[href], input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video, #notes-preview, .window-item'
   ));
   if (!window.NotchDomain.shouldTogglePanelForSpace({
     key: event.key,

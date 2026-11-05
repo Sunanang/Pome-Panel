@@ -51,15 +51,28 @@
 }
 #tab-settings .settings-appearance-card .settings-weather-attribution + .settings-device-row { border-top: 1px solid var(--hairline-soft); }
 #tab-settings .settings-group .settings-card p.experience-hint { margin-top: 6px; }
-#tab-settings .experience-backup { display: flex; flex-direction: column; gap: 10px; }
-#tab-settings .experience-backup .experience-actions { justify-content: flex-end; }
-#tab-settings .ui-token-brief strong { color: var(--text-2); font-size: 12px; }
-#tab-settings .ui-token-brief .ai-source-icon { width: 24px; height: 24px; padding: 4px; }
-#tab-settings .ui-token-brief:is([data-source='cursor'],[data-source='codex']) .ai-source-icon { filter: invert(.85); }
-#tab-settings .ui-token-brief small { min-width: 100px; }
-#tab-settings #settings-ai-token-controls { padding-top: 4px; border-top: 1px solid var(--hairline-soft); }
-#tab-settings #settings-ai-token-controls > .ai-source-token,
-#tab-settings #settings-ai-provider-tokens > .ai-source-token { padding-top: 12px; padding-bottom: 6px; }
+#tab-settings .settings-data-card .settings-workspace-row { border: 0; }
+#settings-group-common .settings-device-row { border-bottom: 0; }
+#settings-group-common .settings-device-row ~ .settings-device-row { border-top: 1px solid var(--hairline-soft); }
+#tab-settings .experience-backup { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 20px; }
+.settings-backup-copy { flex: 1; min-width: 0; }
+#tab-settings .settings-backup-copy p { margin: 6px 0 0; }
+#tab-settings .experience-backup .experience-actions { flex: 0 0 auto; margin: 0; }
+.ai-token-details { margin: 10px 0 0 42px; min-width: 0; }
+.ai-token-details > summary { display: flex; align-items: center; gap: 8px; min-height: 30px; cursor: pointer; color: var(--text-2); font-size: 11px; list-style: none; }
+.ai-token-details > summary::-webkit-details-marker { display: none; }
+.ai-token-details > summary::before { content: ''; flex: 0 0 5px; width: 5px; height: 5px; border: solid currentColor; border-width: 0 1px 1px 0; transform: rotate(-45deg); margin-right: 3px; }
+.ai-token-details[open] > summary::before { transform: rotate(45deg); }
+.ai-token-details > summary small { flex: 1; min-width: 0; font-size: 10px; color: var(--text-3); text-align: right; overflow-wrap: anywhere; }
+.ai-token-details > summary small[data-state='error'] { color: var(--ai-critical, #ff7b72); }
+.ai-token-details > summary small[data-state='saved'] { color: #65d9a1; }
+/* Quota/token configuration remains usable independently of hook connection. */
+#tab-settings .ai-token-details > .ai-source-token { padding: 8px 0 0; border: 0; opacity: 1; }
+#tab-settings .ai-token-details p:empty { display: none; }
+#tab-settings .ai-token-details .settings-cursor-token-row { flex-wrap: wrap; gap: 8px; }
+#tab-settings .ai-token-details .settings-cursor-token-row input { flex: 1 1 180px; min-width: 0; }
+#tab-settings .ai-token-details .settings-cursor-token-row > button { flex: none; }
+#tab-settings .ai-token-details .settings-cursor-token-row + .settings-cursor-token-row { margin-top: 8px; }
 #tab-settings .ai-source-main { display: flex; flex-direction: row; align-items: center; gap: 10px; }
 #tab-settings .ai-source-actions { flex: none; margin-left: auto; }
 #tab-settings .settings-nas-section-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-2); }

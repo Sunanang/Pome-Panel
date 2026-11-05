@@ -12,7 +12,7 @@
   }
   function details(key, id) {
     const d = document.createElement('details'); d.id = id;
-    const s = document.createElement('summary'); text(s, key); d.append(s); return d;
+    const s = document.createElement('summary'), label = document.createElement('span'); text(label, key); s.append(label); d.append(s); return d;
   }
   function openManual(id) {
     const d = el(`ui-token-manual-${id}`); if (d) d.open = true;
@@ -40,18 +40,13 @@
   for (const id of tokens) {
     const input = el(`settings-${id}-token`), section = input?.closest('.ai-source-token');
     if (!section) continue;
-    const manual = details('ui.token.manual', `ui-token-manual-${id}`);
-    const row = input.closest('.settings-cursor-token-row'), status = el(`settings-${id}-token-status`);
-    const brief = document.createElement('div'); brief.className = 'ui-token-brief'; brief.dataset.source = id;
-    const provider = window.NotchAiProviders.get(id);
-    const icon = document.createElement('img'); icon.className = 'ai-source-icon'; icon.src = provider.icon; icon.alt = '';
-    const name = document.createElement('strong'); name.textContent = provider.label;
-    brief.append(icon, name);
-    if (status) brief.append(status);
+    const manual = details('ui.token.settings', `ui-token-manual-${id}`);
+    manual.className = 'ai-token-details';
+    const status = el(`settings-${id}-token-status`);
+    if (status) manual.querySelector('summary').append(status);
+    section.before(manual); manual.append(section);
     const fetch = el(`settings-${id}-token-fetch`);
-    if (fetch) { text(fetch, 'ui.token.acquire'); fetch.classList.add('primary'); brief.append(fetch); }
-    manual.append(row); section.prepend(brief, manual);
-    if (id === 'grok') manual.append(el('settings-grok-team').closest('label'));
+    if (fetch) { text(fetch, 'ui.token.acquire'); fetch.classList.add('primary'); }
     manual.addEventListener('toggle', () => { if (manual.open) input.focus({ preventScroll: true }); });
   }
   document.addEventListener('notch:ai-usage-updated', e => renderTokenSources(e.detail));

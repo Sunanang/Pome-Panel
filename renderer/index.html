@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="notes-workflow.css" />
     <link rel="stylesheet" href="windows-widget.css" />
     <link rel="stylesheet" href="scrollbars.css" />
+    <link rel="stylesheet" href="controls.css" />
   </head>
   <body>
     <div id="app" class="collapsed" data-dock="top">
@@ -374,7 +375,7 @@
                 <div class="credentials-heading"><div><span class="tile-label"><span data-i18n="copy.addCredential.54aa0a">新增密钥</span></span><strong><span data-i18n="copy.encryptedOnThisDevice.b5d01c">本机加密保存</span></strong></div><span class="secure-chip"><span data-i18n="copy.secureStorage.c46e4f">安全存储</span></span></div>
                 <label><span><span data-i18n="copy.appService.9f6081">软件 / 服务</span></span><input id="credential-service" maxlength="80" placeholder="例如 GitHub" autocomplete="off"  data-i18n-placeholder="copy.forExampleGithub.7a5548"/></label>
                 <label><span><span data-i18n="copy.account.311bb3">账号</span></span><input id="credential-account" maxlength="320" placeholder="邮箱、用户名或手机号" autocomplete="off"  data-i18n-placeholder="copy.emailUsernameOrPhoneNumber.6ffe15"/></label>
-                <label><span><span data-i18n="copy.passwordToken.64f1f9">密码 / Token</span></span><span class="credential-password-field"><input id="credential-password" type="password" maxlength="4096" placeholder="保存后使用系统加密" autocomplete="off" spellcheck="false"  data-i18n-placeholder="copy.encryptedByTheSystemAfterSaving.bd5e5f"/><button type="button" data-credential-reveal aria-pressed="false"><span data-i18n="copy.show.4e1449">显示</span></button></span></label>
+                <label><span><span data-i18n="copy.passwordToken.64f1f9">密码 / Token</span></span><span class="credential-password-field"><input id="credential-password" type="password" maxlength="4096" placeholder="保存后使用系统加密" autocomplete="off" spellcheck="false"  data-i18n-placeholder="copy.encryptedByTheSystemAfterSaving.bd5e5f"/><button type="button" class="workspace-button compact" data-credential-reveal aria-pressed="false"><span data-i18n="copy.show.4e1449">显示</span></button></span></label>
                 <button class="workspace-button primary credential-save" id="credential-save" type="button"><span data-i18n="copy.save.a3030b">保存</span></button>
                 <p class="credentials-note" id="credentials-note"><span data-i18n="copy.passwordsAreNotSentToPageStorage.b9c6b9">密码不会发送到页面存储，复制后 60 秒自动清空剪贴板。</span></p>
                 <p class="credentials-note" id="credentials-sync-hint"><span data-i18n="copy.supportsEncryptedNasSyncLocalDataBackups.987229">支持 NAS 加密同步；普通资料备份不包含密钥。</span></p>
@@ -420,11 +421,11 @@
                     </label>
                     <div class="settings-device-row">
                       <div><span><span data-i18n="copy.panelShortcut.f64340">唤出快捷键</span></span><strong id="settings-shortcut-value">Space</strong></div>
-                      <button id="settings-shortcut-change" type="button"><span data-i18n="copy.change.a1f9c6">重新设置</span></button>
+                      <button id="settings-shortcut-change" class="workspace-button compact" type="button"><span data-i18n="copy.change.a1f9c6">重新设置</span></button>
                     </div>
                     <div class="settings-device-row">
                       <div><span><span data-i18n="copy.panelPosition.f71d2a">面板位置</span></span><strong><span data-i18n="copy.dragWhileCollapsedClickToExpand.d4d144">收起时可拖动；点一下展开</span></strong></div>
-                      <button id="settings-reset-panel-position" type="button"><span data-i18n="copy.resetToTop.700e4b">重置到顶部</span></button>
+                      <button id="settings-reset-panel-position" class="workspace-button compact" type="button"><span data-i18n="copy.resetToTop.700e4b">重置到顶部</span></button>
                     </div>
                     <label class="settings-device-row settings-default-tab-row settings-select-row">
                       <div><span><span data-i18n="copy.defaultPage.2ce591">默认展开页</span></span><strong><span data-i18n="copy.shownWheneverThePanelOpens.a3c1cd">每次唤出面板时显示</span></strong></div>
@@ -534,7 +535,8 @@
                     </div>
                     <p class="ai-source-scope" data-i18n="settings.ai.subtitle">接入本机完成提醒，并管理各家额度。</p>
                     <div id="settings-ai-sources-list" class="ai-source-list"></div>
-                    <div id="settings-ai-token-controls">
+                    <!-- Initial mount; existing controls move into their provider rows. -->
+                    <div id="settings-ai-token-controls" hidden>
                       <section class="ai-source-token" id="settings-cursor-token-card">
                         <div class="settings-cursor-token-row">
                           <input id="settings-cursor-token" type="password" placeholder="粘贴 Cursor access token" autocomplete="off" spellcheck="false" aria-label="Cursor access token"  data-i18n-placeholder="copy.pasteACursorAccessToken.bb32fc"/>
@@ -580,16 +582,16 @@
                     <div class="settings-device-row settings-workspace-row">
                       <div><span><span data-i18n="copy.dataFolder.748019">数据文件夹 ·</span> <em id="settings-workspace-kind"><span data-i18n="copy.defaultFolder.dc3290">默认文件夹</span></em></span><strong id="settings-workspace-path"><span data-i18n="copy.loading.346ff6">读取中…</span></strong></div>
                       <span class="settings-device-actions">
-                        <button id="settings-workspace-open" type="button"><span data-i18n="copy.openFolder.fcf8b4">打开文件夹</span></button>
-                        <button id="settings-workspace-choose" type="button"><span data-i18n="copy.change.a21a41">更换…</span></button>
+                        <button id="settings-workspace-open" class="workspace-button compact" type="button"><span data-i18n="copy.openFolder.fcf8b4">打开文件夹</span></button>
+                        <button id="settings-workspace-choose" class="workspace-button compact" type="button"><span data-i18n="copy.change.a21a41">更换…</span></button>
                       </span>
                     </div>
                   </section>
-                  <section class="tile settings-card experience-backup" id="experience-backup"><div class="settings-card-heading"><div><strong data-i18n="copy.exportDataBackup.652e8a"></strong></div></div>
-                    <p data-i18n="ux.backup.hint"></p><div class="experience-actions"><button id="settings-data-export" class="workspace-button compact" type="button" data-backup-action="settings-nas-export-backup" data-i18n="copy.exportDataBackup.652e8a"></button></div>
+                  <section class="tile settings-card experience-backup" id="experience-backup"><div class="settings-backup-copy"><div class="settings-card-heading"><div><strong data-i18n="copy.exportDataBackup.652e8a"></strong></div></div>
+                    <p data-i18n="ux.backup.hint"></p></div><div class="experience-actions"><button id="settings-data-export" class="workspace-button compact" type="button" data-backup-action="settings-nas-export-backup" data-i18n="copy.exportDataBackup.652e8a"></button></div>
                   </section>
-                  <section class="tile settings-card experience-backup" id="settings-restore-backup-card"><div class="settings-card-heading"><div><strong data-i18n="copy.restoreDataBackup.8838f6"></strong></div></div>
-                    <p data-i18n="ux.backup.hint"></p><div class="experience-actions"><button id="settings-data-restore" class="workspace-button compact" type="button" data-backup-action="settings-nas-restore-backup" data-i18n="copy.restoreDataBackup.8838f6"></button></div>
+                  <section class="tile settings-card experience-backup" id="settings-restore-backup-card"><div class="settings-backup-copy"><div class="settings-card-heading"><div><strong data-i18n="copy.restoreDataBackup.8838f6"></strong></div></div>
+                    <p data-i18n="ux.backup.hint"></p></div><div class="experience-actions"><button id="settings-data-restore" class="workspace-button compact" type="button" data-backup-action="settings-nas-restore-backup" data-i18n="copy.restoreDataBackup.8838f6"></button></div>
                   </section>
                 </section>
                 <section class="settings-group" id="settings-group-nas" data-settings-group="nas" role="tabpanel" aria-labelledby="settings-nav-nas" hidden>

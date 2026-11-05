@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Polish Settings: remove the local-folder trailing divider, align backup descriptions and actions, and separate General rows. Nest each token form in its own AI source with a collapsed disclosure, preserving inputs, status and existing acquisition/save/completion controls across refreshes and locale changes. Share action/select styles across the desktop while retaining navigation, segmented and transport layouts; native Space activation on buttons and disclosure headings no longer collapses the panel.
+
 - Deep-review fixes: update command/comment editors in place on blur so subsequent copy, delete and cross-row editing clicks remain effective. Delete only unchanged previewed commands, preserving concurrent sync updates with a review prompt. Guard non-array command, recording and hidden-window data and malformed link groups/items so one bad collection cannot abort workspace initialization; retain original stored bytes on startup.
 
 - Use 30px single command rows with comment pills and a hover-only **+** for empty notes. Inline editing supports Enter/blur save, Escape cancel and clearing; the six-character counter is advisory, preserving legacy comments and clipboard/sync fields. Delayed glass tooltips reveal truncated content, flip within panel bounds, support Mini comments and stay hidden while editing or dragging. Preserve the card shell and size rules.

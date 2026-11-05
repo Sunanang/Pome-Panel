@@ -1354,6 +1354,7 @@
   "ui.details": "Details anzeigen",
   "ui.hookSummary": "Fügen Sie Pome-Benachrichtigungen hinzu und behalten Sie dabei Ihre bestehende Konfiguration bei. Trennen Sie die Verbindung, wann immer Sie möchten.",
   "ui.hookDisconnect": "Entfernen Sie nur Pome-Benachrichtigungen. Behalten Sie alle anderen Konfigurationen bei.",
+  "ui.token.settings": "Token-Einstellungen",
   "ui.token.manual": "Geben Sie manuell ein",
   "ui.token.acquire": "Abrufen und speichern",
   "ui.token.localActive": "Lokale Anmeldung · aktiv",
