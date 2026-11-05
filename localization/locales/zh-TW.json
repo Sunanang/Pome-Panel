@@ -1,4 +1,12 @@
 {
+  "privacy.ai.explanation": "需要憑證的額度讀取預設暫停。點擊後，本次執行會讀取查詢額度所需的本機登入憑證及已儲存 Token；macOS 可能要求存取 Cursor、Claude Code、GitHub CLI 或 Pome 的鑰匙圈項目。憑證僅用於對應服務，不寫入記錄；拒絕不影響本機完成事件接收。 系統授權由 macOS 處理，Pome 不會取得你的 Mac 登入密碼，也不會遍歷整個鑰匙圈。",
+  "privacy.background.explanation": "已啟用的 NAS 自動同步及 Manus 完成提醒會在啟動時讀取所需憑證。系統權限、鑰匙圈鎖定或應用程式簽章變更仍可能觸發授權，無法保證完全不跳出提示。",
+  "privacy.ai.enable": "讀取額度 / 重試授權",
+  "privacy.ai.active": "本次執行已啟用讀取；背景不會反覆要求遭拒的憑證。",
+  "privacy.ai.paused": "本次執行尚未啟用額度讀取",
+  "privacy.ai.required": "需啟用讀取",
+  "privacy.credentials.onDemand": "僅在開啟密鑰頁或使用密鑰時解密；macOS 可能要求存取 Pome 鑰匙圈。拒絕後保留原資料，可點擊修復重試；已啟用的 NAS 加密同步也需要存取。",
+  "privacy.recording.onDemand": "儲存 API Key 時加密，開始轉寫或 AI 命名時才解密。macOS 可能要求存取 Pome 鑰匙圈；拒絕不影響一般錄音。",
   "time.justNow": "剛剛",
   "time.minutesAgo": "{count} 分鐘前",
   "settings.language": "語言",

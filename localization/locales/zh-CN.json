@@ -1,4 +1,12 @@
 {
+  "privacy.ai.explanation": "需凭据的额度读取默认暂停。点击后，本次运行会读取查询额度所需的本机登录凭据和已保存 Token；macOS 可能请求访问 Cursor、Claude Code、GitHub CLI 或 Pome 的钥匙串项目。凭据仅用于对应服务，不写入日志；拒绝不影响本地完成事件接收。 系统授权由 macOS 处理，Pome 不会获取你的 Mac 登录密码，也不会遍历整个钥匙串。",
+  "privacy.background.explanation": "已启用的 NAS 自动同步和 Manus 完成提醒会在启动时读取所需凭据。系统权限、钥匙串锁定或应用签名变化仍可能触发授权，无法保证完全不弹窗。",
+  "privacy.ai.enable": "读取额度 / 重试授权",
+  "privacy.ai.active": "本次运行已启用读取；后台不会反复请求被拒绝的凭据。",
+  "privacy.ai.paused": "本次运行尚未启用额度读取",
+  "privacy.ai.required": "需启用读取",
+  "privacy.credentials.onDemand": "仅在打开密钥页或使用密钥时解密；macOS 可能请求访问 Pome 钥匙串。拒绝后保留原数据，可点击修复重试；已启用的 NAS 加密同步也需要访问。",
+  "privacy.recording.onDemand": "保存 API Key 时加密，开始转写或 AI 命名时才解密。macOS 可能请求访问 Pome 钥匙串；拒绝不影响普通录音。",
   "time.justNow": "刚刚",
   "time.minutesAgo": "{count} 分钟前",
   "settings.language": "语言",

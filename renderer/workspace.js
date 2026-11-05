@@ -4131,12 +4131,14 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     if (workspaceTab !== 'recordings') pauseRecordingAudio();
     if (workspaceTab === 'home') refreshWindows();
     if (workspaceTab === 'settings') refreshSettingsPanel();
+    if (workspaceTab === 'credentials' && workspaceExpanded) void loadCredentials();
   });
   document.addEventListener('notch:modechange', (event) => {
     clearWindowDragVisuals();
     workspaceExpanded = !!(event.detail && event.detail.expanded);
     if (!workspaceExpanded) pauseRecordingAudio();
     if (workspaceExpanded && workspaceTab === 'home') refreshWindows();
+    if (workspaceExpanded && workspaceTab === 'credentials') void loadCredentials();
   });
   document.addEventListener('notch:home-modules-changed', (event) => {
     const nextVisible = Array.isArray(event.detail?.visibleIds)
@@ -4405,11 +4407,14 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     updateCredentialBulkAction();
   }
 
-  async function loadCredentials() {
+  async function loadCredentials({ retry = false } = {}) {
+    // Merely booting or receiving a background projection is not a vault read.
+    if (!workspaceExpanded || workspaceTab !== 'credentials') return;
+    if (credentialsReadFailed && !retry) return;
     if (!window.notchAPI || typeof window.notchAPI.listCredentials !== 'function') return;
     const generation = ++credentialsLoadGeneration;
     let result;
-    try { result = await window.notchAPI.listCredentials(); } catch (error) { result = null; }
+    try { result = await window.notchAPI.listCredentials({ retry }); } catch (error) { result = null; }
     if (generation !== credentialsLoadGeneration) return;
     const wasFailed = credentialsReadFailed;
     credentialsReadFailed = !result || result.ok === false || !Array.isArray(result.items);
@@ -4440,7 +4445,7 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
     if (window.NotchUi?.showError) {
       window.NotchUi.showError({ messageKey, repairKey: 'credentials.readRepair',
         diagnostic: `Credentials: ${result?.error || 'read_failed'}`, scope: 'credentials',
-        inlineHint: credentialsNote, onRepair: loadCredentials });
+        inlineHint: credentialsNote, onRepair: () => loadCredentials({ retry: true }) });
     } else if (credentialsNote) {
       pomeLocaleRendererWorkspace.bind(credentialsNote, 'textContent', () => pomeLocaleRendererWorkspace.t(messageKey));
       credentialsNote.classList.add('error');
@@ -4769,7 +4774,6 @@ const pomeLocaleRendererWorkspace = typeof module === 'object' && module.exports
   loadTranscriptionConfig();
   refreshSettingsPanel();
   refreshMusicStatus();
-  loadCredentials();
 
   window.addEventListener('pome:language-changed', () => {
     // These renderers do not repopulate the API form or recreate recordings.

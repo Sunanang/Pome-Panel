@@ -142,14 +142,14 @@ function createCursorUsageService({ fetchImpl = (...args) => fetch(...args), rea
     generation++; pending?.controller.abort();
     pending = null; lastAttempt = null; lastSuccess = null; key = ''; manualInvalid = false;
   }
-  async function getUsage({ force = false, manualToken = '' } = {}) {
+  async function getUsage({ force = false, manualToken = '', allowLocalAuth = true } = {}) {
     // Older Pome versions accidentally saved Cursor's ciphertext as a manual
     // token. Ignore that device-bound copy and use the current local sign-in.
     const savedManual = String(manualToken || '').trim();
     const manual = isCursorEncryptedToken(savedManual) ? '' : savedManual;
     const beforeAuth = authRevision, authRead = ++authReads;
     let auth;
-    try { const value = readAuth(); auth = value?.then ? await value : value; } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
+    try { const value = allowLocalAuth ? readAuth() : { ok: false, error: 'credential_access_required' }; auth = value?.then ? await value : value; } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
     if (beforeAuth !== authRevision || authRead < latestAuthRead) return { superseded: true };
     latestAuthRead = authRead;
     // Re-read the owner's login before cache lookup: local sign-out/account switch

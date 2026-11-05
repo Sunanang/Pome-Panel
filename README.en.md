@@ -61,6 +61,8 @@ Discovery covers all display coordinates and supplements windows omitted from th
 
 The Mac app uses the distinct `com.pomepanel.app` identity and can coexist with legacy TO-DO Panel. After first updating to this identity, authorize the installed Pome Panel in System Settings → Privacy & Security → Accessibility; the old app's permission does not transfer automatically. The data directory remains Pome Panel. After source changes reach `dev`, rebuild that branch and replace the installed app; pulling source alone does not update a running installation.
 
+Quota credentials are read on demand: after each launch, choose “Read quotas / retry access” in Settings → AI to enable local sign-ins and saved-token reads for that run. Saving a token enables only its source. Credential-free local Codex readings remain available. Token/transcription status displays do not decrypt secrets; the vault loads when opened. Background quota refresh does not repeatedly request failed credentials; retry explicitly. macOS handles authorization: Pome never receives the Mac login password or scans the entire Keychain. Previously enabled NAS auto-sync and Manus completion alerts still read their credentials at startup; system locks, permissions or signature changes can still prompt.
+
 ## Get started
 
 The current source development version is **0.11.0**. No formal Release installers are published yet; run the source with the development commands below. Published installers will be available from Releases.

@@ -75,6 +75,7 @@ async function run(c) {
   assert.equal(Object.hasOwn(settings,'encryptedProviderTokens'), false);
   const stored = fs.readFileSync(path.join(profile,'app-settings.json'),'utf8');
   for (const id of ['copilot','grok','antigravity','manus']) { assert(JSON.parse(stored).encryptedProviderTokens[id]); assert(!stored.includes(`fixture-${id}`)); }
+  await js('notchAPI.enableAiCredentialAccess()');
   for (const method of ['getCopilotUsage','getGrokUsage','getAntigravityUsage','getManusUsage']) assert.equal((await js(`notchAPI.${method}({force:true})`)).ok, true);
   assert(requests.some(url => url.includes('/teams/team-b/prepaid/balance')));
   assert.equal((await js('notchAPI.getManusUsage()')).credits.available,60);

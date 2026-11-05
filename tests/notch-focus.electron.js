@@ -332,6 +332,8 @@ async function main() {
           deleteCredentials: async () => ({ ok: true }),
           copyCredential: async () => true,
         };
+        // A vault read now starts only on the visible credentials page.
+        document.dispatchEvent(new CustomEvent('notch:modechange', { detail: { expanded: true } }));
         document.getElementById('tab-button-credentials').click();
         document.getElementById('credential-service').value = item.service;
         document.getElementById('credential-account').value = item.account;

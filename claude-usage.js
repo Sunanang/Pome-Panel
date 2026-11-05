@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { createHash } = require('node:crypto');
-const { execFileSync } = require('node:child_process');
+const { execFile } = require('node:child_process');
 
 const API_HOST = 'api.anthropic.com';
 const USAGE_PATH = '/api/oauth/usage';
@@ -28,26 +28,38 @@ function readJsonCredentials(filePath = credentialsPath()) {
   }
 }
 
+let keychainRead = null;
+function resetKeychainRead() { keychainRead = null; }
 function readKeychainCredentials() {
   if (process.platform !== 'darwin') return { ok: false, error: 'claude_keychain_unsupported' };
-  try {
-    const text = execFileSync('security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w'], {
-      encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+  // Share an in-flight prompt and retain both denial and success in memory.
+  // Retrying is explicit; polling must not repeatedly open system dialogs.
+  if (keychainRead) return keychainRead;
+  keychainRead = new Promise(resolve => execFile('/usr/bin/security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w'], {
+    encoding: 'utf8', timeout: 120000, maxBuffer: 131072,
+  }, (error, stdout) => {
+    if (error) return resolve({ ok: false, error: 'claude_keychain_read_failed' });
+    try { resolve(parseKeychainCredentials(stdout)); }
+    catch { resolve({ ok: false, error: 'claude_keychain_read_failed' }); }
+  }));
+  return keychainRead;
+}
+
+function parseKeychainCredentials(value) {
+    const text = String(value || '').trim();
     if (!text) return { ok: false, error: 'claude_keychain_empty' };
     const raw = JSON.parse(text);
     const oauth = raw?.claudeAiOauth && typeof raw.claudeAiOauth === 'object' ? raw.claudeAiOauth : raw;
     const token = oauth?.accessToken || oauth?.access_token || '';
     if (!token) return { ok: false, error: 'claude_keychain_token_missing' };
     return { ok: true, token: String(token), expiresAt: Number(oauth?.expiresAt || oauth?.expires_at || 0) || null, source: 'keychain' };
-  } catch {
-    return { ok: false, error: 'claude_keychain_read_failed' };
-  }
 }
 
-function readAuthToken({ home = os.homedir(), readFile = readJsonCredentials, readKeychain = readKeychainCredentials } = {}) {
+async function readAuthToken({ home = os.homedir(), readFile = readJsonCredentials, readKeychain = readKeychainCredentials, now = Date.now } = {}) {
   const file = readFile(credentialsPath(home));
-  const keychain = readKeychain();
+  // A usable file credential needs no cross-application Keychain authorization.
+  if (file.ok && (!file.expiresAt || file.expiresAt > now())) return file;
+  const keychain = await readKeychain();
   if (file.ok && keychain.ok) {
     const fileExp = file.expiresAt || 0;
     const keyExp = keychain.expiresAt || 0;
@@ -150,8 +162,10 @@ function createClaudeUsageService({
     pending = null; lastAttempt = null; lastSuccess = null; key = '';
   }
   async function getUsage({ force = false } = {}) {
+    const beforeAuth = generation;
     let auth;
-    try { auth = readAuth(); } catch { auth = { ok: false, error: 'claude_auth_read_failed' }; }
+    try { auth = await readAuth(); } catch { auth = { ok: false, error: 'claude_auth_read_failed' }; }
+    if (beforeAuth !== generation) return { superseded: true };
     const identity = createHash('sha256').update(JSON.stringify([auth.ok ? auth.token : null, auth.source || null])).digest('hex');
     if (key !== identity) { reset(); key = identity; }
     const revision = generation;
@@ -188,5 +202,5 @@ function createClaudeUsageService({
 }
 
 module.exports = {
-  createClaudeUsageService, readAuthToken, readJsonCredentials, buildSnapshot, CACHE_TTL_MS, credentialsPath,
+  createClaudeUsageService, readAuthToken, readJsonCredentials, buildSnapshot, CACHE_TTL_MS, credentialsPath, resetKeychainRead,
 };

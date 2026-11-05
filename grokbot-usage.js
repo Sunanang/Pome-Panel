@@ -86,12 +86,12 @@ function createGrokbotUsageService({ fetchImpl = (...args) => fetch(...args), re
     generation++; pending?.controller.abort();
     pending = null; lastAttempt = null; lastSuccess = null; key = ''; manualInvalid = false;
   }
-  async function getUsage({ force = false, manualToken = '' } = {}) {
+  async function getUsage({ force = false, manualToken = '', allowLocalAuth = true } = {}) {
     const savedManual = String(manualToken || '').trim();
     const manual = isCursorEncryptedToken(savedManual) ? '' : savedManual;
     const beforeAuth = authRevision, authRead = ++authReads;
     let auth;
-    try { const value = readAuth(); auth = value?.then ? await value : value; } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
+    try { const value = allowLocalAuth ? readAuth() : { ok: false, error: 'credential_access_required' }; auth = value?.then ? await value : value; } catch { auth = { ok: false, error: 'cursor_db_read_failed' }; }
     if (beforeAuth !== authRevision || authRead < latestAuthRead) return { superseded: true };
     latestAuthRead = authRead;
     const identity = createHash('sha256').update(JSON.stringify([manual, auth.ok ? auth.token : null, auth.email || null])).digest('hex');

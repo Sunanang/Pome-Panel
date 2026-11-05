@@ -1,4 +1,12 @@
 {
+  "privacy.ai.explanation": "La lectura de credenciales de cuota está pausada por defecto. Un clic la activa durante esta ejecución mediante sesiones locales y tokens guardados. macOS puede solicitar acceso al llavero de Cursor, Claude Code, GitHub CLI o Pome. Las credenciales solo se usan para el servicio correspondiente y nunca se registran. Rechazar no afecta a los eventos locales de finalización. macOS gestiona la autorización; Pome no recibe la contraseña de inicio del Mac ni examina todo el llavero.",
+  "privacy.background.explanation": "La sincronización NAS automática y las alertas de finalización de Manus activadas leen sus credenciales al iniciar. Los permisos, un llavero bloqueado o una firma modificada pueden seguir generando solicitudes.",
+  "privacy.ai.enable": "Leer cuotas / reintentar acceso",
+  "privacy.ai.active": "Lectura activada durante esta ejecución; no se repetirán solicitudes de credenciales rechazadas en segundo plano.",
+  "privacy.ai.paused": "Lectura de credenciales de cuota pausada durante esta ejecución",
+  "privacy.ai.required": "Activar lectura",
+  "privacy.credentials.onDemand": "Se descifra al abrir o usar las credenciales. macOS puede solicitar acceso al llavero de Pome. Rechazar conserva los datos; use Reparar para reintentar. La sincronización NAS cifrada activada también requiere acceso.",
+  "privacy.recording.onDemand": "Las claves API se cifran al guardar y se descifran al iniciar la transcripción o el nombre con IA. macOS puede solicitar acceso al llavero de Pome; rechazar no impide grabar audio normal.",
   "time.justNow": "Justo ahora",
   "time.minutesAgo": {
     "one": "{count} hace minutos",

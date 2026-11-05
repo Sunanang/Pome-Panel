@@ -59,6 +59,11 @@
 #tab-settings .settings-backup-copy p { margin: 6px 0 0; }
 #tab-settings .experience-backup .experience-actions { flex: 0 0 auto; margin: 0; }
 .ai-token-details { margin: 10px 0 0 42px; min-width: 0; }
+.settings-credential-access { padding: 12px 0; border-bottom: 1px solid var(--hairline-soft); }
+#tab-settings .settings-credential-access p { margin: 0 0 8px; font-size: 11px; line-height: 1.65; color: var(--text-3); }
+.settings-credential-access-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-credential-access-actions small { min-width: 0; color: var(--text-3); }
+.settings-credential-access-actions button { flex: none; }
 .ai-token-details > summary { display: flex; align-items: center; gap: 8px; min-height: 30px; cursor: pointer; color: var(--text-2); font-size: 11px; list-style: none; }
 .ai-token-details > summary::-webkit-details-marker { display: none; }
 .ai-token-details > summary::before { content: ''; flex: 0 0 5px; width: 5px; height: 5px; border: solid currentColor; border-width: 0 1px 1px 0; transform: rotate(-45deg); margin-right: 3px; }

@@ -1,0 +1,45 @@
+{
+  "fullSuite": "npm test exit 0",
+  "fullSuiteNode": {
+    "total": 1112,
+    "passed": 1110,
+    "skipped": 2,
+    "failed": 0
+  },
+  "electronInvocations": 76,
+  "syntaxChecks": 136,
+  "finalRelated": [
+    "credential-access",
+    "cursor-credentials",
+    "provider-credentials",
+    "codex-usage-accuracy",
+    "ui-simplify",
+    "work-hub-nas"
+  ],
+  "startupCalls": {
+    "secureStorageAvailability": 0,
+    "decrypt": 0,
+    "thirdPartyCredentialServices": 0
+  },
+  "checks": [
+    "metadata-only token and recording configuration",
+    "single-source save does not authorize other sources",
+    "clear does not authorize local sign-in",
+    "rejected automatic secret reads stop until explicit retry",
+    "paused quota link focuses explanation/action",
+    "existing encrypted vault loads only on demand",
+    "ciphertext survives failed reads",
+    "actual Cursor writer keeps NAS imports paused; explicit save enables its two related sources only"
+  ],
+  "boundary": [
+    "isolated macOS Electron with synthetic encrypted credentials",
+    "real system dialogs, signed installation and Windows hardware not tested",
+    "no NAS deployment or installed-app replacement"
+  ],
+  "finalNode": {
+    "total": 1113,
+    "passed": 1111,
+    "skipped": 2,
+    "failed": 0
+  }
+}

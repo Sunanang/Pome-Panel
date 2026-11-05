@@ -1,4 +1,12 @@
 {
+  "privacy.ai.explanation": "La lecture des identifiants de quota est suspendue par défaut. Un clic l’active pour cette exécution avec les connexions locales et les jetons enregistrés. macOS peut demander l’accès aux éléments du trousseau de Cursor, Claude Code, GitHub CLI ou Pome. Les identifiants servent uniquement au service concerné et ne sont jamais journalisés. Un refus ne bloque pas les événements locaux de fin. macOS gère l’autorisation ; Pome ne reçoit jamais votre mot de passe de session Mac et ne parcourt pas tout le trousseau.",
+  "privacy.background.explanation": "La synchronisation NAS automatique et les alertes de fin Manus activées lisent leurs identifiants au démarrage. Les autorisations système, un trousseau verrouillé ou une signature modifiée peuvent encore provoquer des demandes.",
+  "privacy.ai.enable": "Lire les quotas / réessayer l’accès",
+  "privacy.ai.active": "Lecture activée pour cette exécution ; aucune demande répétée en arrière-plan après un refus.",
+  "privacy.ai.paused": "Lecture des identifiants de quota suspendue pour cette exécution",
+  "privacy.ai.required": "Activer la lecture",
+  "privacy.credentials.onDemand": "Le déchiffrement se fait à l’ouverture ou à l’utilisation des identifiants. macOS peut demander l’accès au trousseau Pome. Un refus conserve les données ; utilisez Réparer pour réessayer. La synchronisation NAS chiffrée activée nécessite aussi cet accès.",
+  "privacy.recording.onDemand": "Les clés API sont chiffrées à l’enregistrement et déchiffrées au début de la transcription ou du nommage IA. macOS peut demander l’accès au trousseau Pome ; un refus n’empêche pas un enregistrement audio classique.",
   "time.justNow": "Juste maintenant",
   "time.minutesAgo": {
     "one": "{count} il y a une minute",

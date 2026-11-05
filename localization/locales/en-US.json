@@ -1,4 +1,12 @@
 {
+  "privacy.ai.explanation": "Quota credential reads are paused by default. Clicking enables them for this run using local sign-ins and saved tokens. macOS may request access to Cursor, Claude Code, GitHub CLI or Pome Keychain items. Credentials are used only for the corresponding service and never logged. Denying access does not affect local completion-event reception. macOS handles authorization; Pome never receives your Mac login password or scans the entire Keychain.",
+  "privacy.background.explanation": "Enabled NAS auto-sync and Manus completion alerts read their credentials at startup. System permissions, a locked Keychain or a changed app signature may still cause prompts; prompt-free operation cannot be guaranteed.",
+  "privacy.ai.enable": "Read quotas / retry access",
+  "privacy.ai.active": "Reading enabled for this run; background refresh will not repeatedly request denied credentials.",
+  "privacy.ai.paused": "Quota credential reads are paused for this run",
+  "privacy.ai.required": "Enable reading",
+  "privacy.credentials.onDemand": "Decryption happens when you open or use credentials. macOS may request Pome Keychain access. Denial preserves your data; use Repair to retry. Enabled encrypted NAS sync also needs access.",
+  "privacy.recording.onDemand": "API keys are encrypted when saved and decrypted when transcription or AI naming starts. macOS may request Pome Keychain access; denial does not prevent ordinary audio recording.",
   "time.justNow": "Just now",
   "time.minutesAgo": {
     "one": "{count} minute ago",

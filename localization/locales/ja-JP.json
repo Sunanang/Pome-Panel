@@ -1,4 +1,12 @@
 {
+  "privacy.ai.explanation": "認証情報の読み取りは初期状態で停止しています。クリックすると、今回の起動中は使用量の取得にローカルログインと保存済み Token を使用します。macOS が Cursor、Claude Code、GitHub CLI、Pome のキーチェーンへのアクセスを求める場合があります。認証情報は該当サービスのみに使用し、ログに記録しません。拒否してもローカル完了イベントの受信には影響しません。 認可は macOS が処理します。Pome は Mac のログインパスワードを取得せず、キーチェーン全体を走査しません。",
+  "privacy.background.explanation": "有効な NAS 自動同期と Manus 完了通知は起動時に認証情報を読み取ります。権限、キーチェーンのロック、アプリの署名変更により確認が表示される場合があり、完全には防げません。",
+  "privacy.ai.enable": "使用量を取得 / アクセスを再試行",
+  "privacy.ai.active": "今回の起動中は読み取りが有効です。拒否された認証情報をバックグラウンドで繰り返し要求しません。",
+  "privacy.ai.paused": "今回の起動中は認証情報の読み取りが停止中です",
+  "privacy.ai.required": "読み取りを有効化",
+  "privacy.credentials.onDemand": "認証情報ページを開くか使用するときに復号します。macOS が Pome キーチェーンへのアクセスを求める場合があります。拒否してもデータは保持されます。「修復」で再試行できます。有効な NAS 暗号化同期にもアクセスが必要です。",
+  "privacy.recording.onDemand": "API キーは保存時に暗号化し、文字起こしや AI 命名の開始時に復号します。macOS が Pome キーチェーンへのアクセスを求める場合があります。拒否しても通常の録音は利用できます。",
   "time.justNow": "たった今",
   "time.minutesAgo": {
     "one": "{count} 分前",

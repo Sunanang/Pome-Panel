@@ -10,7 +10,6 @@ const {
   systemPreferences,
   clipboard,
   globalShortcut,
-  safeStorage,
   dialog,
   desktopCapturer,
   ClipboardItem,
@@ -78,6 +77,34 @@ const grokUsageService = createGrokUsageService();
 const antigravityUsageService = createAntigravityUsageService();
 const manusUsageService = createManusUsageService();
 const PROVIDER_TOKEN_IDS = new Set(['copilot', 'grok', 'antigravity', 'manus']);
+// Even resolving Electron's safeStorage module can initialize OS crypto.
+// Keep it lazy until an operation actually needs encrypted credentials.
+const safeStorage = {
+  isEncryptionAvailable: () => require('electron').safeStorage.isEncryptionAvailable(),
+  encryptString: value => require('electron').safeStorage.encryptString(value),
+  decryptString: value => require('electron').safeStorage.decryptString(value),
+};
+let secureStorageAvailability = null;
+function checkSecureStorageAvailability() {
+  if (secureStorageAvailability !== null) return secureStorageAvailability;
+  secureStorageAvailability = safeStorage.isEncryptionAvailable();
+  return secureStorageAvailability;
+}
+// Consent is a read trigger for this process, not a claim that macOS granted
+// access. Background quota refresh must never be the first credential reader.
+let aiCredentialAccessEnabled = false;
+const storedSecretReadFailures = new Set();
+const legacyCursorCiphertexts = new Set();
+let storedSecretReadBlocked = false;
+const aiCredentialProviders = new Set();
+const canReadAiCredential = id => aiCredentialAccessEnabled || aiCredentialProviders.has(id);
+
+function quotaAccessRequired(configured = false) {
+  return { ok: false, error: 'credential_access_required', credentialAccessRequired: true, configured, detected: false };
+}
+function quotaCredentialState(data) {
+  return data.error === 'credential_access_required' ? { ...data, credentialAccessRequired: true } : data;
+}
 // 能力层 v2（P0-1）：启动时按平台 + 运行时（原生模块是否可用、用户开关）解析一次，
 // 通过 additionalArguments 下发给渲染层；运行期变化走 capabilities:changed。
 // 这里的初值不读设置：模块加载早于 app.whenReady，不能碰 screen / 设置文件。
@@ -2917,6 +2944,7 @@ async function fetchFaviconDataUrl(pageUrl, html) {
 }
 
 async function enrichLinkMetadata(url, title) {
+  retryStoredSecretReads();
   const config = resolveLlmConfig();
   if (!config.apiKey || !config.model) return { title, category: '' };
   const endpoint = config.baseUrl.endsWith('/chat/completions')
@@ -3032,6 +3060,7 @@ async function inspectLink(rawUrl) {
 ipcMain.handle('links:inspect', (event, url) => inspectLink(url));
 
 ipcMain.handle('smart:organize-material', async (event, payload) => {
+  retryStoredSecretReads();
   const config = resolveLlmConfig();
   const kind = payload && payload.kind === 'note' ? 'note' : 'material';
   const transcript = String(payload && payload.text || '').trim().slice(0, 8000);
@@ -3197,8 +3226,10 @@ function publicCredential(item) {
 
 function credentialFailure(error) { return { ok: false, error: error?.code || 'credentials_unreadable' }; }
 
-ipcMain.handle('credentials:list', () => {
-  const secureStorage = safeStorage.isEncryptionAvailable();
+ipcMain.handle('credentials:list', (_event, options = {}) => {
+  if (options.retry === true) retryStoredSecretReads();
+  if (!fs.existsSync(getCredentialsVaultPath())) return { ok: true, secureStorage: secureStorageAvailability, items: [] };
+  const secureStorage = checkSecureStorageAvailability();
   if (!secureStorage) return { ok: false, secureStorage, items: [], error: 'secure_storage_unavailable' };
   try { return { ok: true, secureStorage, items: readCredentialsVault().map(publicCredential) }; }
   catch (error) { return { ...credentialFailure(error), secureStorage, items: [] }; }
@@ -3212,7 +3243,8 @@ ipcMain.handle('credentials:get', (event, id) => {
 });
 
 ipcMain.handle('credentials:save', (event, payload) => {
-  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
+  retryStoredSecretReads();
+  if (!checkSecureStorageAvailability()) return { ok: false, error: 'secure_storage_unavailable' };
   try {
     const rows = readCredentialsVault();
     const existing = payload && payload.id ? rows.find((item) => item.id === payload.id) : null;
@@ -3280,6 +3312,7 @@ const syncCredentialsStore = createSyncCredentialsStore({
   fs,
   path,
   fileName: SYNC_CREDENTIALS_FILE_NAME,
+  lazyStatus: true,
 });
 
 const syncSettingsStore = createSyncSettingsStore({
@@ -4649,7 +4682,7 @@ function materializeWorkspaceSnapshot(projected, previousSnapshot) {
   if (projected.secretsApplied) {
     // Verify the existing vault before materializing any ordinary media from
     // this projection. An unreadable secret store must not cause a partial pull.
-    if (!safeStorage.isEncryptionAvailable()) throw Object.assign(new Error('secure_storage_unavailable'), { code: 'secure_storage_unavailable' });
+    if (!checkSecureStorageAvailability()) throw Object.assign(new Error('secure_storage_unavailable'), { code: 'secure_storage_unavailable' });
     readCredentialsVault();
   }
   const snapshot = projected.snapshot;
@@ -5163,16 +5196,18 @@ ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
 });
 
 async function cursorLoginDetected() {
+  if (!aiCredentialAccessEnabled) return false;
   const auth = await readCursorAuthToken();
   return auth.ok === true || auth.detected === true;
 }
 
 ipcMain.handle('cursor:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('cursor')) return quotaAccessRequired(Boolean(readAppSettings().encryptedCursorToken));
   try {
     let data;
-    do { data = await fetchCursorUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
+    do { data = await fetchCursorUsage({ force: options?.force === true, manualToken: readCursorManualToken(), allowLocalAuth: aiCredentialAccessEnabled }); }
     while (data.superseded);
-    return { ...data, detected: await cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
+    return quotaCredentialState({ ...data, detected: await cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) });
   } catch {
     return { ok: false, error: 'cursor_usage_failed', detected: await cursorLoginDetected(),
       configured: Boolean(readAppSettings().encryptedCursorToken) };
@@ -5183,25 +5218,30 @@ ipcMain.handle('codex:usage', async (_event, options = {}) => {
   let result;
   do {
     result = await codexUsageService.getUsage({
-      manualToken: decryptStoredSecret(readAppSettings().encryptedCodexToken).trim(),
+      manualToken: canReadAiCredential('codex') ? decryptStoredSecret(readAppSettings().encryptedCodexToken).trim() : '',
       configured: codexTokenStatus().configured,
       force: options?.force === true,
     });
   } while (result.superseded); // A save/clear cancels old requests; never return the previous token's state.
+  if (!canReadAiCredential('codex') && codexTokenStatus().configured && !result.detected) {
+    return { ...result, credentialAccessRequired: true };
+  }
   return result;
 });
 ipcMain.handle('grokbot:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('grokbot')) return quotaAccessRequired(Boolean(readAppSettings().encryptedCursorToken));
   try {
     let data;
-    do { data = await grokbotUsageService.getUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
+    do { data = await grokbotUsageService.getUsage({ force: options?.force === true, manualToken: readCursorManualToken(), allowLocalAuth: aiCredentialAccessEnabled }); }
     while (data.superseded);
-    return { ...data, detected: await cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
+    return quotaCredentialState({ ...data, detected: await cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) });
   } catch {
     return { ok: false, error: 'grokbot_usage_failed', detected: await cursorLoginDetected(),
       configured: Boolean(readAppSettings().encryptedCursorToken) };
   }
 });
 ipcMain.handle('claude:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('claude')) return quotaAccessRequired();
   try {
     let data;
     do { data = await claudeUsageService.getUsage({ force: options?.force === true }); }
@@ -5212,16 +5252,18 @@ ipcMain.handle('claude:usage', async (_event, options = {}) => {
   }
 });
 ipcMain.handle('copilot:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('copilot')) return quotaAccessRequired(Boolean(readAppSettings().encryptedProviderTokens?.copilot));
   try {
     let data;
-    do { data = await copilotUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('copilot') }); }
+    do { data = await copilotUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('copilot'), allowLocalAuth: aiCredentialAccessEnabled }); }
     while (data.superseded);
-    return data;
+    return quotaCredentialState(data);
   } catch {
     return { ok: false, error: 'copilot_usage_failed', detected: false, configured: Boolean(readProviderManualToken('copilot')) };
   }
 });
 ipcMain.handle('grok:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('grok')) return quotaAccessRequired(Boolean(readAppSettings().encryptedProviderTokens?.grok));
   try {
     let data;
     do { data = await grokUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('grok'), teamId: readAppSettings().grokTeamId }); }
@@ -5232,6 +5274,7 @@ ipcMain.handle('grok:usage', async (_event, options = {}) => {
   }
 });
 ipcMain.handle('antigravity:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('antigravity')) return quotaAccessRequired(Boolean(readAppSettings().encryptedProviderTokens?.antigravity));
   try {
     let data;
     do { data = await antigravityUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('antigravity') }); }
@@ -5242,6 +5285,7 @@ ipcMain.handle('antigravity:usage', async (_event, options = {}) => {
   }
 });
 ipcMain.handle('manus:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('manus')) return quotaAccessRequired(Boolean(readAppSettings().encryptedProviderTokens?.manus));
   try {
     let data;
     do { data = await manusUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('manus') }); }
@@ -5275,6 +5319,21 @@ ipcMain.handle('manus:completion-preview', async (event) => {
   } catch (error) { return { ok: false, error: error.code || 'manus_preview_failed' }; }
 });
 ipcMain.handle('ai-provider:token-status', (_event, providerId) => providerTokenStatus(providerId));
+ipcMain.handle('ai:credential-access-status', () => ({ enabled: aiCredentialAccessEnabled || aiCredentialProviders.size > 0 }));
+ipcMain.handle('ai:enable-credential-access', event => {
+  requireWorkspaceOwner(event);
+  aiCredentialAccessEnabled = true;
+  // A deliberate retry is the only way to revisit a failed Pome secret read.
+  storedSecretReadFailures.clear();
+  storedSecretReadBlocked = false;
+  secureStorageAvailability = null;
+  require('./claude-usage').resetKeychainRead();
+  require('./copilot-usage').resetGhTokenRead();
+  require('./platform-adapters/cursor-secrets').resetCursorSecretAccess();
+  resetCursorUsage();
+  for (const service of [codexUsageService, grokbotUsageService, claudeUsageService, copilotUsageService, grokUsageService, antigravityUsageService, manusUsageService]) service.reset();
+  return { ok: true, enabled: true };
+});
 ipcMain.handle('ai-provider:set-token', (_event, providerId, token, options) => typeof token === 'string' && token.trim()
   ? writeProviderManualToken(providerId, token, options) : { ok: false, error: 'token_required' });
 ipcMain.handle('ai-provider:clear-token', (_event, providerId) => writeProviderManualToken(providerId, ''));
@@ -5303,7 +5362,7 @@ ipcMain.handle('cursor:read-local-token', async (event) => {
   return result.ok ? { ok: true, token: result.token } : { ok: false, error: result.error };
 });
 
-ipcMain.handle('cursor:set-token', (_event, token) => writeCursorManualToken(token));
+ipcMain.handle('cursor:set-token', (_event, token) => writeCursorManualToken(token, { activateUsage: true }));
 
 ipcMain.handle('cursor:clear-token', () => writeCursorManualToken(''));
 
@@ -5365,17 +5424,31 @@ function decryptStoredApiKey(settings) {
 }
 
 function decryptStoredSecret(value) {
-  if (!value || !safeStorage.isEncryptionAvailable()) return '';
+  if (!value) return '';
+  if (storedSecretReadFailures.has(value)) return '';
+  if (storedSecretReadBlocked) { storedSecretReadFailures.add(value); return ''; }
+  if (!checkSecureStorageAvailability()) { storedSecretReadBlocked = true; storedSecretReadFailures.add(value); return ''; }
   try {
-    return safeStorage.decryptString(Buffer.from(String(value), 'base64'));
+    const plain = safeStorage.decryptString(Buffer.from(String(value), 'base64'));
+    return plain;
   } catch (error) {
+    // Native failures do not reliably distinguish denial from corrupt bytes.
+    // Stop automatic reads after either; a deliberate retry can recover them.
+    storedSecretReadBlocked = true;
+    storedSecretReadFailures.add(value);
     return '';
   }
 }
 
+function retryStoredSecretReads() {
+  secureStorageAvailability = null;
+  storedSecretReadBlocked = false;
+  storedSecretReadFailures.clear();
+}
+
 function encryptStoredSecret(plain) {
   const value = String(plain || '');
-  if (!value || !safeStorage.isEncryptionAvailable()) return '';
+  if (!value || !checkSecureStorageAvailability()) return '';
   try {
     return safeStorage.encryptString(value).toString('base64');
   } catch (error) {
@@ -5386,6 +5459,7 @@ function encryptStoredSecret(plain) {
 function readCursorManualToken() {
   const settings = readAppSettings();
   const token = decryptStoredSecret(settings.encryptedCursorToken).trim();
+  if (isCursorEncryptedToken(token)) legacyCursorCiphertexts.add(settings.encryptedCursorToken);
   // A legacy ciphertext copy is neither a bearer token nor a portable secret.
   // Leave the saved envelope intact until the user replaces/clears it, but do
   // not send it to Cursor or synchronize it to other devices.
@@ -5393,24 +5467,31 @@ function readCursorManualToken() {
 }
 
 function cursorTokenStatus() {
-  const configured = Boolean(readCursorManualToken());
+  const ciphertext = readAppSettings().encryptedCursorToken;
+  const configured = Boolean(ciphertext && !legacyCursorCiphertexts.has(ciphertext));
   return {
     ok: true,
     configured,
-    secureStorage: safeStorage.isEncryptionAvailable(),
-    label: configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : PomeI18n.t("copy.notConfiguredUsingLocalSignIn.3004c2"),
+    secureStorage: secureStorageAvailability,
+    label: configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : !canReadAiCredential('cursor') ? PomeI18n.t('privacy.ai.paused') : PomeI18n.t("copy.notConfiguredUsingLocalSignIn.3004c2"),
     state: configured ? 'saved' : 'empty',
   };
 }
 
-function writeCursorManualToken(token) {
-  if (!safeStorage.isEncryptionAvailable()) {
+function writeCursorManualToken(token, { activateUsage = false } = {}) {
+  const trimmed = String(token || '').trim();
+  if (isCursorEncryptedToken(trimmed)) return { ok: false, error: 'cursor_token_decrypt_failed' };
+  retryStoredSecretReads();
+  if (!checkSecureStorageAvailability()) {
     return { ok: false, error: 'secure_storage_unavailable' };
   }
   const next = readAppSettings();
-  const trimmed = String(token || '').trim();
-  if (isCursorEncryptedToken(trimmed)) return { ok: false, error: 'cursor_token_decrypt_failed' };
   if (readCursorManualToken() === trimmed && (trimmed || !next.encryptedCursorToken)) {
+    if (trimmed && activateUsage) {
+      aiCredentialProviders.add('cursor'); aiCredentialProviders.add('grokbot');
+      const status = cursorTokenStatus();
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cursor:token-changed', status);
+    }
     return cursorTokenStatus();
   }
   if (!trimmed) {
@@ -5421,6 +5502,7 @@ function writeCursorManualToken(token) {
     next.encryptedCursorToken = encrypted;
   }
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  if (trimmed && activateUsage) { retryStoredSecretReads(); aiCredentialProviders.add('cursor'); aiCredentialProviders.add('grokbot'); }
   resetCursorUsage?.();
   grokbotUsageService.reset();
   const status = cursorTokenStatus();
@@ -5431,19 +5513,21 @@ function writeCursorManualToken(token) {
 function codexTokenStatus() {
   const configured = Boolean(readAppSettings().encryptedCodexToken);
   const invalid = configured && codexUsageService.tokenState().manualTokenInvalid;
-  return { ok: true, configured, manualTokenInvalid: invalid, secureStorage: safeStorage.isEncryptionAvailable(),
+  return { ok: true, configured, manualTokenInvalid: invalid, secureStorage: secureStorageAvailability,
     label: invalid ? PomeI18n.t("copy.tokenExpired.22c3fe") : configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : PomeI18n.t("copy.noManualTokenConfigured.a2ebce"),
     state: invalid ? 'error' : configured ? 'saved' : 'empty' };
 }
 
 function writeCodexManualToken(token) {
-  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
+  retryStoredSecretReads();
+  if (!checkSecureStorageAvailability()) return { ok: false, error: 'secure_storage_unavailable' };
   const next = readAppSettings();
   const trimmed = String(token || '').trim();
   const encrypted = trimmed ? encryptStoredSecret(trimmed) : '';
   if (trimmed && !encrypted) return { ok: false, error: 'encrypt_failed' };
   next.encryptedCodexToken = encrypted;
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  if (trimmed) { retryStoredSecretReads(); aiCredentialProviders.add('codex'); }
   codexUsageService.reset();
   const status = codexTokenStatus();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('codex:token-changed', status);
@@ -5458,9 +5542,9 @@ function readProviderManualToken(providerId) {
 }
 function providerTokenStatus(providerId) {
   if (!PROVIDER_TOKEN_IDS.has(providerId)) return { ok: false, error: 'unsupported_provider' };
-  const configured = Boolean(readProviderManualToken(providerId));
+  const configured = Boolean(readAppSettings().encryptedProviderTokens?.[providerId]);
   return {
-    ok: true, providerId, configured, secureStorage: safeStorage.isEncryptionAvailable(),
+    ok: true, providerId, configured, secureStorage: secureStorageAvailability,
     label: configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : PomeI18n.t("copy.noManualTokenConfigured.a2ebce"),
     state: configured ? 'saved' : 'empty',
     ...(providerId === 'grok' ? { teamId: readAppSettings().grokTeamId } : {}),
@@ -5516,7 +5600,6 @@ function getManusCompletionService() {
 
 function writeProviderManualToken(providerId, token, options = {}) {
   if (!PROVIDER_TOKEN_IDS.has(providerId)) return { ok: false, error: 'unsupported_provider' };
-  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
   const next = readAppSettings();
   const bag = next.encryptedProviderTokens && typeof next.encryptedProviderTokens === 'object'
     ? { ...next.encryptedProviderTokens } : {};
@@ -5527,6 +5610,8 @@ function writeProviderManualToken(providerId, token, options = {}) {
     next.grokTeamId = teamId;
   }
   if (providerId === 'grok' && !trimmed) next.grokTeamId = '';
+  retryStoredSecretReads();
+  if (!checkSecureStorageAvailability()) return { ok: false, error: 'secure_storage_unavailable' };
   if (!trimmed) bag[providerId] = '';
   else {
     const encrypted = encryptStoredSecret(trimmed);
@@ -5535,6 +5620,7 @@ function writeProviderManualToken(providerId, token, options = {}) {
   }
   next.encryptedProviderTokens = bag;
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  if (trimmed) { retryStoredSecretReads(); aiCredentialProviders.add(providerId); }
   if (providerId === 'copilot') copilotUsageService.reset();
   if (providerId === 'grok') grokUsageService.reset();
   if (providerId === 'antigravity') antigravityUsageService.reset();
@@ -5577,19 +5663,25 @@ function resolveTranscriptionConfig() {
 }
 
 function publicTranscriptionConfig() {
-  const config = resolveTranscriptionConfig();
-  const llmConfig = resolveLlmConfig();
   const settings = readStoredTranscriptionSettings();
+  // Settings/status display is metadata-only. Decrypt only when recording or
+  // AI naming actually starts; retain the original ciphertext on any failure.
+  const hasAsrEnvironment = Boolean(String(process.env.DASHSCOPE_API_KEY || '').trim());
+  const hasLlmEnvironment = Boolean(String(process.env.NOTCH_LLM_API_KEY || '').trim());
+  const failed = key => Boolean(key && storedSecretReadFailures.has(key));
+  const environmentRegion = String(process.env.DASHSCOPE_REGION || '').trim().toLowerCase();
+  const region = ['beijing', 'singapore'].includes(environmentRegion) ? environmentRegion : settings.region === 'singapore' ? 'singapore' : 'beijing';
+  const workspaceId = String(process.env.DASHSCOPE_WORKSPACE_ID || process.env.DASHSCOPE_WORKSPACE || settings.workspaceId || '').trim().slice(0, 128);
   return {
-    configured: Boolean(config.apiKey),
-    asrNeedsReentry: Boolean(settings.encryptedApiKey && !config.apiKey),
-    workspaceId: config.workspaceId,
-    region: config.region,
-    transcriptionLanguage: config.language,
+    configured: hasAsrEnvironment || Boolean(settings.encryptedApiKey && !failed(settings.encryptedApiKey)),
+    asrNeedsReentry: !hasAsrEnvironment && failed(settings.encryptedApiKey),
+    workspaceId: /^[A-Za-z0-9_-]{0,128}$/.test(workspaceId) ? workspaceId : '',
+    region,
+    transcriptionLanguage: PomeI18n.transcriptionLanguage(settings.transcriptionLanguage),
     provider: 'qwen3-asr-flash-realtime',
-    secureStorage: safeStorage.isEncryptionAvailable(),
-    llmConfigured: Boolean(llmConfig.apiKey),
-    llmNeedsReentry: Boolean(settings.encryptedLlmApiKey && !llmConfig.apiKey),
+    secureStorage: secureStorageAvailability,
+    llmConfigured: hasLlmEnvironment || Boolean(settings.encryptedLlmApiKey && !failed(settings.encryptedLlmApiKey)),
+    llmNeedsReentry: !hasLlmEnvironment && failed(settings.encryptedLlmApiKey),
     llmBaseUrl: String(settings.llmBaseUrl || 'https://api.deepseek.com'),
     llmModel: String(settings.llmModel || 'deepseek-v4-flash'),
   };
@@ -5799,7 +5891,8 @@ ipcMain.handle('transcription:set-config', (event, payload) => {
   if (!parsedLlmUrl || parsedLlmUrl.protocol !== 'https:' || parsedLlmUrl.username || parsedLlmUrl.password) {
     return { ok: false, error: 'invalid_llm_url' };
   }
-  if ((apiKey || llmApiKey) && !safeStorage.isEncryptionAvailable()) {
+  if (apiKey || llmApiKey) retryStoredSecretReads();
+  if ((apiKey || llmApiKey) && !checkSecureStorageAvailability()) {
     return { ok: false, error: 'secure_storage_unavailable' };
   }
   const next = {
@@ -5825,6 +5918,7 @@ ipcMain.handle('transcription:set-config', (event, payload) => {
 
 ipcMain.handle('transcription:start', (event, payload = {}) => {
   if (payload.language != null && !['zh', 'en'].includes(payload.language)) return { ok: false, error: 'invalid_language' };
+  retryStoredSecretReads();
   const resolved = resolveTranscriptionConfig();
   const config = { ...resolved, language: PomeI18n.transcriptionLanguage(payload.language ?? resolved.language) };
   if (!config.apiKey) return { ok: false, error: 'not_configured' };

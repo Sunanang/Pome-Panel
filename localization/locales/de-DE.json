@@ -1,4 +1,12 @@
 {
+  "privacy.ai.explanation": "Das Lesen von Kontingent-Zugangsdaten ist zunächst pausiert. Ein Klick aktiviert es für diesen Programmstart mit lokalen Anmeldungen und gespeicherten Tokens. macOS kann Zugriff auf Schlüsselbundobjekte von Cursor, Claude Code, GitHub CLI oder Pome anfordern. Zugangsdaten werden nur für den jeweiligen Dienst verwendet und nie protokolliert. Eine Ablehnung beeinträchtigt lokale Abschlussmeldungen nicht. macOS verwaltet die Freigabe; Pome erhält weder Ihr Mac-Anmeldepasswort noch durchsucht es den gesamten Schlüsselbund.",
+  "privacy.background.explanation": "Aktivierte NAS-Autosynchronisierung und Manus-Abschlussmeldungen lesen beim Start ihre Zugangsdaten. Systemrechte, ein gesperrter Schlüsselbund oder eine geänderte App-Signatur können weiterhin Rückfragen auslösen.",
+  "privacy.ai.enable": "Kontingente lesen / Zugriff erneut versuchen",
+  "privacy.ai.active": "Lesen für diesen Programmstart aktiviert; abgelehnte Zugangsdaten werden nicht wiederholt im Hintergrund angefordert.",
+  "privacy.ai.paused": "Zugangsdaten für Kontingente werden derzeit nicht gelesen",
+  "privacy.ai.required": "Lesen aktivieren",
+  "privacy.credentials.onDemand": "Entschlüsselung erfolgt beim Öffnen oder Verwenden der Zugangsdaten. macOS kann Pome-Schlüsselbundzugriff anfordern. Eine Ablehnung bewahrt die Daten; mit Reparieren erneut versuchen. Aktivierte verschlüsselte NAS-Synchronisierung benötigt ebenfalls Zugriff.",
+  "privacy.recording.onDemand": "API-Schlüssel werden beim Speichern verschlüsselt und beim Start der Transkription oder KI-Benennung entschlüsselt. macOS kann Pome-Schlüsselbundzugriff anfordern; eine Ablehnung verhindert normale Audioaufnahmen nicht.",
   "time.justNow": "Gerade eben",
   "time.minutesAgo": {
     "one": "{count} Minute vor",

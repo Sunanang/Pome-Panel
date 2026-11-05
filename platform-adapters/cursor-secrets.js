@@ -110,7 +110,7 @@ function readMacPasswordAsync() {
 function createAsyncCursorTokenDecoder({ platform = process.platform, readPassword = readMacPasswordAsync, ...options } = {}) {
   const fallback = createCursorTokenDecoder({ platform, ...options });
   let decoder = null, pending = null, denied = false;
-  return async function decode(value, context = {}) {
+  const decode = async function decode(value, context = {}) {
     if (!isCursorEncryptedToken(value) || platform !== 'darwin' || !value.startsWith(PREFIX)) return fallback(value, context);
     // Explicit Get local login retries a denial; background quota polling does not.
     if (context.force && !pending) { decoder = null; denied = false; }
@@ -134,6 +134,9 @@ function createAsyncCursorTokenDecoder({ platform = process.platform, readPasswo
     }
     return decoder(value, { ...context, force: false });
   };
+  decode.reset = () => { if (!pending) { decoder = null; denied = false; } };
+  return decode;
 }
 module.exports.createAsyncCursorTokenDecoder = createAsyncCursorTokenDecoder;
 module.exports.decodeCursorTokenAsync = createAsyncCursorTokenDecoder();
+module.exports.resetCursorSecretAccess = () => module.exports.decodeCursorTokenAsync.reset();

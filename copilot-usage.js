@@ -9,6 +9,8 @@ const { execFileSync } = require('node:child_process');
 const API_HOST = 'api.github.com';
 const USAGE_PATH = '/copilot_internal/user';
 const CACHE_TTL_MS = 60_000;
+let cachedCliRead;
+function resetGhTokenRead() { cachedCliRead = undefined; }
 
 function hostsYmlPath(home = os.homedir()) {
   return path.join(home, '.config', 'gh', 'hosts.yml');
@@ -28,11 +30,12 @@ function readGhToken({ home = os.homedir(), env = process.env, exec = execFileSy
   try {
     const cliEnv = { ...env };
     if (env.GH_HOST && env.GH_HOST.toLowerCase() !== 'github.com') { delete cliEnv.GH_TOKEN; delete cliEnv.GITHUB_TOKEN; }
-    const token = exec('gh', ['auth', 'token', '--hostname', 'github.com'], {
+    const token = exec === execFileSync && cachedCliRead !== undefined ? cachedCliRead : exec('gh', ['auth', 'token', '--hostname', 'github.com'], {
       encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'], env: cliEnv,
     }).trim();
+    if (exec === execFileSync) cachedCliRead = token;
     if (token) return { ok: true, token, source: 'gh' };
-  } catch { /* fall through */ }
+  } catch { if (exec === execFileSync) cachedCliRead = ''; }
   const filePath = env.GH_CONFIG_DIR ? path.join(env.GH_CONFIG_DIR, 'hosts.yml') : hostsYmlPath(home);
   if (!fs.existsSync(filePath)) return { ok: false, error: 'copilot_token_missing' };
   try {
@@ -134,10 +137,10 @@ function createCopilotUsageService({
     generation++; pending?.controller.abort();
     pending = null; lastAttempt = null; lastSuccess = null; key = ''; authInvalid = false;
   }
-  async function getUsage({ force = false, manualToken = '' } = {}) {
+  async function getUsage({ force = false, manualToken = '', allowLocalAuth = true } = {}) {
     const manual = String(manualToken || '').trim();
     let auth;
-    try { auth = manual ? { ok: true, token: manual, source: 'manual' } : readAuth(); }
+    try { auth = manual ? { ok: true, token: manual, source: 'manual' } : allowLocalAuth ? readAuth() : { ok: false, error: 'credential_access_required' }; }
     catch { auth = { ok: false, error: 'copilot_auth_read_failed' }; }
     const identity = createHash('sha256').update(JSON.stringify([auth.ok ? auth.token : null])).digest('hex');
     if (key !== identity) { reset(); key = identity; }
@@ -175,4 +178,4 @@ function createCopilotUsageService({
   return { getUsage, reset, buildSnapshot, readGhToken };
 }
 
-module.exports = { createCopilotUsageService, buildSnapshot, readGhToken, githubTokenFromHosts, CACHE_TTL_MS };
+module.exports = { createCopilotUsageService, buildSnapshot, readGhToken, githubTokenFromHosts, CACHE_TTL_MS, resetGhTokenRead };

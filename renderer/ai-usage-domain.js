@@ -127,6 +127,8 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     if (blocked) return { text: pomeLocaleRendererAiUsageDomain.t('providers.cursorLoginBlockedSummary', { source: registry.get(blocked).label }), severity: 'error', repair: blocked };
     const invalid = errors.find(id => invalidToken(snapshots[id]));
     if (invalid) return { text: pomeLocaleRendererAiUsageDomain.t('quota.invalidSummary', { source: registry.get(invalid).label }), severity: 'error', repair: invalid };
+    const waiting = errors.find(id => snapshots[id]?.credentialAccessRequired);
+    if (waiting) return { text: pomeLocaleRendererAiUsageDomain.t('privacy.ai.paused'), severity: 'ok', repair: waiting };
     if (errors.length) return { text: pomeLocaleRendererAiUsageDomain.t('quota.failedSummary', { source: registry.get(errors[0]).label }), severity: 'error', retry: errors[0] };
     const valid = ids.filter(id => !['error', 'stale'].includes(status(snapshots[id], id, now)));
     const depleted = valid.filter(id => urgencyRemaining(snapshots[id], id) === 0);

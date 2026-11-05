@@ -27,12 +27,12 @@
       const node = el(`settings-${id}-token-status`), data = usage[id];
       if (!node || !data) continue;
       const invalid = data.manualTokenInvalid || data.status === 401 || data.status === 403;
-      const key = invalid ? data.ok && data.authSource === 'local' ? 'ui.token.localFallback' : 'ui.token.expired'
+      const key = data.credentialAccessRequired ? 'privacy.ai.paused' : invalid ? data.ok && data.authSource === 'local' ? 'ui.token.localFallback' : 'ui.token.expired'
         : data.ok === false ? 'ui.token.fetchFailed'
           : data.ok && data.authSource === 'manual' ? 'ui.token.manualActive'
           : data.ok && ['local', 'file', 'gh', 'hosts.yml', 'keychain'].includes(data.authSource) ? 'ui.token.localActive'
             : data.configured || data.manualTokenConfigured ? 'ui.token.savedPending' : 'ui.token.notAvailable';
-      text(node, key); node.dataset.state = invalid || data.ok === false ? 'error' : data.ok ? 'saved' : 'empty';
+      text(node, key); node.dataset.state = data.credentialAccessRequired ? 'empty' : invalid || data.ok === false ? 'error' : data.ok ? 'saved' : 'empty';
       const hint = el(`settings-${id}-token-hint`);
       if (data.ok && hint && !hint.classList.contains('error')) I.bind(hint, 'textContent', () => '');
     }

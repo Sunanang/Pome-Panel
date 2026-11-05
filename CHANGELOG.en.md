@@ -6,6 +6,8 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Quota credentials are read on demand: after each launch, choose “Read quotas / retry access” in Settings → AI to enable local sign-ins and saved-token reads for that run. Saving a token enables only its source. Credential-free local Codex readings remain available. Token/transcription status displays do not decrypt secrets; the vault loads when opened. Background quota refresh does not repeatedly request failed credentials; retry explicitly. macOS handles authorization: Pome never receives the Mac login password or scans the entire Keychain. Previously enabled NAS auto-sync and Manus completion alerts still read their credentials at startup; system locks, permissions or signature changes can still prompt.
+
 - Polish Settings: remove the local-folder trailing divider, align backup descriptions and actions, and separate General rows. Nest each token form in its own AI source with a collapsed disclosure, preserving inputs, status and existing acquisition/save/completion controls across refreshes and locale changes. Share action/select styles across the desktop while retaining navigation, segmented and transport layouts; native Space activation on buttons and disclosure headings no longer collapses the panel.
 
 - Deep-review fixes: update command/comment editors in place on blur so subsequent copy, delete and cross-row editing clicks remain effective. Delete only unchanged previewed commands, preserving concurrent sync updates with a review prompt. Guard non-array command, recording and hidden-window data and malformed link groups/items so one bad collection cannot abort workspace initialization; retain original stored bytes on startup.

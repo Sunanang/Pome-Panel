@@ -962,7 +962,19 @@ function createSyncCredentialsStore(deps = {}) {
     return safeStorage.isEncryptionAvailable() === true;
   }
 
+  // Production can show an unpaired status without initializing OS crypto.
+  // null means not checked; save and existing bindings still verify encryption.
+  function emptyLazyStatus() {
+    if (!deps.lazyStatus) return null;
+    const { candidates } = credentialCandidates();
+    try { if (candidates.some(filePath => fsMod.existsSync(filePath))) return null; }
+    catch { return null; }
+    return { ok: true, bound: false, record: null, secureStorage: null, credentialsUnreadable: false, needsReauth: false };
+  }
+
   function read() {
+    const empty = emptyLazyStatus();
+    if (empty) return empty;
     if (!encryptionAvailable()) {
       return { ok: false, error: 'secure_storage_unavailable', bound: false, record: null };
     }
@@ -1076,6 +1088,8 @@ function createSyncCredentialsStore(deps = {}) {
   }
 
   function getStatus() {
+    const empty = emptyLazyStatus();
+    if (empty) { const { record, ...status } = empty; return status; }
     if (!encryptionAvailable()) {
       return {
         ok: true,

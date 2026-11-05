@@ -1,4 +1,12 @@
 {
+  "privacy.ai.explanation": "A leitura de credenciais de cota começa pausada. Clique para ativá-la nesta execução usando logins locais e tokens salvos. O macOS pode solicitar acesso ao Chaves do Cursor, Claude Code, GitHub CLI ou Pome. As credenciais são usadas apenas no serviço correspondente e nunca registradas em logs. Negar não afeta eventos locais de conclusão. O macOS gerencia a autorização; o Pome não recebe a senha de login do Mac nem varre todo o Chaves.",
+  "privacy.background.explanation": "A sincronização NAS automática e os alertas de conclusão do Manus ativados leem suas credenciais ao iniciar. Permissões, o Chaves bloqueado ou uma assinatura alterada ainda podem causar solicitações.",
+  "privacy.ai.enable": "Ler cotas / tentar acesso novamente",
+  "privacy.ai.active": "Leitura ativada nesta execução; credenciais negadas não serão solicitadas repetidamente em segundo plano.",
+  "privacy.ai.paused": "Leitura de credenciais de cota pausada nesta execução",
+  "privacy.ai.required": "Ativar leitura",
+  "privacy.credentials.onDemand": "A descriptografia ocorre ao abrir ou usar credenciais. O macOS pode solicitar acesso ao Chaves do Pome. Negar preserva os dados; use Reparar para tentar novamente. A sincronização NAS criptografada ativada também exige acesso.",
+  "privacy.recording.onDemand": "As chaves API são criptografadas ao salvar e descriptografadas ao iniciar transcrição ou nomeação por IA. O macOS pode solicitar acesso ao Chaves do Pome; negar não impede gravações comuns.",
   "time.justNow": "Agora mesmo",
   "time.minutesAgo": {
     "one": "{count} minuto atrás",

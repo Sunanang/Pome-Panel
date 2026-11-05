@@ -109,6 +109,11 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     if (byId('tab-settings').getAttribute('aria-hidden') !== 'false') return;
+    if (state[provider]?.credentialAccessRequired || provider === 'claude' && D.invalidToken(state.claude)) {
+      window.NotchSettings?.reveal(byId('settings-ai-credential-access'), { block: 'start' });
+      byId('settings-ai-credential-enable')?.focus({ preventScroll: true });
+      return;
+    }
     const card = byId(registry.get(provider)?.settingsCard || 'settings-ai-sources');
     window.NotchSettings?.reveal(card, { block: provider ? 'center' : 'start' });
     window.NotchUi?.openManual(provider);
@@ -127,6 +132,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     return t(data?.configured ? 'copy.manualToken.bf90e7' : 'copy.localSignIn.8c966e');
   }
   function errorCopy(data) {
+    if (data?.credentialAccessRequired) return t('privacy.ai.required');
     return t(D.cursorLoginBlocked(data)
       ? 'providers.cursorEncryptedLogin' : D.invalidToken(data) ? 'quota.tokenRequired' : data?.error === 'antigravity_quota_unavailable'
       ? 'providers.quotaUnavailable' : data?.error === 'grok_team_required' ? 'providers.grokTeamRequired' : 'copy.usageUnavailableRefreshToRetry.1ceded');
@@ -230,8 +236,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const hasBars = inlineModel.inlineRows.length > 0 && !error;
     const empty = adaptive && !hasGauge && !error
       ? `<p class="q-adaptive-empty"${['currency','credits'].includes(m.selected.kind) ? ' data-main-amount' : ''}>${escape(m.selected.kind !== 'percent' ? m.selected.display : errorCopy(m.data))}</p>` : '';
-    const invalid = D.invalidToken(m.data), errorLabel = t(invalid ? 'quota.status.invalid' : 'quota.status.error');
-    const settings = invalid || m.data?.error === 'grok_team_required'
+    const invalid = D.invalidToken(m.data), errorLabel = t(m.data?.credentialAccessRequired ? 'privacy.ai.required' : invalid ? 'quota.status.invalid' : 'quota.status.error');
+    const settings = m.data?.credentialAccessRequired || invalid || m.data?.error === 'grok_team_required'
       || D.cursorLoginBlocked(m.data);
     const repair = error ? `<button class="ai-inline-settings" type="button" data-quota-${settings ? 'settings' : 'retry'}="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t(settings ? 'copy.openSettings.93112c' : 'ui.retry')}`)}">${escape(t(settings ? 'quota.repair' : 'ui.retry'))}</button>` : '';
     // No native title tooltip — details live in the progress popover (with updated time).

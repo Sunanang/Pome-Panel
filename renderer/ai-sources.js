@@ -23,6 +23,25 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   let dismissed = [];
   try { const value = JSON.parse(localStorage.getItem(dismissKey) || '[]'); if (Array.isArray(value)) dismissed = value; } catch {}
   const el = id => document.getElementById(id);
+  const credentialEnable = el('settings-ai-credential-enable');
+  async function refreshCredentialAccess() {
+    const access = await api?.getAiCredentialAccessStatus?.().catch(() => null);
+    pomeLocaleRendererAiSources.bind(el('settings-ai-credential-status'), 'textContent', () => pomeLocaleRendererAiSources.t(access?.enabled ? 'privacy.ai.active' : 'privacy.ai.paused'));
+  }
+  credentialEnable?.addEventListener('click', async () => {
+    credentialEnable.disabled = true;
+    try {
+      const result = await api?.enableAiCredentialAccess?.();
+      if (!result?.ok) throw new Error('credential_access_failed');
+      await refreshCredentialAccess();
+      await window.NotchAiUsage?.refresh({ force: true });
+    } catch { reportFailure('ai', 'credential_access_failed'); }
+    finally { credentialEnable.disabled = false; }
+  });
+  void refreshCredentialAccess();
+  for (const name of ['notch:cursor-token-changed', 'notch:codex-token-changed', 'notch:ai-provider-token-changed']) {
+    document.addEventListener(name, () => void refreshCredentialAccess());
+  }
   function reportFailure(source, code, hint = status, scope = `source:${source}`, messageKey = 'ui.error.generic', detail = '') {
     if (window.NotchUi) window.NotchUi.showError({ diagnostic: `${source}: ${code}${detail ? ` (${detail})` : ''}`, messageKey, scope, inlineHint: hint, onRepair: () => openSettings(source) });
     else if (hint) pomeLocaleRendererAiSources.bind(hint, 'textContent', () => pomeLocaleRendererAiSources.t(messageKey));
@@ -461,6 +480,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     finally { busy = false; el('ai-source-confirm-apply').disabled = false; await refresh(); }
   });
   document.addEventListener('notch:tabchange', event => {
+    if (event.detail.tab === 'settings') void refreshCredentialAccess();
     if (event.detail.tab === 'settings' || (event.detail.tab === 'home' && !modeBusy && Date.now() - checkedAt > 30000)) void refresh();
   });
   window.addEventListener('resize', () => { if (dialog?.open) positionConfirmation(); });

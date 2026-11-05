@@ -379,6 +379,7 @@
                 <button class="workspace-button primary credential-save" id="credential-save" type="button"><span data-i18n="copy.save.a3030b">保存</span></button>
                 <p class="credentials-note" id="credentials-note"><span data-i18n="copy.passwordsAreNotSentToPageStorage.b9c6b9">密码不会发送到页面存储，复制后 60 秒自动清空剪贴板。</span></p>
                 <p class="credentials-note" id="credentials-sync-hint"><span data-i18n="copy.supportsEncryptedNasSyncLocalDataBackups.987229">支持 NAS 加密同步；普通资料备份不包含密钥。</span></p>
+                <p class="credentials-note" data-i18n="privacy.credentials.onDemand"></p>
               </section>
               <section class="tile credentials-library">
                 <div class="credentials-library-head"><div><span class="tile-label"><span data-i18n="copy.accountsPasswords.164c7a">账号密码</span></span><strong id="credential-count"><span data-i18n="copy.0Items.c35a86">0 项</span></strong></div><div class="credentials-library-actions"><input id="credential-search" type="search" placeholder="搜索名称或账号" aria-label="搜索密钥" autocomplete="off"  data-i18n-placeholder="copy.searchNameOrAccount.b5ec62" data-i18n-aria-label="copy.searchCredentials.b49721"/><button class="bulk-delete" id="credential-bulk-delete" type="button" hidden><span data-i18n="copy.delete.2f9daa">删除</span></button></div></div>
@@ -534,6 +535,14 @@
                       <small id="settings-ai-sources-count"></small>
                     </div>
                     <p class="ai-source-scope" data-i18n="settings.ai.subtitle">接入本机完成提醒，并管理各家额度。</p>
+                    <div class="settings-credential-access" id="settings-ai-credential-access">
+                      <p data-i18n="privacy.ai.explanation"></p>
+                      <p class="experience-hint" data-i18n="privacy.background.explanation"></p>
+                      <div class="settings-credential-access-actions">
+                        <small id="settings-ai-credential-status" aria-live="polite"></small>
+                        <button id="settings-ai-credential-enable" class="workspace-button compact" type="button" data-i18n="privacy.ai.enable"></button>
+                      </div>
+                    </div>
                     <div id="settings-ai-sources-list" class="ai-source-list"></div>
                     <!-- Initial mount; existing controls move into their provider rows. -->
                     <div id="settings-ai-token-controls" hidden>
@@ -758,6 +767,7 @@
               </label>
             </div>
             <p class="transcription-settings-note" id="transcription-settings-note"><span data-i18n="copy.apiKeysAreEncryptedUsingSystemSecure.24f3f1">API Key 会由系统安全存储加密，渲染页面无法读取。</span></p>
+            <p class="transcription-settings-note" data-i18n="privacy.recording.onDemand"></p>
             <div class="transcription-settings-actions">
               <button class="workspace-button compact" id="transcription-settings-cancel" type="button"><span data-i18n="copy.cancel.2cd0f3">取消</span></button>
               <button class="workspace-button compact primary" id="transcription-settings-save" type="button"><span data-i18n="copy.save.a3030b">保存</span></button>
