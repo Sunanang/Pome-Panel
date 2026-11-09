@@ -110,5 +110,8 @@
   "demo.task3": "收集设计参考",
   "demo.task4": "归档项目笔记",
   "demo.task5": "检查同步状态",
-  "demo.task6": "跑步半小时"
+  "demo.task6": "跑步半小时",
+  "download.pending": "第一个版本还在打包，还没对外发布。发布之后这里会直接列出各平台安装包。",
+  "download.allReleases": "全部历史版本",
+  "download.version": "最新 {version}"
 }

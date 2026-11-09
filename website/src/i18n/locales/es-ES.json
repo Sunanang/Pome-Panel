@@ -110,5 +110,8 @@
   "demo.task3": "Recopilar referencias de diseño",
   "demo.task4": "Guardar las notas del proyecto",
   "demo.task5": "Comprobar la sincronización",
-  "demo.task6": "Salir a correr un rato"
+  "demo.task6": "Salir a correr un rato",
+  "download.pending": "La primera compilación aún no se ha publicado. Cuando salga, los instaladores aparecerán aquí como descarga directa.",
+  "download.allReleases": "Todas las versiones",
+  "download.version": "Última {version}"
 }

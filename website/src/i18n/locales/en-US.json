@@ -110,5 +110,8 @@
   "demo.task3": "Collect design references",
   "demo.task4": "Save the project notes",
   "demo.task5": "Check the sync status",
-  "demo.task6": "Go for a short run"
+  "demo.task6": "Go for a short run",
+  "download.pending": "The first build hasn’t been published yet. Installers will show up here as direct downloads once it ships.",
+  "download.allReleases": "All releases",
+  "download.version": "Latest {version}"
 }

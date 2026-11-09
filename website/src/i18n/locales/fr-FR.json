@@ -110,5 +110,8 @@
   "demo.task3": "Réunir des références de design",
   "demo.task4": "Conserver les notes du projet",
   "demo.task5": "Vérifier la synchronisation",
-  "demo.task6": "Faire un petit footing"
+  "demo.task6": "Faire un petit footing",
+  "download.pending": "La première version n’est pas encore publiée. Dès sa sortie, les installateurs seront téléchargeables directement ici.",
+  "download.allReleases": "Toutes les versions",
+  "download.version": "Dernière {version}"
 }

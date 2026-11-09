@@ -246,4 +246,17 @@ jobs:
 
           gh release create "${GITHUB_REF_NAME}" release-assets/*.dmg release-assets/*.exe release-assets/*.fpk release-assets/*.sha256 --title "Pome Panel
           ${GITHUB_REF_NAME}" --notes-file release-notes.rendered.md
+      - name: Generate website download manifest
+        if: steps.release.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |-
+          node scripts/gen-downloads-json.mjs "${GITHUB_REF_NAME}"
+          if [ -n "$(git status --porcelain website/public/downloads.json)" ]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add website/public/downloads.json
+            git commit -m "chore(website): 更新下载清单 ${GITHUB_REF_NAME}"
+            git push
+          fi
     if: needs.changes.outputs.website_only != 'true'

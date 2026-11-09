@@ -110,5 +110,8 @@
   "demo.task3": "Designreferenzen sammeln",
   "demo.task4": "Projektnotizen speichern",
   "demo.task5": "Synchronisierungsstatus prüfen",
-  "demo.task6": "Eine kleine Runde laufen"
+  "demo.task6": "Eine kleine Runde laufen",
+  "download.pending": "Der erste Build ist noch nicht veröffentlicht. Sobald er erscheint, stehen die Installer hier als Direktdownload bereit.",
+  "download.allReleases": "Alle Versionen",
+  "download.version": "Neueste {version}"
 }

@@ -110,5 +110,8 @@
   "demo.task3": "デザインの参考を集める",
   "demo.task4": "プロジェクトのメモを保存する",
   "demo.task5": "同期状態を確認する",
-  "demo.task6": "軽くランニングする"
+  "demo.task6": "軽くランニングする",
+  "download.pending": "最初のビルドはまだ公開されていません。公開後はここから各プラットフォームのインストーラーを直接ダウンロードできます。",
+  "download.allReleases": "すべてのリリース",
+  "download.version": "最新 {version}"
 }

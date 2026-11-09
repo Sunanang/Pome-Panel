@@ -125,15 +125,28 @@ function Story({ reduced }) {
   </section>;
 }
 
+const PLATFORM_LABEL={'mac-arm64':'macOS · Apple Silicon','mac-x64':'macOS · Intel','win-x64':'Windows · x64','fnos-fpk':'fnOS · FPk'};
+
 export function App(){
   const {t,locale}=useLanguage();
   const reduced=useReducedMotion();
   const [tab,setTab]=useState(0), [download,setDownload]=useState(false), [nas,setNas]=useState(false);
+  /* 下载清单由发版 CI 生成到 /downloads.json；没有这个文件说明还没发过版 */
+  const [manifest,setManifest]=useState(undefined);
   const dialog=useRef(null),lastFocus=useRef(null),backdropPressed=useRef(false);
   useEffect(()=>{
     if(download){backdropPressed.current=false;lastFocus.current=document.activeElement;dialog.current.showModal();}
     else if(dialog.current?.open){dialog.current.close();lastFocus.current?.focus();}
   },[download]);
+  useEffect(()=>{
+    if(!download||manifest!==undefined)return;
+    let alive=true;
+    fetch('/downloads.json',{cache:'no-store'})
+      .then(r=>r.ok?r.json():null)
+      .then(data=>{if(alive)setManifest(data&&Array.isArray(data.assets)&&data.assets.length?data:null);})
+      .catch(()=>{if(alive)setManifest(null);});
+    return()=>{alive=false;};
+  },[download,manifest]);
   const changeTab=i=>setTab((i+tabs.length)%tabs.length);
   return <>
     <Header onDownload={()=>setDownload(true)}/>
@@ -174,6 +187,9 @@ export function App(){
       </section>
     </main>
     <footer><a className="brand" href="#top"><img src="/assets/pome-icon.webp" alt=""/><span>Pome Panel</span></a><span>{t('footer.tagline')}</span><div><a href={REPO} target="_blank" rel="noreferrer">GitHub</a><a href={REPO+'/blob/dev/LICENSE'} target="_blank" rel="noreferrer">{t('footer.license')}</a><a href="https://github.com/xiaopu-ai/TO-DO-Panel" target="_blank" rel="noreferrer">{t('footer.credit')}</a></div></footer>
-    <dialog ref={dialog} className="download-dialog" onCancel={e=>{e.preventDefault();setDownload(false);}} onPointerDown={e=>{backdropPressed.current=isDialogBackdropEvent(e);}} onClick={e=>{if(backdropPressed.current&&isDialogBackdropEvent(e))setDownload(false);backdropPressed.current=false;}} aria-labelledby="download-title"><div className="dialog-heading"><img src="/assets/pome-icon.webp" alt=""/><button className="icon-button" aria-label={t('action.closeDownload')} title={t('action.close')} onClick={()=>setDownload(false)}><X size={19} aria-hidden="true"/></button></div><span className="eyebrow">{t('download.eyebrow')}</span><h2 id="download-title">{t('download.title')}</h2><p>{t('download.description')}</p><a className="button primary" href={REPO+'/releases'} target="_blank" rel="noreferrer"><span>{t('download.releases')}</span><ArrowUpRight size={17} aria-hidden="true"/></a><a className="button quiet" href={REPO+'/blob/dev/'+readmeFilename(locale)} target="_blank" rel="noreferrer"><span>{t('download.source')}</span><ArrowUpRight size={16} aria-hidden="true"/></a><small>{t('download.platforms')}</small></dialog>
+    <dialog ref={dialog} className="download-dialog" onCancel={e=>{e.preventDefault();setDownload(false);}} onPointerDown={e=>{backdropPressed.current=isDialogBackdropEvent(e);}} onClick={e=>{if(backdropPressed.current&&isDialogBackdropEvent(e))setDownload(false);backdropPressed.current=false;}} aria-labelledby="download-title"><div className="dialog-heading"><img src="/assets/pome-icon.webp" alt=""/><button className="icon-button" aria-label={t('action.closeDownload')} title={t('action.close')} onClick={()=>setDownload(false)}><X size={19} aria-hidden="true"/></button></div><span className="eyebrow">{t('download.eyebrow')}</span><h2 id="download-title">{t('download.title')}</h2><p>{t('download.description')}</p>{manifest?.assets?.length?<>
+          <div className="download-list">{manifest.assets.map(a=><a key={a.name} className="download-row" href={a.url} rel="noreferrer"><span className="download-row-name">{PLATFORM_LABEL[a.platform]||a.name}</span><span className="download-row-meta mono">{a.sizeHuman}</span><ArrowDown size={16} aria-hidden="true"/></a>)}</div>
+          <small className="download-version mono">{t('download.version',{version:manifest.tag})}</small></>
+        :manifest===null?<p className="download-pending">{t('download.pending')}</p>:null}<a className="button quiet" href={REPO+'/releases'} target="_blank" rel="noreferrer"><span>{t('download.allReleases')}</span><ArrowUpRight size={17} aria-hidden="true"/></a><a className="button quiet" href={REPO+'/blob/dev/'+readmeFilename(locale)} target="_blank" rel="noreferrer"><span>{t('download.source')}</span><ArrowUpRight size={16} aria-hidden="true"/></a><small>{t('download.platforms')}</small></dialog>
   </>;
 }
