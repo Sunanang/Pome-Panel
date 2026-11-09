@@ -95,7 +95,7 @@
   "footer.credit": "オープンソースへの謝辞",
   "download.eyebrow": "次のステップ",
   "download.title": "ワークスペースを、デスクトップへ。",
-  "download.description": "公開済みのインストーラーは GitHub Releases を確認してください。ソースコードとローカルでの実行方法も参照できます。",
+  "download.description": "公開済みのインストーラーは GitHub Releases を確認してください。飛牛 NAS 用のコンパニオンはアプリセンターで手動インストールする FPK で、Node.js 22 ランタイムが必要です。ソースコードとローカルでの実行方法も参照できます。",
   "download.releases": "Releases を見る",
   "download.source": "ソースコードと実行方法",
   "download.platforms": "macOS 13+ Apple Silicon · Windows 10 / 11 x64",
@@ -115,5 +115,7 @@
   "download.allReleases": "すべてのリリース",
   "download.version": "最新 {version}",
   "download.soon": "近日公開",
-  "download.soonHint": "未公開"
+  "download.soonHint": "未公開",
+  "faq.ai.question": "AI 機能は内容を外部に送りますか？",
+  "faq.ai.answer": "録音の文字起こしとスマート命名は任意です。有効にすると、音声やテキストは自分で設定したサービス（DashScope または OpenAI 互換の任意のエンドポイント）に送信されます。オフにすればすべて端末内に留まります。それ以外の機能はネットワークを使いません。"
 }

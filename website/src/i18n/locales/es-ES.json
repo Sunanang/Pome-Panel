@@ -95,7 +95,7 @@
   "footer.credit": "Créditos de código abierto",
   "download.eyebrow": "TU SIGUIENTE PASO",
   "download.title": "Lleva tu espacio de trabajo al escritorio.",
-  "download.description": "Consulta los instaladores publicados en GitHub Releases. También puedes explorar el código y las instrucciones de ejecución local.",
+  "download.description": "Los instaladores publicados están en GitHub Releases. El complemento para NAS fnOS es un FPK que se instala manualmente en el Centro de aplicaciones y requiere el entorno de ejecución Node.js 22. También puedes consultar el código y las instrucciones de ejecución local.",
   "download.releases": "Ver Releases",
   "download.source": "Código e instrucciones",
   "download.platforms": "macOS 13+ Apple Silicon · Windows 10 / 11 x64",
@@ -115,5 +115,7 @@
   "download.allReleases": "Todas las versiones",
   "download.version": "Última {version}",
   "download.soon": "Muy pronto",
-  "download.soonHint": "Aún no publicado"
+  "download.soonHint": "Aún no publicado",
+  "faq.ai.question": "¿Las funciones de IA envían contenido fuera?",
+  "faq.ai.answer": "La transcripción de grabaciones y el nombrado inteligente son opcionales. Si los activas, el audio o el texto se envían al servicio que configures (DashScope o cualquier endpoint compatible con OpenAI); si los desactivas, todo queda en tu equipo. El resto no necesita red."
 }

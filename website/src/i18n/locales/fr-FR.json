@@ -95,7 +95,7 @@
   "footer.credit": "Crédits open source",
   "download.eyebrow": "LA SUITE",
   "download.title": "Votre espace de travail, sur le bureau.",
-  "download.description": "Consultez GitHub Releases pour les programmes d’installation publiés. Le code source et les instructions d’exécution locale sont aussi disponibles.",
+  "download.description": "Les programmes d’installation publiés sont dans GitHub Releases. Le compagnon pour NAS fnOS est un FPK à installer manuellement dans le Centre d’applications ; il nécessite l’environnement Node.js 22. Le code source et les instructions d’exécution locale sont aussi disponibles.",
   "download.releases": "Voir les Releases",
   "download.source": "Code source et instructions",
   "download.platforms": "macOS 13+ Apple Silicon · Windows 10 / 11 x64",
@@ -115,5 +115,7 @@
   "download.allReleases": "Toutes les versions",
   "download.version": "Dernière {version}",
   "download.soon": "Bientôt disponible",
-  "download.soonHint": "Pas encore publié"
+  "download.soonHint": "Pas encore publié",
+  "faq.ai.question": "Les fonctions IA envoient-elles du contenu à l’extérieur ?",
+  "faq.ai.answer": "La transcription des enregistrements et le nommage intelligent sont facultatifs. Activés, l’audio ou le texte est envoyé au service que vous configurez (DashScope ou tout point de terminaison compatible OpenAI) ; désactivés, tout reste sur votre machine. Le reste ne nécessite pas de réseau."
 }

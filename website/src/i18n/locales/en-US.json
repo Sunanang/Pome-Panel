@@ -95,7 +95,7 @@
   "footer.credit": "Open-source credits",
   "download.eyebrow": "YOUR NEXT STEP",
   "download.title": "Bring your workspace to the desktop.",
-  "download.description": "Check GitHub Releases for published installers. You can also explore the source and instructions for running locally.",
+  "download.description": "Published installers live in GitHub Releases. The fnOS NAS companion is an FPK you install manually in App Center, and it needs the Node.js 22 runtime. You can also explore the source and instructions for running locally.",
   "download.releases": "View Releases",
   "download.source": "Source & setup instructions",
   "download.platforms": "macOS 13+ Apple Silicon · Windows 10 / 11 x64",
@@ -115,5 +115,7 @@
   "download.allReleases": "All releases",
   "download.version": "Latest {version}",
   "download.soon": "Coming soon",
-  "download.soonHint": "Not published yet"
+  "download.soonHint": "Not published yet",
+  "faq.ai.question": "Do the AI features send anything out?",
+  "faq.ai.answer": "Recording transcription and smart naming are optional. When on, audio or text is sent to the service you configure (DashScope or any OpenAI-compatible endpoint); turn them off and everything stays on your machine. Nothing else needs the network."
 }

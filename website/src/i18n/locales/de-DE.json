@@ -95,7 +95,7 @@
   "footer.credit": "Open-Source-Danksagung",
   "download.eyebrow": "DEIN NÄCHSTER SCHRITT",
   "download.title": "Dein Arbeitsbereich auf dem Desktop.",
-  "download.description": "Veröffentlichte Installationsdateien findest du in GitHub Releases. Du kannst auch den Quellcode und die Anleitung zum lokalen Start ansehen.",
+  "download.description": "Veröffentlichte Installationsdateien findest du in GitHub Releases. Der fnOS-NAS-Begleiter ist ein FPK, das du im App-Center manuell installierst, und benötigt die Node.js-22-Laufzeit. Du kannst auch den Quellcode und die Anleitung zum lokalen Start ansehen.",
   "download.releases": "Releases ansehen",
   "download.source": "Quellcode und Startanleitung",
   "download.platforms": "macOS 13+ Apple Silicon · Windows 10 / 11 x64",
@@ -115,5 +115,7 @@
   "download.allReleases": "Alle Versionen",
   "download.version": "Neueste {version}",
   "download.soon": "Demnächst",
-  "download.soonHint": "Noch nicht veröffentlicht"
+  "download.soonHint": "Noch nicht veröffentlicht",
+  "faq.ai.question": "Senden die KI-Funktionen Inhalte nach außen?",
+  "faq.ai.answer": "Transkription und intelligente Benennung sind optional. Aktiviert werden Audio oder Text an den von dir konfigurierten Dienst gesendet (DashScope oder ein beliebiger OpenAI-kompatibler Endpunkt); deaktiviert bleibt alles auf deinem Rechner. Alles andere braucht kein Netzwerk."
 }

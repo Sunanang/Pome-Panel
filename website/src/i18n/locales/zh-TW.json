@@ -95,7 +95,7 @@
   "footer.credit": "開源致謝",
   "download.eyebrow": "下一步",
   "download.title": "把工作台，帶回桌面。",
-  "download.description": "安裝程式以 GitHub Releases 中實際發佈的版本為準。也可以查看原始碼與本機執行說明。",
+  "download.description": "安裝程式以 GitHub Releases 中實際發佈的版本為準。飛牛 NAS 夥伴是應用中心裡手動安裝的 FPK，需要 Node.js 22 執行環境。也可以查看原始碼與本機執行說明。",
   "download.releases": "查看 Releases",
   "download.source": "查看原始碼與執行說明",
   "download.platforms": "macOS 13+ Apple Silicon · Windows 10 / 11 x64",
@@ -115,5 +115,7 @@
   "download.allReleases": "全部歷史版本",
   "download.version": "最新 {version}",
   "download.soon": "敬請期待",
-  "download.soonHint": "尚未發布"
+  "download.soonHint": "尚未發布",
+  "faq.ai.question": "AI 功能會把內容傳出去嗎？",
+  "faq.ai.answer": "錄音轉寫與智慧命名是選用的。開啟後，音訊或文字會傳送到你自己設定的服務（DashScope 或任意 OpenAI 相容介面）；關掉就完全留在本機。其餘功能不需要連網。"
 }

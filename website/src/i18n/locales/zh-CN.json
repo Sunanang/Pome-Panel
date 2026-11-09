@@ -95,7 +95,7 @@
   "footer.credit": "开源致谢",
   "download.eyebrow": "下一步",
   "download.title": "把工作台，带回桌面。",
-  "download.description": "安装包以 GitHub Releases 中实际发布的版本为准。也可以查看源码与本地运行说明。",
+  "download.description": "安装包以 GitHub Releases 中实际发布的版本为准。飞牛 NAS 伴侣是应用中心里手动安装的 FPK，需要 Node.js 22 运行时。也可以查看源码与本地运行说明。",
   "download.releases": "查看 Releases",
   "download.source": "查看源码与运行说明",
   "download.platforms": "macOS 13+ Apple Silicon · Windows 10 / 11 x64",
@@ -115,5 +115,7 @@
   "download.allReleases": "全部历史版本",
   "download.version": "最新 {version}",
   "download.soon": "敬请期待",
-  "download.soonHint": "尚未发布"
+  "download.soonHint": "尚未发布",
+  "faq.ai.question": "AI 功能会把内容发出去吗？",
+  "faq.ai.answer": "录音转写与智能命名是可选的。开启后，音频或文本会发送到你自己配置的服务（DashScope 或任意 OpenAI 兼容接口）；关掉就完全留在本机。其余功能不需要联网。"
 }

@@ -196,6 +196,7 @@ export function App(){
         <details><summary><span>{t('faq.nas.question')}</span><CaretDown size={18} aria-hidden="true"/></summary><p>{t('faq.nas.answer')}</p></details>
         <details><summary><span>{t('faq.platform.question')}</span><CaretDown size={18} aria-hidden="true"/></summary><p>{t('faq.platform.answer')}</p></details>
         <details><summary><span>{t('faq.demo.question')}</span><CaretDown size={18} aria-hidden="true"/></summary><p>{t('faq.demo.answer')}</p></details>
+        <details><summary><span>{t('faq.ai.question')}</span><CaretDown size={18} aria-hidden="true"/></summary><p>{t('faq.ai.answer')}</p></details>
       </section>
     </main>
     <footer><a className="brand" href="#top"><img src="/assets/pome-icon.webp" alt=""/><span>Pome Panel</span></a><span>{t('footer.tagline')}</span><div><a href={REPO} target="_blank" rel="noreferrer">GitHub</a><a href={REPO+'/blob/dev/LICENSE'} target="_blank" rel="noreferrer">{t('footer.license')}</a><a href="https://github.com/xiaopu-ai/TO-DO-Panel" target="_blank" rel="noreferrer">{t('footer.credit')}</a></div></footer>

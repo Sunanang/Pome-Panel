@@ -95,7 +95,7 @@
   "footer.credit": "오픈 소스 크레딧",
   "download.eyebrow": "다음 단계",
   "download.title": "작업 공간을 데스크톱으로.",
-  "download.description": "공개된 설치 파일은 GitHub Releases를 확인하세요. 소스 코드와 로컬 실행 방법도 살펴볼 수 있습니다.",
+  "download.description": "공개된 설치 파일은 GitHub Releases를 확인하세요. fnOS NAS 컴패니언은 앱 센터에서 직접 설치하는 FPK이며 Node.js 22 런타임이 필요합니다. 소스 코드와 로컬 실행 방법도 살펴볼 수 있습니다.",
   "download.releases": "Releases 보기",
   "download.source": "소스 코드와 실행 방법",
   "download.platforms": "macOS 13+ Apple Silicon · Windows 10 / 11 x64",
@@ -115,5 +115,7 @@
   "download.allReleases": "전체 릴리스",
   "download.version": "최신 {version}",
   "download.soon": "곧 공개",
-  "download.soonHint": "미공개"
+  "download.soonHint": "미공개",
+  "faq.ai.question": "AI 기능이 내용을 외부로 보내나요?",
+  "faq.ai.answer": "녹음 전사와 스마트 이름 지정은 선택 사항입니다. 켜면 오디오나 텍스트가 직접 설정한 서비스(DashScope 또는 OpenAI 호환 엔드포인트)로 전송됩니다. 끄면 모두 기기 안에 남습니다. 나머지 기능은 네트워크를 쓰지 않습니다."
 }
