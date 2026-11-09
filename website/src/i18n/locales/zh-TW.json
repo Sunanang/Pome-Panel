@@ -113,5 +113,7 @@
   "demo.task6": "跑步半小時",
   "download.pending": "第一個版本還在打包，尚未對外發布。發布之後這裡會直接列出各平台安裝檔。",
   "download.allReleases": "全部歷史版本",
-  "download.version": "最新 {version}"
+  "download.version": "最新 {version}",
+  "download.soon": "敬請期待",
+  "download.soonHint": "尚未發布"
 }

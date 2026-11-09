@@ -113,5 +113,7 @@
   "demo.task6": "가볍게 달리기",
   "download.pending": "첫 빌드가 아직 공개되지 않았습니다. 공개되면 여기에서 플랫폼별 설치 파일을 바로 내려받을 수 있습니다.",
   "download.allReleases": "전체 릴리스",
-  "download.version": "최신 {version}"
+  "download.version": "최신 {version}",
+  "download.soon": "곧 공개",
+  "download.soonHint": "미공개"
 }

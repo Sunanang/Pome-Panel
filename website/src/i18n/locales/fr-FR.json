@@ -113,5 +113,7 @@
   "demo.task6": "Faire un petit footing",
   "download.pending": "La première version n’est pas encore publiée. Dès sa sortie, les installateurs seront téléchargeables directement ici.",
   "download.allReleases": "Toutes les versions",
-  "download.version": "Dernière {version}"
+  "download.version": "Dernière {version}",
+  "download.soon": "Bientôt disponible",
+  "download.soonHint": "Pas encore publié"
 }

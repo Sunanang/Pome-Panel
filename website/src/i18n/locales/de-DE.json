@@ -113,5 +113,7 @@
   "demo.task6": "Eine kleine Runde laufen",
   "download.pending": "Der erste Build ist noch nicht veröffentlicht. Sobald er erscheint, stehen die Installer hier als Direktdownload bereit.",
   "download.allReleases": "Alle Versionen",
-  "download.version": "Neueste {version}"
+  "download.version": "Neueste {version}",
+  "download.soon": "Demnächst",
+  "download.soonHint": "Noch nicht veröffentlicht"
 }

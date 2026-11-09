@@ -113,5 +113,7 @@
   "demo.task6": "軽くランニングする",
   "download.pending": "最初のビルドはまだ公開されていません。公開後はここから各プラットフォームのインストーラーを直接ダウンロードできます。",
   "download.allReleases": "すべてのリリース",
-  "download.version": "最新 {version}"
+  "download.version": "最新 {version}",
+  "download.soon": "近日公開",
+  "download.soonHint": "未公開"
 }

@@ -113,5 +113,7 @@
   "demo.task6": "Salir a correr un rato",
   "download.pending": "La primera compilación aún no se ha publicado. Cuando salga, los instaladores aparecerán aquí como descarga directa.",
   "download.allReleases": "Todas las versiones",
-  "download.version": "Última {version}"
+  "download.version": "Última {version}",
+  "download.soon": "Muy pronto",
+  "download.soonHint": "Aún no publicado"
 }

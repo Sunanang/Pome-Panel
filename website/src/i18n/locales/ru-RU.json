@@ -113,5 +113,7 @@
   "demo.task6": "Немного побегать",
   "download.pending": "Первая сборка ещё не опубликована. Когда выйдет, установщики появятся здесь для прямой загрузки.",
   "download.allReleases": "Все версии",
-  "download.version": "Последняя {version}"
+  "download.version": "Последняя {version}",
+  "download.soon": "Скоро",
+  "download.soonHint": "Ещё не опубликовано"
 }

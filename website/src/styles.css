@@ -27,3 +27,6 @@ dialog{color:#eee;background:#1b1a1c;border:1px solid #ffffff30;border-radius:10
 .download-row svg{flex:0 0 auto;color:#b9b3ad}
 .download-pending{font-size:12.5px;line-height:1.9;color:#b0aaa4;border:1px dashed var(--control-border);border-radius:12px;padding:14px 16px;margin:4px 0 16px}
 .download-version{display:block;font-size:10px;letter-spacing:.08em;color:#8c8585;margin-bottom:14px;font-variant-numeric:tabular-nums}
+.download-row--soon{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;opacity:.72}
+.download-row--soon:hover{opacity:1}
+.download-row--soon .download-row-meta{font-size:10px;letter-spacing:.06em;text-transform:uppercase}

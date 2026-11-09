@@ -113,5 +113,7 @@
   "demo.task6": "Go for a short run",
   "download.pending": "The first build hasn’t been published yet. Installers will show up here as direct downloads once it ships.",
   "download.allReleases": "All releases",
-  "download.version": "Latest {version}"
+  "download.version": "Latest {version}",
+  "download.soon": "Coming soon",
+  "download.soonHint": "Not published yet"
 }
