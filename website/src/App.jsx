@@ -125,9 +125,9 @@ function Story({ reduced }) {
   </section>;
 }
 
-const PLATFORM_LABEL={'mac-arm64':'macOS · Apple Silicon','mac-x64':'macOS · Intel','win-x64':'Windows · x64','fnos-fpk':'fnOS · FPk'};
+const PLATFORM_LABEL={'mac-arm64':'macOS · Apple Silicon','mac-x64':'macOS · Intel','win-x64':'Windows · x64','fnos-fpk':'fnOS · FPK'};
 /* 下载弹窗固定给三行：macOS / Windows / fnOS·FPk。清单里没有对应产物时按钮提示「敬请期待」 */
-const DOWNLOADS=[{id:'mac',label:'macOS'},{id:'win',label:'Windows'},{id:'fnos',label:'fnOS · FPk'}];
+const DOWNLOADS=[{id:'mac',label:'macOS'},{id:'win',label:'Windows'},{id:'fnos',label:'fnOS · FPK'}];
 function assetFor(manifest,id){
   if(!manifest||!Array.isArray(manifest.assets))return null;
   const pick=platform=>manifest.assets.find(a=>a.platform===platform);

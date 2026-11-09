@@ -20,7 +20,7 @@
   "hero.eyebrow": "POME PANEL / 데스크톱 작업 공간",
   "hero.title": "작고 가볍게, 화면 끝에.\n살짝 누르면, 공간이 펼쳐져요.",
   "hero.description": "데스크톱 가장자리에 살며시 숨어 있는 작은 캡슐.\n가볍게 한 번 누르면 할 일, 메모, 일상의 도구가 손닿는 곳에 펼쳐져요.",
-  "hero.platforms": "macOS 13+ · Windows 10 / 11 · 로컬 우선",
+  "hero.platforms": "macOS 13+（Apple Silicon）· Windows 10/11 x64 · 로컬 우선",
   "hero.imageAlt": "짙은 금속과 유리 사이로 가느다란 석류빛이 비치는 공간",
   "hero.productLabel": "자주 쓰는 도구가 화면 가장자리에.",
   "hero.motto": "방해는 줄이고, 나만의 흐름으로.",
