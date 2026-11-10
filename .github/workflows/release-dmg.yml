@@ -111,6 +111,11 @@ jobs:
       - run: npm ci
         if: needs.changes.outputs.website_only != 'true'
       - run: npm test
+        env:
+          # CI runner 没有真实桌面尺寸（Windows 只有 1024x768），tests/*.electron.js 那批
+          # 交互验收脚本会因此误报，且它们还要生成人工核对的截图。
+          # 单元测试与语法检查照常跑；交互验收在本地或真机执行。
+          POME_SKIP_ELECTRON_ACCEPTANCE: '1'
         if: needs.changes.outputs.website_only != 'true'
       - name: Build DMG
         run: npm run build
@@ -170,6 +175,11 @@ jobs:
       - run: npm ci
         if: needs.changes.outputs.website_only != 'true'
       - run: npm test
+        env:
+          # CI runner 没有真实桌面尺寸（Windows 只有 1024x768），tests/*.electron.js 那批
+          # 交互验收脚本会因此误报，且它们还要生成人工核对的截图。
+          # 单元测试与语法检查照常跑；交互验收在本地或真机执行。
+          POME_SKIP_ELECTRON_ACCEPTANCE: '1'
         if: needs.changes.outputs.website_only != 'true'
       - run: npm run build:win
         if: needs.changes.outputs.website_only != 'true'
