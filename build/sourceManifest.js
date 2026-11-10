@@ -6,6 +6,10 @@ const PACKAGE_IDENTITY=['name','version','main','license'];
 function verifyPackagedSources(projectRoot,appRoot){
  const hashes={};
  function verify(relative){
+  // walk() 传进来的是 path.relative 的结果，Windows 上带反斜杠（renderer\index.html），
+  // 会和 REQUIRED 里写的正斜杠形成两个不同的 key，同一个文件被记两次。
+  // 统一成 POSIX 分隔符，让两边的 key 一致。
+  relative=relative.split(path.sep).join('/');
   const source=path.join(projectRoot,relative),packed=path.join(appRoot,relative);
   if(!fs.existsSync(source)||!fs.statSync(source).isFile())return;
   const expected=crypto.createHash('sha256').update(fs.readFileSync(source)).digest('hex');
