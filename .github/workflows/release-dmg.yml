@@ -84,7 +84,6 @@ jobs:
   mac:
     name: Build Apple Silicon DMG
     runs-on: macos-14
-    # 只在 tag（真正发版）或 PR（验证）时构建；main push 交给 tag job
     if: github.ref_type == 'tag' || github.event_name == 'pull_request'
     # macOS arm64 的 hosted runner 容量紧张，抢不到机器时 GitHub 会连续重试约 15 分钟再放弃。
     # 原来 45 分钟的超时里大半耗在排队，把上限抬高让它能等到机器。真正的失败仍由重试
@@ -147,7 +146,6 @@ jobs:
   windows:
     name: Build and test Windows installer
     runs-on: windows-latest
-    # 只在 tag（真正发版）或 PR（验证）时构建；main push 交给 tag job
     if: github.ref_type == 'tag' || github.event_name == 'pull_request'
     timeout-minutes: 30
     steps:
@@ -197,7 +195,6 @@ jobs:
   nas:
     name: Build fnOS FPK
     runs-on: ubuntu-24.04
-    # 只在 tag（真正发版）或 PR（验证）时构建；main push 交给 tag job
     if: github.ref_type == 'tag' || github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
@@ -258,8 +255,10 @@ jobs:
       - windows
       - nas
     runs-on: ubuntu-latest
-    # 只在 tag（真正发版）或 PR（验证）时构建；main push 交给 tag job
-    if: github.ref_type == 'tag' || github.event_name == 'pull_request'
+    # 只改官网时不发布；真正发版只在 tag 上（release-policy.js 里 publish 也判 tag）
+    if: >-
+      (github.ref_type == 'tag' || github.event_name == 'pull_request') &&
+      needs.changes.outputs.website_only != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -320,8 +319,4 @@ jobs:
           fi
           gh pr create --base main --head dev \
             --title "更新下载清单 $TAG" \
-            --body "发版流水线生成了官网的下载清单（website/public/downloads.json），指向 $TAG 的安装包。
-
-          合并后 EdgeOne 自动构建，官网下载弹窗就会列出这个版本的 macOS / Windows / fnOS 安装包。"
-          fi
-    if: needs.changes.outputs.website_only != 'true'
+            --body "发版流水线生成了官网的下载清单（website/public/downloads.json），指向 $TAG 的安装包。合并后 EdgeOne 自动构建，官网下载弹窗就会列出这个版本的安装包。"
