@@ -51,7 +51,10 @@ jobs:
   mac:
     name: Build Apple Silicon DMG
     runs-on: macos-14
-    timeout-minutes: 45
+    # macOS arm64 的 hosted runner 容量紧张，抢不到机器时 GitHub 会连续重试约 15 分钟再放弃。
+    # 原来 45 分钟的超时里大半耗在排队，把上限抬高让它能等到机器。真正的失败仍由重试
+    # workflow（retry-release.yml）兜底。
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
