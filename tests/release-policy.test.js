@@ -117,8 +117,11 @@ test('NAS builds use a pinned official tool and join the desktop release gate', 
     assert.ok(config.jobs.release.needs.includes(platform), `${platform} must gate release publishing`);
   }
   assert.match(workflow, /pattern: '\*-installer'/);
-  assert.match(workflow, /gh release create .*release-assets\/\*\.fpk/);
-  assert.ok(workflow.indexOf('sha256sum --check *.sha256') < workflow.indexOf('gh release create'));
+  // 发布用的资产列表现在是动态数组（macOS 可能缺失），fpk 仍在其中；
+  // 校验和检查也必须排在发布之前。
+  assert.match(workflow, /assets=\(release-assets\/\*\.dmg release-assets\/\*\.exe release-assets\/\*\.fpk release-assets\/\*\.sha256\)/);
+  assert.match(workflow, /gh release create "\$\{GITHUB_REF_NAME\}" "\$\{assets\[@\]\}"/);
+  assert.ok(workflow.indexOf('sha256sum --check') < workflow.indexOf('gh release create'));
 });
 
 for (const manifest of ['manifest', 'manifest.json']) {
