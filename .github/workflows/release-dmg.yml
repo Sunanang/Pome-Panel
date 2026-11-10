@@ -10,12 +10,9 @@ name: Release macOS, Windows and NAS
   pull_request: null
 permissions:
   contents: write
-# group 里带 sha：不同 commit 的 run 互不取消。
-# 原来只按 ref 分组，PR 上每 push 一次就有一个新 run 进同一个组，把前一个顶掉，
-# 结果永远是「跑到一半被取消」，拿不到完整结论。
 concurrency:
-  group: release-${{ github.ref }}-${{ github.sha }}
-  cancel-in-progress: false
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   changes:
     name: Classify website-only update
