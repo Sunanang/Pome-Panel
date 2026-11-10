@@ -6,8 +6,8 @@
 //
 // 平台判定按文件名后缀（electron-builder 的 artifactName 是 Pome-Panel-<ver>-<arch>.<ext>）。
 import { execFileSync } from 'node:child_process'
-import { writeFileSync, mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 
 const repo = 'Sunanang/Pome-Panel'
 const tag = process.argv[2] || process.env.GITHUB_REF_NAME
@@ -31,16 +31,32 @@ function platformOf(name) {
 
 const sizeHuman = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB')
 
+// 低于这个体积的包拷到官网域名下，点下载直接走 EdgeOne，不经过 GitHub；
+// 更大的（当前是 Windows 安装包 120MB）留 GitHub 直链——GitHub 单文件硬限 100MB，
+// 塞不进 git 仓库。GitHub 的 release 直链本身返回 Content-Disposition: attachment，
+// 点下去也是直接下载、不会跳到网页。
+const LOCAL_MAX_BYTES = 20 * 1048576
+const LOCAL_DIR = 'website/public/downloads'
+
+// 每次重新生成前清掉上一版的本地包，避免仓库里越堆越多
+if (existsSync(LOCAL_DIR)) rmSync(LOCAL_DIR, { recursive: true, force: true })
+mkdirSync(LOCAL_DIR, { recursive: true })
+
 const assets = release.assets
   .map((a) => {
     const platform = platformOf(a.name)
     if (!platform) return null
+    const local = a.size <= LOCAL_MAX_BYTES
+    if (local) {
+      execFileSync('gh', ['release', 'download', release.tagName, '-R', repo, '-p', a.name, '-D', LOCAL_DIR, '--clobber'], { stdio: 'inherit' })
+    }
     return {
       name: a.name,
       platform,
       size: a.size,
       sizeHuman: sizeHuman(a.size),
-      url: `https://github.com/${repo}/releases/download/${release.tagName}/${a.name}`,
+      local,
+      url: local ? `downloads/${a.name}` : `https://github.com/${repo}/releases/download/${release.tagName}/${a.name}`,
     }
   })
   .filter(Boolean)
