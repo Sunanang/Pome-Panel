@@ -1,0 +1,21 @@
+{
+  "tag": "v0.11.0",
+  "publishedAt": "2026-11-10",
+  "releasePage": "https://github.com/Sunanang/Pome-Panel/releases/tag/v0.11.0",
+  "assets": [
+    {
+      "name": "Pome-Panel-0.11.0-fnos-all.fpk",
+      "platform": "fnos-fpk",
+      "size": 1695264,
+      "sizeHuman": "1.6 MB",
+      "url": "https://github.com/Sunanang/Pome-Panel/releases/download/v0.11.0/Pome-Panel-0.11.0-fnos-all.fpk"
+    },
+    {
+      "name": "Pome-Panel-0.11.0-windows-x64-setup.exe",
+      "platform": "win-x64",
+      "size": 126335737,
+      "sizeHuman": "120.5 MB",
+      "url": "https://github.com/Sunanang/Pome-Panel/releases/download/v0.11.0/Pome-Panel-0.11.0-windows-x64-setup.exe"
+    }
+  ]
+}
