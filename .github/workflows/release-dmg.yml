@@ -10,6 +10,8 @@ name: Release macOS, Windows and NAS
   pull_request: null
 permissions:
   contents: write
+  # 发版后要开 dev -> main 的清单 PR（main 有「要求 PR」的保护，bot 推不上去）
+  pull-requests: write
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
