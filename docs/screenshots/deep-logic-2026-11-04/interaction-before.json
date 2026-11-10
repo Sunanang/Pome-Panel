@@ -1,0 +1,12 @@
+{
+  "phase": "interaction",
+  "baseline": true,
+  "ready": true,
+  "copyAfterBlur": false,
+  "noteSaved": true,
+  "nextEditor": false,
+  "singlePreserved": false,
+  "bulkPreserved": false,
+  "bulkUnchangedDeleted": true,
+  "unselectedPreserved": true
+}

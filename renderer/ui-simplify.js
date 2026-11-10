@@ -12,7 +12,7 @@
   }
   function details(key, id) {
     const d = document.createElement('details'); d.id = id;
-    const s = document.createElement('summary'); text(s, key); d.append(s); return d;
+    const s = document.createElement('summary'), label = document.createElement('span'); text(label, key); s.append(label); d.append(s); return d;
   }
   function openManual(id) {
     const d = el(`ui-token-manual-${id}`); if (d) d.open = true;
@@ -27,12 +27,12 @@
       const node = el(`settings-${id}-token-status`), data = usage[id];
       if (!node || !data) continue;
       const invalid = data.manualTokenInvalid || data.status === 401 || data.status === 403;
-      const key = invalid ? data.ok && data.authSource === 'local' ? 'ui.token.localFallback' : 'ui.token.expired'
+      const key = data.credentialAccessRequired ? 'privacy.ai.paused' : invalid ? data.ok && data.authSource === 'local' ? 'ui.token.localFallback' : 'ui.token.expired'
         : data.ok === false ? 'ui.token.fetchFailed'
           : data.ok && data.authSource === 'manual' ? 'ui.token.manualActive'
           : data.ok && ['local', 'file', 'gh', 'hosts.yml', 'keychain'].includes(data.authSource) ? 'ui.token.localActive'
             : data.configured || data.manualTokenConfigured ? 'ui.token.savedPending' : 'ui.token.notAvailable';
-      text(node, key); node.dataset.state = invalid || data.ok === false ? 'error' : data.ok ? 'saved' : 'empty';
+      text(node, key); node.dataset.state = data.credentialAccessRequired ? 'empty' : invalid || data.ok === false ? 'error' : data.ok ? 'saved' : 'empty';
       const hint = el(`settings-${id}-token-hint`);
       if (data.ok && hint && !hint.classList.contains('error')) I.bind(hint, 'textContent', () => '');
     }
@@ -40,14 +40,13 @@
   for (const id of tokens) {
     const input = el(`settings-${id}-token`), section = input?.closest('.ai-source-token');
     if (!section) continue;
-    const manual = details('ui.token.manual', `ui-token-manual-${id}`);
-    const row = input.closest('.settings-cursor-token-row'), status = el(`settings-${id}-token-status`);
-    const brief = document.createElement('div'); brief.className = 'ui-token-brief';
-    if (status) brief.append(status);
+    const manual = details('ui.token.settings', `ui-token-manual-${id}`);
+    manual.className = 'ai-token-details';
+    const status = el(`settings-${id}-token-status`);
+    if (status) manual.querySelector('summary').append(status);
+    section.before(manual); manual.append(section);
     const fetch = el(`settings-${id}-token-fetch`);
-    if (fetch) { text(fetch, 'ui.token.acquire'); fetch.classList.add('primary'); brief.append(fetch); }
-    manual.append(row); section.prepend(brief, manual);
-    if (id === 'grok') manual.append(el('settings-grok-team').closest('label'));
+    if (fetch) { text(fetch, 'ui.token.acquire'); fetch.classList.add('primary'); }
     manual.addEventListener('toggle', () => { if (manual.open) input.focus({ preventScroll: true }); });
   }
   document.addEventListener('notch:ai-usage-updated', e => renderTokenSources(e.detail));
@@ -55,27 +54,31 @@
   api?.onCodexTokenChanged?.(() => { delete usage.codex; });
   api?.onAiProviderTokenChanged?.(s => { if (s?.providerId) delete usage[s.providerId]; });
 
-  // Keep all existing NAS controls and handlers; only move the secondary view.
+  // NAS keeps every control expanded. Put existing diagnostic hints in their
+  // own section; pairing validation stays beside the pairing fields.
   const card = el('settings-nas-sync-card');
-  const nasDetails = details('ui.nas.troubleshoot', 'ui-nas-troubleshoot');
+  const nasDetails = document.createElement('section'); nasDetails.id = 'ui-nas-troubleshoot';
+  const nasTitle = document.createElement('h4'); nasTitle.className = 'settings-nas-section-title';
+  text(nasTitle, 'ui.nas.troubleshoot'); nasDetails.append(nasTitle);
   const summary = document.createElement('div'); summary.className = 'ui-nas-summary';
   const status = el('settings-nas-sync-status');
   const message = document.createElement('p'); message.id = 'ui-nas-message';
   const main = button('ui.nas.connect', () => {
     const state = window.__pomeNasUi || {};
     if (!state.bound && state.offline) el('settings-nas-pair-submit')?.click();
-    else if (!state.bound) { nasDetails.open = true; el('settings-nas-sync-base-url')?.focus(); }
+    else if (!state.bound) { window.NotchSettings?.reveal('settings-nas-sync-base-url'); el('settings-nas-sync-base-url')?.focus(); }
     else if (state.paused) el('settings-nas-recovery')?.click();
-    else if (state.needsAttention) { nasDetails.open = true; el('settings-nas-status-hint')?.scrollIntoView({ block: 'nearest' }); }
+    else if (state.needsAttention) { window.NotchSettings?.reveal('settings-nas-status-hint', { block: 'nearest' }); }
     else if (state.offline) el('settings-nas-sync-retry')?.click();
     else el('settings-nas-sync-open')?.click();
   }, true); main.id = 'ui-nas-main';
   summary.append(status, message, main);
   const heading = card.querySelector('.settings-card-heading');
-  for (const child of [...card.children]) if (child !== heading) nasDetails.append(child);
-  card.append(summary, nasDetails);
+  heading.after(summary);
+  for (const id of ['settings-nas-status-hint', 'settings-nas-endpoint-hint']) nasDetails.append(el(id));
+  card.append(nasDetails);
   const copyNas = button('ui.copyDiagnostic', () => copyDiagnostic(nasDiagnostic()));
-  nasDetails.append(copyNas);
+  summary.append(copyNas);
   function nasDiagnostic() {
     return ['NAS', window.__pomeNasUi?.code, ...['settings-nas-sync-hint','settings-nas-status-hint','settings-nas-endpoint-hint'].map(id => el(id)?.textContent)].filter(Boolean).join('\n');
   }
@@ -148,23 +151,13 @@
     const value = options.diagnostic || options.message || '';
     const problem = options.messageKey || D.errorKey(value);
     const layoutProblem = options.scope === 'home:layout' || problem === 'ui.error.layout';
-    text(errorMessage, problem); text(repairCopy, options.repairKey || (layoutProblem ? 'ui.error.layoutRepair' : 'ui.error.repair'));
+    text(errorMessage, problem); text(fix, options.repairActionKey || (layoutProblem ? 'ux.settings.display' : options.scope === 'nas' ? 'ux.nas.connection' : options.scope?.startsWith('token:') || options.scope?.startsWith('source:') || !options.onRepair ? 'copy.openSettings.93112c' : 'ui.retry')); text(repairCopy, options.repairKey || (layoutProblem ? 'ui.error.layoutRepair' : 'ui.error.repair'));
     raw.textContent = D.diagnostic(value);
     const source = ['claude','codex','cursor','manus','grok','copilot'].find(id => value.toLowerCase().includes(id));
-    repair = options.onRepair || (layoutProblem ? () => { void setActiveTab('settings').then(() => el('settings-home-module-list')?.scrollIntoView({ block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
+    repair = options.onRepair || (layoutProblem ? () => { void setActiveTab('settings').then(() => window.NotchSettings?.reveal('settings-home-module-list', { block: 'center' })); } : () => window.NotchAiSources?.openSettings(source));
     text(copy, 'ui.copyDiagnostic'); errorDetails.open = false;
     setErrorVisible(el('app').classList.contains('expanded'));
   }
-
-  const recordingOpen = button('ui.openRecordings', () => setActiveTab('recordings'));
-  recordingOpen.id = 'ui-open-recordings'; recordingOpen.classList.add('ui-quick-entry');
-  // Park on the tile itself (bottom-right). Grid placement spans the full card so
-  // absolute coords are not trapped in a tiny auto-placed cell beside the title.
-  el('home-recorder')?.append(recordingOpen);
-  function quickEntries(settings) {
-    recordingOpen.hidden = settings?.features?.recordings === false;
-  }
-  api?.onAppSettingsChanged?.(quickEntries);
 
   const welcome = document.createElement('dialog'); welcome.id = 'ui-welcome'; welcome.className = 'ui-welcome';
   welcome.setAttribute('aria-labelledby', 'ui-welcome-title');
@@ -212,6 +205,7 @@
         const card = document.createElement('div'), title = document.createElement('strong'), hint = document.createElement('p');
         text(title, 'ui.welcome.' + key); text(hint, 'ui.welcome.' + key + 'Hint'); card.append(title, hint); cards.append(card);
       }
+      const demo=document.createElement('div');demo.className='welcome-capsule-demo';demo.setAttribute('aria-hidden','true');demo.innerHTML='<span class="welcome-demo-capsule"></span><span class="welcome-demo-panel"><i></i><i></i><i></i><i></i></span>';body.prepend(demo);
       body.append(cards);
     } else if (step === 2) {
       const note = document.createElement('p'); text(note, 'ui.welcome.modules'); body.append(note);
@@ -227,9 +221,10 @@
     } else {
       const p = document.createElement('p'); text(p, 'ui.welcome.optional'); body.append(p);
       for (const [key, target] of [['ui.nas.connect', 'settings-nas-sync-card'], ['ui.welcome.ai', 'settings-ai-sources']]) {
-        body.append(button(key, async () => { if (!await finishWelcome()) return; await setActiveTab('settings'); el(target)?.scrollIntoView({ block: 'start' }); if (target.includes('nas')) nasDetails.open = true; }));
+        body.append(button(key, async () => { if (!await finishWelcome()) return; await setActiveTab('settings'); window.NotchSettings?.reveal(target, { block: 'start' }); }));
       }
     }
+    const scrollHint=document.createElement('small');scrollHint.className='welcome-scroll-hint';text(scrollHint,'ux.welcome.scroll');body.append(scrollHint);
     if (finishing) welcome.querySelectorAll('button').forEach(b => { b.disabled = true; });
   }
   let finishing = false;
@@ -248,8 +243,11 @@
     }
   }
   welcome.addEventListener('cancel', e => { e.preventDefault(); if (!finishing) welcome.close(); });
+  let welcomeSettingsRevision = 0;
+  api?.onAppSettingsChanged?.(value => { welcomeSettingsRevision++; settings = value || settings; });
+  const initialWelcomeSettingsRevision = welcomeSettingsRevision;
   api?.getAppSettings?.().then(value => {
-    settings = value || {}; quickEntries(settings);
+    if (welcomeSettingsRevision === initialWelcomeSettingsRevision) settings = value || {};
     firstWelcome = settings.onboardingPending === true;
     if (firstWelcome) {
       renderWelcome();

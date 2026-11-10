@@ -1,0 +1,12 @@
+[
+  {
+    "file": "windows-native",
+    "status": 0,
+    "signal": null
+  },
+  {
+    "file": "windows-widget",
+    "status": 0,
+    "signal": null
+  }
+]

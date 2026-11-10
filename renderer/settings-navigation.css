@@ -1,0 +1,91 @@
+/* Settings A: one fixed navigation column and one scrolling reading pane. */
+#tab-settings .settings-page {
+  --settings-sidebar-width: 144px;
+  display: grid;
+  grid-template-columns: var(--settings-sidebar-width) minmax(0, 1fr);
+  gap: 14px;
+  height: 100%; min-height: 0; min-width: 0; padding: 0;
+  overflow: hidden;
+}
+.settings-sidebar {
+  display: flex; flex-direction: column; gap: 6px;
+  align-self: stretch; min-height: 0; min-width: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 12px 8px;
+  border: 1px solid var(--wb-line, var(--hairline-soft));
+  border-radius: var(--wb-radius, var(--r-card));
+  background: var(--wb-surface, var(--surface-1));
+}
+.settings-sidebar-label { padding: 2px 10px 8px; color: var(--text-4); font-size: 10px; }
+.settings-group-button {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  min-width: 0; min-height: 42px; padding: 9px 10px;
+  border: 1px solid transparent; border-radius: 11px;
+  background: transparent; color: var(--text-3);
+  font: 12px var(--font); text-align: left; cursor: pointer;
+}
+.settings-group-button svg { flex: none; width: 18px; height: 18px; }
+.settings-group-button span { overflow-wrap: anywhere; }
+.settings-group-button:hover { background: var(--surface-2); color: var(--text-2); }
+.settings-group-button[aria-selected='true'] {
+  border-color: var(--hairline-soft); background: var(--wb-control, var(--surface-3)); color: var(--text-1);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+.settings-group-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+#settings-content {
+  min-width: 0; min-height: 0; height: 100%; overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain; scrollbar-gutter: stable; padding-right: 4px;
+}
+.settings-group { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.settings-group[hidden] { display: none !important; }
+#settings-content > .settings-inline-note { min-height: 0; font-size: 11px; }
+#settings-content > .settings-inline-note:empty { display: none; }
+#tab-settings .settings-group > .settings-card { width: 100%; flex: none; margin: 0; }
+#tab-settings :is(.settings-device-card, .settings-appearance-card, .settings-data-card) { display: flex; flex-direction: column; }
+#tab-settings .settings-device-row { flex: none; padding: 10px 0; }
+#tab-settings .settings-device-row strong { white-space: normal; overflow-wrap: anywhere; }
+#tab-settings .settings-panel-size-row { flex: none; }
+#tab-settings .settings-weather-effects-row { border-bottom: 0; }
+#tab-settings .settings-appearance-card .settings-weather-attribution {
+  margin: 0; padding: 2px 0 12px; border: 0; background: none;
+}
+#tab-settings .settings-appearance-card .settings-weather-attribution + .settings-device-row { border-top: 1px solid var(--hairline-soft); }
+#tab-settings .settings-group .settings-card p.experience-hint { margin-top: 6px; }
+#tab-settings .settings-data-card .settings-workspace-row { border: 0; }
+#settings-group-common .settings-device-row { border-bottom: 0; }
+#settings-group-common .settings-device-row ~ .settings-device-row { border-top: 1px solid var(--hairline-soft); }
+#tab-settings .experience-backup { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 20px; }
+.settings-backup-copy { flex: 1; min-width: 0; }
+#tab-settings .settings-backup-copy p { margin: 6px 0 0; }
+#tab-settings .experience-backup .experience-actions { flex: 0 0 auto; margin: 0; }
+.ai-token-details { margin: 10px 0 0 42px; min-width: 0; }
+.settings-credential-access { padding: 12px 0; border-bottom: 1px solid var(--hairline-soft); }
+#tab-settings .settings-credential-access p { margin: 0 0 8px; font-size: 11px; line-height: 1.65; color: var(--text-3); }
+.settings-credential-access-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-credential-access-actions small { min-width: 0; color: var(--text-3); }
+.settings-credential-access-actions button { flex: none; }
+.ai-token-details > summary { display: flex; align-items: center; gap: 8px; min-height: 30px; cursor: pointer; color: var(--text-2); font-size: 11px; list-style: none; }
+.ai-token-details > summary::-webkit-details-marker { display: none; }
+.ai-token-details > summary::before { content: ''; flex: 0 0 5px; width: 5px; height: 5px; border: solid currentColor; border-width: 0 1px 1px 0; transform: rotate(-45deg); margin-right: 3px; }
+.ai-token-details[open] > summary::before { transform: rotate(45deg); }
+.ai-token-details > summary small { flex: 1; min-width: 0; font-size: 10px; color: var(--text-3); text-align: right; overflow-wrap: anywhere; }
+.ai-token-details > summary small[data-state='error'] { color: var(--ai-critical, #ff7b72); }
+.ai-token-details > summary small[data-state='saved'] { color: #65d9a1; }
+/* Quota/token configuration remains usable independently of hook connection. */
+#tab-settings .ai-token-details > .ai-source-token { padding: 8px 0 0; border: 0; opacity: 1; }
+#tab-settings .ai-token-details p:empty { display: none; }
+#tab-settings .ai-token-details .settings-cursor-token-row { flex-wrap: wrap; gap: 8px; }
+#tab-settings .ai-token-details .settings-cursor-token-row input { flex: 1 1 180px; min-width: 0; }
+#tab-settings .ai-token-details .settings-cursor-token-row > button { flex: none; }
+#tab-settings .ai-token-details .settings-cursor-token-row + .settings-cursor-token-row { margin-top: 8px; }
+#tab-settings .ai-source-main { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+#tab-settings .ai-source-actions { flex: none; margin-left: auto; }
+#tab-settings .settings-nas-section-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-2); }
+#tab-settings .settings-nas-disclosure { padding-top: 12px; }
+#tab-settings .settings-nas-disclosure > :not(.settings-nas-section-title) { margin-top: 10px; }
+#tab-settings :is(.settings-nas-sync-actions, .settings-nas-migration-actions, .settings-nas-recovery-actions, .ui-nas-summary) { gap: 8px; }
+@media (max-width: 900px) {
+  #tab-settings .settings-page { --settings-sidebar-width: 120px; gap: 10px; }
+  .settings-group-button { padding: 8px; gap: 8px; }
+  #tab-settings .settings-group > .settings-card { padding: 16px; }
+}

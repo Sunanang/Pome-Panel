@@ -10,25 +10,34 @@ const {
   systemPreferences,
   clipboard,
   globalShortcut,
-  safeStorage,
   dialog,
   desktopCapturer,
   ClipboardItem,
 } = require('electron');
+const platformPolicy = require('./platform');
+// Production installations ignore a leaked test profile. Packaged acceptance
+// must opt in explicitly, before any profile, service or permission decision.
+if (platformPolicy.desktopTestEnvironment({ packaged: app.isPackaged === true, env: process.env }).ignoreInheritedTestState) {
+  for (const key of ['TODO_TEST_USER_DATA', 'POME_TEST_LANGUAGE', 'POME_TEST_NOTIFICATIONS', 'POME_HOOK_TEST_HOME']) delete process.env[key];
+}
 const WebSocket = require('ws');
 const PomeI18n = require('./localization/runtime');
 let localizationRevision = 0;
 const path = require('path');
 const fs = require('fs');
+const { writeAtomic } = require('./atomicStorage');
 const http = require('http');
 const { validatePublicHttpUrl, fetchPublicHttp, readLimitedBody } = require('./public-http');
 const zlib = require('zlib');
 const crypto = require('crypto');
+const { createTodoReminderReceipts, reminderKey } = require('./todoReminders');
 const { createTaskInbox, completionEventId, rebuildTaskInbox } = require('./taskInbox');
 const { createAiSourceHooks } = require('./aiSourceHooks');
 const { classifyAiEvent, MANUS_TRUSTED_ADAPTER } = require('./aiEventPolicy');
 const { createAiAttentionStore, rebuildAiAttention } = require('./aiAttentionStore');
 const { createAiNotificationScheduler } = require('./aiNotificationScheduler');
+const { createMeetingModeMonitor } = require('./meetingMode');
+const { createMeetingProbe } = require('./platform-adapters/meetingProbe');
 const { createClaudeAttentionAdapter } = require('./claudeAttentionAdapter');
 const { expandMcpAuthSessionResolution, isMcpAuthSessionResolution } = require('./scripts/cursor-mcp-auth-notify');
 const claudeAttentionAdapter = createClaudeAttentionAdapter();
@@ -44,7 +53,6 @@ const sourceTestTokens = new Map();
 const backup = require('./workspaceBackup');
 const { createSyncRecovery } = require('./syncRecovery');
 function recoveryStore() { return createSyncRecovery(path.join(app.getPath('userData'), 'sync-recovery.json')); }
-const platformPolicy = require('./platform');
 const { loadAdapter } = require('./platform-adapters');
 const { completionIds: catalogCompletionIds, httpNotifyIds: catalogHttpNotifyIds } = require('./aiProviderCatalog');
 const { createManusCompletionService } = require('./manusCompletionService');
@@ -69,6 +77,34 @@ const grokUsageService = createGrokUsageService();
 const antigravityUsageService = createAntigravityUsageService();
 const manusUsageService = createManusUsageService();
 const PROVIDER_TOKEN_IDS = new Set(['copilot', 'grok', 'antigravity', 'manus']);
+// Even resolving Electron's safeStorage module can initialize OS crypto.
+// Keep it lazy until an operation actually needs encrypted credentials.
+const safeStorage = {
+  isEncryptionAvailable: () => require('electron').safeStorage.isEncryptionAvailable(),
+  encryptString: value => require('electron').safeStorage.encryptString(value),
+  decryptString: value => require('electron').safeStorage.decryptString(value),
+};
+let secureStorageAvailability = null;
+function checkSecureStorageAvailability() {
+  if (secureStorageAvailability !== null) return secureStorageAvailability;
+  secureStorageAvailability = safeStorage.isEncryptionAvailable();
+  return secureStorageAvailability;
+}
+// Consent is a read trigger for this process, not a claim that macOS granted
+// access. Background quota refresh must never be the first credential reader.
+let aiCredentialAccessEnabled = false;
+const storedSecretReadFailures = new Set();
+const legacyCursorCiphertexts = new Set();
+let storedSecretReadBlocked = false;
+const aiCredentialProviders = new Set();
+const canReadAiCredential = id => aiCredentialAccessEnabled || aiCredentialProviders.has(id);
+
+function quotaAccessRequired(configured = false) {
+  return { ok: false, error: 'credential_access_required', credentialAccessRequired: true, configured, detected: false };
+}
+function quotaCredentialState(data) {
+  return data.error === 'credential_access_required' ? { ...data, credentialAccessRequired: true } : data;
+}
 // 能力层 v2（P0-1）：启动时按平台 + 运行时（原生模块是否可用、用户开关）解析一次，
 // 通过 additionalArguments 下发给渲染层；运行期变化走 capabilities:changed。
 // 这里的初值不读设置：模块加载早于 app.whenReady，不能碰 screen / 设置文件。
@@ -81,6 +117,7 @@ const {
   recordingExtension,
   todoReminderState,
   todoReminderTimerDelay,
+  mergeTodoReminderSchedule,
   taskNotificationContent,
   normalizeTaskNotificationWindow,
   normalizeCredentialInput,
@@ -144,6 +181,7 @@ const {
   writeCategoryUpsert,
   runTodosSyncCycle,
   gateSchemaCompatibility,
+  buildTodoEntityPayload,
 } = require('./todos-sync');
 const {
   countWorkspaceContent,
@@ -327,18 +365,20 @@ function createNotchTrayIcon() {
   }
   const trayPng = path.join(__dirname, 'build', 'pome-trayTemplate.png');
   const trayPng2x = path.join(__dirname, 'build', 'pome-trayTemplate@2x.png');
-  let icon;
+  let icon = nativeImage.createEmpty();
+  // Keep the @2x bitmap as a scaleFactor:2 representation (16pt logical).
+  // Avoid resize(): it can drop the Retina representation and yield an empty Tray on macOS.
   if (fs.existsSync(trayPng2x)) {
     const hi = nativeImage.createFromPath(trayPng2x);
-    icon = nativeImage.createFromBuffer(hi.toPNG(), { scaleFactor: 2 });
-  } else {
+    if (!hi.isEmpty()) icon = nativeImage.createFromBuffer(hi.toPNG(), { scaleFactor: 2.0 });
+  }
+  if (icon.isEmpty() && fs.existsSync(trayPng)) {
     icon = nativeImage.createFromPath(trayPng);
   }
   if (icon.isEmpty()) {
-    const png2x = makeNotchPng(2);
-    icon = nativeImage.createFromBuffer(png2x, { scaleFactor: 2 });
+    icon = nativeImage.createFromBuffer(makeNotchPng(2), { scaleFactor: 2.0 });
   }
-  icon.setTemplateImage(true);
+  if (!icon.isEmpty()) icon.setTemplateImage(true);
   return icon;
 }
 
@@ -347,7 +387,7 @@ function createNotchTrayIcon() {
 //
 // NOTCH_LIP（原 6px 唇边）已移除：折叠条高度现在恰好等于菜单栏高（≈物理刘海高），
 // 一个像素都不超出物理刘海。虽然折叠条完全在菜单栏拦截带内，
-// 但本项目窗口使用 setAlwaysOnTop(true,'floating') 级别（不压截图/输入法），
+// 本项目的层级由 platformPolicy.windowLayer 统一决定，仍低于系统截图选区，
 // 实测菜单栏不拦截该级别窗口的点击，折叠条仍可点击展开。
 // （见项目记忆 notch-top-geometry-constraint / commit f12aea1）
 
@@ -368,7 +408,8 @@ const CREDENTIALS_VAULT_FILE = 'credentials.vault.json';
 const APP_SETTINGS_FILE = 'app-settings.json';
 const WORKSPACE_SETTINGS_FILE = 'workspace-settings.json';
 const WORKSPACE_DATA_FILE = 'workspace.json';
-const MIRROR_IMAGE_FILE = 'mirror-cover.jpg';
+const MIRROR_IMAGE_FILE = 'mirror-cover.webp';
+const LEGACY_MIRROR_IMAGE_FILE = 'mirror-cover.jpg';
 const SYNC_CREDENTIALS_FILE_NAME = 'sync-credentials.json';
 let workspacePersistenceGate = createWorkspacePersistenceGate();
 const sensitiveClipboardGuard = createSensitiveClipboardGuard();
@@ -389,7 +430,6 @@ const TASK_NOTIFICATION_ENTER_MS = process.platform === 'win32' ? 220 : 300;
 const TASK_NOTIFICATION_SCREEN_MARGIN = 12;
 const TASK_NOTIFICATION_VISIBLE_MS = 6000;
 const TASK_NOTIFICATION_LEAVE_MS = 420;
-const TASK_NOTIFICATION_DEDUPE_MS = 2000;
 // AI bubbles keep only the newest completion/awaiting item. Todo deadline
 // reminders retain their own FIFO and cannot be discarded by AI arrivals.
 const TASK_NOTIFICATION_BODY_LIMIT = 64 * 1024;
@@ -402,6 +442,11 @@ const TODO_REMINDER_LEAD_MS = 60 * 60 * 1000;
 
 let mainWindow = null;
 let tray = null;
+let trayMenu = null;
+let trayOpenQueued = false;
+let mirrorImageGeneration = 0;
+let pendingHideUntilTray = false;
+const desktopTrayExpected = !process.env.TODO_TEST_USER_DATA;
 let currentMode = 'collapsed';
 let panelDragOffset = null;
 let typingFocusActive = false;
@@ -409,12 +454,17 @@ let currentTab = 'home';
 let collapseWatchdog = null;
 let collapseGeneration = 0;
 let hideWhenCollapsed = false;
+let startupRecoveryDismissed = false;
 let isQuitting = false;
 let mediaPermissionRequests = 0;
 let mediaPermissionBatchHadCamera = false;
 let transientSystemInteractionRequests = 0;
 let cameraBlurDeferred = false;
-const mediaPermissionCoordinator = createForegroundMediaPermissionCoordinator();
+const mediaPermissionCoordinator = createForegroundMediaPermissionCoordinator({
+  getWindowLayer: () => platformPolicy.windowLayer(process.platform, {
+    typingFocus: currentMode === 'expanded' && typingFocusActive,
+  }),
+});
 
 // 适配层（P0-2）：JXA / osascript 等"怎么做"的实现都在 platform-adapters/ 下，
 // main.js 只做 IPC 与生命周期。Electron 依赖与窗口相关的钩子由这里注入。
@@ -427,10 +477,31 @@ const platformAdapter = loadAdapter(process.platform, {
   },
 });
 
+let ownCameraLabels = [];
+const meetingProbe = createMeetingProbe({ packaged: app.isPackaged === true, ownCameraLabels: () => ownCameraLabels });
+let effectiveMeetingMode = false;
+const meetingMonitor = createMeetingModeMonitor({ probe: meetingProbe, onChange: () => applyMeetingNotificationPolicy() });
+function meetingModeActive() {
+  return readAppSettings().meetingMode === true || meetingMonitor.snapshot().active;
+}
+function applyMeetingNotificationPolicy() {
+  const active = meetingModeActive();
+  if (active !== effectiveMeetingMode) {
+    effectiveMeetingMode = active;
+    if (active) { notificationScheduler.clearDisplay(); dismissActiveTaskNotificationShell(); }
+    else { scheduleNextTodoReminder(); refreshAttentionNotifications(); showNextTaskNotification(); }
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', publicAppSettings());
+  publishNotificationListenerState();
+  refreshTrayMenu();
+}
+
 let notificationWindow = null;
 let notificationWindowReady = false;
 let notificationServer = null;
 let notificationServerAvailable = false;
+let notificationServerError = null;
+let notificationServerRetry = null;
 let activeTaskNotification = null;
 let taskNotificationLeaving = false;
 let taskNotificationTimer = null;
@@ -462,7 +533,8 @@ function attentionNotification(row) {
     window: { app: event.source === 'claude' ? 'Terminal' : event.source === 'cursor' ? 'Cursor' : 'Codex' } };
 }
 function taskNotificationsEnabled() {
-  return readAppSettings().taskNotifications !== false;
+  const settings = readAppSettings();
+  return settings.taskNotifications !== false && !meetingModeActive();
 }
 function dismissActiveTaskNotificationShell() {
   const eventId = activeTaskNotification?.eventId;
@@ -513,7 +585,6 @@ function replaceAiTaskNotification() {
   }
   showNextTaskNotification();
 }
-const recentTaskNotifications = new Map();
 let taskInboxStore = null;
 let taskInboxFailure = null;
 function reportTaskInboxFailure(error) {
@@ -537,6 +608,8 @@ function getTaskInbox() {
 }
 let todoReminderTimer = null;
 let scheduledTodoReminders = [];
+let todoReminderRoot = null;
+let todoReminderReceipts = null;
 
 let clipPollTimer = null;
 let clipBaselineTimer = null;
@@ -662,6 +735,8 @@ function layoutDisplayContext(display) {
 function layoutContext(display) {
   const ctx = layoutDisplayContext(display);
   const settings = readAppSettings();
+  ctx.panelSize = settings.panelSize;
+  ctx.tabSizes = platformPolicy.layout.tabSizes(settings.panelSize);
   ctx.position = settings.panelPosition;
   ctx.legacyWinLayout = process.platform === 'win32'
     && (LEGACY_WIN_LAYOUT_ENV || settings.legacyWinLayout === true);
@@ -699,7 +774,8 @@ function applyMode(mode, display) {
   mainWindow.setBounds(nextBounds);
   mainWindow.setIgnoreMouseEvents(false);
   currentMode = mode;
-  if (mode === 'expanded') hideWhenCollapsed = false;
+  applyMainWindowLayer();
+  if (mode === 'expanded') { hideWhenCollapsed = false; pendingHideUntilTray = false; }
   if (mode === 'collapsed') {
     // 把纠正后的落点写回，避免下次仍用旧坐标算出错位动画种子。
     // 回退到旧 Windows 布局时不写回：那条路径的坐标恒为顶部居中，会把旧 edge 一起腌坏。
@@ -715,7 +791,7 @@ function applyMode(mode, display) {
     }
     if (hideWhenCollapsed) {
       hideWhenCollapsed = false;
-      mainWindow.hide();
+      hideMainWindowSafely();
       refreshTrayMenu();
     }
   }
@@ -772,6 +848,7 @@ function activateMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (process.env.TODO_TEST_USER_DATA) return;
   const plan = mainPanelActivationPlan(process.platform);
+  pendingHideUntilTray = false;
   hideWhenCollapsed = false;
   if (plan.showIfHidden && !mainWindow.isVisible()) mainWindow.show();
   if (plan.stealAppFocus) {
@@ -780,15 +857,37 @@ function activateMainWindow() {
   if (plan.focusWindow) mainWindow.focus();
 }
 
+function recoverStartupPanelVisibility() {
+  if (!mainWindow || mainWindow.isDestroyed() || isQuitting || startupRecoveryDismissed
+    || process.env.TODO_TEST_USER_DATA || mediaPermissionRequests > 0) return;
+  // isVisible() may remain true after a native order-out. Reorder without
+  // activating the application, even when Electron's visible flag stayed true.
+  mainWindow.showInactive();
+  applyMainWindowLayer();
+}
+
+function hideMainWindowSafely() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (desktopTrayExpected && (!tray || tray.isDestroyed())) {
+    pendingHideUntilTray = true;
+    mainWindow.showInactive();
+    applyMainWindowLayer();
+    return;
+  }
+  pendingHideUntilTray = false;
+  mainWindow.hide();
+}
+
 function hideWindowAfterCollapse() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  startupRecoveryDismissed = true;
   if (currentMode === 'expanded') {
     hideWhenCollapsed = true;
     requestRendererCollapse();
     return;
   }
   hideWhenCollapsed = false;
-  mainWindow.hide();
+  hideMainWindowSafely();
   refreshTrayMenu();
 }
 
@@ -928,18 +1027,14 @@ function enqueueTaskNotification(notification) {
       return 'save_failed';
     }
   }
-  const now = Date.now();
-  for (const [key, seenAt] of recentTaskNotifications) {
-    if (now - seenAt > TASK_NOTIFICATION_DEDUPE_MS) recentTaskNotifications.delete(key);
+  if (!taskNotificationsEnabled()) return 'suppressed';
+
+  if (notification.source === 'todo') {
+    const keys = new Set(todoNotificationItems(notification).map(reminderKey));
+    if ([activeTaskNotification, ...taskNotificationQueue].filter(Boolean).some(row =>
+      row.source === 'todo' && todoNotificationItems(row).some(item => keys.has(reminderKey(item))))) return 'duplicate';
   }
 
-  const identity = notification.taskId || `${notification.title}:${notification.project}`;
-  const dedupeKey = `${notification.source}:${identity}`;
-  const lastSeenAt = recentTaskNotifications.get(dedupeKey);
-  if (notification.source === 'todo' && lastSeenAt && now - lastSeenAt <= TASK_NOTIFICATION_DEDUPE_MS) return 'duplicate';
-  recentTaskNotifications.set(dedupeKey, now);
-
-  if (!taskNotificationsEnabled()) return 'suppressed';
   notificationScheduler.enqueue(notification);
   if (notification.source === 'todo') {
     if (!activeTaskNotification) showNextTaskNotification();
@@ -955,62 +1050,140 @@ function clearTodoReminderTimer() {
   todoReminderTimer = null;
 }
 
-function fireTodoReminder(todo) {
-  const deadline = Date.parse(String(todo.deadline || ''));
-  const notification = {
-    eventId: `todo-${todo.id}-${deadline}`,
-    source: 'todo',
-    status: 'due',
-    taskId: String(todo.id || ''),
-    title: String(todo.text || '').trim() || PomeI18n.t("copy.taskDueSoon.52facb"),
-    project: '',
-    detail: PomeI18n.t("copy.dueWithin1Hour.955b14"),
-    deadline,
-    completedAt: Date.now(),
-  };
-  enqueueTaskNotification(notification);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('todo:reminded', {
-      id: notification.taskId,
-      deadline: String(todo.deadline || ''),
-      remindedAt: notification.completedAt,
-    });
+function todoNotificationItems(notification) {
+  if (Array.isArray(notification?.todoItems)) return notification.todoItems;
+  if (notification?.source !== 'todo') return [];
+  const deadlineMs = Number(notification.deadline);
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) return [];
+  try {
+    return [{ id: notification.taskId, deadline: new Date(deadlineMs).toISOString() }];
+  } catch {
+    return [];
   }
+}
+
+function reportTodoReminderError(key = 'todo.reminderStorageError', error = null) {
+  const message = PomeI18n.t(key);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('todo:reminder-error', {
+    message, messageKey: key, diagnostic: [message, error?.code || error?.message].filter(Boolean).join('\n'),
+  });
+}
+
+function syncTodoReminderReceipts(items) {
+  const ctx = readBoundSyncContext();
+  if (!ctx.ok) { if (ctx.error !== 'not_bound') throw new Error(ctx.error); return; }
+  if (workspaceSwitching || migrationSession.readonly || recoveryStore().read().paused) return;
+  let written = false;
+  ctx.store._runInTransaction(() => {
+    for (const item of items) {
+      const entity = ctx.store.getEntity(ctx.accountId, 'todos', item.id);
+      if (!entity || entity.deletedAt != null || reminderKey(entity.payload) !== reminderKey(item)
+        || Number(entity.payload.remindedAt) >= item.remindedAt) continue;
+      const result = ctx.store.writeLocalMutation({
+        accountId: ctx.accountId, deviceId: ctx.deviceId, collection: 'todos', entityId: item.id, op: 'upsert',
+        payload: buildTodoEntityPayload({ ...entity.payload, remindedAt: item.remindedAt }, entity.payload.categoryId),
+        clientMutationId: crypto.randomUUID(), baseServerRev: ctx.store.getPullCursor(ctx.accountId, 'todos').serverRev,
+        clientTime: Date.now(),
+      });
+      if (!result.ok) throw new Error(result.reason || 'todo_reminder_sync_failed');
+      written = true;
+    }
+  });
+  if (written) runBoundTodosSyncCycle().catch(() => {});
+}
+
+function acknowledgeTodoReminder(notification) {
+  if (notification?.source !== 'todo' || notification.todoReceiptSaved || notification.todoRoot !== workspaceRoot()) return true;
+  const keys = new Set(todoNotificationItems(notification).map(reminderKey));
+  const current = scheduledTodoReminders.filter(item => !item.done && keys.has(reminderKey(item)));
+  try {
+    const receipts = todoReminderReceipts.markShown(current);
+    const byKey = new Map(scheduledTodoReminders.map(row => [reminderKey(row), row]));
+    for (const receipt of receipts) {
+      const item = byKey.get(reminderKey(receipt));
+      if (item) item.remindedAt = receipt.remindedAt;
+    }
+    if (receipts.length && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('todo:reminded', receipts.length === 1 ? receipts[0] : { items: receipts });
+    }
+    notification.todoReceiptSaved = true;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('todo:reminder-error', { cleared: true });
+    try { syncTodoReminderReceipts(receipts); } catch (error) { reportTodoReminderError('todo.reminderSyncError', error); }
+    return true;
+  } catch (error) { reportTodoReminderError('todo.reminderStorageError', error); return false; }
+}
+
+function fireTodoReminder(items, overdue = false) {
+  const first = items[0], summary = items.length > 1;
+  return enqueueTaskNotification({
+    eventId: `todo-${crypto.createHash('sha256').update(items.map(reminderKey).join()).digest('hex')}`,
+    source: 'todo', status: overdue ? 'overdue' : 'due', taskId: first.id,
+    title: summary ? PomeI18n.t('todo.overdueSummary', { count: items.length }) : first.text,
+    detail: summary ? PomeI18n.t('todo.overdueSummaryDetail') : '',
+    todoSummary: summary, todoCount: items.length,
+    todoItems: items.map(item => ({ id: item.id, deadline: item.deadline })),
+    todoRoot: todoReminderRoot, deadline: Date.parse(first.deadline), completedAt: Date.now(),
+  });
 }
 
 function scheduleNextTodoReminder() {
   clearTodoReminderTimer();
-  const now = Date.now();
+  if (todoReminderRoot !== workspaceRoot()) return;
+  // Rebuild only unshown shells. Unseen tasks remain eligible after disabling,
+  // quitting, editing, deleting or receiving a newer sync projection.
+  for (let i = taskNotificationQueue.length - 1; i >= 0; i--) {
+    if (taskNotificationQueue[i].source === 'todo') taskNotificationQueue.splice(i, 1);
+  }
+  const activeKeys = new Set(todoNotificationItems(activeTaskNotification).map(reminderKey));
+  const now = Date.now(), due = [], overdue = [];
   let nextDelay = Infinity;
   for (const todo of scheduledTodoReminders) {
     const status = todoReminderState(todo, now, TODO_REMINDER_LEAD_MS);
-    if (status.state === 'due') {
-      todo.remindedAt = now;
-      fireTodoReminder(todo);
-      continue;
-    }
-    if (status.state === 'scheduled') nextDelay = Math.min(nextDelay, status.delayMs);
+    if (activeKeys.has(reminderKey(todo))) continue;
+    if (status.state === 'due') due.push(todo);
+    else if (status.state === 'expired-missed') overdue.push(todo);
+    else if (status.state === 'scheduled') nextDelay = Math.min(nextDelay, status.delayMs);
   }
-  if (Number.isFinite(nextDelay)) {
-    todoReminderTimer = setTimeout(scheduleNextTodoReminder, todoReminderTimerDelay(nextDelay));
-  }
+  overdue.sort((a, b) => Date.parse(a.deadline) - Date.parse(b.deadline));
+  if (overdue.length >= 3) fireTodoReminder(overdue, true);
+  else overdue.forEach(todo => fireTodoReminder([todo], true));
+  due.forEach(todo => fireTodoReminder([todo]));
+  if (Number.isFinite(nextDelay)) todoReminderTimer = setTimeout(scheduleNextTodoReminder, todoReminderTimerDelay(nextDelay));
+  sendTaskNotificationQueueCount();
 }
 
-ipcMain.handle('todos:schedule-reminders', (event, items) => {
-  scheduledTodoReminders = Array.isArray(items)
-    ? items
-      .filter((item) => item && typeof item === 'object')
-      .map((item) => ({
-        id: String(item.id || '').slice(0, 160),
-        text: String(item.text || '').trim().slice(0, 160),
-        deadline: String(item.deadline || ''),
-        done: item.done === true,
-        remindedAt: Math.max(0, Number(item.remindedAt) || 0),
-      }))
-      .filter((item) => item.id && item.text)
-    : [];
-  scheduleNextTodoReminder();
-  return { ok: true, count: scheduledTodoReminders.length };
+ipcMain.handle('todos:schedule-reminders', (event, items, expectedRoot) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return { ok: false, error: 'invalid_sender' };
+  if (workspaceSwitching) return { ok: false, error: 'workspace_switching' };
+  const root = workspaceRoot();
+  if (typeof expectedRoot !== 'string' || !path.isAbsolute(expectedRoot)) return { ok: false, error: 'workspace_not_ready' };
+  if (path.resolve(expectedRoot) !== path.resolve(root)) return { ok: false, error: 'stale_workspace' };
+  if (todoReminderRoot !== root) {
+    scheduledTodoReminders = [];
+    todoReminderRoot = root;
+    todoReminderReceipts = createTodoReminderReceipts({ filePath: path.join(root, 'todo-reminders.json') });
+    if (activeTaskNotification?.source === 'todo') dismissActiveTaskNotificationShell();
+  }
+  try {
+    // Always adopt the renderer projection even when an on-screen receipt cannot
+    // be flushed yet; otherwise deletes/edits stay stuck in main memory and can
+    // re-fire after the bubble is dismissed.
+    const ackOk = !activeTaskNotification?.todoShown
+      || acknowledgeTodoReminder(activeTaskNotification);
+    scheduledTodoReminders = todoReminderReceipts.merge(mergeTodoReminderSchedule(scheduledTodoReminders, items));
+    try {
+      syncTodoReminderReceipts(scheduledTodoReminders.filter(row => row.remindedAt > 0));
+      if (ackOk) mainWindow.webContents.send('todo:reminder-error', { cleared: true });
+    }
+    catch (error) { reportTodoReminderError('todo.reminderSyncError', error); }
+    scheduleNextTodoReminder();
+    if (!ackOk) return { ok: false, error: 'todo_reminder_storage_failed' };
+    return { ok: true, count: scheduledTodoReminders.length, reminded: scheduledTodoReminders.filter(row => row.remindedAt > 0).map(({ id, deadline, remindedAt }) => ({ id, deadline, remindedAt })) };
+  } catch (error) {
+    clearTodoReminderTimer();
+    reportTodoReminderError('todo.reminderStorageError', error);
+    return { ok: false, error: 'todo_reminder_storage_failed' };
+  }
 });
 
 ipcMain.handle('pomodoro:notify', (event, minutes) => {
@@ -1079,14 +1252,17 @@ function createTaskNotificationWindow() {
       nodeIntegration: false,
       sandbox: true,
       backgroundThrottling: false,
-      additionalArguments: [capabilitiesArgument(), localizationArgument()],
+      additionalArguments: [capabilitiesArgument(), localizationArgument(), `--pome-panel-size=${readAppSettings().panelSize}`],
     },
   });
 
   installLocalWebContentsGuards(notificationWindow.webContents);
 
   const targetWindow = notificationWindow;
-  notificationWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+  // 与主窗同级；relativeLevel 1 让气泡仍叠在面板之上。
+  // 不用 screen-saver：该级会压住系统截图选区，且常被截图工具排除。
+  const notificationLayer = platformPolicy.windowLayer(process.platform, { notification: true });
+  notificationWindow.setAlwaysOnTop(true, notificationLayer.level, notificationLayer.relativeLevel);
   if (process.platform === 'darwin') notificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   notificationWindow.setIgnoreMouseEvents(false);
   notificationWindow.loadFile(path.join(__dirname, 'renderer', 'notification.html'));
@@ -1248,8 +1424,18 @@ function sendTaskNotificationResponse(response, statusCode, body) {
   response.end(json);
 }
 
+function notificationListenerState() {
+  return { listening: notificationServerAvailable, error: notificationServerError,
+    port: notificationServer?.address()?.port || TASK_NOTIFICATION_PORT,
+    meetingMode: meetingModeActive(),
+    meetingStatus: meetingMonitor.snapshot(),
+    topBubbleEnabled: readAppSettings().taskNotifications !== false };
+}
+function publishNotificationListenerState() {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('tasks:listener-changed', notificationListenerState());
+}
 function startTaskNotificationServer() {
-  if (notificationServer) return;
+  if (notificationServer || isQuitting) return;
   const server = http.createServer((request, response) => {
     let requestUrl;
     try {
@@ -1399,11 +1585,18 @@ function startTaskNotificationServer() {
   server.once('listening', () => {
     if (notificationServer !== server) return;
     notificationServerAvailable = true;
+    notificationServerError = null;
+    publishNotificationListenerState();
     refreshTrayMenu();
   });
   server.on('error', (error) => {
     if (notificationServer === server) notificationServer = null;
     notificationServerAvailable = false;
+    notificationServerError = error.code || 'listen_failed';
+    publishNotificationListenerState();
+    clearTimeout(notificationServerRetry);
+    notificationServerRetry = setTimeout(() => { notificationServerRetry = null; startTaskNotificationServer(); }, 5000);
+    notificationServerRetry.unref();
     refreshTrayMenu();
     console.warn(`Task notification server unavailable: ${error.message}`);
   });
@@ -1412,6 +1605,7 @@ function startTaskNotificationServer() {
 }
 
 function stopTaskNotificationServer() {
+  clearTimeout(notificationServerRetry); notificationServerRetry = null;
   const server = notificationServer;
   notificationServer = null;
   notificationServerAvailable = false;
@@ -1424,11 +1618,16 @@ function isActiveTaskNotificationSender(event, eventId) {
     && activeTaskNotification.eventId === eventId;
 }
 ipcMain.on('task-notification:shown', (event, eventId) => {
-  if (isActiveTaskNotificationSender(event, eventId)) startTaskNotificationCountdown();
+  if (isActiveTaskNotificationSender(event, eventId)) {
+    activeTaskNotification.todoShown = true;
+    acknowledgeTodoReminder(activeTaskNotification);
+    startTaskNotificationCountdown();
+  }
 });
 ipcMain.on('task-notification:close', (event, eventId) => {
   if (!isActiveTaskNotificationSender(event, eventId)) return;
   try {
+    if (activeTaskNotification.source === 'todo') acknowledgeTodoReminder(activeTaskNotification);
     if (activeTaskNotification.attentionKey) { getAiAttention().display(activeTaskNotification.attentionKey, true); refreshAttentionNotifications(); }
     else beginTaskNotificationDismiss();
   } catch { reportTaskEventFailure(PomeI18n.t('attention.storageError')); }
@@ -1498,18 +1697,21 @@ function createWindow() {
       // A startup test can sit under the already-running panel. Keep its
       // hidden renderer scheduled so workspace recovery still finishes.
       backgroundThrottling: !process.env.TODO_TEST_USER_DATA,
-      additionalArguments: [capabilitiesArgument(), localizationArgument()],
+      additionalArguments: [capabilitiesArgument(), localizationArgument(), `--pome-panel-size=${readAppSettings().panelSize}`],
     },
   });
 
   installLocalWebContentsGuards(mainWindow.webContents);
 
-  // floating：仍在普通窗口之上，但不压住截图选区 / 输入法候选框（screen-saver 太高）。
-  mainWindow.setAlwaysOnTop(true, 'floating');
+  // status：盖住普通全屏应用（Cursor 全屏时 floating 会被挡住，表现为「安装后看不到」）。
+  // 仍低于 screen-saver，避免压住系统截图选区。
+  mainWindow.setAlwaysOnTop(true, platformPolicy.windowLayer(process.platform).level);
   if (process.platform === 'darwin') {
     try { mainWindow.setVibrancy(null); } catch (e) {}
   }
-  if (process.platform === 'darwin') mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  if (process.platform === 'darwin') {
+    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
   if (process.platform === 'win32') mainWindow.setMenu(null);
 
   // Escape 在到达页面前会被 Chromium 浏览器层吞掉（实测 document keydown 收不到），
@@ -1539,17 +1741,43 @@ function createWindow() {
   });
   mainWindow.on('show', syncHoverSpacePolling);
   mainWindow.on('hide', syncHoverSpacePolling);
+  const visibilityOwner = mainWindow;
+  let lastWindowVisibility;
+  const publishVisibility = () => {
+    if (visibilityOwner.isDestroyed() || visibilityOwner.webContents.isDestroyed()) return;
+    const visible = visibilityOwner.isVisible();
+    if (visible === lastWindowVisibility) return;
+    lastWindowVisibility = visible;
+    visibilityOwner.webContents.send('window:visibility-changed', visible);
+  };
+  visibilityOwner.on('show', publishVisibility);
+  visibilityOwner.on('hide', publishVisibility);
+  visibilityOwner.webContents.on('did-finish-load', () => { lastWindowVisibility = undefined; publishVisibility(); });
+  visibilityOwner.webContents.on('did-start-loading', () => { ownCameraLabels = []; });
+  visibilityOwner.webContents.on('render-process-gone', () => { ownCameraLabels = []; });
+  visibilityOwner.webContents.on('destroyed', () => { ownCameraLabels = []; });
+  // Some macOS floating/status windows change visibility without emitting show/hide.
+  // A cheap native-state check backs up those events; IPC is sent only on changes.
+  const visibilityWatch = setInterval(publishVisibility, 200);
+  visibilityWatch.unref();
+  visibilityOwner.once('closed', () => clearInterval(visibilityWatch));
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   mainWindow.once('ready-to-show', () => {
     applyMode('collapsed');
-    if (!process.env.TODO_TEST_USER_DATA) mainWindow.show();
+    if (!process.env.TODO_TEST_USER_DATA && !startupRecoveryDismissed) {
+      mainWindow.show();
+      // Keychain / permission prompts during first paint can leave the status
+      // capsule ordered out (CGWindow onScreen=false). Re-assert visibility.
+      setTimeout(recoverStartupPanelVisibility, 400);
+    }
   });
 
   mainWindow.on('closed', () => {
     cancelCollapseWatchdog();
     hideWhenCollapsed = false;
+    trayOpenQueued = false;
     mainWindow = null;
   });
 
@@ -1746,7 +1974,7 @@ function syncDockMetrics() {
 function publicAppSettings() {
   const settings = readAppSettings();
   const { encryptedCursorToken, encryptedCodexToken, encryptedProviderTokens, ...publicSettings } = settings;
-  return { ...publicSettings, localization: localizationSnapshot(), autoLaunch: isAutoLaunchEnabled() };
+  return { ...publicSettings, meetingStatus: meetingMonitor.snapshot(), localization: localizationSnapshot(), autoLaunch: isAutoLaunchEnabled() };
 }
 
 function saveAppSettings(settings) {
@@ -1796,7 +2024,7 @@ function copyWorkspaceAssets(sourceRoot, targetRoot) {
       fs.cpSync(source, target, { recursive: true, force: false, errorOnExist: false });
     } catch (error) { throw new Error('workspace_assets_copy_failed', { cause: error }); }
   }
-  for (const filename of [WORKSPACE_DATA_FILE, MIRROR_IMAGE_FILE]) {
+  for (const filename of [WORKSPACE_DATA_FILE, MIRROR_IMAGE_FILE, LEGACY_MIRROR_IMAGE_FILE]) {
     const source = path.join(sourceRoot, filename);
     const target = path.join(targetRoot, filename);
     try {
@@ -1929,7 +2157,12 @@ function mirrorImagePath() {
 
 function mirrorImageDataUrl() {
   try {
-    const image = nativeImage.createFromPath(mirrorImagePath());
+    const bytes = fs.readFileSync(mirrorImagePath());
+    if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP')
+      return `data:image/webp;base64,${bytes.toString('base64')}`;
+  } catch { /* Keep the legacy cover readable until a valid WebP has been saved. */ }
+  try {
+    const image = nativeImage.createFromPath(workspacePath(LEGACY_MIRROR_IMAGE_FILE));
     if (image.isEmpty()) return null;
     return image.toDataURL();
   } catch (error) {
@@ -1937,7 +2170,35 @@ function mirrorImageDataUrl() {
   }
 }
 
+async function encodeMirrorCover(image, contents) {
+  if (!contents || contents.isDestroyed()) throw new Error('mirror_encoder_unavailable');
+  const size = image.getSize(), ratio = Math.min(1, 1600 / Math.max(size.width, size.height));
+  const bounded = ratio < 1 ? image.resize({ width: Math.max(1, Math.round(size.width * ratio)),
+    height: Math.max(1, Math.round(size.height * ratio)), quality: 'best' }) : image;
+  const script = `(async () => {
+    const image = new Image(); image.src = ${JSON.stringify(bounded.toDataURL())}; await image.decode();
+    const canvas = new OffscreenCanvas(image.naturalWidth, image.naturalHeight);
+    canvas.getContext('2d').drawImage(image, 0, 0);
+    const blob = await canvas.convertToBlob({ type: 'image/webp', quality: 0.86 });
+    if (blob.type !== 'image/webp') throw new Error('webp_encoder_unavailable');
+    return await new Promise((resolve, reject) => { const reader = new FileReader();
+      reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('image_encode_failed'));
+      reader.readAsDataURL(blob); });
+  })()`;
+  let timer;
+  const dataUrl = await Promise.race([contents.executeJavaScript(script), new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('image_encode_timeout')), 10000);
+  })]).finally(() => clearTimeout(timer));
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/webp;base64,')) throw new Error('invalid_webp');
+  const bytes = Buffer.from(dataUrl.slice('data:image/webp;base64,'.length), 'base64');
+  if (bytes.length < 12 || bytes.length > 10 * 1024 * 1024 || bytes.toString('ascii', 0, 4) !== 'RIFF'
+    || bytes.toString('ascii', 8, 12) !== 'WEBP') throw new Error('invalid_webp');
+  return { bytes, dataUrl };
+}
+
 async function chooseMirrorImage() {
+  const generation = ++mirrorImageGeneration, destination = mirrorImagePath(), owner = mainWindow;
+  const current = () => generation === mirrorImageGeneration && destination === mirrorImagePath() && owner === mainWindow && owner && !owner.isDestroyed();
   const result = await showOwnedOpenDialog({
     title: PomeI18n.t("copy.changeMirrorCover.855f71"),
     properties: ['openFile'],
@@ -1950,21 +2211,39 @@ async function chooseMirrorImage() {
     if (image.isEmpty()) throw new Error('invalid_image');
     const size = image.getSize();
     if (!size.width || !size.height || size.width * size.height > 60_000_000) throw new Error('image_too_large');
-    fs.writeFileSync(mirrorImagePath(), image.toJPEG(92), { mode: 0o600 });
-    const dataUrl = mirrorImageDataUrl();
+    const { bytes, dataUrl } = await encodeMirrorCover(image, owner?.webContents);
+    if (!current()) return { ok: false, canceled: true };
+    writeAtomic(destination, bytes);
     if (dataUrl && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('mirror:image-changed', dataUrl);
     }
     return { ok: true, canceled: false, dataUrl };
   } catch (error) {
+    if (!current()) return { ok: false, canceled: true };
     await dialog.showMessageBox({ type: 'error', title: PomeI18n.t("copy.couldnTChangeTheCover.29c48a"), message: PomeI18n.t("copy.chooseAValidImageOfASupported.298e1e") });
     return { ok: false, error: 'invalid_image' };
   }
 }
 
 function showMainPanelFromTray() {
+  if (isQuitting) return;
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow();
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  pendingHideUntilTray = false;
+  if (mainWindow.webContents.isLoadingMainFrame()) {
+    if (!trayOpenQueued) {
+      trayOpenQueued = true;
+      const owner = mainWindow;
+      owner.webContents.once('did-finish-load', () => {
+        trayOpenQueued = false;
+        if (mainWindow === owner) showMainPanelFromTray();
+      });
+    }
+    return;
+  }
   repositionWindow(getTargetDisplay());
+  mainWindow.showInactive();
+  applyMainWindowLayer();
   activateMainWindow();
   if (currentMode !== 'expanded') {
     mainWindow.webContents.send('shortcut:toggle-panel');
@@ -1994,6 +2273,11 @@ function refreshTrayMenu() {
     },
     { type: 'separator' },
     {
+      label: PomeI18n.t('notifications.manualMeetingMode'), type: 'checkbox',
+      checked: readAppSettings().meetingMode === true,
+      click: item => setMeetingMode(item.checked),
+    },
+    {
       label: PomeI18n.t("copy.about.52d25a"),
       click: () => {
         dialog.showMessageBox({
@@ -2017,25 +2301,59 @@ function refreshTrayMenu() {
       click: () => app.quit(),
     },
   ]);
-  tray.setContextMenu(menu);
+  trayMenu = menu;
+  // macOS automatically opens an attached menu on left click. Keep left click
+  // for opening Pome and show this menu explicitly on right click instead.
+  tray.setContextMenu(process.platform === 'darwin' ? null : menu);
 }
 
 function createTray() {
-  tray = new Tray(createNotchTrayIcon());
-  tray.setToolTip('Pome Panel');
-  tray.on('click', () => {
-    if (!mainWindow) return;
-    if (!mainWindow.isVisible()) {
-      repositionWindow(getTargetDisplay());
-      activateMainWindow();
-      refreshTrayMenu();
+  if (isQuitting || (tray && !tray.isDestroyed())) return;
+  try {
+    const icon = createNotchTrayIcon();
+    if (!icon || icon.isEmpty()) {
+      throw new Error('tray_icon_empty');
     }
-  });
-  refreshTrayMenu();
+    tray = new Tray(icon);
+    tray.setToolTip('Pome Panel');
+    tray.on('click', () => {
+      // Always surface the panel: a hidden status window is easy to miss, and a
+      // visible collapsed capsule may still sit under the menu bar after auth dialogs.
+      // Do not gate on mainWindow — showMainPanelFromTray recreates it when needed.
+      showMainPanelFromTray();
+    });
+    if (process.platform === 'darwin') {
+      tray.setIgnoreDoubleClickEvents(true);
+      tray.on('right-click', () => { if (trayMenu) tray.popUpContextMenu(trayMenu); });
+    }
+    refreshTrayMenu();
+    if (pendingHideUntilTray && currentMode === 'collapsed') hideMainWindowSafely();
+  } catch (error) {
+    // Tray failure must not abort whenReady (notification server / permission prompts).
+    console.error('[pome] createTray failed', error);
+    try { tray?.destroy(); } catch (_) {}
+    tray = null;
+  }
 }
 
 ipcMain.handle('window:begin-open', (event) => { requireWorkspaceOwner(event); return require('./panelTiming').begin(); });
 ipcMain.handle('window:open-interactive', (event, id) => { requireWorkspaceOwner(event); return require('./panelTiming').finish(id); });
+// Capture only this workspace's rendered pixels. This does not capture the
+// desktop, request screen-recording permission, write a file or send pixels out.
+ipcMain.handle('notes:capture-module', async (event, rect) => {
+  requireWorkspaceOwner(event);
+  if(currentMode!=='expanded'||currentTab!=='home'||!mainWindow.isVisible())return null;
+  if(!rect||!['x','y','width','height'].every(key=>Number.isFinite(rect[key])))return null;
+  const [width,height]=mainWindow.getContentSize();
+  const x=Math.max(0,Math.floor(rect.x)),y=Math.max(0,Math.floor(rect.y));
+  const crop={x,y,width:Math.min(width,Math.ceil(rect.x+rect.width))-x,height:Math.min(height,Math.ceil(rect.y+rect.height))-y};
+  if(crop.width<10||crop.height<10||rect.width<=0||rect.height<=0)return null;
+  try {
+    const bitmap=await event.sender.capturePage(crop);
+    if(bitmap.isEmpty()||currentMode!=='expanded'||currentTab!=='home')return null;
+    return {rect:crop,dataURL:bitmap.toDataURL()};
+  } catch {return null;}
+});
 ipcMain.handle('window:set-mode', async (event, mode) => {
   if (mode === 'expanded') await rememberPasteTarget();
   applyMode(mode === 'expanded' ? 'expanded' : 'collapsed');
@@ -2118,17 +2436,22 @@ ipcMain.handle('window:reset-panel-position', () => {
   return true;
 });
 
-// 默认用 floating，避免压住系统截图选区与输入法候选框。
+// 胶囊和非编辑状态使用 status，展开编辑期间临时让位给 macOS 输入法候选窗。
+// 所有恢复路径都按当前输入状态计算，避免授权结束或收起后留下错误层级。
 function applyMainWindowLayer() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mediaPermissionRequests > 0) return;
-  mainWindow.setAlwaysOnTop(true, 'floating');
+  mainWindow.setAlwaysOnTop(true, platformPolicy.windowLayer(process.platform, {
+    typingFocus: currentMode === 'expanded' && typingFocusActive,
+  }).level);
   if (process.platform === 'darwin') {
     try { mainWindow.setVibrancy(null); } catch (e) {}
   }
 }
 
 ipcMain.handle('window:set-typing-focus', (event, focused) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
+    || event.senderFrame !== mainWindow.webContents.mainFrame) return false;
   const next = focused === true;
   if (typingFocusActive === next) return typingFocusActive;
   typingFocusActive = next;
@@ -2196,6 +2519,19 @@ ipcMain.handle('settings:set-auto-launch', (event, enabled) => {
   refreshTrayMenu();
   return { ok: true, autoLaunch: settings.autoLaunch };
 });
+ipcMain.handle('settings:set-panel-size', (event, preset) => {
+  requireWorkspaceOwner(event);
+  if (typeof preset !== 'string' || !Object.hasOwn(platformPolicy.layout.panelSizePresets, preset)) return { ok: false, error: 'invalid' };
+  const settings = readAppSettings();
+  if (settings.panelSize === preset) return { ok: true, settings: publicAppSettings() };
+  if (!saveAppSettings({ ...settings, panelSize: preset })) return { ok: false, error: 'save_failed' };
+  // Resolve against the saved edge/alignment, never the cursor's display.
+  repositionWindow();
+  syncDockMetrics();
+  const updated = publicAppSettings();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', updated);
+  return { ok: true, settings: updated };
+});
 ipcMain.handle('settings:set-task-notifications', (event, enabled) => {
   if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
   const next = { ...readAppSettings(), taskNotifications: enabled };
@@ -2203,10 +2539,38 @@ ipcMain.handle('settings:set-task-notifications', (event, enabled) => {
   if (!enabled) {
     notificationScheduler.clearDisplay();
     dismissActiveTaskNotificationShell();
+  } else {
+    // Reminders suppressed while the switch was off were not consumed; retry now.
+    scheduleNextTodoReminder();
+    showNextTaskNotification();
   }
   const settings = publicAppSettings();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', settings);
+  publishNotificationListenerState();
   return { ok: true, taskNotifications: settings.taskNotifications === true };
+});
+function setMeetingMode(enabled) {
+  if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
+  if (!saveAppSettings({ ...readAppSettings(), meetingMode: enabled })) return { ok: false, error: 'save_failed' };
+  applyMeetingNotificationPolicy();
+  return { ok: true, meetingMode: enabled };
+}
+ipcMain.handle('settings:set-meeting-mode', (event, enabled) => {
+  requireWorkspaceOwner(event); return setMeetingMode(enabled);
+});
+ipcMain.handle('settings:set-auto-meeting-mode', (event, enabled) => {
+  requireWorkspaceOwner(event);
+  if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
+  if (!saveAppSettings({ ...readAppSettings(), autoMeetingMode: enabled })) return { ok: false, error: 'save_failed' };
+  meetingMonitor.setEnabled(enabled);
+  if (!enabled) meetingProbe.stop();
+  applyMeetingNotificationPolicy();
+  return { ok: true, autoMeetingMode: enabled };
+});
+ipcMain.on('media:own-camera-state', (event, labels) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+  if (!Array.isArray(labels) || labels.length > 8 || labels.some(label => typeof label !== 'string' || label.length > 256)) return;
+  ownCameraLabels = labels;
 });
 ipcMain.handle('settings:set-weather-effects', (event, enabled) => {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return { ok: false, error: 'invalid_sender' };
@@ -2463,7 +2827,7 @@ ipcMain.handle('ai-attention:rebuild', async event => {
     return result;
   } catch { return { ok: false, message: PomeI18n.t('attention.storageError') }; }
 });
-ipcMain.handle('tasks:sources', async (event) => { requireWorkspaceOwner(event); return { ok: true, sources: await getAiSourceHooks().list() }; });
+ipcMain.handle('tasks:sources', async (event) => { requireWorkspaceOwner(event); return { ok: true, sources: await getAiSourceHooks().list(), listener: notificationListenerState() }; });
 ipcMain.handle('tasks:sources-preview', async (event, source, action) => {
   requireWorkspaceOwner(event);
   try { return { ok: true, preview: await getAiSourceHooks().preview(source, action) }; }
@@ -2480,6 +2844,7 @@ ipcMain.handle('tasks:sources-apply', async (event, token) => {
 });
 ipcMain.handle('tasks:sources-test', async (event, source) => {
   requireWorkspaceOwner(event);
+  if (!notificationServerAvailable) return { ok: false, message: PomeI18n.t('notifications.listenerUnavailable') };
   const token = crypto.randomUUID(), test = { source, expires: Date.now() + 10000, delivered: false };
   sourceTestTokens.set(token, test);
   try {
@@ -2579,6 +2944,7 @@ async function fetchFaviconDataUrl(pageUrl, html) {
 }
 
 async function enrichLinkMetadata(url, title) {
+  retryStoredSecretReads();
   const config = resolveLlmConfig();
   if (!config.apiKey || !config.model) return { title, category: '' };
   const endpoint = config.baseUrl.endsWith('/chat/completions')
@@ -2694,6 +3060,7 @@ async function inspectLink(rawUrl) {
 ipcMain.handle('links:inspect', (event, url) => inspectLink(url));
 
 ipcMain.handle('smart:organize-material', async (event, payload) => {
+  retryStoredSecretReads();
   const config = resolveLlmConfig();
   const kind = payload && payload.kind === 'note' ? 'note' : 'material';
   const transcript = String(payload && payload.text || '').trim().slice(0, 8000);
@@ -2739,14 +3106,16 @@ ipcMain.handle('smart:organize-material', async (event, payload) => {
   }
 });
 
-// 窗口枚举与聚焦在适配层实现（Mac 走 JXA，Windows 暂时 unsupported）。
+// 窗口枚举与聚焦由适配层实现：macOS 使用 AX 身份，Windows 使用 HWND。
 // 聚焦只接受最近一次扫描缓存里的窗口 ID，缓存也留在适配层实例里。
-ipcMain.handle('windows:list', async () => {
+ipcMain.handle('windows:list', async (event, force = false) => {
+  requireWorkspaceOwner(event);
   if (!platformCapabilities.features.windowSwitcher) return { items: [], error: 'unsupported' };
-  return platformAdapter.windows.list();
+  return platformAdapter.windows.list({ force: force === true });
 });
 
 ipcMain.handle('windows:focus', async (event, windowId) => {
+  requireWorkspaceOwner(event);
   if (!platformCapabilities.features.windowSwitcher) return false;
   return platformAdapter.windows.focus(windowId);
 });
@@ -2768,7 +3137,30 @@ async function openManusTaskRecord(record) {
 
 async function activateActiveTaskNotification(eventId = null) {
   const notification = activeTaskNotification;
-  if (!notification || (eventId && notification.eventId !== eventId) || notification.source === 'todo') return { ok: false, message: PomeI18n.t("copy.thisTaskReminderIsNoLongerAvailable.f287da") };
+  if (!notification || (eventId && notification.eventId !== eventId)) {
+    return { ok: false, message: PomeI18n.t('copy.thisTaskReminderIsNoLongerAvailable.f287da') };
+  }
+  // Todo due/overdue bubbles open the Tasks tab instead of an external app.
+  if (notification.source === 'todo') {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return { ok: false, message: PomeI18n.t('copy.thisTaskReminderIsNoLongerAvailable.f287da') };
+    }
+    notification.todoShown = true;
+    acknowledgeTodoReminder(notification);
+    notification.activationPending = true;
+    setTaskNotificationPaused(true);
+    const deadlineMs = Number(notification.deadline);
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.webContents.send('app:open-todo', {
+      id: String(notification.taskId || ''),
+      ids: todoNotificationItems(notification).map(item => item.id),
+      deadline: Number.isFinite(deadlineMs) && deadlineMs > 0
+        ? new Date(deadlineMs).toISOString()
+        : '',
+    });
+    beginTaskNotificationDismiss();
+    return { ok: true };
+  }
   // Without the native focus capability, a completion bubble only dismisses.
   // Explicit source opening from the inbox remains a separate user action.
   if (!notification.attentionKey && !platformCapabilities.features.windowFocus) {
@@ -2834,8 +3226,10 @@ function publicCredential(item) {
 
 function credentialFailure(error) { return { ok: false, error: error?.code || 'credentials_unreadable' }; }
 
-ipcMain.handle('credentials:list', () => {
-  const secureStorage = safeStorage.isEncryptionAvailable();
+ipcMain.handle('credentials:list', (_event, options = {}) => {
+  if (options.retry === true) retryStoredSecretReads();
+  if (!fs.existsSync(getCredentialsVaultPath())) return { ok: true, secureStorage: secureStorageAvailability, items: [] };
+  const secureStorage = checkSecureStorageAvailability();
   if (!secureStorage) return { ok: false, secureStorage, items: [], error: 'secure_storage_unavailable' };
   try { return { ok: true, secureStorage, items: readCredentialsVault().map(publicCredential) }; }
   catch (error) { return { ...credentialFailure(error), secureStorage, items: [] }; }
@@ -2849,7 +3243,8 @@ ipcMain.handle('credentials:get', (event, id) => {
 });
 
 ipcMain.handle('credentials:save', (event, payload) => {
-  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
+  retryStoredSecretReads();
+  if (!checkSecureStorageAvailability()) return { ok: false, error: 'secure_storage_unavailable' };
   try {
     const rows = readCredentialsVault();
     const existing = payload && payload.id ? rows.find((item) => item.id === payload.id) : null;
@@ -2917,6 +3312,7 @@ const syncCredentialsStore = createSyncCredentialsStore({
   fs,
   path,
   fileName: SYNC_CREDENTIALS_FILE_NAME,
+  lazyStatus: true,
 });
 
 const syncSettingsStore = createSyncSettingsStore({
@@ -4286,7 +4682,7 @@ function materializeWorkspaceSnapshot(projected, previousSnapshot) {
   if (projected.secretsApplied) {
     // Verify the existing vault before materializing any ordinary media from
     // this projection. An unreadable secret store must not cause a partial pull.
-    if (!safeStorage.isEncryptionAvailable()) throw Object.assign(new Error('secure_storage_unavailable'), { code: 'secure_storage_unavailable' });
+    if (!checkSecureStorageAvailability()) throw Object.assign(new Error('secure_storage_unavailable'), { code: 'secure_storage_unavailable' });
     readCredentialsVault();
   }
   const snapshot = projected.snapshot;
@@ -4799,19 +5195,21 @@ ipcMain.handle('sync:restore-migration-backup', async (event, payload = {}) => {
   return { ...result, projectionJson: applied };
 });
 
-function cursorLoginDetected() {
-  const auth = readCursorAuthToken();
+async function cursorLoginDetected() {
+  if (!aiCredentialAccessEnabled) return false;
+  const auth = await readCursorAuthToken();
   return auth.ok === true || auth.detected === true;
 }
 
 ipcMain.handle('cursor:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('cursor')) return quotaAccessRequired(Boolean(readAppSettings().encryptedCursorToken));
   try {
     let data;
-    do { data = await fetchCursorUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
+    do { data = await fetchCursorUsage({ force: options?.force === true, manualToken: readCursorManualToken(), allowLocalAuth: aiCredentialAccessEnabled }); }
     while (data.superseded);
-    return { ...data, detected: cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
+    return quotaCredentialState({ ...data, detected: await cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) });
   } catch {
-    return { ok: false, error: 'cursor_usage_failed', detected: cursorLoginDetected(),
+    return { ok: false, error: 'cursor_usage_failed', detected: await cursorLoginDetected(),
       configured: Boolean(readAppSettings().encryptedCursorToken) };
   }
 });
@@ -4820,25 +5218,30 @@ ipcMain.handle('codex:usage', async (_event, options = {}) => {
   let result;
   do {
     result = await codexUsageService.getUsage({
-      manualToken: decryptStoredSecret(readAppSettings().encryptedCodexToken).trim(),
+      manualToken: canReadAiCredential('codex') ? decryptStoredSecret(readAppSettings().encryptedCodexToken).trim() : '',
       configured: codexTokenStatus().configured,
       force: options?.force === true,
     });
   } while (result.superseded); // A save/clear cancels old requests; never return the previous token's state.
+  if (!canReadAiCredential('codex') && codexTokenStatus().configured && !result.detected) {
+    return { ...result, credentialAccessRequired: true };
+  }
   return result;
 });
 ipcMain.handle('grokbot:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('grokbot')) return quotaAccessRequired(Boolean(readAppSettings().encryptedCursorToken));
   try {
     let data;
-    do { data = await grokbotUsageService.getUsage({ force: options?.force === true, manualToken: readCursorManualToken() }); }
+    do { data = await grokbotUsageService.getUsage({ force: options?.force === true, manualToken: readCursorManualToken(), allowLocalAuth: aiCredentialAccessEnabled }); }
     while (data.superseded);
-    return { ...data, detected: cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) };
+    return quotaCredentialState({ ...data, detected: await cursorLoginDetected(), configured: Boolean(readAppSettings().encryptedCursorToken) });
   } catch {
-    return { ok: false, error: 'grokbot_usage_failed', detected: cursorLoginDetected(),
+    return { ok: false, error: 'grokbot_usage_failed', detected: await cursorLoginDetected(),
       configured: Boolean(readAppSettings().encryptedCursorToken) };
   }
 });
 ipcMain.handle('claude:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('claude')) return quotaAccessRequired();
   try {
     let data;
     do { data = await claudeUsageService.getUsage({ force: options?.force === true }); }
@@ -4849,16 +5252,18 @@ ipcMain.handle('claude:usage', async (_event, options = {}) => {
   }
 });
 ipcMain.handle('copilot:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('copilot')) return quotaAccessRequired(Boolean(readAppSettings().encryptedProviderTokens?.copilot));
   try {
     let data;
-    do { data = await copilotUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('copilot') }); }
+    do { data = await copilotUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('copilot'), allowLocalAuth: aiCredentialAccessEnabled }); }
     while (data.superseded);
-    return data;
+    return quotaCredentialState(data);
   } catch {
     return { ok: false, error: 'copilot_usage_failed', detected: false, configured: Boolean(readProviderManualToken('copilot')) };
   }
 });
 ipcMain.handle('grok:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('grok')) return quotaAccessRequired(Boolean(readAppSettings().encryptedProviderTokens?.grok));
   try {
     let data;
     do { data = await grokUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('grok'), teamId: readAppSettings().grokTeamId }); }
@@ -4869,6 +5274,7 @@ ipcMain.handle('grok:usage', async (_event, options = {}) => {
   }
 });
 ipcMain.handle('antigravity:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('antigravity')) return quotaAccessRequired(Boolean(readAppSettings().encryptedProviderTokens?.antigravity));
   try {
     let data;
     do { data = await antigravityUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('antigravity') }); }
@@ -4879,6 +5285,7 @@ ipcMain.handle('antigravity:usage', async (_event, options = {}) => {
   }
 });
 ipcMain.handle('manus:usage', async (_event, options = {}) => {
+  if (!canReadAiCredential('manus')) return quotaAccessRequired(Boolean(readAppSettings().encryptedProviderTokens?.manus));
   try {
     let data;
     do { data = await manusUsageService.getUsage({ force: options?.force === true, manualToken: readProviderManualToken('manus') }); }
@@ -4912,6 +5319,21 @@ ipcMain.handle('manus:completion-preview', async (event) => {
   } catch (error) { return { ok: false, error: error.code || 'manus_preview_failed' }; }
 });
 ipcMain.handle('ai-provider:token-status', (_event, providerId) => providerTokenStatus(providerId));
+ipcMain.handle('ai:credential-access-status', () => ({ enabled: aiCredentialAccessEnabled || aiCredentialProviders.size > 0 }));
+ipcMain.handle('ai:enable-credential-access', event => {
+  requireWorkspaceOwner(event);
+  aiCredentialAccessEnabled = true;
+  // A deliberate retry is the only way to revisit a failed Pome secret read.
+  storedSecretReadFailures.clear();
+  storedSecretReadBlocked = false;
+  secureStorageAvailability = null;
+  require('./claude-usage').resetKeychainRead();
+  require('./copilot-usage').resetGhTokenRead();
+  require('./platform-adapters/cursor-secrets').resetCursorSecretAccess();
+  resetCursorUsage();
+  for (const service of [codexUsageService, grokbotUsageService, claudeUsageService, copilotUsageService, grokUsageService, antigravityUsageService, manusUsageService]) service.reset();
+  return { ok: true, enabled: true };
+});
 ipcMain.handle('ai-provider:set-token', (_event, providerId, token, options) => typeof token === 'string' && token.trim()
   ? writeProviderManualToken(providerId, token, options) : { ok: false, error: 'token_required' });
 ipcMain.handle('ai-provider:clear-token', (_event, providerId) => writeProviderManualToken(providerId, ''));
@@ -4929,18 +5351,18 @@ ipcMain.handle('codex:clear-token', () => writeCodexManualToken(''));
 
 ipcMain.handle('cursor:token-status', () => cursorTokenStatus());
 
-ipcMain.handle('cursor:read-local-token', (event) => {
+ipcMain.handle('cursor:read-local-token', async (event) => {
   // Return a local credential only to the main panel, never the notification window.
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
     || event.senderFrame !== mainWindow.webContents.mainFrame) {
     return { ok: false, error: 'forbidden' };
   }
-  const result = readCursorAuthToken(undefined, { force: true });
+  const result = await readCursorAuthToken(undefined, { force: true });
   // Keep database paths, account metadata and raw errors out of this response.
   return result.ok ? { ok: true, token: result.token } : { ok: false, error: result.error };
 });
 
-ipcMain.handle('cursor:set-token', (_event, token) => writeCursorManualToken(token));
+ipcMain.handle('cursor:set-token', (_event, token) => writeCursorManualToken(token, { activateUsage: true }));
 
 ipcMain.handle('cursor:clear-token', () => writeCursorManualToken(''));
 
@@ -5002,17 +5424,31 @@ function decryptStoredApiKey(settings) {
 }
 
 function decryptStoredSecret(value) {
-  if (!value || !safeStorage.isEncryptionAvailable()) return '';
+  if (!value) return '';
+  if (storedSecretReadFailures.has(value)) return '';
+  if (storedSecretReadBlocked) { storedSecretReadFailures.add(value); return ''; }
+  if (!checkSecureStorageAvailability()) { storedSecretReadBlocked = true; storedSecretReadFailures.add(value); return ''; }
   try {
-    return safeStorage.decryptString(Buffer.from(String(value), 'base64'));
+    const plain = safeStorage.decryptString(Buffer.from(String(value), 'base64'));
+    return plain;
   } catch (error) {
+    // Native failures do not reliably distinguish denial from corrupt bytes.
+    // Stop automatic reads after either; a deliberate retry can recover them.
+    storedSecretReadBlocked = true;
+    storedSecretReadFailures.add(value);
     return '';
   }
 }
 
+function retryStoredSecretReads() {
+  secureStorageAvailability = null;
+  storedSecretReadBlocked = false;
+  storedSecretReadFailures.clear();
+}
+
 function encryptStoredSecret(plain) {
   const value = String(plain || '');
-  if (!value || !safeStorage.isEncryptionAvailable()) return '';
+  if (!value || !checkSecureStorageAvailability()) return '';
   try {
     return safeStorage.encryptString(value).toString('base64');
   } catch (error) {
@@ -5023,6 +5459,7 @@ function encryptStoredSecret(plain) {
 function readCursorManualToken() {
   const settings = readAppSettings();
   const token = decryptStoredSecret(settings.encryptedCursorToken).trim();
+  if (isCursorEncryptedToken(token)) legacyCursorCiphertexts.add(settings.encryptedCursorToken);
   // A legacy ciphertext copy is neither a bearer token nor a portable secret.
   // Leave the saved envelope intact until the user replaces/clears it, but do
   // not send it to Cursor or synchronize it to other devices.
@@ -5030,24 +5467,31 @@ function readCursorManualToken() {
 }
 
 function cursorTokenStatus() {
-  const configured = Boolean(readCursorManualToken());
+  const ciphertext = readAppSettings().encryptedCursorToken;
+  const configured = Boolean(ciphertext && !legacyCursorCiphertexts.has(ciphertext));
   return {
     ok: true,
     configured,
-    secureStorage: safeStorage.isEncryptionAvailable(),
-    label: configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : PomeI18n.t("copy.notConfiguredUsingLocalSignIn.3004c2"),
+    secureStorage: secureStorageAvailability,
+    label: configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : !canReadAiCredential('cursor') ? PomeI18n.t('privacy.ai.paused') : PomeI18n.t("copy.notConfiguredUsingLocalSignIn.3004c2"),
     state: configured ? 'saved' : 'empty',
   };
 }
 
-function writeCursorManualToken(token) {
-  if (!safeStorage.isEncryptionAvailable()) {
+function writeCursorManualToken(token, { activateUsage = false } = {}) {
+  const trimmed = String(token || '').trim();
+  if (isCursorEncryptedToken(trimmed)) return { ok: false, error: 'cursor_token_decrypt_failed' };
+  retryStoredSecretReads();
+  if (!checkSecureStorageAvailability()) {
     return { ok: false, error: 'secure_storage_unavailable' };
   }
   const next = readAppSettings();
-  const trimmed = String(token || '').trim();
-  if (isCursorEncryptedToken(trimmed)) return { ok: false, error: 'cursor_token_decrypt_failed' };
   if (readCursorManualToken() === trimmed && (trimmed || !next.encryptedCursorToken)) {
+    if (trimmed && activateUsage) {
+      aiCredentialProviders.add('cursor'); aiCredentialProviders.add('grokbot');
+      const status = cursorTokenStatus();
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cursor:token-changed', status);
+    }
     return cursorTokenStatus();
   }
   if (!trimmed) {
@@ -5058,6 +5502,7 @@ function writeCursorManualToken(token) {
     next.encryptedCursorToken = encrypted;
   }
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  if (trimmed && activateUsage) { retryStoredSecretReads(); aiCredentialProviders.add('cursor'); aiCredentialProviders.add('grokbot'); }
   resetCursorUsage?.();
   grokbotUsageService.reset();
   const status = cursorTokenStatus();
@@ -5068,19 +5513,21 @@ function writeCursorManualToken(token) {
 function codexTokenStatus() {
   const configured = Boolean(readAppSettings().encryptedCodexToken);
   const invalid = configured && codexUsageService.tokenState().manualTokenInvalid;
-  return { ok: true, configured, manualTokenInvalid: invalid, secureStorage: safeStorage.isEncryptionAvailable(),
+  return { ok: true, configured, manualTokenInvalid: invalid, secureStorage: secureStorageAvailability,
     label: invalid ? PomeI18n.t("copy.tokenExpired.22c3fe") : configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : PomeI18n.t("copy.noManualTokenConfigured.a2ebce"),
     state: invalid ? 'error' : configured ? 'saved' : 'empty' };
 }
 
 function writeCodexManualToken(token) {
-  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
+  retryStoredSecretReads();
+  if (!checkSecureStorageAvailability()) return { ok: false, error: 'secure_storage_unavailable' };
   const next = readAppSettings();
   const trimmed = String(token || '').trim();
   const encrypted = trimmed ? encryptStoredSecret(trimmed) : '';
   if (trimmed && !encrypted) return { ok: false, error: 'encrypt_failed' };
   next.encryptedCodexToken = encrypted;
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  if (trimmed) { retryStoredSecretReads(); aiCredentialProviders.add('codex'); }
   codexUsageService.reset();
   const status = codexTokenStatus();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('codex:token-changed', status);
@@ -5095,9 +5542,9 @@ function readProviderManualToken(providerId) {
 }
 function providerTokenStatus(providerId) {
   if (!PROVIDER_TOKEN_IDS.has(providerId)) return { ok: false, error: 'unsupported_provider' };
-  const configured = Boolean(readProviderManualToken(providerId));
+  const configured = Boolean(readAppSettings().encryptedProviderTokens?.[providerId]);
   return {
-    ok: true, providerId, configured, secureStorage: safeStorage.isEncryptionAvailable(),
+    ok: true, providerId, configured, secureStorage: secureStorageAvailability,
     label: configured ? PomeI18n.t("copy.manualTokenConfigured.4bb854") : PomeI18n.t("copy.noManualTokenConfigured.a2ebce"),
     state: configured ? 'saved' : 'empty',
     ...(providerId === 'grok' ? { teamId: readAppSettings().grokTeamId } : {}),
@@ -5153,7 +5600,6 @@ function getManusCompletionService() {
 
 function writeProviderManualToken(providerId, token, options = {}) {
   if (!PROVIDER_TOKEN_IDS.has(providerId)) return { ok: false, error: 'unsupported_provider' };
-  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'secure_storage_unavailable' };
   const next = readAppSettings();
   const bag = next.encryptedProviderTokens && typeof next.encryptedProviderTokens === 'object'
     ? { ...next.encryptedProviderTokens } : {};
@@ -5164,6 +5610,8 @@ function writeProviderManualToken(providerId, token, options = {}) {
     next.grokTeamId = teamId;
   }
   if (providerId === 'grok' && !trimmed) next.grokTeamId = '';
+  retryStoredSecretReads();
+  if (!checkSecureStorageAvailability()) return { ok: false, error: 'secure_storage_unavailable' };
   if (!trimmed) bag[providerId] = '';
   else {
     const encrypted = encryptStoredSecret(trimmed);
@@ -5172,6 +5620,7 @@ function writeProviderManualToken(providerId, token, options = {}) {
   }
   next.encryptedProviderTokens = bag;
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
+  if (trimmed) { retryStoredSecretReads(); aiCredentialProviders.add(providerId); }
   if (providerId === 'copilot') copilotUsageService.reset();
   if (providerId === 'grok') grokUsageService.reset();
   if (providerId === 'antigravity') antigravityUsageService.reset();
@@ -5214,19 +5663,25 @@ function resolveTranscriptionConfig() {
 }
 
 function publicTranscriptionConfig() {
-  const config = resolveTranscriptionConfig();
-  const llmConfig = resolveLlmConfig();
   const settings = readStoredTranscriptionSettings();
+  // Settings/status display is metadata-only. Decrypt only when recording or
+  // AI naming actually starts; retain the original ciphertext on any failure.
+  const hasAsrEnvironment = Boolean(String(process.env.DASHSCOPE_API_KEY || '').trim());
+  const hasLlmEnvironment = Boolean(String(process.env.NOTCH_LLM_API_KEY || '').trim());
+  const failed = key => Boolean(key && storedSecretReadFailures.has(key));
+  const environmentRegion = String(process.env.DASHSCOPE_REGION || '').trim().toLowerCase();
+  const region = ['beijing', 'singapore'].includes(environmentRegion) ? environmentRegion : settings.region === 'singapore' ? 'singapore' : 'beijing';
+  const workspaceId = String(process.env.DASHSCOPE_WORKSPACE_ID || process.env.DASHSCOPE_WORKSPACE || settings.workspaceId || '').trim().slice(0, 128);
   return {
-    configured: Boolean(config.apiKey),
-    asrNeedsReentry: Boolean(settings.encryptedApiKey && !config.apiKey),
-    workspaceId: config.workspaceId,
-    region: config.region,
-    transcriptionLanguage: config.language,
+    configured: hasAsrEnvironment || Boolean(settings.encryptedApiKey && !failed(settings.encryptedApiKey)),
+    asrNeedsReentry: !hasAsrEnvironment && failed(settings.encryptedApiKey),
+    workspaceId: /^[A-Za-z0-9_-]{0,128}$/.test(workspaceId) ? workspaceId : '',
+    region,
+    transcriptionLanguage: PomeI18n.transcriptionLanguage(settings.transcriptionLanguage),
     provider: 'qwen3-asr-flash-realtime',
-    secureStorage: safeStorage.isEncryptionAvailable(),
-    llmConfigured: Boolean(llmConfig.apiKey),
-    llmNeedsReentry: Boolean(settings.encryptedLlmApiKey && !llmConfig.apiKey),
+    secureStorage: secureStorageAvailability,
+    llmConfigured: hasLlmEnvironment || Boolean(settings.encryptedLlmApiKey && !failed(settings.encryptedLlmApiKey)),
+    llmNeedsReentry: !hasLlmEnvironment && failed(settings.encryptedLlmApiKey),
     llmBaseUrl: String(settings.llmBaseUrl || 'https://api.deepseek.com'),
     llmModel: String(settings.llmModel || 'deepseek-v4-flash'),
   };
@@ -5436,7 +5891,8 @@ ipcMain.handle('transcription:set-config', (event, payload) => {
   if (!parsedLlmUrl || parsedLlmUrl.protocol !== 'https:' || parsedLlmUrl.username || parsedLlmUrl.password) {
     return { ok: false, error: 'invalid_llm_url' };
   }
-  if ((apiKey || llmApiKey) && !safeStorage.isEncryptionAvailable()) {
+  if (apiKey || llmApiKey) retryStoredSecretReads();
+  if ((apiKey || llmApiKey) && !checkSecureStorageAvailability()) {
     return { ok: false, error: 'secure_storage_unavailable' };
   }
   const next = {
@@ -5462,6 +5918,7 @@ ipcMain.handle('transcription:set-config', (event, payload) => {
 
 ipcMain.handle('transcription:start', (event, payload = {}) => {
   if (payload.language != null && !['zh', 'en'].includes(payload.language)) return { ok: false, error: 'invalid_language' };
+  retryStoredSecretReads();
   const resolved = resolveTranscriptionConfig();
   const config = { ...resolved, language: PomeI18n.transcriptionLanguage(payload.language ?? resolved.language) };
   if (!config.apiKey) return { ok: false, error: 'not_configured' };
@@ -5549,7 +6006,7 @@ function ensureRecordingsDir() {
   }
 }
 
-function getSafeRecordingPath(value) {
+function getSafeRecordingPath(value, { allowMissing = false } = {}) {
   if (typeof value !== 'string' || !value.trim()) return null;
   const directory = path.resolve(getRecordingsDir());
   const resolvedPath = path.isAbsolute(value)
@@ -5561,8 +6018,10 @@ function getSafeRecordingPath(value) {
   }
   try {
     const directoryStat = fs.lstatSync(directory);
-    const fileStat = fs.lstatSync(resolvedPath);
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return null;
+    let fileStat;
+    try { fileStat = fs.lstatSync(resolvedPath); }
+    catch (error) { return allowMissing && error.code === 'ENOENT' ? resolvedPath : null; }
     if (fileStat.isSymbolicLink() || !fileStat.isFile()) return null;
     return resolvedPath;
   } catch (error) {
@@ -5608,13 +6067,13 @@ ipcMain.handle('recordings:read', async (event, audioPath) => {
 });
 
 ipcMain.handle('recordings:delete', async (event, audioPath) => {
-  const safePath = getSafeRecordingPath(audioPath);
+  const safePath = getSafeRecordingPath(audioPath, { allowMissing: true });
   if (!safePath) return false;
   try {
     await fs.promises.unlink(safePath);
     return true;
   } catch (error) {
-    return false;
+    return error?.code === 'ENOENT';
   }
 });
 
@@ -6083,16 +6542,36 @@ app.whenReady().then(() => {
   refreshRuntimeCapabilities();
   backup.recoverWorkspaceRestore(workspaceRoot());
   createWindow();
-  if (!process.env.TODO_TEST_USER_DATA) {
-    createTray();
-    startTaskNotificationServer();
-    void promptForMissingPermissions();
+  // Packaged installs already cleared leaked TODO_TEST_* above (unless
+  // POME_PACKAGED_TEST_MODE=1). Source/Electron tests keep an explicit profile
+  // and skip tray + notify + permission prompts here.
+  const testUserData = Boolean(process.env.TODO_TEST_USER_DATA);
+  const enableDesktopChrome = !testUserData;
+  if (enableDesktopChrome) {
+    // Notify server first. Tray construction can stall on a crowded macOS menu bar;
+    // never let it block the rest of boot (otherwise 43821 stays closed and there is
+    // no status item / no way back into a hidden LSUIElement panel).
+    try { startTaskNotificationServer(); } catch (error) { console.error('[pome] notify server failed', error); }
+    setImmediate(() => {
+      if (isQuitting) return;
+      try { createTray(); } catch (error) { console.error('[pome] createTray aborted', error); }
+    });
+    void promptForMissingPermissions()
+      .catch(() => console.error('[pome] permission self-check failed'))
+      .finally(recoverStartupPanelVisibility);
     try {
       const manus = getManusCompletionService();
       if (manus.status().enabled) void manus.start();
     } catch { /* Manus listener is optional at boot. */ }
   }
-  if (process.env.TODO_TEST_USER_DATA && process.env.POME_TEST_NOTIFICATIONS === '1') startTaskNotificationServer();
+  if (testUserData && process.env.POME_TEST_NOTIFICATIONS === '1') startTaskNotificationServer();
+  meetingMonitor.setEnabled(readAppSettings().autoMeetingMode !== false);
+  // Isolated acceptance injects probe samples; never inspect the user's system
+  // or let their actual Focus/camera state make notification tests nondeterministic.
+  if (!testUserData) meetingMonitor.start();
+  if (testUserData && process.env.POME_TEST_NOTIFICATIONS === '1') {
+    app.on('pome-test-meeting-sample', sample => meetingMonitor.accept(sample));
+  }
   watchDisplayChanges();
   watchActiveSpaceChanges();
   ensureClipImagesDir();
@@ -6118,6 +6597,7 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  meetingMonitor.stop(); meetingProbe.stop();
   cancelCollapseWatchdog();
   platformAdapter.paste.stopTracking();
   clearTodoReminderTimer();

@@ -1,0 +1,16 @@
+{
+  "checks": [
+    "capsule help copy/action alignment and spacing in both languages",
+    "native WebM duration/play/seek and independent stop button",
+    "transcription Esc restores focus",
+    "date Esc and no-op preview",
+    "shortcut Esc cancels without collapsing",
+    "NAS field validation without network or persistent error",
+    "invalid link rejected, valid link metadata, search empty/recovery",
+    "clipboard search, full scope confirm, cancellation/sync race, locale cache",
+    "locale change preserves recognition choices, English footer visible",
+    "900/740 scrollable homepage preserves saved layout and localized settings actions remain clickable",
+    "local temperature and motion preferences"
+  ],
+  "errors": []
+}

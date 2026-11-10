@@ -1,0 +1,6 @@
+{
+  "checks": [
+    "eight sample windows, system icons, exact A/B click IDs, same-title hide/restore, 22 reachable rows, scroll/focus retention, persistent failures/recovery, bilingual labels and mini/small layouts"
+  ],
+  "errors": []
+}

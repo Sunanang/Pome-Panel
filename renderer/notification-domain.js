@@ -18,7 +18,7 @@ const pomeNotificationProviders = typeof module === 'object' && module.exports ?
     return Object.hasOwn(sources, key) ? key : 'task';
   }
   function statusKey(value, source) {
-    if (['completed', 'due', 'failed', 'awaiting'].includes(value)) return value;
+    if (['completed', 'due', 'overdue', 'failed', 'awaiting'].includes(value)) return value;
     return sourceKey(source) === 'todo' ? 'due' : 'completed';
   }
   function fallbackTitle(source, status, locale = pomeLocaleRendererNotificationDomain.getState().effectiveLocale) {
@@ -26,6 +26,7 @@ const pomeNotificationProviders = typeof module === 'object' && module.exports ?
     const name = key === 'task' ? pomeLocaleRendererNotificationDomain.t('copy.task.525304', {}, locale)
       : key === 'todo' ? pomeLocaleRendererNotificationDomain.t('copy.tasks.52fdbb', {}, locale) : sources[key];
     const message = status === 'due' ? 'copy.taskDueSoon.52facb'
+      : status === 'overdue' ? 'copy.taskOverdue.d31df8'
       : status === 'failed' ? 'copy.taskFailed.5f588b'
       : status === 'awaiting' ? 'copy.isAwaitingConfirmation.74d3db'
       : key === 'task' ? 'copy.taskCompleted.e9a880' : 'copy.taskCompleted.80a4b4';
@@ -64,17 +65,25 @@ const pomeNotificationProviders = typeof module === 'object' && module.exports ?
     const status = statusKey(data.status, source);
     const text = values => values.find(value => typeof value === 'string' && value.trim())?.trim() || '';
     const project = text([data.project, data.projectName, data.workspace]);
+    const todoSummary = source === 'todo' && data.todoSummary === true;
+    const todoCount = Number.isSafeInteger(data.todoCount) && data.todoCount > 0 ? data.todoCount : 1;
     return {
-      sourceKey: source, source: sources[source], status, project,
+      sourceKey: source, source: sources[source], status, project, todoSummary, todoCount,
       attentionKind: status === 'awaiting' ? attentionKind(data.attentionKind) : null,
       manualResolution: data.manualResolution === true,
       commandPreview: data.commandPreview === 'npm install' ? data.commandPreview : null,
       attentionTitleKey: ['attention.commandMasked', 'attention.sensitive', 'attention.generic'].includes(data.attentionTitleKey) ? data.attentionTitleKey : null,
       titleIsFallback: data.titleIsFallback === true || !concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])),
-      title: data.titleIsFallback === true ? fallbackTitle(source, status) : concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])) || fallbackTitle(source, status),
+      title: todoSummary ? pomeLocaleRendererNotificationDomain.t('todo.overdueSummary', { count: todoCount }) : data.titleIsFallback === true ? fallbackTitle(source, status) : concreteTitle(text([data.title, data.taskTitle, data.taskName, data.name])) || fallbackTitle(source, status),
       completionSummary: text([data.completionSummary, data.completion_summary, data.title]).slice(0, 4096),
       sessionTitle: text([data.sessionTitle, data.session_title]).slice(0, 256),
-      detail: status === 'due' ? pomeLocaleRendererNotificationDomain.t("copy.dueWithin1Hour.955b14") : project,
+      detail: todoSummary
+        ? pomeLocaleRendererNotificationDomain.t('todo.overdueSummaryDetail')
+        : status === 'due'
+        ? pomeLocaleRendererNotificationDomain.t('copy.dueWithin1Hour.955b14')
+        : status === 'overdue'
+          ? pomeLocaleRendererNotificationDomain.t('copy.deadlineHasPassed.37e6a6')
+          : project,
       eventId: data.eventId ?? null,
       occurredAt: eventTime(data.occurredAt ?? data.completedAt ?? data.completed_at ?? data.timestamp ?? data.queuedAt, now),
       queueCount: queueCount(data.queueCount ?? data.pendingCount ?? data.pending),

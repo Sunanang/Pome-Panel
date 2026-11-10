@@ -28,10 +28,12 @@ test('old events retain timed completion and todo defaults, while status is expl
   assert.equal(domain.normalize({ source: 'codex' }).status, 'completed');
   assert.equal(domain.normalize({ source: 'todo' }).status, 'due');
   assert.equal(domain.normalize({ source: 'cursor', status: 'invalid' }).status, 'completed');
-  for (const status of ['completed','due','failed','awaiting']) {
+  for (const status of ['completed','due','overdue','failed','awaiting']) {
     assert.equal(domain.normalize({ source: 'claude', status }).status, status);
   }
   assert.equal(domain.normalize({ source: 'todo' }).detail, '将在 1 小时内截止');
+  assert.equal(domain.normalize({ source: 'todo', status: 'overdue' }).detail, '截止时间已过');
+  assert.equal(domain.normalize({ source: 'todo', status: 'overdue', title: '  ' }).title, '待办已过期');
 });
 
 test('notification copy shows actual work, falls back by source, and has no repeated completion subtitle', () => {
@@ -67,4 +69,21 @@ test('queue indicator is hidden for zero and bounded for invalid or excessive co
   assert.equal(domain.queueCount(3), 3);
   assert.equal(domain.queueCount({pendingCount: 3}), 3);
   assert.equal(domain.queueCount(999), 99);
+});
+
+
+test('overdue summary count and review action are localized in all ten languages', () => {
+  const i18n = require('../localization/runtime'), previous = i18n.getState();
+  try {
+    for (const { id } of require('../localization/languages.json')) {
+      i18n.setState(i18n.snapshot(id, [id]));
+      const summary = domain.normalize({ source: 'todo', status: 'overdue', todoSummary: true, todoCount: 12, eventId: 'summary-id' });
+      assert.equal(summary.title, i18n.t('todo.overdueSummary', { count: 12 }));
+      assert(summary.title.includes('12')); assert(!summary.title.includes('{count}'));
+      assert.equal(summary.detail, i18n.t('todo.overdueSummaryDetail'));
+      assert.equal(summary.eventId, 'summary-id');
+      assert.equal(summary.todoCount, 12);
+      assert.equal(domain.normalize({ source: 'todo', todoSummary: true, todoCount: Infinity }).todoCount, 1);
+    }
+  } finally { i18n.setState(previous); }
 });

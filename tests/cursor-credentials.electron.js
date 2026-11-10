@@ -78,6 +78,7 @@ async function run(c) {
   await js(`document.querySelector('#ui-capsule-hint button')?.click();setMode(true);setActiveTab('home');
     hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>id!=='cursor');homeSizes.cursor='medium';homeWorkingLayout=null;
     applyHomeLayout(NotchDomain.resolveHomeWidgetLayout(homeOrder,homeSizes,hiddenHomeModules),{reason:'initial'});`);
+  await js('notchAPI.enableAiCredentialAccess()');
   await refresh();
   await until(`document.querySelector('#ai-provider-cursor[data-state="ok"]') && document.querySelector('#ai-provider-grokbot[data-state="ok"]')`);
   assert.equal((await js('notchAPI.getCursorTokenStatus()')).configured, false, 'legacy ciphertext is not a usable manual token');

@@ -83,10 +83,17 @@ async function main() {
     })()`);
     assert.equal(scheduling.before,0);assert(scheduling.writes<=6);assert(Math.abs(scheduling.x-.6)<.01);
 
-    // Controls remain stationary and usable; hovering never starts the mirror.
+    // Crossing interactive children must keep tilt continuous; click still flattens.
     assert.equal(await js(`document.querySelector('.home-mirror').classList.contains('live')`),false);
+    await hover('pomodoro');await wait(220);
+    assert.notEqual((await state('pomodoro')).transform,'none');
     await hover('pomodoro',.5,.5,'mouse','#pomodoro-toggle');await wait(220);
-    assert.equal((await state('pomodoro')).transform,'none');
+    assert.notEqual((await state('pomodoro')).transform,'none','tilt must continue over clickable controls');
+    await capture('03b-timer-over-control');
+    await js(`document.getElementById('pomodoro-toggle').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerType:'mouse',buttons:1}))`);
+    await frame();
+    assert.equal((await state('pomodoro')).transform,'none','pointerdown flattens before the click');
+    await hover('pomodoro',.5,.5,'mouse','#pomodoro-toggle');await wait(220);
     await js(`document.getElementById('pomodoro-toggle').click()`);
     assert.equal(await js(`document.getElementById('home-pomodoro').dataset.state`),'running');
     await js(`document.getElementById('pomodoro-toggle').click()`);
@@ -128,7 +135,8 @@ async function main() {
     assert.equal((await state('mirror')).transform,'none');
     await capture('08-layout-edit');
     assert.deepEqual(await js(`[HOME_ORDER_KEY,HOME_SIZES_KEY,HOME_PLACEMENTS_KEY,'notch-home-commands'].map(key=>localStorage.getItem(key))`),await js('hoverStored'));
-    assert.equal(await js(`document.querySelector('.command-text').title`),'先核实来源，再给出事实、风险和替代解释，保持独立判断。');
+    assert.equal(await js(`document.querySelector('.command-text').textContent`),'先核实来源，再给出事实、风险和替代解释，保持独立判断。');
+    assert.equal(await js(`document.querySelector('.command-text').title`),'','command detail uses the custom tooltip, without a native title');
     assert.deepEqual(errors,[]);
     console.log('Card hover: bounded 2/2.5/1 degree tilt without scale, frame coalescing, controls, focus, leave/cancel, reduced motion and edit isolation passed');
     console.log('Screenshots:',shots);

@@ -3,6 +3,9 @@
 // Electron profiles must never borrow credentials from the user's real tools.
 // Individual integration tests can still inject their own auth/fetch fixtures.
 if (process.versions.electron && process.env.TODO_TEST_USER_DATA) {
+  // Keep hook fixtures next to their own profile, including startup suites
+  // that later remove TODO_TEST_USER_DATA to exercise production boot paths.
+  process.env.POME_HOOK_TEST_HOME ||= require('node:path').join(process.env.TODO_TEST_USER_DATA, 'hook-home');
   // Hosted macOS VMs intermittently lose their GPU/Viz process during captures.
   // This preload is test-only; packaged applications retain normal rendering.
   if (process.platform === 'darwin' && process.env.CI) process.once('loaded', () => {

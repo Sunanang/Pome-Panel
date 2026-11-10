@@ -1,0 +1,18 @@
+[
+  {
+    "path": "/Applications/Pome Panel.app",
+    "bundleId": "com.pomepanel.app",
+    "version": "0.11.0",
+    "signatureVerified": true,
+    "renameButtonRemoved": true,
+    "originalBackup": "/Users/lando/coding/Pome-Panel/dist.noindex/install-validation-20261029/previous-system-Pome Panel.app"
+  },
+  {
+    "path": "/Users/lando/Applications/Pome Panel.app",
+    "bundleId": "com.pomepanel.app",
+    "version": "0.11.0",
+    "signatureVerified": true,
+    "renameButtonRemoved": true,
+    "originalBackup": "/Users/lando/coding/Pome-Panel/dist.noindex/install-validation-20261029/previous-user-Pome Panel.app"
+  }
+]

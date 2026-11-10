@@ -260,3 +260,12 @@ test('thunder flashes at 4–8 second intervals for 140ms with a maximum alpha o
   FX.step(s,.07);assert(s.flash>.21&&s.flash<=.22);
   FX.step(s,.08);assert.equal(s.flash,0);assert.equal(s.nextFlash,12);
 });
+
+
+test('temperature units convert only the display and preserve the source weather', () => {
+  const source={code:0,temperature:10,humidity:50};
+  assert.equal(Weather.view(source,'medium',key=>key,'c').temperature,'10°C');
+  assert.equal(Weather.view(source,'medium',key=>key,'f').temperature,'50°F');
+  assert.equal(source.temperature,10);
+  assert.equal(Weather.view(null,'mini',key=>key,'f').temperature,'--°F');
+});

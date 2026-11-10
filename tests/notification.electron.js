@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const profile = process.env.TODO_TEST_USER_DATA;
+fs.mkdirSync(profile, { recursive: true });
+// Skip first-run welcome so todo focus screenshots are not covered by the dialog.
+fs.writeFileSync(path.join(profile, '.ui-welcome-done'), '1');
 app.commandLine.appendSwitch('user-data-dir', profile);
 if (process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain');
 require('../cursor-usage').readAuthToken = () => ({ ok: false });
@@ -80,6 +83,21 @@ app.on('web-contents-created', (_event, contents) => {
 async function run(mainContents) {
   await until(async () => port && await mainContents.executeJavaScript('!!window.NotchWorkspace'), 'production startup');
   assert.equal((await fetch(`http://127.0.0.1:${port}/notify/gpt`, {method:'POST'})).status,404);
+  // Meeting mode pauses display while continuing durable receipt of AI completions.
+  const js = source => mainContents.executeJavaScript(source);
+  assert.equal((await js('notchAPI.setMeetingMode(true)')).meetingMode, true);
+  await send('codex', { title: '会议期间已保存', 'thread-id': 'meeting-session', 'turn-id': 'meeting-turn' });
+  const inbox = await js('notchAPI.getTaskInbox()');
+  assert(inbox.items.some(row => row.title === '会议期间已保存'));
+  assert.equal(notificationWindow()?.isVisible() || false, false);
+  assert.equal((await js('notchAPI.getAppSettings()')).taskNotifications, true);
+  assert.equal((await js('notchAPI.setMeetingMode(false)')).meetingMode, false);
+  await send('codex', { title: '会议结束后恢复提醒' });
+  await dismiss(await shown('会议结束后恢复提醒'));
+  await js('notchAPI.setTaskNotifications(false)');
+  await js('notchAPI.setMeetingMode(true)'); await js('notchAPI.setMeetingMode(false)');
+  assert.equal((await js('notchAPI.getAppSettings()')).taskNotifications, false, 'meeting mode preserves the original bubble preference');
+  await js('notchAPI.setTaskNotifications(true)');
   // Each known source enters through the real HTTP receiver and source identity service.
   const variants = [
     ['codex-completed', 'codex', { title: '重构通知队列，补齐悬停暂停逻辑', project: 'Pome-Panel' }],
@@ -94,6 +112,11 @@ async function run(mainContents) {
     await send(source, payload);
     const title = require('../main-services').taskNotificationIdentity(payload, source).title;
     const win = await shown(title);
+    assert.equal(win.isAlwaysOnTop(), true);
+    // Match the panel's platform layer, with notifications one relative level above.
+    // Keep both below screen-saver so system capture UI can still appear above them.
+    const notificationLayer=require('../platform').windowLayer(process.platform,{notification:true});
+    assert.deepEqual(notificationLayer,{level:process.platform==='darwin'?'status':'floating',relativeLevel:1});
     assert.equal(win.getBounds().width, 400);
     assert.equal(win.hasShadow(), false, 'native window cannot add a second outer shadow');
     const edge = await evaluate(win, `({shadow:getComputedStyle(shell.querySelector('.notification-shape')).boxShadow,
@@ -198,7 +221,7 @@ async function run(mainContents) {
   assert.equal(!afterLatest || !afterLatest.isVisible(), true, 'no older queued bubbles remain');
   // Settings can suppress the top bubble while completions still save, and must
   // clear queued shells so a later re-enable does not resurrect them.
-  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'suppressed-due',text:'关闭后不应再弹出的待办',deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0}])`);
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'suppressed-due',text:'关闭后不应再弹出的待办',deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0}],workspacePersistenceRoot)`);
   win = await shown('关闭后不应再弹出的待办');
   assert.equal((await mainContents.executeJavaScript('notchAPI.setTaskNotifications(false)')).ok, true);
   await delay(400);
@@ -242,16 +265,57 @@ async function run(mainContents) {
   await until(() => !notificationWindow() || !notificationWindow().isVisible(), 'normal countdown resumes and closes');
   // Exercise the real todo IPC rather than creating a completion record for a reminder.
   const before = JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length;
-  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-due',text:'提交 Pome Panel 1.4 发布说明',deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0}])`);
+  const todoDeadline = new Date(Date.now()+1800000).toISOString();
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-due',text:'提交 Pome Panel 1.4 发布说明',deadline:${JSON.stringify(todoDeadline)},done:false,remindedAt:0}],workspacePersistenceRoot)`);
   win = await shown('提交 Pome Panel 1.4 发布说明');
   assert.equal(await evaluate(win, 'currentNotification.status'), 'due');
   assert.equal(await evaluate(win, 'detailElement.textContent'), '将在 1 小时内截止');
   assert.equal(await evaluate(win, `document.getElementById('attention-brand').decode().then(()=>document.getElementById('attention-brand').naturalWidth>0).catch(()=>false)`),true,'real todo reminder loads its source icon');
-  await capture(win, 'todo-due-soon'); await dismiss(win);
+  await capture(win, 'todo-due-soon');
+  // Clicking a todo bubble expands Tasks and focuses the matching row.
+  await mainContents.executeJavaScript(`(() => {
+    data.P0 = [{
+      id: 'notification-due',
+      text: '提交 Pome Panel 1.4 发布说明',
+      done: false,
+      createdAt: Date.now(),
+      deadline: ${JSON.stringify(todoDeadline)},
+      remindedAt: 0,
+    }];
+    if (typeof renderTodoBoard === 'function') renderTodoBoard();
+    if (typeof saveData === 'function') saveData(data);
+  })()`);
+  const canFocusTodo = await mainContents.executeJavaScript('notchAPI.capabilities.features.windowFocus');
+  await evaluate(win, 'void activateNotification()');
+  if (!canFocusTodo) {
+    await until(() => !notificationWindow() || !notificationWindow().isVisible(), 'native-off todo bubble only dismisses');
+    mainContents.send('app:open-todo', { id: 'notification-due', deadline: todoDeadline });
+  }
+  await until(async () => mainContents.executeJavaScript(`isExpanded === true && !modeBusy && activeTab === 'todo'`), 'todo bubble opens Tasks');
+  await until(async () => mainContents.executeJavaScript(`!!document.querySelector('.todo-item[data-id="notification-due"].is-reminder-focus')`), 'todo row highlighted');
+  await mainContents.executeJavaScript(`(() => {
+    const welcome = document.getElementById('ui-welcome');
+    if (welcome?.open) welcome.close();
+    document.querySelector('#ui-capsule-hint button')?.click();
+    const hint = document.getElementById('ui-capsule-hint');
+    if (hint) hint.hidden = true;
+    document.querySelector('.todo-item.is-reminder-focus')?.scrollIntoView({ block: 'center' });
+  })()`);
+  await delay(200);
+  const panel = BrowserWindow.fromWebContents(mainContents);
+  fs.mkdirSync(output, { recursive: true });
+  fs.writeFileSync(path.join(output, 'todo-open-focus.png'), (await panel.capturePage()).toPNG());
+  await until(() => !notificationWindow() || !notificationWindow().isVisible(), 'todo bubble dismisses after open');
   assert.equal(JSON.parse(fs.readFileSync(path.join(profile, 'task-inbox.json'))).records.length, before);
+  // Overdue catch-up when the lead window was missed and remindedAt is still 0.
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders([{id:'notification-overdue',text:'补交上周周报',deadline:new Date(Date.now()-60000).toISOString(),done:false,remindedAt:0}],workspacePersistenceRoot)`);
+  win = await shown('补交上周周报');
+  assert.equal(await evaluate(win, 'currentNotification.status'), 'overdue');
+  assert.equal(await evaluate(win, 'detailElement.textContent'), '截止时间已过');
+  await capture(win, 'todo-overdue'); await dismiss(win);
   // Two deadlines in the same turn retain FIFO order through AI bursts and a
   // notification-window crash. No reminder is marked then silently dropped.
-  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders(['a','b'].map(id=>({id:'batch-'+id,text:'批量待办 '+id,deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0})))`);
+  await mainContents.executeJavaScript(`notchAPI.scheduleTodoReminders(['a','b'].map(id=>({id:'batch-'+id,text:'批量待办 '+id,deadline:new Date(Date.now()+1800000).toISOString(),done:false,remindedAt:0})),workspacePersistenceRoot)`);
   win = await shown('批量待办 a');
   assert.equal(await evaluate(win, 'queueElement.textContent'), '+1');
   await send('codex', { title: '较早排队的 AI 完成' });
@@ -343,13 +407,18 @@ async function verifyMcpAuthorization(mainContents) {
     if (to === filePath) { writes++; throw Object.assign(new Error('fixture ENOSPC'), { code: 'ENOSPC' }); }
     return rename(from, to);
   };
+  const expectedWarnings = [], warn = console.warn;
+  console.warn = (...args) => expectedWarnings.push(args.join(' '));
   try {
     const response = await fetch(`http://127.0.0.1:${port}/notify/cursor`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(done),
     });
     assert.equal(response.status, 503);
     assert.equal((await response.json()).error, 'ENOSPC');
-  } finally { fs.renameSync = rename; }
+  } finally { fs.renameSync = rename; console.warn = warn; }
+  assert.equal(expectedWarnings.length, 1, 'only the injected storage failure warns');
+  assert.match(expectedWarnings[0], /AI|待处理/);
+  console.log('[expected fixture: ENOSPC] AI attention write rejected; preserved bytes and retry checked');
   assert.equal(writes, 1);
   assert.equal(fs.readFileSync(filePath, 'utf8'), beforeFailure);
   assert.equal((await pending()).items.some(row => row.event.requestId === retryAuth.requestId), true);

@@ -1,0 +1,24 @@
+{
+  "calendar": {
+    "before": {
+      "expanded": true,
+      "open": true
+    },
+    "after": {
+      "expanded": false,
+      "open": false
+    }
+  },
+  "shortcut": {
+    "start": {
+      "hidden": false,
+      "display": "grid"
+    },
+    "esc": false,
+    "stayed": {
+      "expanded": true,
+      "display": "grid",
+      "aria": "等待输入…"
+    }
+  }
+}

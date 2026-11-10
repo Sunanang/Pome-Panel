@@ -1,0 +1,13 @@
+{
+  "serverRev": 523,
+  "counts": {
+    "live": 523,
+    "tombstones": 0,
+    "changeLogCount": 523,
+    "serverRev": 523,
+    "pristine": false,
+    "latestUpdatedAt": 1793294532060
+  },
+  "checkpointBytes": 241,
+  "journalBytes": 309181
+}

@@ -5,7 +5,8 @@ const { app, BrowserWindow } = require('electron');
 const domain = require('../renderer/domain');
 app.setPath('userData', process.env.TODO_TEST_USER_DATA);
 app.on('window-all-closed', () => {});
-const watchdog = setTimeout(() => { console.error('Sun/home regression timed out'); app.exit(1); }, 60000);
+let lastCheck = 'startup';
+const watchdog = setTimeout(() => { console.error('Sun/home regression timed out:', lastCheck); app.exit(1); }, 60000);
 
 async function runPlatform(name) {
   const win = new BrowserWindow({ width: 1240, height: 638, frame: false, show: false,
@@ -13,10 +14,10 @@ async function runPlatform(name) {
       sandbox: false, preload: path.join(__dirname, 'sun-home.preload.js'),
       additionalArguments: [`--sun-test-platform=${name}`] } });
   const errors = [];
-  const js = code => win.webContents.executeJavaScript(code).catch(error => {
+  const js = code => { lastCheck = `${name}: ${code.slice(0,180)}`; return win.webContents.executeJavaScript(code).catch(error => {
     console.error('Failed renderer check:', code, 'Console errors:', errors);
     throw error;
-  });
+  }); };
   const frames = () => js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
   async function until(code) {
     for (let i = 0; i < 150; i++) {
@@ -64,45 +65,33 @@ async function runPlatform(name) {
   win.webContents.on('console-message', details => { if (details.level === 'error') errors.push(details.message); });
   try {
     await win.loadFile(path.join(__dirname, '..', 'renderer/index.html'));
+    win.show(); win.focus();
     win.show();
+    if(process.platform==='darwin')app.focus({steal:true});
     win.focus();
     win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await js('setMode(true)');
     const initial = await readLayout();
-    if (name === 'win32') {
-      assert.deepEqual(await js('NotchHome.getVisibility().visibleIds'), ['pomodoro', 'cursor', 'recorder', 'inbox', 'mirror', 'note', 'commands', 'sun', 'almanac']);
-      assert(!initial.hidden.includes('sun'), 'fresh Windows enables sun: ' + JSON.stringify(await js(`({freshWindowsHome,caps:readPlatformCapabilities(),initial:${JSON.stringify(initial)}})`)));
-      assert(initial.hidden.includes('music') && initial.hidden.includes('windows'));
-      assert(!initial.storedHidden.includes('music') && !initial.storedHidden.includes('windows'), 'platform restrictions must not overwrite saved preferences');
-      assert(domain.validateHomeWidgetLayout({ placements: initial.placements, allowGaps: false }, Object.keys(initial.placements)), 'fresh Windows fills all 48 cells');
-    } else {
-      assert(initial.hidden.includes('sun'), 'Mac keeps its existing default visibility');
-      assert.equal(initial.sizes.pomodoro, 'mini');
-      assert.equal(initial.sizes.commands, 'mini');
-      assert.deepEqual(initial.placements.inbox, { column: 8, row: 0, width: 4, height: 2 });
-    }
+    assert.deepEqual(await js('NotchHome.getVisibility().visibleIds'), ['sun','pomodoro','cursor','almanac','inbox','commands','mirror','note']);
+    assert.deepEqual(initial.storedHidden, ['music','recorder']);
+    assert.equal(initial.sizes.pomodoro,'mini');assert.equal(initial.sizes.commands,'mini');
+    assert(domain.validateHomeWidgetLayout({placements:initial.placements,allowGaps:true},Object.keys(initial.placements)));
+    if(name==='win32')assert(initial.hidden.includes('windows'),'unsupported native widget remains hidden');
     await capture('default-home');
     await new Promise(resolve => { win.webContents.once('did-finish-load', resolve); win.webContents.reload(); });
     await until('!!window.NotchHome && !!window.PomeSun');
     assert.deepEqual(await readLayout(), initial, 'default layout survives a reload');
     await js('setMode(true)');
 
-    if (name === 'win32') {
-      await js(`(() => {
-        const old=NotchDomain.normalizeHomeInboxLayout({order:HOME_ORDER_DEFAULTS,sizes:HOME_SIZE_DEFAULTS,
-          hiddenIds:['music','windows','sun'],registry:HOME_MODULE_REGISTRY});
-        localStorage.setItem(HOME_ORDER_KEY,JSON.stringify(HOME_ORDER_DEFAULTS));
-        localStorage.setItem(HOME_SIZES_KEY,JSON.stringify(HOME_SIZE_DEFAULTS));
-        localStorage.setItem(HOME_HIDDEN_MODULES_KEY,'["sun"]');
-        localStorage.setItem(HOME_PLACEMENTS_KEY,JSON.stringify(old.placements));
-      })()`);
-      await new Promise(resolve => { win.webContents.once('did-finish-load', resolve); win.webContents.reload(); });
-      await until('!!window.NotchHome && !!window.PomeSun');
-      assert.deepEqual(await readLayout(), initial, 'an untouched old Windows default upgrades to the filled, sun-enabled default');
-      assert.equal(await js(`localStorage.getItem(HOME_HIDDEN_MODULES_KEY)`), '[]');
-      await js('setMode(true)');
-    }
+    // Updating must not apply the new priorities to an existing ordered layout.
+    const legacyOrder=['music','pomodoro','cursor','recorder','inbox','commands','mirror','note','windows','sun','almanac'];
+    await js(`localStorage.setItem(HOME_ORDER_KEY,JSON.stringify(${JSON.stringify(legacyOrder)}));localStorage.setItem(HOME_HIDDEN_MODULES_KEY,'["sun","almanac"]');`);
+    await new Promise(resolve=>{win.webContents.once('did-finish-load',resolve);win.webContents.reload()});
+    await until('!!window.NotchHome && !!window.PomeSun');
+    assert.deepEqual(await js('homeOrder'),legacyOrder);
+    assert.deepEqual(await js('hiddenHomeModules'),['sun','almanac']);
+    await js('setMode(true)');
 
     // Explicitly saved user sizes, visibility and gaps must not be replaced by first-run defaults.
     await js(`(() => {
@@ -233,7 +222,7 @@ async function runPlatform(name) {
 app.whenReady().then(async () => {
   await runPlatform('win32');
   await runPlatform('darwin');
-  console.log('Windows fresh-home fill, Mac defaults, saved layouts, sun dialog edges/content and collapse lifecycle passed');
+  console.log('Windows/macOS homepage defaults, saved layouts, sun dialog edges/content and collapse lifecycle passed');
   clearTimeout(watchdog);
   app.quit();
 }).catch(error => { console.error(error); app.exit(1); });

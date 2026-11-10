@@ -15,6 +15,7 @@ const {
   pasteResultToIpc,
   todoReminderState,
   todoReminderTimerDelay,
+  mergeTodoReminderSchedule,
   taskNotificationIdentity,
   normalizeTaskNotificationWindow,
   normalizeCredentialInput,
@@ -76,9 +77,10 @@ test('first-run auto-launch only fires for a genuinely fresh install', () => {
   assert.equal(firstRunAutoLaunchPlan().reason, 'unsupported');
 });
 
-test('media permission prompts temporarily lower the panel and restore its normal floating layer', async () => {
+test('media permission prompts temporarily lower the panel and restore its shared normal layer', async () => {
   const events = [];
   let alwaysOnTop = true;
+  const expectedLevel = process.platform === 'darwin' ? 'status' : 'floating';
   const owner = {
     isDestroyed: () => false,
     isVisible: () => true,
@@ -110,7 +112,7 @@ test('media permission prompts temporarily lower the panel and restore its norma
     ['activate'],
     ['focus'],
     ['request', false],
-    ['top', true, 'floating'],
+    ['top', true, expectedLevel],
     ['track', -1],
   ]);
 });
@@ -119,6 +121,7 @@ test('media permission prompts restore the window layer when the system request 
   let alwaysOnTop = true;
   let restoredLevel;
   const deltas = [];
+  const expectedLevel = process.platform === 'darwin' ? 'status' : 'floating';
   const owner = {
     isDestroyed: () => false,
     isVisible: () => true,
@@ -137,8 +140,21 @@ test('media permission prompts restore the window layer when the system request 
   }), /permission service failed/);
 
   assert.equal(alwaysOnTop, true);
-  assert.equal(restoredLevel, 'floating');
+  assert.equal(restoredLevel, expectedLevel);
   assert.deepEqual(deltas, [1, -1]);
+});
+
+test('permission completion resolves the latest editing layer instead of restoring a stale status layer', async () => {
+  let typing = false, restored;
+  const owner = { isDestroyed: () => false, isAlwaysOnTop: () => true,
+    setAlwaysOnTop: (enabled, level) => { if (enabled) restored = level; }, focus() {} };
+  const coordinator = createForegroundMediaPermissionCoordinator({
+    getWindowLayer: () => require('../platform').windowLayer('darwin', { typingFocus: typing }),
+  });
+  await coordinator.run({ owner, request: async () => { typing = true; return true; } });
+  assert.equal(restored, 'floating');
+  await coordinator.run({ owner, request: async () => { typing = false; return false; } });
+  assert.equal(restored, 'status');
 });
 
 test('overlapping media prompts stay below system UI until every request settles', async () => {
@@ -146,6 +162,7 @@ test('overlapping media prompts stay below system UI until every request settles
   const restoredLevels = [];
   const deltas = [];
   const releases = [];
+  const expectedLevel = process.platform === 'darwin' ? 'status' : 'floating';
   const owner = {
     isDestroyed: () => false,
     isAlwaysOnTop: () => alwaysOnTop,
@@ -172,7 +189,7 @@ test('overlapping media prompts stay below system UI until every request settles
   releases[1](false);
   assert.equal(await microphone, false);
   assert.equal(alwaysOnTop, true);
-  assert.deepEqual(restoredLevels, ['floating']);
+  assert.deepEqual(restoredLevels, [expectedLevel]);
   assert.deepEqual(deltas, [1, 1, -1, -1]);
 });
 
@@ -426,7 +443,7 @@ test('WIN_NATIVE_DEFAULT stays off until the antivirus gate (D16) passes', () =>
   assert.equal(appSettingsLayoutPreferences({ taskNotifications: true }).taskNotifications, true);
 });
 
-test('todoReminderState fires once within the final hour and expires after the DDL', () => {
+test('todoReminderState fires once within the final hour and catch-up once after the DDL', () => {
   const deadline = Date.parse('2026-08-22T10:00:00.000Z');
   const todo = { id: 't1', text: '发布新版', deadline: new Date(deadline).toISOString(), done: false, remindedAt: 0 };
   assert.deepEqual(todoReminderState(todo, deadline - 2 * 60 * 60 * 1000), {
@@ -438,7 +455,31 @@ test('todoReminderState fires once within the final hour and expires after the D
     delayMs: 0,
   });
   assert.equal(todoReminderState({ ...todo, remindedAt: deadline - 60 * 60 * 1000 }, deadline - 30 * 60 * 1000).state, 'notified');
-  assert.equal(todoReminderState(todo, deadline + 1).state, 'expired');
+  assert.deepEqual(todoReminderState(todo, deadline + 1), { state: 'expired-missed', delayMs: 0 });
+  assert.equal(
+    todoReminderState({ ...todo, remindedAt: deadline - 60 * 60 * 1000 }, deadline + 1).state,
+    'notified',
+    'already reminded before DDL must not overdue-catch-up again'
+  );
+  assert.equal(todoReminderState({ ...todo, done: true }, deadline - 1).state, 'done');
+  assert.equal(todoReminderState({ ...todo, deadline: '' }, deadline).state, 'invalid');
+  assert.equal(todoReminderState(todo, deadline).state, 'due', 'exact deadline is still the lead window');
+  assert.equal(todoReminderState(todo, deadline - 3600000).state, 'due', 'exact lead boundary is due');
+  assert.equal(todoReminderState(todo, deadline - 3600000 - 1).state, 'scheduled');
+});
+
+test('mergeTodoReminderSchedule keeps in-memory remindedAt ahead of stale renderer payloads', () => {
+  const deadline = '2026-08-22T10:00:00.000Z';
+  const previous = [{ id: 't1', text: '发布新版', deadline, done: false, remindedAt: 1700000001000 }];
+  const incoming = [
+    { id: 't1', text: '发布新版', deadline, done: false, remindedAt: 0 },
+    { id: 't2', text: '新任务', deadline, done: false, remindedAt: 0 },
+    { id: '', text: '丢弃', deadline, done: false, remindedAt: 0 },
+  ];
+  const merged = mergeTodoReminderSchedule(previous, incoming);
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].remindedAt, 1700000001000);
+  assert.equal(merged[1].remindedAt, 0);
 });
 
 test('todo reminder timers checkpoint far-future deadlines without overflowing Node timers', () => {
@@ -838,4 +879,23 @@ test('native conversation title and multiline completion summary stay separate',
   const content = taskNotificationContent({ completionSummary: summary, session_title: '首页改版', project: 'Done' }, 'codex');
   assert.equal(content.title, '修复布局。'); assert.equal(content.project, 'Done');
   assert.equal(content.sessionTitle, '首页改版'); assert.equal(content.completionSummary, summary);
+});
+
+test('AX identities preserve separate same-title windows and survive title/index changes',()=>{
+ const items=normalizeWindowRows([
+  {pid:10,appName:'Terminal',title:'zsh',axWindowId:'41',windowIndex:0},
+  {pid:10,appName:'Terminal',title:'zsh',axWindowId:'42',windowIndex:1},
+  {pid:10,appName:'Terminal',title:'zsh',axWindowId:'41',windowIndex:2},
+ ]);
+ assert.equal(items.length,2);assert.notEqual(items[0].id,items[1].id);
+ const changed=normalizeWindowRows([{pid:10,appName:'Terminal',title:'npm test',axWindowId:'41',windowIndex:5}]);
+ assert.equal(changed[0].id,items[0].id);
+});
+
+test('remote AX tokens require a valid AX identity, native window number and safe element ID', () => {
+ const base={pid:70,appName:'Browser',title:'other Space',axWindowId:'4272',windowNumber:117};
+ assert.equal(normalizeWindowRows([{...base,axRemoteId:'0'}])[0].axRemoteId,'0');
+ for(const axRemoteId of ['-1','17; do shell script','9007199254740992','NaN'])assert.equal(normalizeWindowRows([{...base,axRemoteId}])[0].axRemoteId,undefined);
+ assert.equal(normalizeWindowRows([{...base,windowNumber:0,axRemoteId:'17'}])[0].axRemoteId,undefined);
+ assert.equal(normalizeWindowRows([{...base,axWindowId:'',axRemoteId:'17'}])[0].axRemoteId,undefined);
 });

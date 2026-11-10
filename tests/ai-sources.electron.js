@@ -14,11 +14,12 @@ app.on('web-contents-created',(_event,c)=>{c.on('console-message',details=>{if(d
 async function run(c){
  const js=code=>c.executeJavaScript(code);
  async function until(expr){for(let i=0;i<300;i++){try{if(await js(expr))return;}catch{}await sleep(30);}throw new Error('Timeout: '+expr);}
- async function capture(name){await sleep(500);fs.writeFileSync(path.join(artifacts,name+'.png'),(await c.capturePage()).toPNG());}
+ async function capture(name){if(name.startsWith('settings')&&await js(`activeTab==='settings'`))await js(`NotchSettings.select('ai')`);await sleep(500);fs.writeFileSync(path.join(artifacts,name+'.png'),(await c.capturePage()).toPNG());}
  await until(`!!window.NotchTaskInbox && window.NotchAiSources?.getState().ready && document.getElementById('home-inbox').dataset.sourceState==='none'`);await js('setMode(true)');
  assert.equal(await js(`document.getElementById('home-inbox-read-all').hidden`),true,'N3: empty hides read-all');await capture('empty-none');
  const tabReady=await js(`(async()=>{const original=ipcSetTab;let release;ipcSetTab=()=>new Promise(resolve=>{release=resolve});try{const switching=setActiveTab('notes');await new Promise(resolve=>requestAnimationFrame(resolve));const input=document.getElementById('notes-search'),r=input.getBoundingClientRect();const ready=document.querySelector('.tab-panel.active').id==='tab-notes' && !input.closest('.tab-panel').inert && document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===input;release();await switching;return ready;}finally{ipcSetTab=original;await setActiveTab('home');}})()`);assert.equal(tabReady,true,'first input must work before a slow native tab IPC replies');
 
+ await js(`hiddenHomeModules=[...new Set([...hiddenHomeModules,'windows'])];saveHiddenHomeModules();`);
  const initial=await js(`({sizes:{...homeSizes},hidden:[...hiddenHomeModules],layout:JSON.parse(JSON.stringify(homeWorkingLayout))})`);
  for(const size of ['mini','small']){
   await js(`homeSizes={...homeSizes,inbox:'${size}'};hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!['music','inbox'].includes(id));homeWorkingLayout=NotchDomain.resolveHomeWidgetLayout(homeOrder,homeSizes,hiddenHomeModules);applyHomeLayout(homeWorkingLayout,{reason:'initial'})`);
@@ -33,8 +34,8 @@ async function run(c){
  await until(`window.NotchAiSources?.getState().ready && document.getElementById('home-inbox').dataset.sourceState==='none'`);assert.equal(await js(`NotchAiSources.getState().suggestion`),undefined,'dismiss persists across reload');await js('setMode(true)');
  await js(`setActiveTab('settings')`);await until(`document.querySelectorAll('.ai-source-row').length===8`);
  assert.equal(await js(`document.querySelectorAll('.ai-source-restart-hint').length`),0,'detection alone must not ask to restart');
- assert.equal(await js(`getComputedStyle(document.querySelector('.settings-column-primary')).overflowY`),'auto');
- await js(`window.fixtureTrigger=document.querySelector('.ai-source-row[data-source="codex"] button');fixtureTrigger.scrollIntoView({block:'center'});fixtureTrigger.focus();fixtureTrigger.click()`);await until(`document.getElementById('ai-source-confirm').open && !fixtureTrigger.disabled`);
+ assert.equal(await js(`getComputedStyle(document.getElementById('settings-content')).overflowY`),'auto');
+ await js(`window.fixtureTrigger=document.querySelector('.ai-source-row[data-source="codex"] button');NotchSettings.reveal(fixtureTrigger,{block:'center'});fixtureTrigger.focus();fixtureTrigger.click()`);await until(`document.getElementById('ai-source-confirm').open && !fixtureTrigger.disabled`);
  assert.equal(await js(`fixtureTrigger.isConnected && fixtureTrigger===document.querySelector('.ai-source-row[data-source="codex"] button')`),true,'busy renders must preserve the confirmation anchor');
  assert.equal(fs.readFileSync(config,'utf8'),original,'confirmation preview must not write');
  const bounds=await js(`(()=>{const d=document.getElementById('ai-source-confirm').getBoundingClientRect(),b=fixtureTrigger.getBoundingClientRect();return {top:d.top,bottom:d.bottom,left:d.left,right:d.right,h:innerHeight,w:innerWidth,buttonTop:b.top,expectedLeft:Math.max(12,Math.min(innerWidth-d.width-12,b.right-d.width))}})()`);assert(bounds.top>=0&&bounds.bottom<=bounds.h&&bounds.left>=0&&bounds.right<=bounds.w);assert(bounds.top<bounds.buttonTop,'confirmation floats above button');assert(Math.abs(bounds.left-bounds.expectedLeft)<1,'confirmation must align with its actual trigger');await capture('settings-confirm');
@@ -54,8 +55,10 @@ async function run(c){
  await js(`document.getElementById('ai-source-confirm-apply').click()`);await until(`!document.getElementById('ai-source-confirm').open && !document.getElementById('ui-error-bar').hidden && document.querySelector('#ui-error-details pre').textContent.includes('配置文件已变化')`);
  assert.equal(await js(`document.getElementById('ai-sources-status').textContent`),'','failed apply has only one error surface');
  await assertRestartSources([]);assert.equal(await js(`document.getElementById('ai-sources-status').textContent.includes('重新打开')`),false,'failed source must not ask to restart');
+ const confirmedActions=new Set();
  async function apply(source,action='connect'){
-  await js(`NotchAiSources.request('${source}','${action}',document.querySelector('.ai-source-row[data-source="${source}"] button'))`);await until(`document.getElementById('ai-source-confirm').open`);await js(`document.getElementById('ai-source-confirm-apply').click()`);await until(`!document.getElementById('ai-source-confirm').open && NotchAiSources.getState().sources.find(s=>s.source==='${source}').state==='${action==='disconnect'?'disconnected':'connected'}'`);
+  await js(`NotchSettings.select('ai')`);
+  await js(`NotchAiSources.request('${source}','${action}',document.querySelector('.ai-source-row[data-source="${source}"] button'))`);await until(`document.getElementById('ai-source-confirm').open`);if(!confirmedActions.has(action)){await capture('settings-confirm-'+action);confirmedActions.add(action);}await js(`document.getElementById('ai-source-confirm-apply').click()`);await until(`!document.getElementById('ai-source-confirm').open && NotchAiSources.getState().sources.find(s=>s.source==='${source}').state==='${action==='disconnect'?'disconnected':'connected'}'`);
  }
  await apply('codex');assert(fs.readdirSync(path.dirname(config)).some(n=>n.includes('.pome-backup-')));
  await assertRestartSources(['codex']);assert(await js(`document.getElementById('ai-sources-status').textContent.includes('完全退出并重新打开 Codex')`));

@@ -13,7 +13,7 @@ function linkHarness() {
   const requests = [], listeners = new Map();
   let renders = 0, persists = 0, editing = null;
   const context = { Domain, linkGroups: [], CSS: { escape: value => value },
-    uid: () => 'link-fixture', setLinksStatus() {},
+    uid: () => 'link-fixture', setLinksStatus() {}, linkHostname: url => new URL(url).hostname.replace(/^www\./,''),
     allLinks: () => context.linkGroups.flatMap(group => group.links),
     persistLinks: () => { persists++; }, renderLinkGroups: () => { renders++; },
     pomeLocaleRendererWorkspace: { t: () => 'Untitled' }, queueMicrotask,
@@ -58,7 +58,7 @@ test('late classification respects a manually moved link or renamed group', asyn
 test('link metadata preserves an active rename draft and refreshes only after editing ends', async () => {
   const h = linkHarness(); h.edit();
   h.requests[0]({ ok: true, title: 'Learn JavaScript' }); await settle();
-  assert.equal(h.link().title, 'Untitled');
+  assert.equal(h.link().title, 'example.com');
   assert.equal(h.renders(), 1, 'metadata must not replace the active input');
   h.blur(); await settle();
   assert.equal(h.renders(), 2);
@@ -71,7 +71,7 @@ test('metadata completes an untouched link, but is discarded after its URL chang
   const changed = linkHarness(); changed.link().url = 'https://example.org/';
   changed.requests[0]({ ok: true, title: 'Obsolete reply', url: 'https://example.net/' }); await settle();
   assert.equal(changed.link().url, 'https://example.org/');
-  assert.equal(changed.link().title, 'Untitled');
+  assert.equal(changed.link().title, 'example.com');
   assert.equal(changed.persists(), 1);
 });
 

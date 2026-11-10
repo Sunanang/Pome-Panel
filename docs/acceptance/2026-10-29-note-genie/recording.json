@@ -1,0 +1,16 @@
+{
+  "frames": 104,
+  "size": [
+    1240,
+    638
+  ],
+  "captureSpanMs": 2420,
+  "durationInAppMs": 720,
+  "durationForRecordingMs": 1500,
+  "source": "actual Electron Page.screencastFrame frames; no interpolated or generated frames",
+  "exportSize": [
+    960,
+    494
+  ],
+  "exportFrames": 98
+}

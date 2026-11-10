@@ -12,16 +12,36 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   const tokenHost = document.getElementById('settings-ai-provider-tokens');
   const dismissKey = 'notch-ai-source-dismissed-v1';
   const restartSources = new Set();
-  const TOKEN_PROVIDERS = new Set(['copilot', 'grok', 'antigravity', 'manus']);
+  const TOKEN_PROVIDERS = new Set(['grok', 'copilot', 'antigravity', 'manus']);
   const restartMessage = source => source === 'claude'
     ? pomeLocaleRendererAiSources.t('sources.claudeRestart')
     : pomeLocaleRendererAiSources.t("copy.configurationSavedQuitCompletelyThenReopenIt.507666", { arg1: labels[source] });
   let hookRows = [];
+  let listener = null;
   let manusListener = null;
   let ready = false, busy = false, plan = null, anchor = null, checkedAt = 0;
   let dismissed = [];
   try { const value = JSON.parse(localStorage.getItem(dismissKey) || '[]'); if (Array.isArray(value)) dismissed = value; } catch {}
   const el = id => document.getElementById(id);
+  const credentialEnable = el('settings-ai-credential-enable');
+  async function refreshCredentialAccess() {
+    const access = await api?.getAiCredentialAccessStatus?.().catch(() => null);
+    pomeLocaleRendererAiSources.bind(el('settings-ai-credential-status'), 'textContent', () => pomeLocaleRendererAiSources.t(access?.enabled ? 'privacy.ai.active' : 'privacy.ai.paused'));
+  }
+  credentialEnable?.addEventListener('click', async () => {
+    credentialEnable.disabled = true;
+    try {
+      const result = await api?.enableAiCredentialAccess?.();
+      if (!result?.ok) throw new Error('credential_access_failed');
+      await refreshCredentialAccess();
+      await window.NotchAiUsage?.refresh({ force: true });
+    } catch { reportFailure('ai', 'credential_access_failed'); }
+    finally { credentialEnable.disabled = false; }
+  });
+  void refreshCredentialAccess();
+  for (const name of ['notch:cursor-token-changed', 'notch:codex-token-changed', 'notch:ai-provider-token-changed']) {
+    document.addEventListener(name, () => void refreshCredentialAccess());
+  }
   function reportFailure(source, code, hint = status, scope = `source:${source}`, messageKey = 'ui.error.generic', detail = '') {
     if (window.NotchUi) window.NotchUi.showError({ diagnostic: `${source}: ${code}${detail ? ` (${detail})` : ''}`, messageKey, scope, inlineHint: hint, onRepair: () => openSettings(source) });
     else if (hint) pomeLocaleRendererAiSources.bind(hint, 'textContent', () => pomeLocaleRendererAiSources.t(messageKey));
@@ -55,11 +75,12 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   function openSettings(source) {
     void setActiveTab('settings').then(() => {
       const row = list.querySelector(`[data-source="${source || 'codex'}"]`);
-      const target = source ? row : el('settings-ai-sources');
-      target?.scrollIntoView({ block: source ? 'center' : 'start' });
+      const token = source && el(catalog.get(source)?.settingsCard);
+      const target = token || (source ? row : el('settings-ai-sources'));
+      window.NotchSettings?.reveal(target, { block: source ? 'center' : 'start' });
       const focusRow = source ? row : list.querySelector('[data-source="codex"]') || row;
       window.NotchUi?.openManual(source || "codex");
-      const input = focusRow?.querySelector('input[type="password"], input:not([type="checkbox"])');
+      const input = token?.querySelector('input[type="password"], input:not([type="checkbox"])');
       (input || focusRow?.querySelector('.ai-source-actions button') || focusRow?.querySelector('button'))
         ?.focus({ preventScroll: true });
     });
@@ -275,7 +296,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     if (row.hookable) {
       if (row.state === 'connected') {
         if (row.attentionHookMissing || row.summaryHookMissing) definitions.push(['repair', 'copy.repair.37a693']);
-        definitions.push(['disconnect', 'copy.disconnect.f33ac0']);
+        definitions.push(['test', 'notifications.test'], ['disconnect', 'copy.disconnect.f33ac0']);
       } else {
         definitions.push(row.state === 'error' ? ['repair', 'copy.repair.37a693'] : ['connect', 'copy.connect.f3b392']);
       }
@@ -287,7 +308,13 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     definitions.forEach(([action, key], index) => {
       let button = actions.querySelector(`[data-source-action="${action}"]`);
       if (!button) {
-        button = makeButton('', event => void request(row.source, action, event.currentTarget));
+        button = makeButton('', async event => {
+          if (action !== 'test') return void request(row.source, action, event.currentTarget);
+          button.disabled = true;
+          try { const result = await api.testAiSource(row.source); status.textContent = result.message || ''; }
+          catch { status.textContent = pomeLocaleRendererAiSources.t('notifications.listenerUnavailable'); }
+          finally { button.disabled = false; }
+        });
         button.dataset.sourceAction = action;
       }
       button.textContent = pomeLocaleRendererAiSources.t(key);
@@ -302,7 +329,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     }
   }
   function render() {
-    const order = ['cursor', 'codex', 'grokbot', 'claude'];
+    const order = ['cursor', 'codex', 'grokbot', 'claude', 'grok', 'copilot', 'antigravity', 'manus'];
     const rank = source => order.includes(source) ? order.indexOf(source) : order.length;
     const rows = mergedRows().sort((a, b) => rank(a.source) - rank(b.source));
     const connectable = rows.filter((row) => row.hookable || row.source === 'manus');
@@ -319,15 +346,19 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         const copy = document.createElement('div'); copy.className = 'ai-source-copy';
         const actions = document.createElement('div'); actions.className = 'ai-source-actions';
         main.append(icon, copy, actions); item.append(main);
-        // Existing Cursor/Codex listeners retain their input nodes and IDs.
-        const token = el(catalog.get(row.source)?.settingsCard);
-        if (token) item.append(token);
-        else if (['claude', 'grokbot'].includes(row.source)) {
+        // Keep every form mounted; its disclosure belongs below this source's
+        // actions, including when provider discovery completes later.
+        if (['claude', 'grokbot'].includes(row.source)) {
           const note = document.createElement('p'); note.className = 'ai-source-local-quota';
           note.id = catalog.get(row.source).settingsCard;
           item.append(note);
         }
         providerRows.set(row.source, item); list.append(item);
+      }
+      const token = el(catalog.get(row.source)?.settingsCard);
+      if (token?.classList.contains('ai-source-token')) {
+        const form = token.closest('.ai-token-details') || token;
+        if (form.parentElement !== item) item.append(form);
       }
       item.dataset.state = row.state;
       const copy = item.querySelector('.ai-source-copy'); copy.replaceChildren();
@@ -346,6 +377,10 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         state.textContent = pomeLocaleRendererAiSources.t('settings.ai.apiManaged');
       }
       copy.append(heading, file);
+      if (row.state === 'error' && row.message) {
+        const hint = document.createElement('small'); hint.className = 'ai-source-repair-hint';
+        hint.textContent = row.message; copy.append(hint);
+      }
       if (row.state === 'connected' && restartSources.has(row.source)) {
         const hint = document.createElement('small'); hint.className = 'ai-source-restart-hint';
         hint.textContent = restartMessage(row.source); copy.append(hint);
@@ -361,8 +396,8 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       if (!provider) continue;
       const input = el(`settings-${id}-token`);
       if (input) pomeLocaleRendererAiSources.bind(input, 'placeholder', () => pomeLocaleRendererAiSources.t('copy.pasteToken.8a1c2d', { arg1: provider.label }));
-      const save = tokenHost?.querySelector(`[data-provider-save="${id}"]`);
-      const clear = tokenHost?.querySelector(`[data-provider-clear="${id}"]`);
+      const save = input?.closest('.ai-source-token')?.querySelector(`[data-provider-save="${id}"]`);
+      const clear = input?.closest('.ai-source-token')?.querySelector(`[data-provider-clear="${id}"]`);
       if (save) pomeLocaleRendererAiSources.bind(save, 'textContent', () => pomeLocaleRendererAiSources.t('copy.save.a3030b'));
       if (clear) pomeLocaleRendererAiSources.bind(clear, 'textContent', () => pomeLocaleRendererAiSources.t('copy.clear.bce237'));
       if (id === 'grok' && el('settings-grok-team-label')) {
@@ -388,6 +423,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         const response = await api.getAiSources();
         if (!response?.ok) throw new Error(response?.message || pomeLocaleRendererAiSources.t("copy.couldnTReadConnectionStatus.9412ff"));
         hookRows = response.sources;
+        listener = response.listener || null;
         for (const source of restartSources) {
           if (!hookRows.some(row => row.source === source && row.state === 'connected')) restartSources.delete(source);
         }
@@ -444,6 +480,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     finally { busy = false; el('ai-source-confirm-apply').disabled = false; await refresh(); }
   });
   document.addEventListener('notch:tabchange', event => {
+    if (event.detail.tab === 'settings') void refreshCredentialAccess();
     if (event.detail.tab === 'settings' || (event.detail.tab === 'home' && !modeBusy && Date.now() - checkedAt > 30000)) void refresh();
   });
   window.addEventListener('resize', () => { if (dialog?.open) positionConfirmation(); });
@@ -453,11 +490,12 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     void refreshTokenStatuses();
   });
   api?.onManusCompletionStatus?.(applyManusCompletionStatus);
+  api?.onNotificationListenerChanged?.(state => { listener = state; announce(); });
   window.NotchAiSources = Object.freeze({ refresh, request, openSettings, dismiss, icons, compactPath,
     getState: () => ({
       sources: mergedRows().filter(row => row.hookable || row.source === 'manus').map(row => ({ ...row })),
       providers: mergedRows().map((row) => ({ ...row })),
-      ready,
+      ready, listener,
       suggestion: hookRows.find((row) => row.state === 'disconnected' && !dismissed.includes(row.source)),
     }) });
   try {

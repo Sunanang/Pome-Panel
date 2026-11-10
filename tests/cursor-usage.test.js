@@ -20,40 +20,40 @@ function fixture(t, rows = []) {
   return dbPath;
 }
 
-test('Cursor credentials are read from SQLite without changing the database', (t) => {
+test('Cursor credentials are read from SQLite without changing the database', async (t) => {
   const dbPath = fixture(t, [['cursorAuth/accessToken', 'fixture-cursor-token']]);
   const before = fs.readFileSync(dbPath);
-  const result = readAuthToken(dbPath);
+  const result = await readAuthToken(dbPath);
   assert.equal(result.ok, true);
   assert.equal(result.token, 'fixture-cursor-token');
   assert.deepEqual(fs.readFileSync(dbPath), before);
 });
 
-test('missing Cursor install and signed-out Cursor have distinct results', (t) => {
+test('missing Cursor install and signed-out Cursor have distinct results', async (t) => {
   const dbPath = fixture(t);
-  assert.equal(readAuthToken(`${dbPath}.missing`).error, 'cursor_db_missing');
-  assert.equal(readAuthToken(dbPath).error, 'cursor_token_missing');
+  assert.equal((await readAuthToken(`${dbPath}.missing`)).error, 'cursor_db_missing');
+  assert.equal((await readAuthToken(dbPath)).error, 'cursor_token_missing');
 });
 
-test('an unreadable Cursor database returns a failure without a token', (t) => {
+test('an unreadable Cursor database returns a failure without a token', async (t) => {
   const dbPath = fixture(t);
   fs.writeFileSync(dbPath, 'invalid sqlite database');
-  const result = readAuthToken(dbPath);
+  const result = await readAuthToken(dbPath);
   assert.equal(result.error, 'cursor_db_read_failed');
   assert.equal(Object.hasOwn(result, 'token'), false);
 });
 
-test('encrypted Cursor login is decoded before use; failed decoding preserves detection and database bytes', t => {
+test('encrypted Cursor login is decoded before use; failed decoding preserves detection and database bytes', async t => {
   const value = 'cursor-safe-storage:v1:fixture-ciphertext';
   const dbPath = fixture(t, [['cursorAuth/accessToken', value]]);
   const before = fs.readFileSync(dbPath);
-  const decoded = readAuthToken(dbPath, { force: true, decryptToken: (stored, options) => {
+  const decoded = await readAuthToken(dbPath, { force: true, decryptToken: (stored, options) => {
     assert.equal(stored, value); assert.equal(options.dbPath, dbPath); assert.equal(options.force, true);
     return 'fixture-plaintext-token';
   } });
   assert.equal(decoded.token, 'fixture-plaintext-token');
   for (const decryptToken of [() => { throw new Error('private password'); }, () => value]) {
-    const result = readAuthToken(dbPath, { decryptToken });
+    const result = await readAuthToken(dbPath, { decryptToken });
     assert.equal(result.ok, false); assert.equal(result.detected, true);
     assert.equal(result.error, 'cursor_token_decrypt_failed');
     assert(!JSON.stringify(result).includes(value)); assert(!JSON.stringify(result).includes('private password'));
@@ -62,6 +62,23 @@ test('encrypted Cursor login is decoded before use; failed decoding preserves de
 });
 
 const { createCursorUsageService, buildSnapshot } = require('../cursor-usage');
+for (const create of [createCursorUsageService, require('../grokbot-usage').createGrokbotUsageService]) {
+  test(`${create.name}: clearing credentials during an async login read cannot start a stale request`, async () => {
+    let finish, calls = 0;
+    const service = create({ readAuth: () => new Promise(resolve => { finish = resolve; }), fetchImpl: async () => { calls++; throw Error(); } });
+    const result = service.getUsage(); service.reset();
+    finish({ ok: true, token: 'fixture-old-token' });
+    assert.deepEqual(await result, { superseded: true }); assert.equal(calls, 0);
+  });
+  test(`${create.name}: an older delayed login read cannot replace a newer signed-out account`, async () => {
+    let finish, reads = 0, calls = 0;
+    const service = create({ readAuth: () => ++reads === 1 ? new Promise(resolve => { finish = resolve; }) : { ok: false },
+      fetchImpl: async () => { calls++; throw Error(); } });
+    const result = service.getUsage(); await service.getUsage();
+    finish({ ok: true, token: 'fixture-old-token' });
+    assert.deepEqual(await result, { superseded: true }); assert.equal(calls, 0);
+  });
+}
 const response = (body, status = 200) => new Response(JSON.stringify(body), { status });
 const signedOut = () => ({ ok: false, error: 'cursor_token_missing' });
 const period = percent => ({ planUsage: { autoPercentUsed: percent, apiPercentUsed: 20 } });

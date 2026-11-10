@@ -15,7 +15,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   const animation = A.createValueStore();
   const visualStates = new Map();
   let lastRequest = null;
-  let renderedSize = null, renderedOrder = '';
+  let renderedSize = null, renderedOrder = '', renderedVariant = '';
   let pinnedDetails = null;
   let hoverDetailsTimer = null;
   let hoverDetailsId = null; // pending or currently hovered provider
@@ -109,8 +109,13 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     if (byId('tab-settings').getAttribute('aria-hidden') !== 'false') return;
+    if (state[provider]?.credentialAccessRequired || provider === 'claude' && D.invalidToken(state.claude)) {
+      window.NotchSettings?.reveal(byId('settings-ai-credential-access'), { block: 'start' });
+      byId('settings-ai-credential-enable')?.focus({ preventScroll: true });
+      return;
+    }
     const card = byId(registry.get(provider)?.settingsCard || 'settings-ai-sources');
-    card?.scrollIntoView({ block: provider ? 'center' : 'start', behavior: 'instant' });
+    window.NotchSettings?.reveal(card, { block: provider ? 'center' : 'start' });
     window.NotchUi?.openManual(provider);
     card?.querySelector('input')?.focus({ preventScroll: true });
   }
@@ -127,6 +132,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     return t(data?.configured ? 'copy.manualToken.bf90e7' : 'copy.localSignIn.8c966e');
   }
   function errorCopy(data) {
+    if (data?.credentialAccessRequired) return t('privacy.ai.required');
     return t(D.cursorLoginBlocked(data)
       ? 'providers.cursorEncryptedLogin' : D.invalidToken(data) ? 'quota.tokenRequired' : data?.error === 'antigravity_quota_unavailable'
       ? 'providers.quotaUnavailable' : data?.error === 'grok_team_required' ? 'providers.grokTeamRequired' : 'copy.usageUnavailableRefreshToRetry.1ceded');
@@ -222,18 +228,25 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     return [t('quota.resetAt', { time })];
   }
   function provider(m, layout) {
-    const error = m.status === 'error', caption = captionContent(m);
-    const invalid = D.invalidToken(m.data), errorLabel = t(invalid ? 'quota.status.invalid' : 'quota.status.error');
-    const settings = invalid || m.data?.error === 'grok_team_required'
+    const adaptive = layout.adaptive === true;
+    const error = m.status === 'error', caption = captionContent(adaptive ? { ...m, size: 'medium' } : m);
+    const name = adaptive && layout.columns > 4 ? compactNames[m.id] || registry.get(m.id).label : registry.get(m.id).label;
+    const hasGauge = !adaptive || (!error && m.remaining != null);
+    const inlineModel = adaptive ? { ...m, size: 'medium', inlineRows: m.rows.filter(row => row.key !== m.selected.key) } : m;
+    const hasBars = inlineModel.inlineRows.length > 0 && !error;
+    const empty = adaptive && !hasGauge && !error
+      ? `<p class="q-adaptive-empty"${['currency','credits'].includes(m.selected.kind) ? ' data-main-amount' : ''}>${escape(m.selected.kind !== 'percent' ? m.selected.display : errorCopy(m.data))}</p>` : '';
+    const invalid = D.invalidToken(m.data), errorLabel = t(m.data?.credentialAccessRequired ? 'privacy.ai.required' : invalid ? 'quota.status.invalid' : 'quota.status.error');
+    const settings = m.data?.credentialAccessRequired || invalid || m.data?.error === 'grok_team_required'
       || D.cursorLoginBlocked(m.data);
     const repair = error ? `<button class="ai-inline-settings" type="button" data-quota-${settings ? 'settings' : 'retry'}="${m.id}" aria-label="${escape(`${registry.get(m.id).label} · ${t(settings ? 'copy.openSettings.93112c' : 'ui.retry')}`)}">${escape(t(settings ? 'quota.repair' : 'ui.retry'))}</button>` : '';
     // No native title tooltip — details live in the progress popover (with updated time).
-    return `<section class="ai-usage-provider" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-stale="${m.stale}" data-level="${m.level}" data-unit="${m.selected.kind}" data-quota-window="${escape(m.selected.key)}" data-balance-empty="${m.exhausted}" data-has-bars="${m.inlineRows.length > 0 && !error}" data-depleted="${!error && visualStates.get(`${m.id}/depleted`) === true}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}">
+    return `<section class="ai-usage-provider" id="ai-provider-${m.id}" data-provider="${m.id}" data-state="${m.status}" data-stale="${m.stale}" data-level="${m.level}" data-unit="${m.selected.kind}" data-quota-window="${escape(m.selected.key)}" data-balance-empty="${m.exhausted}" data-has-gauge="${hasGauge}" data-has-bars="${hasBars}" data-depleted="${!error && visualStates.get(`${m.id}/depleted`) === true}" aria-label="${escape(registry.get(m.id).label)}" aria-description="${escape(m.title)}">
       <button class="q-detail-toggle" data-quota-toggle="${m.id}" type="button" aria-controls="${m.id}-usage-rows" aria-expanded="false" aria-label="${escape(t('ui.quota.details', { source: registry.get(m.id).label }))}"></button>
       <div class="q-provider-body">
-        <div class="ai-usage-source">${icon(m.id)}<b style="--q-name-length:${registry.get(m.id).label.length}">${escape(registry.get(m.id).label)}</b></div>
-        <div class="q-gauge-group">${ring(m, layout.ringSize)}${m.inlineRows.length && !error ? quotaRows(m, true) : ''}</div>
-        <div class="q-compact-caption" data-state-fade="${m.status}"${caption.title ? ` title="${escape(caption.title)}"` : ''}>${caption.html}</div>
+        <div class="ai-usage-source">${icon(m.id)}<b style="--q-name-length:${name.length}"${adaptive ? ` title="${escape(registry.get(m.id).label)}"` : ''}>${escape(name)}</b></div>
+        ${hasGauge || hasBars ? `<div class="q-gauge-group">${hasGauge ? ring(adaptive ? { ...m, size: 'medium' } : m, layout.ringSize) : empty}${hasBars ? quotaRows(inlineModel, true) : ''}</div>` : empty}
+        ${adaptive && error ? '' : `<div class="q-compact-caption" data-state-fade="${m.status}"${caption.title ? ` title="${escape(caption.title)}"` : ''}>${caption.html}</div>`}
         <p class="cursor-usage-footnote" id="${m.id}-usage-footnote">${error ? `<span>${escape(errorLabel)}</span>${repair}` : ''}</p>
       </div>${quotaRows(m)}
       <div class="q-mini-value">${error ? escape(errorLabel) : m.remaining == null ? `<span data-main-amount>${escape(m.selected.display)}</span>` : `<span class="q-pct" data-main-number>${pct(m.remaining)}</span>`}</div></section>`;
@@ -256,7 +269,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
 
   function fadeState(node, key, next) {
     const previous = visualStates.get(key);
-    if (previous && previous.state !== next && !motion.matches && node.checkVisibility()) {
+    if (previous && previous.state !== next && !(motion.matches || document.documentElement.classList.contains('experience-reduced-motion')) && node.checkVisibility()) {
       const ghost = document.createElement('span');
       ghost.className = 'q-fade-previous'; ghost.innerHTML = previous.html;
       node.append(ghost);
@@ -287,6 +300,35 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   function syncGeometry(layout = currentLayout, models = currentModels) {
     currentLayout = layout; currentModels = models;
     if (!layout || !models.length) return;
+    if (layout.adaptive) {
+      tile.dataset.quotaTall = 'false';
+      const css = getComputedStyle(tile);
+      const line = parseFloat(css.getPropertyValue('--q-window-line'));
+      const gap = parseFloat(css.getPropertyValue('--q-window-gap'));
+      let minHeight = 112;
+      const areas = [...tile.querySelectorAll('.q-gauge-group')].map(node => {
+        const card = node.closest('.ai-usage-provider');
+        const count = node.querySelectorAll('.q-inline-rows .ai-quota-row').length;
+        const rows = Math.min(3, count);
+        // Font ink can extend below the line box. A single row must not gain
+        // a scrollbar; reserve the same painted height as the original layout.
+        const rowHeight = rows ? Math.max(rows * line + (rows - 1) * gap,
+          count <= 3 ? node.querySelector('.q-inline-content').scrollHeight : 0) : 0;
+        card.style.setProperty('--q-window-height', `${rowHeight}px`);
+        minHeight = Math.max(minHeight, 112 + rowHeight + (rows ? 8 : 0));
+        return { node, rowHeight };
+      });
+      tile.style.setProperty('--q-adaptive-min-height', `${minHeight}px`);
+      const available = Math.min(...areas.filter(({ node }) => node.querySelector('.q-ring')).map(({ node, rowHeight }) => {
+        const area = node.getBoundingClientRect();
+        return Math.min(area.width, area.height - rowHeight - (rowHeight ? 8 : 0));
+      }));
+      if (!Number.isFinite(available)) return;
+      const diameter = Math.max(56, Math.floor(available * .68));
+      tile.style.setProperty('--q-render-size', `${diameter}px`);
+      tile.style.setProperty('--q-ring-font', `${diameter * .25}px`);
+      return;
+    }
     const size = tile.dataset.widgetSize || 'small';
     tile.dataset.quotaNarrow = String(tile.clientWidth < 600);
     const tall = size === 'medium' && layout.rows === 1 && models.length >= 3 && models.length <= 4;
@@ -370,7 +412,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       const offset = (inset + Math.max(0, valueWidth - visibleWidth) - pad) / 2;
       const content = card.querySelector('.q-inline-content');
       animation.set(`${m.id}/rows-offset`, offset, value => { content.style.transform = `translateX(${value}px)`; },
-        { reduced:motion.matches, from:offset, delay:Math.min(180, Math.max(0, m.rows.length - 1) * 60) });
+        { reduced:(motion.matches || document.documentElement.classList.contains('experience-reduced-motion')), from:offset, delay:Math.min(180, Math.max(0, m.rows.length - 1) * 60) });
     });
     diameter = Math.max(10, Math.floor(diameter*10)/10);
     tile.style.setProperty('--q-render-size', `${diameter}px`);
@@ -387,14 +429,19 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       // Reuse the existing value store for FLIP adaptation; a second refresh
       // measures the current visual frame before rebinding the new DOM.
       animation.remove(`${m.id}/position`);
-      animation.set(`${m.id}/position`, 0, value => { node.style.transform = value ? `translate(${dx * value}px,${dy * value}px)` : ''; }, { from:1, reduced:motion.matches });
+      animation.set(`${m.id}/position`, 0, value => { node.style.transform = value ? `translate(${dx * value}px,${dy * value}px)` : ''; }, { from:1, reduced:(motion.matches || document.documentElement.classList.contains('experience-reduced-motion')) });
     }
   }
   function animateModels(models) {
-    const palette = getComputedStyle(tile);
-    const rgb = token => (palette.getPropertyValue(token).trim().match(/[a-f0-9]{2}/gi) || []).map(n => parseInt(n, 16));
+    const tilePalette = getComputedStyle(tile);
+    const rgbFrom = (palette, token) => (palette.getPropertyValue(token).trim().match(/[a-f0-9]{2}/gi) || []).map(n => parseInt(n, 16));
     function animateTone(key, level, nodes, reduced, delay = 0) {
       const tone = level === 'warn' ? 'warn' : level === 'critical' ? 'crit' : 'ok';
+      const palette = nodes[0] ? getComputedStyle(nodes[0]) : tilePalette;
+      const rgb = token => {
+        const value = rgbFrom(palette, token);
+        return value.length ? value : rgbFrom(tilePalette, token);
+      };
       for (const channel of ['a', 'b', 'text']) {
         const base = channel === 'text' ? [238,238,240] : rgb(`--q-ok-${channel}`);
         const target = channel === 'text' ? tone === 'ok' ? base : rgb(`--q-${tone}-t`) : rgb(`--q-${tone}-${channel}`);
@@ -407,7 +454,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     }
     for (const m of models) {
       const el = byId(`ai-provider-${m.id}`);
-      const reduced = motion.matches;
+      const reduced = (motion.matches || document.documentElement.classList.contains('experience-reduced-motion'));
       const priorDepleted = m.status !== 'error' && visualStates.get(`${m.id}/depleted`) === true;
       el.dataset.depleted = String(priorDepleted);
       const finish = () => { el.dataset.animating = 'false'; };
@@ -444,8 +491,24 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       el.querySelectorAll('[data-state-fade]').forEach(node => fadeState(node, `${m.id}/label/${node.className}`, `${m.status}/${Boolean(m.bottleneck?.badge)}`));
     }
   }
+  function layoutForVariant(size, variant) {
+    const layout = D.dashboard(state, size);
+    const n = layout.shown.length;
+    if (variant === 'wide') {
+      const columns = Math.max(1, n);
+      return { ...layout, columns, rows: 1, ringSize: 100, adaptive: true };
+    }
+    if (variant === 'tall' || variant === 'full') {
+      const columns = Math.min(2, Math.max(1, n));
+      return { ...layout, columns, rows: Math.ceil(n / columns), ringSize: 120, adaptive: true };
+    }
+    return layout;
+  }
+
   function render() {
-    const size = tile.dataset.widgetSize || 'small', layout = D.dashboard(state, size);
+    const size = tile.dataset.widgetSize || 'small';
+    const variant = tile.dataset.layoutVariant || '';
+    const layout = layoutForVariant(size, variant);
     const ids = layout.ids;
     // Keep hidden compact sources cached, but release detached DOM sinks and
     // pending frames as soon as a source is disconnected.
@@ -460,7 +523,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     byId('ai-usage-title').textContent = D.title();
     let more = byId('ai-usage-more');
     if (!more) { more = document.createElement('button'); more.id='ai-usage-more'; more.className='ai-usage-more'; more.type='button'; more.dataset.quotaSettings=''; tile.querySelector('.cursor-usage-head').insertBefore(more,byId('cursor-usage-refresh')); }
-    more.hidden = size !== 'small' || !layout.hidden.length;
+    more.hidden = (!layout.adaptive && size !== 'small') || !layout.hidden.length;
     more.textContent = `+${layout.hidden.length}`;
     more.setAttribute('aria-label',t('quota.moreSources',{count:layout.hidden.length}));
     tile.setAttribute('aria-label', D.title());
@@ -471,16 +534,16 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       && byId(`${openDetailsId}-usage-rows`)?.matches(':popover-open') ? openDetailsId : null;
     const focused = tile.contains(document.activeElement) ? document.activeElement?.dataset.quotaSettings : undefined;
     const order = visible.map(m => m.id).join('/');
-    const sameLayout = renderedSize === size && renderedOrder === order;
+    const sameLayout = renderedSize === size && renderedOrder === order && renderedVariant === variant;
     if (!sameLayout) animation.prune(key => !key.endsWith('/position'));
-    const oldRings = sameLayout ? new Map([...providers.querySelectorAll('.ai-usage-provider')].map(el => [el.dataset.provider, el.querySelector('.q-ring').getBoundingClientRect()])) : new Map();
-    renderedSize = size; renderedOrder = order;
+    const oldRings = sameLayout ? new Map([...providers.querySelectorAll('.ai-usage-provider')].map(el => [el.dataset.provider, el.querySelector('.q-ring')?.getBoundingClientRect()])) : new Map();
+    renderedSize = size; renderedOrder = order; renderedVariant = variant;
     const scroll = providers.scrollTop;
     const rowScroll = new Map([...providers.querySelectorAll('.cursor-usage-rows')].map(el => [el.id, el.scrollTop]));
     providers.style.setProperty('--q-columns', layout.columns);
     providers.style.setProperty('--q-rows', layout.rows);
     providers.innerHTML = visible.map(m => provider(m, layout)).join('')
-      + (size === 'mini' && layout.hidden.length ? `<button class="q-more-ring" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}" aria-label="${escape(t('quota.moreSources', { count: layout.hidden.length }))}">+${layout.hidden.length}</button>` : '');
+      + (!layout.adaptive && size === 'mini' && layout.hidden.length ? `<button class="q-more-ring" type="button" data-quota-settings="" title="${escape(layout.hidden.map(id => models.find(m => m.id === id).title).join('\n\n'))}" aria-label="${escape(t('quota.moreSources', { count: layout.hidden.length }))}">+${layout.hidden.length}</button>` : '');
     openDetailsId = null; // The previous popover node was removed with the grid.
     providers.scrollTop = scroll;
     for (const [id, offset] of rowScroll) if (byId(id)) byId(id).scrollTop = offset;
@@ -553,6 +616,8 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
           if (revisions[id] === revision) state[id] = state[id]?.ok ? { ...state[id], stale: true, refreshError: 'ipc_failed' }
             : { detected: state[id]?.detected, configured: state[id]?.configured, ok: false };
         }
+        // One provider's login prompt must not hold back other providers' quotas.
+        render();
       }));
       render();
     })();
@@ -571,11 +636,11 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     if (action) { event.stopPropagation(); void openSettings(action.dataset.quotaSettings || undefined); }
   });
   tile.querySelector('.ai-open-settings')?.addEventListener('click', () => openSettings());
-  new MutationObserver(render).observe(tile, { attributes: true, attributeFilter: ['data-widget-size'] });
+  new MutationObserver(render).observe(tile, { attributes: true, attributeFilter: ['data-widget-size', 'data-layout-variant'] });
   new ResizeObserver(() => syncGeometry()).observe(tile);
-  const usageVisible = () => document.visibilityState === 'visible' && document.getElementById('app')?.classList.contains('expanded')
+  const usageVisible = () => document.visibilityState === 'visible' && document.documentElement.dataset.windowVisible !== 'false' && document.getElementById('app')?.classList.contains('expanded')
     && document.getElementById('tab-button-home')?.classList.contains('active') && !tile.hidden;
-  for (const event of ['visibilitychange', 'notch:modechange', 'notch:tabchange', 'notch:home-modules-changed']) {
+  for (const event of ['visibilitychange', 'notch:window-visibility', 'notch:modechange', 'notch:tabchange', 'notch:home-modules-changed']) {
     document.addEventListener(event, () => {
       syncTick();
       if (usageVisible()) {
@@ -632,7 +697,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
       // Still refresh relative reset copy ("明天 …") once a minute without tearing the grid.
       for (const el of tile.querySelectorAll('.ai-usage-provider')) {
         const id = el.dataset.provider;
-        const m = model(id, tile.dataset.widgetSize || 'small');
+        const m = model(id, currentLayout?.adaptive ? 'medium' : tile.dataset.widgetSize || 'small');
         const caption = el.querySelector('.q-compact-caption');
         if (caption) {
           const content = captionContent(m);
@@ -652,6 +717,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     refreshTimer = setTimeout(() => refresh({ force: usageVisible() }), D.refreshDelay(state, usageVisible()));
   }
   motion.addEventListener('change', render);
+  document.addEventListener('notch:motion-preference', render);
   function resetTextMeasurements() { textWidths.clear(); syncGeometry(); }
   document.fonts.ready.then(resetTextMeasurements);
   document.fonts.addEventListener('loadingdone', resetTextMeasurements);

@@ -1,0 +1,9 @@
+{
+  "phase": "recordings",
+  "baseline": true,
+  "ready": false,
+  "errors": [
+    "Uncaught TypeError: loadJson(...).map is not a function"
+  ],
+  "rawPreserved": true
+}

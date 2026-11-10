@@ -66,4 +66,6 @@ test('about dialog names Pome Panel and Lando and opens the current GitHub repo'
   assert.equal(pkg.repository.url, 'https://github.com/Sunanang/Pome-Panel.git');
   assert.equal(pkg.build.productName, 'Pome Panel');
   assert.equal(pkg.build.appId, 'com.dynamicpanel.app');
+  assert.equal(pkg.build.mac.appId, 'com.pomepanel.app', 'macOS has its own identity for coexistence with TO-DO Panel');
+  assert.notEqual(pkg.build.mac.appId, pkg.build.appId);
 });

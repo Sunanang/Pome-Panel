@@ -6,6 +6,21 @@ const path = require('path');
 const fs = require('fs');
 
 exports.default = async function afterPack(context) {
+  if (!['darwin', 'win32'].includes(context.electronPlatformName)) return;
+  const projectRoot = path.resolve(__dirname, '..');
+  const productName = context.packager.appInfo.productFilename;
+  const resources = context.electronPlatformName === 'darwin'
+    ? path.join(context.appOutDir, `${productName}.app`, 'Contents', 'Resources')
+    : path.join(context.appOutDir, 'resources');
+  const appRoot = path.join(resources, 'app');
+  const sourceHashes = require('./sourceManifest').verifyPackagedSources(projectRoot, appRoot);
+  let commit = null, dirty = null;
+  try {
+    commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: projectRoot, encoding: 'utf8' }).trim();
+    dirty = Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: projectRoot, encoding: 'utf8' }).trim());
+  } catch { /* Source archives may not include Git metadata. */ }
+  fs.writeFileSync(path.join(appRoot, 'build-info.json'), JSON.stringify({ schemaVersion: 1,
+    version: context.packager.appInfo.version, commit, dirty, sourceHashes }, null, 2) + '\n');
   if (context.electronPlatformName !== 'darwin') return;
 
   const appPath = path.join(
@@ -13,7 +28,6 @@ exports.default = async function afterPack(context) {
     `${context.packager.appInfo.productFilename}.app`
   );
 
-  const projectRoot = path.resolve(__dirname, '..');
   // Install native purpose strings before signing. Writing them afterwards
   // invalidates the bundle signature.
   for (const { mac: locale } of require('../localization/languages.json')) {
@@ -24,6 +38,9 @@ exports.default = async function afterPack(context) {
   }
   const macOSDirectory = path.join(appPath, 'Contents', 'MacOS');
   const electronExecutablePath = path.join(macOSDirectory, context.packager.appInfo.productFilename);
+  const meetingProbePath = path.join(appRoot, 'platform-adapters', 'meeting-probe');
+  execFileSync('/usr/bin/xcrun', ['swiftc', '-O', '-target', 'arm64-apple-macos13.0',
+    path.join(appRoot, 'platform-adapters', 'meeting-probe.swift'), '-o', meetingProbePath], { stdio: 'pipe' });
 
   if (!fs.existsSync(electronExecutablePath)) {
     throw new Error(`找不到 Electron 主程序：${electronExecutablePath}`);
@@ -61,6 +78,7 @@ exports.default = async function afterPack(context) {
   };
 
   const fwDir = path.join(appPath, 'Contents', 'Frameworks');
+  cs(meetingProbePath, true);
 
   // 1) 所有 dylib
   walk(fwDir, (n) => n.endsWith('.dylib'), cs);

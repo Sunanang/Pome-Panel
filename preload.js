@@ -11,6 +11,7 @@ function subscribe(channel, handler) {
 // webPreferences.additionalArguments 传 --pome-caps=<base64 JSON>。
 // 沙箱 preload 不能 require 本地模块，所以这里只解析、不重新计算。
 const CAPABILITIES_ARGUMENT_PREFIX = '--pome-caps=';
+const initialPanelSize = (process.argv || []).find(value => value.startsWith('--pome-panel-size='))?.slice('--pome-panel-size='.length);
 
 function decodeBase64Json(value) {
   let json;
@@ -86,6 +87,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   resetPanelPosition: () => ipcRenderer.invoke('window:reset-panel-position'),
   setTypingFocus: (focused) => ipcRenderer.invoke('window:set-typing-focus', focused === true),
   setTab: (tab) => ipcRenderer.invoke('window:set-tab', tab),
+  captureNoteModule: (rect) => ipcRenderer.invoke('notes:capture-module', rect),
   ensureCamera: () => ipcRenderer.invoke('media:camera'),
   ensureMicrophone: () => ipcRenderer.invoke('media:microphone'),
   // 只读状态 + 按平台算好的提示文案；ensure* 仍返回布尔，契约不变（P3-2）。
@@ -94,6 +96,8 @@ contextBridge.exposeInMainWorld('notchAPI', {
   openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
   openPrivacySettings: (pane) => ipcRenderer.invoke('shell:open-privacy-settings', pane),
   getMusicStatus: () => ipcRenderer.invoke('music:status'),
+  getAiCredentialAccessStatus: () => ipcRenderer.invoke('ai:credential-access-status'),
+  enableAiCredentialAccess: () => ipcRenderer.invoke('ai:enable-credential-access'),
   getCodexUsage: (options) => ipcRenderer.invoke('codex:usage', options || {}),
   readLocalCodexToken: () => ipcRenderer.invoke('codex:read-local-token'),
   getCodexTokenStatus: () => ipcRenderer.invoke('codex:token-status'),
@@ -123,14 +127,14 @@ contextBridge.exposeInMainWorld('notchAPI', {
   onAiProviderTokenChanged: (cb) => subscribe('ai-provider:token-changed', (event, status) => cb(status)),
   controlMusic: (action) => ipcRenderer.invoke('music:control', action),
   inspectLink: (url) => ipcRenderer.invoke('links:inspect', url),
-  listWindows: () => ipcRenderer.invoke('windows:list'),
+  listWindows: (force = false) => ipcRenderer.invoke('windows:list', force === true),
   focusWindow: (windowId) => ipcRenderer.invoke('windows:focus', windowId),
   saveRecording: (payload) => ipcRenderer.invoke('recordings:save', payload),
   readRecording: (audioPath) => ipcRenderer.invoke('recordings:read', audioPath),
   deleteRecording: (audioPath) => ipcRenderer.invoke('recordings:delete', audioPath),
   revealRecording: (audioPath) => ipcRenderer.invoke('recordings:reveal', audioPath),
   organizeMaterial: (payload) => ipcRenderer.invoke('smart:organize-material', payload),
-  listCredentials: () => ipcRenderer.invoke('credentials:list'),
+  listCredentials: (options) => ipcRenderer.invoke('credentials:list', { retry: options?.retry === true }),
   getCredential: (id) => ipcRenderer.invoke('credentials:get', id),
   saveCredential: (payload) => ipcRenderer.invoke('credentials:save', payload),
   deleteCredentials: (ids) => ipcRenderer.invoke('credentials:delete-many', ids),
@@ -157,16 +161,23 @@ contextBridge.exposeInMainWorld('notchAPI', {
   previewAiSource: (source, action) => ipcRenderer.invoke('tasks:sources-preview', source, action),
   applyAiSource: (token) => ipcRenderer.invoke('tasks:sources-apply', token),
   testAiSource: (source) => ipcRenderer.invoke('tasks:sources-test', source),
-  scheduleTodoReminders: (items) => ipcRenderer.invoke('todos:schedule-reminders', items),
+  scheduleTodoReminders: (items, expectedRoot) => ipcRenderer.invoke('todos:schedule-reminders', items, expectedRoot),
   notifyPomodoro: (minutes) => ipcRenderer.invoke('pomodoro:notify', minutes),
+  onTodoReminderError: (cb) => subscribe('todo:reminder-error', (event, payload) => cb(payload)),
   onTodoReminder: (cb) => subscribe('todo:reminded', (event, payload) => cb(payload)),
   onEscape: (cb) => subscribe('key:escape', () => cb()),
   onToggleShortcut: (cb) => subscribe('shortcut:toggle-panel', () => cb()),
   getHoverSpaceStatus: () => ipcRenderer.invoke('shortcut:hover-space-status'),
+  setMeetingMode: enabled => ipcRenderer.invoke('settings:set-meeting-mode', enabled),
+  setAutoMeetingMode: enabled => ipcRenderer.invoke('settings:set-auto-meeting-mode', enabled),
+  setOwnCameraState: labels => ipcRenderer.send('media:own-camera-state', labels),
+  onNotificationListenerChanged: cb => subscribe('tasks:listener-changed', (event, state) => cb(state)),
   getAppSettings: () => ipcRenderer.invoke('settings:get'),
   completeWelcome: () => ipcRenderer.invoke('settings:complete-welcome'),
   setFeature: (featureId, enabled) => ipcRenderer.invoke('settings:set-feature', { featureId, enabled }),
   setDefaultTab: (tab) => ipcRenderer.invoke('settings:set-default-tab', tab),
+  setPanelSize: preset => ipcRenderer.invoke('settings:set-panel-size', preset),
+  panelSize: ['standard', 'medium', 'compact'].includes(initialPanelSize) ? initialPanelSize : 'standard',
   setWinNative: (enabled) => ipcRenderer.invoke('settings:set-win-native', enabled === true),
   setAutoLaunch: (enabled) => ipcRenderer.invoke('settings:set-auto-launch', enabled === true),
   setTaskNotifications: (enabled) => ipcRenderer.invoke('settings:set-task-notifications', enabled === true),
@@ -189,6 +200,9 @@ contextBridge.exposeInMainWorld('notchAPI', {
   chooseWorkspace: () => ipcRenderer.invoke('workspace:choose'),
   onWorkspaceChanged: (cb) => subscribe('workspace:changed', (event, info) => cb(info)),
   onCollapseRequest: (cb) => subscribe('window:request-collapse', () => cb()),
+  onWindowVisibilityChanged: cb => subscribe('window:visibility-changed', (_event, visible) => {
+    if (typeof visible === 'boolean') cb(visible);
+  }),
   getMetrics: () => ipcRenderer.invoke('window:metrics'),
   onMetricsChanged: (cb) =>
     subscribe('window:metrics-changed', (event, metrics) => cb(metrics)),
@@ -198,6 +212,7 @@ contextBridge.exposeInMainWorld('notchAPI', {
   deleteClipImages: (paths) => ipcRenderer.invoke('clipboard:deleteImages', paths),
   onNewClipEntry: (cb) => subscribe('clipboard:new-entry', (evt, entry) => cb(entry)),
   onOpenClip: (cb) => subscribe('app:open-clip', () => cb()),
+  onOpenTodo: (cb) => subscribe('app:open-todo', (event, payload) => cb(payload || {})),
   onOpenApiSettings: (cb) => subscribe('app:open-api-settings', () => cb()),
   getMirrorImage: () => ipcRenderer.invoke('mirror:get-image'),
   chooseMirrorImage: () => ipcRenderer.invoke('mirror:choose-image'),

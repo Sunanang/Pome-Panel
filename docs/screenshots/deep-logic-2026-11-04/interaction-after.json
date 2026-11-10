@@ -1,0 +1,15 @@
+{
+  "phase": "interaction",
+  "baseline": false,
+  "ready": true,
+  "copyAfterBlur": true,
+  "noteSaved": true,
+  "nextEditor": true,
+  "deleteAfterTextBlur": true,
+  "latestDeletePreview": true,
+  "singlePreserved": true,
+  "noteOnlyUpdatePreserved": true,
+  "bulkPreserved": true,
+  "bulkUnchangedDeleted": true,
+  "unselectedPreserved": true
+}

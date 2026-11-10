@@ -1,0 +1,207 @@
+{
+  "cases": [
+    {
+      "step": "locale-and-responsive",
+      "locale": "en-US",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "en-US",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "en-US",
+      "width": 390
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "zh-CN",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "zh-CN",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "zh-CN",
+      "width": 390
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "zh-TW",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "zh-TW",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "zh-TW",
+      "width": 390
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "ja-JP",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "ja-JP",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "ja-JP",
+      "width": 390
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "ko-KR",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "ko-KR",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "ko-KR",
+      "width": 390
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "es-ES",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "es-ES",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "es-ES",
+      "width": 390
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "fr-FR",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "fr-FR",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "fr-FR",
+      "width": 390
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "de-DE",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "de-DE",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "de-DE",
+      "width": 390
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "ru-RU",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "ru-RU",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "ru-RU",
+      "width": 390
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "pt-BR",
+      "width": 1440
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "pt-BR",
+      "width": 768
+    },
+    {
+      "step": "locale-and-responsive",
+      "locale": "pt-BR",
+      "width": 390
+    },
+    {
+      "step": "navigation",
+      "id": "top"
+    },
+    {
+      "step": "navigation",
+      "id": "experience"
+    },
+    {
+      "step": "navigation",
+      "id": "workspace"
+    },
+    {
+      "step": "navigation",
+      "id": "local"
+    },
+    {
+      "step": "workspace-keyboard"
+    },
+    {
+      "step": "docking-demo",
+      "edge": 0
+    },
+    {
+      "step": "docking-demo",
+      "edge": 1
+    },
+    {
+      "step": "docking-demo",
+      "edge": 2
+    },
+    {
+      "step": "docking-demo",
+      "edge": 3
+    },
+    {
+      "step": "dialog-padding"
+    },
+    {
+      "step": "dialog-escape-focus"
+    },
+    {
+      "step": "dialog-backdrop"
+    },
+    {
+      "step": "reduced-motion"
+    },
+    {
+      "step": "language-persistence"
+    }
+  ],
+  "failures": [],
+  "consoleErrors": [],
+  "missingResources": []
+}

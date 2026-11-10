@@ -1,0 +1,258 @@
+{
+  "mini": {
+    "shell": [
+      {
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 196,
+          "h": 118
+        },
+        "styles": {
+          "display": "flex",
+          "padding": "10px",
+          "borderRadius": "18px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(32, 32, 38, 0.88)",
+          "font": "",
+          "height": "118px"
+        },
+        "html": null
+      },
+      {
+        "rect": {
+          "x": 11,
+          "y": 11,
+          "w": 174,
+          "h": 15
+        },
+        "styles": {
+          "display": "flex",
+          "padding": "0px",
+          "borderRadius": "0px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "font": "",
+          "height": "15px"
+        },
+        "html": "<div class=\"tile-head\">\n                  <span class=\"tile-label\"><span data-i18n=\"copy.commands.b85789\">常用指令</span></span>\n                  <button class=\"bulk-delete\" id=\"command-bulk-delete\" type=\"button\" hidden=\"\" aria-label=\"删除所选\">删除</button>\n                </div>"
+      },
+      {
+        "rect": {
+          "x": 11,
+          "y": 39,
+          "w": 174,
+          "h": 31
+        },
+        "styles": {
+          "display": "block",
+          "padding": "8px 9px",
+          "borderRadius": "13px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(255, 255, 255, 0.043)",
+          "font": "11.5px \"SF Mono\", ui-monospace, \"Cascadia Mono\", Consolas, monospace",
+          "height": "31px"
+        },
+        "html": "<input class=\"command-add\" id=\"command-add\" type=\"text\" placeholder=\"输入指令，回车保存…\" maxlength=\"500\" autocomplete=\"off\" spellcheck=\"false\" data-i18n-placeholder=\"copy.enterACommandAndPressEnterTo.c58522\">"
+      }
+    ],
+    "rows": [
+      50.5
+    ]
+  },
+  "small": {
+    "shell": [
+      {
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 196,
+          "h": 248
+        },
+        "styles": {
+          "display": "flex",
+          "padding": "12px",
+          "borderRadius": "22px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(32, 32, 38, 0.88)",
+          "font": "",
+          "height": "248px"
+        },
+        "html": null
+      },
+      {
+        "rect": {
+          "x": 13,
+          "y": 13,
+          "w": 170,
+          "h": 15
+        },
+        "styles": {
+          "display": "flex",
+          "padding": "0px",
+          "borderRadius": "0px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "font": "",
+          "height": "15px"
+        },
+        "html": "<div class=\"tile-head\">\n                  <span class=\"tile-label\"><span data-i18n=\"copy.commands.b85789\">常用指令</span></span>\n                  <button class=\"bulk-delete\" id=\"command-bulk-delete\" type=\"button\" hidden=\"\" aria-label=\"删除所选\">删除</button>\n                </div>"
+      },
+      {
+        "rect": {
+          "x": 13,
+          "y": 41,
+          "w": 170,
+          "h": 31
+        },
+        "styles": {
+          "display": "block",
+          "padding": "8px 9px",
+          "borderRadius": "13px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(255, 255, 255, 0.043)",
+          "font": "11.5px \"SF Mono\", ui-monospace, \"Cascadia Mono\", Consolas, monospace",
+          "height": "31px"
+        },
+        "html": "<input class=\"command-add\" id=\"command-add\" type=\"text\" placeholder=\"输入指令，回车保存…\" maxlength=\"500\" autocomplete=\"off\" spellcheck=\"false\" data-i18n-placeholder=\"copy.enterACommandAndPressEnterTo.c58522\">"
+      }
+    ],
+    "rows": [
+      50.5,
+      50.5,
+      50.5,
+      50.5,
+      50.5
+    ]
+  },
+  "medium": {
+    "shell": [
+      {
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 404,
+          "h": 248
+        },
+        "styles": {
+          "display": "flex",
+          "padding": "12px",
+          "borderRadius": "22px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(32, 32, 38, 0.88)",
+          "font": "",
+          "height": "248px"
+        },
+        "html": null
+      },
+      {
+        "rect": {
+          "x": 13,
+          "y": 13,
+          "w": 378,
+          "h": 15
+        },
+        "styles": {
+          "display": "flex",
+          "padding": "0px",
+          "borderRadius": "0px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "font": "",
+          "height": "15px"
+        },
+        "html": "<div class=\"tile-head\">\n                  <span class=\"tile-label\"><span data-i18n=\"copy.commands.b85789\">常用指令</span></span>\n                  <button class=\"bulk-delete\" id=\"command-bulk-delete\" type=\"button\" hidden=\"\" aria-label=\"删除所选\">删除</button>\n                </div>"
+      },
+      {
+        "rect": {
+          "x": 13,
+          "y": 41,
+          "w": 378,
+          "h": 31
+        },
+        "styles": {
+          "display": "block",
+          "padding": "8px 9px",
+          "borderRadius": "13px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(255, 255, 255, 0.043)",
+          "font": "11.5px \"SF Mono\", ui-monospace, \"Cascadia Mono\", Consolas, monospace",
+          "height": "31px"
+        },
+        "html": "<input class=\"command-add\" id=\"command-add\" type=\"text\" placeholder=\"输入指令，回车保存…\" maxlength=\"500\" autocomplete=\"off\" spellcheck=\"false\" data-i18n-placeholder=\"copy.enterACommandAndPressEnterTo.c58522\">"
+      }
+    ],
+    "rows": [
+      50.5,
+      50.5,
+      50.5,
+      50.5,
+      50.5
+    ]
+  },
+  "large": {
+    "shell": [
+      {
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 404,
+          "h": 510
+        },
+        "styles": {
+          "display": "flex",
+          "padding": "12px",
+          "borderRadius": "22px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(32, 32, 38, 0.88)",
+          "font": "",
+          "height": "510px"
+        },
+        "html": null
+      },
+      {
+        "rect": {
+          "x": 13,
+          "y": 13,
+          "w": 378,
+          "h": 15
+        },
+        "styles": {
+          "display": "flex",
+          "padding": "0px",
+          "borderRadius": "0px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "font": "",
+          "height": "15px"
+        },
+        "html": "<div class=\"tile-head\">\n                  <span class=\"tile-label\"><span data-i18n=\"copy.commands.b85789\">常用指令</span></span>\n                  <button class=\"bulk-delete\" id=\"command-bulk-delete\" type=\"button\" hidden=\"\" aria-label=\"删除所选\">删除</button>\n                </div>"
+      },
+      {
+        "rect": {
+          "x": 13,
+          "y": 41,
+          "w": 378,
+          "h": 31
+        },
+        "styles": {
+          "display": "block",
+          "padding": "8px 9px",
+          "borderRadius": "13px",
+          "backgroundImage": "none",
+          "backgroundColor": "rgba(255, 255, 255, 0.043)",
+          "font": "11.5px \"SF Mono\", ui-monospace, \"Cascadia Mono\", Consolas, monospace",
+          "height": "31px"
+        },
+        "html": "<input class=\"command-add\" id=\"command-add\" type=\"text\" placeholder=\"输入指令，回车保存…\" maxlength=\"500\" autocomplete=\"off\" spellcheck=\"false\" data-i18n-placeholder=\"copy.enterACommandAndPressEnterTo.c58522\">"
+      }
+    ],
+    "rows": [
+      50.5,
+      50.5,
+      50.5,
+      50.5,
+      50.5
+    ]
+  }
+}

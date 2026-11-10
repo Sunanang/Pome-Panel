@@ -12,6 +12,9 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
   const readAll = document.getElementById('home-inbox-read-all');
   const mini = document.getElementById('home-inbox-mini');
   const unreadLabel = document.getElementById('home-inbox-unread-label');
+  const listenerLabel = document.createElement('small'); listenerLabel.className = 'home-inbox-listener';
+  listenerLabel.setAttribute('role', 'status');
+  tile.querySelector('.home-inbox-head').append(listenerLabel);
   const homeTab = document.getElementById('tab-button-home');
   const sourceSuggestion = document.createElement('div');
   sourceSuggestion.className = 'home-inbox-source-suggestion'; sourceSuggestion.hidden = true;
@@ -22,7 +25,17 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
   }));
   const statusLabels = { get completed() { return pomeLocaleRendererTaskInbox.t("copy.completed.f28461"); }, get failed() { return pomeLocaleRendererTaskInbox.t("copy.failed.01ad2b"); }, get awaiting() { return pomeLocaleRendererTaskInbox.t("copy.awaitingConfirmation.e5d218"); }, get due() { return pomeLocaleRendererTaskInbox.t("copy.dueSoon.ea0afa"); } };
   const recordStatus = row => statusLabels[row?.status] ? row.status : 'completed';
-  function pageSizeForWidget() { return { mini: 1, small: 3, medium: 5, large: 10 }[tile.dataset.widgetSize] || 5; }
+  function pageSizeForWidget() {
+    const size = tile.dataset.widgetSize || 'medium';
+    const variant = tile.dataset.layoutVariant || '';
+    const base = { mini: 1, small: 3, medium: 5, large: 10 }[size] || 5;
+    if (variant === 'tall' || variant === 'full') {
+      if (size === 'small') return Math.max(base, 6);
+      if (size === 'medium') return Math.max(base, 8);
+      if (size === 'mini') return Math.max(base, 3);
+    }
+    return base;
+  }
   let rows = [], total = 0, unread = 0, page = 0;
   let busy = false, editing = false, opening = false, resetScroll = false, queued = false, failure = null, failureGeneration = 0;
   let highlightTimer, paintSignature = ''; 
@@ -42,6 +55,19 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     return new Date(at).toLocaleDateString(pomeLocaleRendererTaskInbox.getState().formatLocale);
   }
   function updateBadge() {
+    const state = window.NotchAiSources?.getState();
+    const connected = state?.sources?.some(row => row.state === 'connected');
+    const listener = state?.listener;
+    const key = listener?.meetingMode ? 'notifications.meetingMode'
+      : listener && !listener.listening ? 'notifications.listenerUnavailable'
+      : connected && listener?.listening ? 'copy.listening.fa2d74' : null;
+    pomeLocaleRendererTaskInbox.bind(listenerLabel, 'textContent', () => key ? pomeLocaleRendererTaskInbox.t(key) : '');
+    listenerLabel.dataset.error = String(Boolean(listener && !listener.listening));
+    pomeLocaleRendererTaskInbox.bind(listenerLabel, 'title', () => listener?.meetingStatus?.active
+      ? pomeLocaleRendererTaskInbox.t('notifications.meetingReasons', { reasons: listener.meetingStatus.reasons.map(key => pomeLocaleRendererTaskInbox.t(`notifications.meetingReason.${key}`)).join(' / ') })
+      : pomeLocaleRendererTaskInbox.t(listener?.meetingMode ? 'notifications.meetingHint'
+      : listener && !listener.listening ? 'notifications.listenerUnavailable'
+      : listener?.topBubbleEnabled === false ? 'settings.notifications.topBubbleDisabled' : 'notifications.listenerHint'));
     const moduleHidden = tile.hidden || window.NotchHome?.isVisible('inbox') === false;
     badge.hidden = homeTab.classList.contains('active') || (!failure && unread === 0);
     badge.dataset.dot = String(moduleHidden);
@@ -50,7 +76,7 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     pomeLocaleRendererTaskInbox.bind(badge, "title", () => (moduleHidden ? pomeLocaleRendererTaskInbox.t("copy.aiActivityIsHiddenOpenSettings.83167e") : failure ? pomeLocaleRendererTaskInbox.t("copy.aiActivityInboxErrorClickToReview.828d6f") : pomeLocaleRendererTaskInbox.t("copy.aiEventsToReview.22d6c7", { arg1: (unread) })));
     homeTab.setAttribute('aria-label', failure ? pomeLocaleRendererTaskInbox.t("copy.homeAiActivityInboxError.71a7c7") : unread ? pomeLocaleRendererTaskInbox.t("copy.homeUnreadAiEvents.cf1008", { arg1: (unread) }) : pomeLocaleRendererTaskInbox.t("copy.home.203c08"));
     document.getElementById('home-inbox-unread').textContent = String(unread);
-    pomeLocaleRendererTaskInbox.bind(unreadLabel, "textContent", () => (failure ? pomeLocaleRendererTaskInbox.t("copy.receivingPaused.ddea48") : unread ? pomeLocaleRendererTaskInbox.t("copy.unread.1b2d74", { arg1: (unread) }) : total === 0 && tile.dataset.sourceState === 'waiting' ? pomeLocaleRendererTaskInbox.t("copy.listening.fa2d74") : ''));
+    pomeLocaleRendererTaskInbox.bind(unreadLabel, "textContent", () => (failure ? pomeLocaleRendererTaskInbox.t("copy.receivingPaused.ddea48") : unread ? pomeLocaleRendererTaskInbox.t("copy.unread.1b2d74", { arg1: (unread) }) : ''));
     readAll.disabled = Boolean(failure) || editing || unread === 0;
     readAll.hidden = Boolean(failure) || total === 0;
   }
@@ -103,13 +129,14 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     else if (connected.length) actions.append(button(pomeLocaleRendererTaskInbox.t("copy.manageSources.a0b36f"), () => window.NotchAiSources?.openSettings()));
     else actions.append(button(pomeLocaleRendererTaskInbox.t("copy.connect.d312c6"), () => window.NotchAiSources?.openSettings(), primary));
     empty.append(actions); list.append(empty);
-    if (state === 'waiting') pomeLocaleRendererTaskInbox.bind(unreadLabel, "textContent", () => (pomeLocaleRendererTaskInbox.t("copy.listening.fa2d74")));
+
   }
   function paint() {
     if (failure) { updateBadge(); return; }
     const size = tile.dataset.widgetSize || 'medium';
+    const variant = tile.dataset.layoutVariant || '';
     const sourceState = window.NotchAiSources?.getState() || { sources: [], ready: false };
-    const signature = JSON.stringify([size,page,total,unread,Math.floor(Date.now()/60000),rows,sourceState]);
+    const signature = JSON.stringify([size,variant,page,total,unread,Math.floor(Date.now()/60000),rows,sourceState]);
     if (signature === paintSignature) { updateBadge(); return; }
     paintSignature = signature;
     const limit = pageSizeForWidget();
@@ -148,13 +175,20 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
         const iconWrap = document.createElement('span'); iconWrap.className = 'home-inbox-source-wrap'; iconWrap.dataset.source = sources[row.source] ? row.source : 'other';
         const icon = document.createElement('img'); icon.src = source.icon; icon.alt = ''; icon.className = 'home-inbox-source'; icon.dataset.source = iconWrap.dataset.source;
         const copy = document.createElement('span'); copy.className = 'home-inbox-copy';
-        const title = document.createElement('strong'); pomeLocaleRendererTaskInbox.bind(title, 'textContent', titleText); copy.append(title);
+        const wide = variant === 'wide' || variant === 'full';
+        const headline = wide ? document.createElement('span') : copy;
+        if (wide) { headline.className = 'home-inbox-headline'; copy.append(headline); }
+        const title = document.createElement('strong'); pomeLocaleRendererTaskInbox.bind(title, 'textContent', titleText); headline.append(title);
         if (recordStatus(row) !== 'completed') {
           const state = document.createElement('small'); state.className = 'home-inbox-event-status';
-          state.textContent = statusLabels[recordStatus(row)]; copy.append(state);
+          state.textContent = statusLabels[recordStatus(row)]; headline.append(state);
         }
-        if (size === 'large') {
-          const summary = document.createElement('small'); summary.textContent = row.project || source.label; copy.append(summary);
+        if (size === 'large' || ['wide', 'tall', 'full'].includes(variant)) {
+          const summary = document.createElement('small');
+          if (['wide', 'tall', 'full'].includes(variant)) summary.className = 'home-inbox-summary';
+          summary.textContent = variant && ['wide', 'tall', 'full'].includes(variant) && row.completionSummary && row.completionSummary !== titleText()
+            ? row.completionSummary : row.project || source.label;
+          copy.append(summary);
         }
         const time = document.createElement('time'); time.dateTime = new Date(row.receivedAt).toISOString(); time.textContent = relativeTime(row.receivedAt);
         const dot = document.createElement('i'); dot.className = 'home-inbox-dot'; dot.setAttribute('aria-hidden', 'true');
@@ -257,7 +291,7 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
     if (tile.hidden || window.NotchHome?.isVisible('inbox') === false) {
       await setActiveTab('settings');
       const input = document.querySelector('[data-settings-home-module="inbox"]');
-      input?.closest('.settings-home-modules-card')?.scrollIntoView({block:'center'}); input?.focus({preventScroll:true});
+      window.NotchSettings?.reveal(input?.closest('.settings-home-modules-card'), {block:'center'}); input?.focus({preventScroll:true});
       window.showStatusToast?.(pomeLocaleRendererTaskInbox.t("copy.aiActivityIsnTVisibleEnableIt.a4876a")); return;
     }
     await setActiveTab('home'); tile.scrollIntoView({block:'nearest'});
@@ -269,11 +303,15 @@ const pomeLocaleRendererTaskInbox = typeof module === 'object' && module.exports
   document.addEventListener('notch:home-layout-applied', paint);
   document.addEventListener('notch:ai-sources-changed', paint);
   let lastWidgetSize = tile.dataset.widgetSize;
+  let lastLayoutVariant = tile.dataset.layoutVariant || '';
   new MutationObserver(() => {
-    if (tile.dataset.widgetSize === lastWidgetSize) return;
-    lastWidgetSize = tile.dataset.widgetSize;
+    const size = tile.dataset.widgetSize;
+    const variant = tile.dataset.layoutVariant || '';
+    if (size === lastWidgetSize && variant === lastLayoutVariant) return;
+    lastWidgetSize = size;
+    lastLayoutVariant = variant;
     page = 0; resetScroll = true; paintSignature = ''; void refresh();
-  }).observe(tile,{attributes:true,attributeFilter:['data-widget-size']});
+  }).observe(tile,{attributes:true,attributeFilter:['data-widget-size','data-layout-variant']});
   api?.onTaskInboxError?.(error => {
     if (error.error === 'event_rejected') { status.textContent = error.message; window.showStatusToast?.(error.message); return; }
     showFailure(error); window.showStatusToast?.(failure.recoverable ? pomeLocaleRendererTaskInbox.t("copy.theInboxIsDamagedBackItUp.c1d086") : pomeLocaleRendererTaskInbox.t("copy.couldnTReadTheInboxReceivingIs.2db66f"));

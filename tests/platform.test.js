@@ -28,9 +28,9 @@ test('Windows capabilities cannot enable Mac-only integrations', () => {
 });
 
 // ============ 能力层 v2（P0-1） ============
-test('fresh homepage defaults enable sun and fill available space only on Windows', () => {
-  assert.deepEqual(platform.resolveCapabilities('win32').homeDefaults, { showSun: true, fillGrid: true });
-  assert.deepEqual(platform.resolveCapabilities('darwin').homeDefaults, { showSun: false, fillGrid: false });
+test('fresh homepage defaults enable sun on both platforms without resizing cards to fill gaps', () => {
+  assert.deepEqual(platform.resolveCapabilities('win32').homeDefaults, { showSun: true, fillGrid: false });
+  assert.deepEqual(platform.resolveCapabilities('darwin').homeDefaults, { showSun: true, fillGrid: false });
 });
 
 test('Mac has every integration and keeps the menu bar as its top inset', () => {
@@ -45,6 +45,7 @@ test('Mac has every integration and keeps the menu bar as its top inset', () => 
     firstRunAutoLaunch: true,
     permissionSelfCheck: true,
     mediaAccessStatus: true,
+    automaticMeetingMode: true,
     winNativeSetting: false,
   });
   assert.deepEqual(caps.layout, { areaKind: 'bounds', topInsetKind: 'menuBar' });

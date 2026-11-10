@@ -1,0 +1,81 @@
+{
+  "checks": [
+    {
+      "positionTransfers": [
+        {
+          "selector": "h2",
+          "before": {
+            "offset": 1256,
+            "y": 26.686676025390625
+          },
+          "editY": 26.53125,
+          "after": {
+            "offset": 1256,
+            "y": 26.6875
+          }
+        },
+        {
+          "selector": "p",
+          "before": {
+            "offset": 1256,
+            "y": -8.3125
+          },
+          "editY": -8.46875,
+          "after": {
+            "offset": 1256,
+            "y": -8.3125
+          }
+        },
+        {
+          "selector": "ul",
+          "before": {
+            "offset": 1392,
+            "y": 28.09375
+          },
+          "editY": 27.9140625,
+          "after": {
+            "offset": 1392,
+            "y": 28.09375
+          }
+        },
+        {
+          "selector": "pre",
+          "before": {
+            "offset": 1409,
+            "y": 43.53125
+          },
+          "editY": 43.3203125,
+          "after": {
+            "offset": 1409,
+            "y": 43.53125
+          }
+        }
+      ]
+    },
+    "links, per-note position, autosave remains edit, retained editor, failed save/retry, keyboard Save",
+    {
+      "moduleMaterial": {
+        "rect": {
+          "x": 424,
+          "y": 376,
+          "width": 392,
+          "height": 246
+        },
+        "tile": {
+          "x": 424,
+          "y": 376,
+          "width": 392,
+          "height": 246
+        },
+        "colors": 243
+      }
+    },
+    {
+      "foregroundRecall": 1
+    },
+    "native 720ms whole-module Genie flight, immediate detach, new draft untouched, two offline collections and stale/acknowledged projections",
+    "snapshot failure/timeout still saves and releases the input",
+    "borderless editing, native whole-module material, capture ownership and bounds, partial-write rollback, system/manual reduced motion, resize/collapse/tab cleanup, independent home draft, English localization, native selection, new-note Save and draft recovery across reload"
+  ],
+  "errors": []
+}

@@ -5,6 +5,15 @@ const os = require('node:os');
 const root = path.join(__dirname, '..');
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
+// electron 交互验收脚本（tests/*.electron.js）按真实桌面尺寸设计，还会生成截图供人工
+// 核对，不适合没有桌面的 CI runner：Windows runner 只有 1024x768，standard(1240) 与
+// medium(1040) 两个预设的窗口会被系统压窄，容量断言随之失败。
+// CI 里设 POME_SKIP_ELECTRON_ACCEPTANCE=1 跳过它们，单元测试与语法检查照常跑；
+// 本地（或真机）不设这个变量就是完整验收。
+const skipElectronAcceptance = process.env.POME_SKIP_ELECTRON_ACCEPTANCE === '1';
+if (skipElectronAcceptance) {
+  console.log('跳过 electron 交互验收：这批脚本需要真实桌面尺寸并生成人工核对截图，CI 环境不适用');
+}
 function run(executable, args) {
   console.log(`Checking ${args.join(' ')}`);
   const result = spawnSync(executable, args, { cwd: root, env, stdio: 'inherit', timeout: 180000 });
@@ -20,11 +29,35 @@ env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-t
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
 env.NODE_OPTIONS = `${env.NODE_OPTIONS || ''} --require=${JSON.stringify(path.join(root, 'tests/provider-usage-fixtures.cjs'))}`.trim();
-for (const file of ['notch-focus', 'retained-workspace', 'workspace-lifecycle', 'metadata-races', 'migration-integrity', 'clipboard-generation', 'content-delete', 'startup', 'cursor-credentials', 'user-data-directory', 'todo-board-fixes', 'ai-usage', 'ai-usage-final', 'quota-refresh', 'codex-usage-accuracy', 'provider-credentials', 'home-layout-swap', 'home-card-hover', 'sun-home', 'sun-weather', 'almanac-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'settings-slim', 'ui-simplify', 'nas-settings-card', 'localization', 'normal-startup']) {
+if (!skipElectronAcceptance) for (const file of ['notch-focus', 'retained-workspace', 'workspace-lifecycle', 'metadata-races', 'migration-integrity', 'clipboard-generation', 'typing-layer', 'panel-size', 'home-fill', 'home-layout-variant', 'home-layout-regression', 'command-comments', 'deep-review', 'content-delete', 'experience', 'visual-consistency', 'notes-workflow', 'windows-widget', 'windows-native', 'workbench', 'startup', 'desktop-shell', 'cursor-credentials', 'user-data-directory', 'todo-board-fixes', 'ai-usage', 'ai-usage-final', 'quota-refresh', 'codex-usage-accuracy', 'credential-access', 'provider-credentials', 'home-layout-swap', 'home-card-hover', 'sun-home', 'sun-weather', 'almanac-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'notification-listener', 'meeting-mode', 'todo-reminder-hydration', 'todo-reminders', 'ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'codex-notify-chain', 'settings-slim', 'ui-simplify', 'nas-settings-card', 'localization', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
   if (file === 'ui-simplify') env.POME_TEST_WELCOME = '1';
   run(require('electron'), [`tests/${file}.electron.js`]);
+  if (file === 'deep-review') {
+    for (const phase of ['commands', 'recordings', 'windows', 'links']) {
+      const auditProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'pome-audit-test-'));
+      env.TODO_TEST_USER_DATA = auditProfile; env.POME_AUDIT_PHASE = phase;
+      run(require('electron'), ['tests/deep-review.electron.js']);
+      fs.rmSync(auditProfile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
+    env.TODO_TEST_USER_DATA = testProfile; delete env.POME_AUDIT_PHASE;
+  }
+  if (file === 'panel-size') {
+    env.POME_PANEL_SIZE_RESTART = '1';
+    run(require('electron'), ['tests/panel-size.electron.js']);
+    delete env.POME_PANEL_SIZE_RESTART;
+  }
+  if (file === 'desktop-shell') {
+    env.POME_SHELL_TEST_CASE = 'explicit';
+    run(require('electron'), ['tests/desktop-shell.electron.js']);
+    delete env.POME_SHELL_TEST_CASE;
+  }
+  if (file === 'todo-reminders') {
+    env.POME_TODO_RESTART = '1';
+    run(require('electron'), ['tests/todo-reminders.electron.js']);
+    delete env.POME_TODO_RESTART;
+  }
   if (file === 'user-data-directory') {
     for (const phase of ['migrate', 'restart', 'switch', 'switched-restart', 'custom', 'fresh']) {
       env.POME_PROFILE_PHASE = phase;
@@ -60,6 +93,7 @@ for (const file of [
   'tests/work-hub-baseline.electron.js',
   'panelTiming.js',
   'atomicStorage.js',
+  'todoReminders.js',
   'taskInbox.js',
   'aiSourceHooks.js',
   'aiEventPolicy.js',
@@ -80,6 +114,8 @@ for (const file of [
   'fnos/app/server/transactionLog.js',
   'main.js',
   'main-services.js',
+  'meetingMode.js',
+  'platform-adapters/meetingProbe.js',
   'public-http.js',
   'cursor-usage.js',
   'platform-adapters/cursor-secrets.js',
@@ -104,10 +140,19 @@ for (const file of [
   'renderer/ai-usage.js',
   'renderer/ui-simplify-domain.js',
   'renderer/ui-simplify.js',
+  'renderer/experience.js',
+  'renderer/settings-navigation.js',
+  'renderer/note-view.js',
+  'renderer/note-flight.js',
+  'tests/notes-workflow.electron.js',
   'renderer/delete-confirm.js',
   'platform.js',
   'platform-adapters/index.js',
   'platform-adapters/darwin.js',
+  'platform-adapters/darwin-windows.js',
+  'tests/windows-widget.electron.js',
+  'tests/windows-native.electron.js',
+  'tests/windows-spaces.native.cjs',
   'platform-adapters/win32.js',
   'platform-adapters/win32-user32.js',
   'preload.js',
@@ -119,6 +164,7 @@ for (const file of [
   'sync-settings.js',
   'sync-tls-trust.js',
   'packages/sync-protocol/index.js',
+  'packages/sync-protocol/todo-reminders.js',
   'packages/sync-protocol/schema.js',
   'packages/sync-protocol/collections.js',
   'packages/sync-protocol/ai-completions.js',
@@ -149,6 +195,9 @@ for (const file of [
   'renderer/nas-sync-migration.js',
   'renderer/nas-sync-settings.js',
   'build/afterPack.js',
+  'build/sourceManifest.js',
+  'tests/desktop-shell.electron.js',
+  'tests/typing-layer.electron.js',
   'scripts/codex-notify.js',
   'scripts/claude-notify.js',
   'scripts/grok-notify.js',

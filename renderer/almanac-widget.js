@@ -5,6 +5,9 @@
   if (!tile || !window.NotchAlmanac) return;
 
   const Almanac = window.NotchAlmanac;
+  const I=window.PomeI18n;
+  const monthText=day=>new Intl.DateTimeFormat(I.getState().formatLocale,{month:'long'}).format(new Date(day.solar.year,day.solar.month-1,day.solar.day));
+  const yearMonthText=day=>new Intl.DateTimeFormat(I.getState().formatLocale,{year:'numeric',month:'long'}).format(new Date(day.solar.year,day.solar.month-1,day.solar.day));
   let timer = 0;
   let renderedKey = '';
   let previewDate = null;
@@ -63,7 +66,7 @@
     return `<div class="almanac-small">
       <div class="almanac-line almanac-date-line">
         <strong class="almanac-daynum">${escapeHtml(day.solar.day)}</strong>
-        <span>${escapeHtml(day.solar.month)}月 · ${escapeHtml(day.solar.weekdayLabel)}</span>
+        <span>${escapeHtml(monthText(day))} · ${escapeHtml(day.solar.weekdayLabel)}</span>
       </div>
       <div class="almanac-line">${escapeHtml(day.lunar.yearLabel)} · ${escapeHtml(day.lunar.dayGanZhi)}</div>
       <div class="almanac-line">${jieQiBlock(view)}</div>
@@ -103,7 +106,7 @@
         <div class="almanac-large-date">
           <strong class="almanac-daynum">${escapeHtml(day.solar.day)}</strong>
           <div>
-            <div class="almanac-weekday">${escapeHtml(day.solar.year)}年${escapeHtml(day.solar.month)}月 · ${escapeHtml(day.solar.weekdayLabel)}</div>
+            <div class="almanac-weekday">${escapeHtml(yearMonthText(day))} · ${escapeHtml(day.solar.weekdayLabel)}</div>
             <div class="almanac-lunar">${escapeHtml(day.lunar.yearLabel)} · ${escapeHtml(day.lunar.shengXiao)}年</div>
           </div>
         </div>
@@ -129,22 +132,77 @@
     </div>`;
   }
 
+  function renderTall(view) {
+    const day = view.day;
+    return `<div class="almanac-tall">
+      <div class="almanac-tall-head">
+        <div class="almanac-tall-date">
+          <strong class="almanac-daynum">${escapeHtml(day.solar.day)}</strong>
+          <div>
+            <div class="almanac-weekday">${escapeHtml(yearMonthText(day))} · ${escapeHtml(day.solar.weekdayLabel)}</div>
+            <div class="almanac-lunar">${escapeHtml(day.lunar.yearLabel)} · ${escapeHtml(day.lunar.shengXiao)}年</div>
+          </div>
+        </div>
+        ${jieQiBlock(view)}
+      </div>
+      <div class="almanac-meta-grid">
+        <span><b>干支</b> ${escapeHtml(day.lunar.ganZhiLine)}</span>
+        <span><b>冲煞</b> ${escapeHtml(day.chongSha)}</span>
+        <span><b>纳音</b> ${escapeHtml(day.naYin)}</span>
+        <span><b>建除</b> ${escapeHtml(day.jianChu)}</span>
+      </div>
+      ${tagRow('宜', view.yi, 'yi')}
+      ${tagRow('忌', view.ji, 'ji')}
+      <div class="almanac-dual">
+        <div><b>吉神宜趋</b><span>${escapeHtml(view.jiShen.join(' '))}</span></div>
+        <div><b>彭祖百忌</b><span>${escapeHtml(day.pengZu.line)}</span></div>
+      </div>
+    </div>`;
+  }
+
+  function contentProfile(size, variant) {
+    if (variant === 'wide' && (size === 'mini' || size === 'small')) {
+      return { format: 'medium', mode: 'medium' };
+    }
+    if (variant === 'tall' || variant === 'full') {
+      if (size === 'large') return { format: 'large', mode: 'large' };
+      return { format: 'medium', mode: 'tall' };
+    }
+    return { format: size, mode: size };
+  }
+
   function render() {
     if (tile.hidden) {
       schedule();
       return;
     }
     const size = tile.dataset.widgetSize || 'medium';
+    const variant = tile.dataset.layoutVariant || '';
+    const profile = contentProfile(size, variant);
     const date = nowDate();
     if (cachedDay?.key !== Almanac.civilKey(date)) cachedDay = Almanac.buildAlmanacDay(date);
-    const day = cachedDay;
-    const view = Almanac.formatForSize(day, size);
-    renderedKey = `${day.key}:${size}`;
-    const html = size === 'mini' ? renderMini(view)
-      : size === 'small' ? renderSmall(view)
-        : size === 'large' ? renderLarge(view)
-          : renderMedium(view);
+    const day = {...cachedDay, solar:{...cachedDay.solar,weekdayLabel:new Intl.DateTimeFormat(I.getState().formatLocale,{weekday:'long'}).format(new Date(cachedDay.solar.year,cachedDay.solar.month-1,cachedDay.solar.day))}};
+    const view = Almanac.formatForSize(day, profile.format);
+    renderedKey = `${day.key}:${size}:${variant}`;
+    const html = profile.mode === 'mini' ? renderMini(view)
+      : profile.mode === 'small' ? renderSmall(view)
+        : profile.mode === 'tall' ? renderTall(view)
+          : profile.mode === 'large' ? renderLarge(view)
+            : renderMedium(view);
     tile.innerHTML = html;
+    tile.setAttribute('aria-label',I.t('ux.almanac.title'));
+    tile.setAttribute('aria-description',I.t('ux.almanac.hint'));
+    tile.removeAttribute('title');
+    if (profile.mode === 'medium' || profile.mode === 'large' || profile.mode === 'tall') {
+      const info = document.createElement('details');
+      info.className = 'almanac-explanation';
+      const summary = document.createElement('summary');
+      summary.textContent = I.t('ux.almanac.title');
+      const note = document.createElement('p');
+      note.textContent = I.t('ux.almanac.hint');
+      info.append(summary, note);
+      tile.append(info);
+    }
     schedule();
   }
 
@@ -159,7 +217,8 @@
 
   function refreshIfNeeded() {
     const size = tile.dataset.widgetSize || 'medium';
-    const key = `${Almanac.civilKey(nowDate())}:${size}`;
+    const variant = tile.dataset.layoutVariant || '';
+    const key = `${Almanac.civilKey(nowDate())}:${size}:${variant}`;
     if (key !== renderedKey) render();
     else schedule();
   }
@@ -168,6 +227,7 @@
     if (!document.hidden) refreshIfNeeded();
   });
   window.addEventListener('focus', refreshIfNeeded);
+  window.addEventListener('pome:language-changed',render);
   document.addEventListener('notch:modechange', (event) => {
     if (event.detail?.expanded) refreshIfNeeded();
   });
@@ -177,7 +237,7 @@
   document.addEventListener('notch:home-layout-applied', refreshIfNeeded);
 
   const sizeObserver = new MutationObserver(refreshIfNeeded);
-  sizeObserver.observe(tile, { attributes: true, attributeFilter: ['data-widget-size', 'hidden'] });
+  sizeObserver.observe(tile, { attributes: true, attributeFilter: ['data-widget-size', 'data-layout-variant', 'hidden'] });
 
   window.PomeAlmanac = Object.freeze({
     render,

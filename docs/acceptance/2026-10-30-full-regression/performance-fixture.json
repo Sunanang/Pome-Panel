@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "seed": "pome-work-hub-v1",
+  "notes": 250,
+  "todos": 200,
+  "links": 100,
+  "recordings": 20,
+  "events": 50,
+  "mediaFiles": 20,
+  "mediaBytes": 32880,
+  "sha256": "348fee359e4e1aa068dc5751e8798263920d583af856e8f770e2638c6ae728e0"
+}

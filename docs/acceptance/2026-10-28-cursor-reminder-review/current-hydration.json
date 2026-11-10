@@ -1,0 +1,86 @@
+{
+  "profile": "/private/tmp/pome-cursor-hydration-unUxQp",
+  "seededReceipt": {
+    "id": "receipt-before-hydration",
+    "deadline": "2026-10-28T13:43:05.639Z",
+    "remindedAt": 1793193125639
+  },
+  "restored": [
+    {
+      "id": "receipt-before-hydration",
+      "text": "已提醒任务不应再次弹出",
+      "done": false,
+      "createdAt": 1793193065639,
+      "deadline": "2026-10-28T13:43:05.639Z",
+      "remindedAt": 0
+    }
+  ],
+  "afterImport": {
+    "version": 1,
+    "receipts": []
+  },
+  "schedules": [
+    {
+      "ids": [],
+      "expectedRoot": null,
+      "before": [
+        {
+          "id": "receipt-before-hydration",
+          "deadline": "2026-10-28T13:43:05.639Z",
+          "remindedAt": 1793193125639
+        }
+      ],
+      "after": [],
+      "result": {
+        "ok": true,
+        "count": 0,
+        "reminded": []
+      }
+    },
+    {
+      "ids": [
+        "receipt-before-hydration"
+      ],
+      "expectedRoot": null,
+      "before": [],
+      "after": [],
+      "result": {
+        "ok": true,
+        "count": 1,
+        "reminded": []
+      }
+    },
+    {
+      "ids": [
+        "receipt-before-hydration"
+      ],
+      "expectedRoot": "/private/tmp/pome-cursor-hydration-unUxQp",
+      "before": [
+        {
+          "id": "receipt-before-hydration",
+          "deadline": "2026-10-28T13:43:05.639Z",
+          "remindedAt": 1793193186400
+        }
+      ],
+      "after": [
+        {
+          "id": "receipt-before-hydration",
+          "deadline": "2026-10-28T13:43:05.639Z",
+          "remindedAt": 1793193186400
+        }
+      ],
+      "result": {
+        "ok": true,
+        "count": 1,
+        "reminded": [
+          {
+            "id": "receipt-before-hydration",
+            "deadline": "2026-10-28T13:43:05.639Z",
+            "remindedAt": 1793193186400
+          }
+        ]
+      }
+    }
+  ],
+  "repeated": true
+}

@@ -124,7 +124,13 @@ function showNotification(payload) {
   document.getElementById('attention-brand').src = brandPath;
   if (notification.attentionKind) renderAttention();
   document.getElementById('notification-status-glyph').setAttribute('href', `./assets/notification/glyphs.svg#${notification.status}`);
-  document.getElementById('notification-status').setAttribute('aria-label', { completed: pomeLocaleRendererNotification.t("copy.completed.f28461"), due: pomeLocaleRendererNotification.t("copy.dueSoon.ea0afa"), failed: pomeLocaleRendererNotification.t("copy.failed.01ad2b"), awaiting: pomeLocaleRendererNotification.t("copy.awaitingConfirmation.e5d218") }[notification.status]);
+  document.getElementById('notification-status').setAttribute('aria-label', {
+    completed: pomeLocaleRendererNotification.t('copy.completed.f28461'),
+    due: pomeLocaleRendererNotification.t('copy.dueSoon.ea0afa'),
+    overdue: pomeLocaleRendererNotification.t('copy.overdue.13c68d'),
+    failed: pomeLocaleRendererNotification.t('copy.failed.01ad2b'),
+    awaiting: pomeLocaleRendererNotification.t('copy.awaitingConfirmation.e5d218'),
+  }[notification.status]);
   progressElement.hidden = notification.status === 'awaiting';
   progressFill.style.transform = 'scaleX(1)';
   root.hidden = false;
@@ -256,7 +262,18 @@ window.addEventListener('pome:language-changed', () => {
   applyShellLabel();
   if (!currentNotification) return;
   if (currentNotification.attentionKind) renderAttention();
+  if (currentNotification.sourceKey === 'todo') sourceElement.textContent = pomeLocaleRendererNotification.t('copy.tasks.52fdbb');
+  if (currentNotification.todoSummary) {
+    currentNotification.title = pomeLocaleRendererNotification.t('todo.overdueSummary', { count: currentNotification.todoCount });
+    titleElement.textContent = currentNotification.title; titleElement.title = currentNotification.title;
+  }
   if (currentNotification.titleIsFallback) { titleElement.textContent = domain.fallbackTitle(currentNotification.sourceKey, currentNotification.status); titleElement.title = [currentNotification.sessionTitle, titleElement.textContent].filter(Boolean).join('\n'); }
-  if (currentNotification.status === 'due' && !activationError) detailElement.textContent = pomeLocaleRendererNotification.t('copy.dueWithin1Hour.955b14');
+  if (!activationError && currentNotification.todoSummary) {
+    detailElement.textContent = pomeLocaleRendererNotification.t('todo.overdueSummaryDetail');
+  } else if (!activationError && currentNotification.status === 'due') {
+    detailElement.textContent = pomeLocaleRendererNotification.t('copy.dueWithin1Hour.955b14');
+  } else if (!activationError && currentNotification.status === 'overdue') {
+    detailElement.textContent = pomeLocaleRendererNotification.t('copy.deadlineHasPassed.37e6a6');
+  }
   updateTime(); updateHeight();
 });

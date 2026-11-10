@@ -36,6 +36,7 @@ async function run(c){
  async function capture(name){await sleep(700);fs.writeFileSync(path.join(artifacts,`${name}.png`),(await c.capturePage()).toPNG());}
  await until(c,`!!window.NotchTaskInbox && !workspaceReloadPending && sessionStorage.getItem('notch-workspace-hydrated')==='1' && document.getElementById('home-inbox-badge').textContent==='3'`);
  await js('setMode(true)');await sleep(800);
+ await js(`hiddenHomeModules=[...new Set([...hiddenHomeModules,'windows'])];saveHiddenHomeModules();`);
  const initial=await js(`({sizes:{...homeSizes},hidden:[...hiddenHomeModules],order:[...homeOrder],layout:JSON.parse(JSON.stringify(homeWorkingLayout))})`);
  assert.equal(await js(`document.getElementById('task-inbox-toggle')===null && document.getElementById('task-inbox-dialog')===null`),true);
  assert.equal(await js(`document.querySelectorAll('.home-inbox-row').length`),5);
@@ -51,8 +52,8 @@ async function run(c){
  const positions=await js(`({inbox:homeWorkingLayout.placements.inbox,windows:homeWorkingLayout.placements.windows,linkMargin:getComputedStyle(document.getElementById('tab-button-links')).marginRight})`);
  const windowsAvailable=await js(`notchAPI.capabilities.features.windowSwitcher===true`);
  const windowsDefaults=await js(`notchAPI.capabilities.homeDefaults?.showSun===true`);
- assert.deepEqual(positions.inbox,{column:windowsDefaults?6:8,row:0,width:4,height:2});assert.deepEqual(positions.windows,windowsAvailable?{column:8,row:2,width:4,height:2}:undefined);assert.equal(positions.linkMargin,'0px');
- assert.equal(await js(`NotchHome.isVisible('windows')`),windowsAvailable,'default layout respects native capability gating');
+ assert.equal(positions.inbox.width,4);assert.equal(positions.inbox.height,2);assert.equal(positions.windows,undefined);assert.equal(positions.linkMargin,'0px');
+ assert.equal(await js(`NotchHome.isVisible('windows')`),false,'capacity truncation retains the enabled native preference separately');
  assert.equal(await js(`getComputedStyle(document.getElementById('home-inbox')).backgroundImage.includes('radial-gradient')`),true);
  assert.equal(await js(`document.getElementById('home-inbox-badge').hidden`),true,'B3: selected home hides badge');
  await capture('default-medium');

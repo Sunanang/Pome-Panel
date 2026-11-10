@@ -332,6 +332,8 @@ async function main() {
           deleteCredentials: async () => ({ ok: true }),
           copyCredential: async () => true,
         };
+        // A vault read now starts only on the visible credentials page.
+        document.dispatchEvent(new CustomEvent('notch:modechange', { detail: { expanded: true } }));
         document.getElementById('tab-button-credentials').click();
         document.getElementById('credential-service').value = item.service;
         document.getElementById('credential-account').value = item.account;
@@ -766,7 +768,7 @@ async function main() {
           const b = measurement.tiles[right].rect;
           const overlaps = a.left < b.right - 1 && a.right > b.left + 1
             && a.top < b.bottom - 1 && a.bottom > b.top + 1;
-          assert.equal(overlaps, false, '首页组件矩形不得重叠');
+          assert.equal(overlaps, false, '首页组件矩形不得重叠: '+JSON.stringify([measurement.tiles[left],measurement.tiles[right]]));
         }
       }
       assert.ok(measurement.sizeControls.every((control) => (
@@ -781,6 +783,10 @@ async function main() {
       const matrix = await window.webContents.executeJavaScript(`
         (async () => {
           const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
           ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
           const results = [];
@@ -825,6 +831,10 @@ async function main() {
     const transactionAudit = await window.webContents.executeJavaScript(`
       (() => {
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         const first = window.NotchHome.setModuleVisible('mirror', false);
@@ -847,10 +857,10 @@ async function main() {
           visible: [...document.querySelectorAll('[data-home-module]')].filter((tile) => !tile.hidden).map((tile) => tile.dataset.homeModule).join(','),
           styles: [...document.querySelectorAll('[data-home-module]')].map((tile) => tile.getAttribute('style')).join('|'),
         };
-        const originalResolver = window.NotchDomain.resolveHomeWidgetLayout;
-        window.NotchDomain.resolveHomeWidgetLayout = () => null;
+        const originalResolver = resolveValidatedHomeLayout;
+        resolveValidatedHomeLayout = () => null;
         const rollback = window.NotchHome.setModuleVisible('music', false);
-        window.NotchDomain.resolveHomeWidgetLayout = originalResolver;
+        resolveValidatedHomeLayout = originalResolver;
         const afterRollback = {
           hidden: JSON.stringify(window.NotchHome.getVisibility().hiddenIds),
           stored: localStorage.getItem('notch-home-hidden-modules-v1'),
@@ -897,6 +907,10 @@ async function main() {
     const persistenceAndRecorderAudit = await window.webContents.executeJavaScript(`
       (() => {
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         const originalSetItem = Storage.prototype.setItem;
@@ -1024,6 +1038,10 @@ async function main() {
     const lifecycleAudit = await window.webContents.executeJavaScript(`
       (async () => {
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         document.getElementById('tab-button-home').click();
@@ -1182,6 +1200,10 @@ async function main() {
           sizeButton.click();
         };
         const ids = ['music', 'pomodoro', 'cursor', 'recorder', 'windows', 'mirror', 'note', 'commands'];
+          hiddenHomeModules=HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id));
+          homeOrder=[...ids,...HOME_MODULE_REGISTRY.filter(id=>!ids.includes(id))];
+          homeSizes={...HOME_SIZE_DEFAULTS};homeWorkingLayout=null;
+          applyHomeLayout(resolveValidatedHomeLayout(hiddenHomeModules),{reason:'initial'});saveHiddenHomeModules();saveHomeLayout();
           window.NotchHome.setModuleVisible('inbox', false);
         ids.forEach((id) => window.NotchHome.setModuleVisible(id, true));
         document.getElementById('tab-button-home').click();
@@ -1195,7 +1217,10 @@ async function main() {
         await new Promise((resolve) => requestAnimationFrame(resolve));
         const ghosts = [...document.querySelectorAll('.home-layout-ghost')];
         const tileAnimations = [...document.querySelectorAll('#home-bento [data-home-module]:not([hidden])')]
-          .flatMap((tile) => tile.getAnimations());
+          .flatMap((tile) => tile.getAnimations())
+          // Layout uses WAAPI; unrelated hover transitions can start when a
+          // resized card moves underneath the stationary mouse pointer.
+          .filter((animation) => !(animation instanceof CSSTransition) && !(animation instanceof CSSAnimation));
         const tileDurations = tileAnimations
           .map((animation) => Number(animation.effect?.getTiming?.().duration) || 0)
           .filter((duration) => duration > 0);

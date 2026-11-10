@@ -1,0 +1,92 @@
+{
+  "passed": true,
+  "checks": [
+    "two standard roots with exact remote identities",
+    "cold discovery across normal/fullscreen Spaces, with stable IDs",
+    "exact focus and onscreen presence on normal desktop A",
+    "exact focus and onscreen presence on fullscreen B",
+    "closed native reference refused"
+  ],
+  "scans": [
+    {
+      "label": "same desktop",
+      "ms": 2226,
+      "rows": [
+        {
+          "id": "window-60277-ax-1668305284",
+          "title": "Pome Multi-Space B",
+          "windowNumber": 12491,
+          "axRemoteId": "42"
+        },
+        {
+          "id": "window-60277-ax-1668305300",
+          "title": "Pome Multi-Space A",
+          "windowNumber": 12490,
+          "axRemoteId": "43"
+        }
+      ]
+    },
+    {
+      "label": "fullscreen with existing cache",
+      "ms": 505,
+      "rows": [
+        {
+          "id": "window-60277-ax-1668305284",
+          "title": "Pome Multi-Space B",
+          "windowNumber": 12491,
+          "axRemoteId": "42"
+        },
+        {
+          "id": "window-60277-ax-1668305300",
+          "title": "Pome Multi-Space A",
+          "windowNumber": 12490,
+          "axRemoteId": "43"
+        }
+      ]
+    },
+    {
+      "label": "cold fullscreen Space",
+      "ms": 2352,
+      "rows": [
+        {
+          "id": "window-60277-ax-1668305284",
+          "title": "Pome Multi-Space B",
+          "windowNumber": 12491,
+          "axRemoteId": "42"
+        },
+        {
+          "id": "window-60277-ax-1668305300",
+          "title": "Pome Multi-Space A",
+          "windowNumber": 12490,
+          "axRemoteId": "43"
+        }
+      ]
+    },
+    {
+      "label": "after fullscreen",
+      "ms": 542,
+      "rows": [
+        {
+          "id": "window-60277-ax-1668305284",
+          "title": "Pome Multi-Space B",
+          "windowNumber": 12491,
+          "axRemoteId": "42"
+        },
+        {
+          "id": "window-60277-ax-1668305300",
+          "title": "Pome Multi-Space A",
+          "windowNumber": 12490,
+          "axRemoteId": "43"
+        }
+      ]
+    }
+  ],
+  "unverified": [
+    "multiple physical displays"
+  ],
+  "pid": 60277,
+  "publishedDuringFullscreen": {
+    "error": 0,
+    "count": 1
+  }
+}

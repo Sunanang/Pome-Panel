@@ -2,7 +2,9 @@ const pomeLocaleMainServices = typeof module === 'object' && module.exports ? re
 const net = require('net');
 const path = require('path');
 const crypto = require('crypto');
+const { reminderKey, reminderStamp } = require('./packages/sync-protocol');
 const notificationDomain = require('./renderer/notification-domain');
+const { windowLayer } = require('./platform');
 
 function isPrivateAddress(address) {
   const value = String(address || '').trim().toLowerCase().split('%', 1)[0];
@@ -122,9 +124,10 @@ function createForegroundMediaPermissionCoordinator(defaults = {}) {
             layerOwner = null;
             restoreAlwaysOnTop = false;
             if (shouldRestore && targetToRestore && !targetToRestore.isDestroyed()) {
-              // Match the main panel's normal layer: permission requests must
-              // not leave it above screenshots or input-method candidates.
-              targetToRestore.setAlwaysOnTop(true, 'floating');
+              // Resolve at completion: focus can change while a prompt is open.
+              const { level } = typeof defaults.getWindowLayer === 'function'
+                ? defaults.getWindowLayer() : windowLayer(process.platform);
+              targetToRestore.setAlwaysOnTop(true, level);
             }
           }
         } finally {
@@ -197,9 +200,13 @@ function normalizeWindowRows(rows, platform = 'darwin') {
       const candidatePath = String(row && row.appPath || '').trim();
       const appPath = isAppPath(candidatePath) ? candidatePath : '';
       const handle = /^\d+$/.test(String(row && row.handle || '')) ? String(row.handle) : '';
+      const axWindowId=!windows&&/^\d{1,20}$/.test(String(row?.axWindowId??''))?String(row.axWindowId):'';
+      const remoteCandidate = String(row?.axRemoteId ?? '');
+      const axRemoteId = axWindowId && windowNumber > 0 && /^\d{1,16}$/.test(remoteCandidate)
+        && Number.isSafeInteger(Number(remoteCandidate)) ? remoteCandidate : '';
       if (!pid || !appName || !title) return null;
       return {
-        id: windowNumber ? `window-${pid}-${windowNumber}` : `window-${pid}-${windowIndex}-${order}`,
+        id: axWindowId ? `window-${pid}-ax-${axWindowId}` : windowNumber ? `window-${pid}-${windowNumber}` : `window-${pid}-${windowIndex}-${order}`,
         pid,
         windowIndex,
         windowNumber,
@@ -208,19 +215,20 @@ function normalizeWindowRows(rows, platform = 'darwin') {
         bundleId: typeof row.bundleId === 'string' ? row.bundleId.trim().slice(0, 240) || null : null,
         title: title.slice(0, 240),
         ...(handle ? { handle } : {}),
+        ...(axWindowId ? {axWindowId,minimized:Boolean(row.minimized)} : {}),
+        ...(axRemoteId ? {axRemoteId} : {}),
       };
     })
     .filter(Boolean)
-    // 同一进程下标题完全相同的窗口只保留最前面那条：CGWindowList 按前后顺序返回，
-    // 首条就是最靠前的那个。实测微信只开一个窗口却会返回两条同名记录（窗口号不同），
-    // 界面上就成了两个「微信」。而聚焦是按标题匹配的，重复条目永远指向同一个窗口，
-    // 留着也点不出第二个结果。标题不同的多窗口（如 VS Code 各工作区）不受影响。
-    // Windows 反过来：聚焦按 HWND，同标题的两个资源管理器窗口是两个真窗口，
-    // 只能按句柄去重。
-    .filter((item, index, list) => (item.handle
+    // Modern macOS rows use AX identity, preserving genuine same-title windows.
+    // Legacy CG rows retain title deduplication for old imports/callers; Windows
+    // rows keep their HWND identity. Never merge an AX row by its title.
+    .filter((item, index, list) => (item.axWindowId
+      ? list.findIndex(other=>other.pid===item.pid&&other.axWindowId===item.axWindowId)===index
+      : item.handle
       ? list.findIndex((other) => other.handle === item.handle) === index
       : list.findIndex(
-        (other) => !other.handle && other.pid === item.pid && other.title === item.title
+        (other) => !other.handle && !other.axWindowId && other.pid === item.pid && other.title === item.title
       ) === index));
 }
 
@@ -288,14 +296,50 @@ function pasteResultToIpc(result) {
 function todoReminderState(todo, now = Date.now(), leadMs = 60 * 60 * 1000) {
   if (!todo || typeof todo !== 'object') return { state: 'invalid', delayMs: 0 };
   if (todo.done === true) return { state: 'done', delayMs: 0 };
+  // One consumption mark covers both the 1-hour warning and the overdue catch-up.
   if (Number(todo.remindedAt) > 0) return { state: 'notified', delayMs: 0 };
   const deadline = Date.parse(String(todo.deadline || ''));
   const current = Number(now);
   if (!Number.isFinite(deadline) || !Number.isFinite(current)) return { state: 'invalid', delayMs: 0 };
-  if (current > deadline) return { state: 'expired', delayMs: 0 };
+  // Missed the lead window (app was closed): fire one overdue catch-up.
+  if (current > deadline) return { state: 'expired-missed', delayMs: 0 };
   const triggerAt = deadline - Math.max(0, Number(leadMs) || 0);
   if (current >= triggerAt) return { state: 'due', delayMs: 0 };
   return { state: 'scheduled', delayMs: triggerAt - current };
+}
+
+function todoReminderScheduleKey(todo) {
+  return reminderKey(todo);
+}
+
+/**
+ * Rebuild the in-memory reminder list from renderer payloads without losing a
+ * remindedAt that was just consumed but not yet flushed back through IPC.
+ */
+function mergeTodoReminderSchedule(previous, items) {
+  const remembered = new Map();
+  for (const row of Array.isArray(previous) ? previous : []) {
+    const key = todoReminderScheduleKey(row);
+    if (!key) continue;
+    remembered.set(key, Math.max(remembered.get(key) || 0, reminderStamp(row.remindedAt)));
+  }
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const id = String(item.id || '').slice(0, 160);
+      const text = String(item.text || '').trim().slice(0, 160);
+      const deadline = String(item.deadline || '');
+      const key = todoReminderScheduleKey({ id, deadline });
+      const incoming = reminderStamp(item.remindedAt);
+      return {
+        id,
+        text,
+        deadline,
+        done: item.done === true,
+        remindedAt: Math.max(incoming, remembered.get(key) || 0),
+      };
+    })
+    .filter((item) => item.id && item.text);
 }
 
 const MAX_NODE_TIMER_DELAY_MS = (2 ** 31) - 1;
@@ -648,6 +692,9 @@ function appSettingsLayoutPreferences(stored) {
     winNative: typeof source.winNative === 'boolean' ? source.winNative : WIN_NATIVE_DEFAULT,
     // Top bubble tips default on; only an explicit false disables them.
     taskNotifications: source.taskNotifications !== false,
+    meetingMode: source.meetingMode === true,
+    autoMeetingMode: source.autoMeetingMode !== false,
+    panelSize: ['standard', 'medium', 'compact'].includes(source.panelSize) ? source.panelSize : 'standard',
     weatherEffects: source.weatherEffects !== false,
   };
 }
@@ -915,7 +962,19 @@ function createSyncCredentialsStore(deps = {}) {
     return safeStorage.isEncryptionAvailable() === true;
   }
 
+  // Production can show an unpaired status without initializing OS crypto.
+  // null means not checked; save and existing bindings still verify encryption.
+  function emptyLazyStatus() {
+    if (!deps.lazyStatus) return null;
+    const { candidates } = credentialCandidates();
+    try { if (candidates.some(filePath => fsMod.existsSync(filePath))) return null; }
+    catch { return null; }
+    return { ok: true, bound: false, record: null, secureStorage: null, credentialsUnreadable: false, needsReauth: false };
+  }
+
   function read() {
+    const empty = emptyLazyStatus();
+    if (empty) return empty;
     if (!encryptionAvailable()) {
       return { ok: false, error: 'secure_storage_unavailable', bound: false, record: null };
     }
@@ -1029,6 +1088,8 @@ function createSyncCredentialsStore(deps = {}) {
   }
 
   function getStatus() {
+    const empty = emptyLazyStatus();
+    if (empty) { const { record, ...status } = empty; return status; }
     if (!encryptionAvailable()) {
       return {
         ok: true,
@@ -1117,6 +1178,8 @@ module.exports = {
   normalizeWindowRows,
   todoReminderState,
   todoReminderTimerDelay,
+  todoReminderScheduleKey,
+  mergeTodoReminderSchedule,
   taskNotificationIdentity,
   taskNotificationContent,
   normalizeTaskNotificationWindow,

@@ -24,7 +24,7 @@ const watchdog = setTimeout(() => { console.error('Clipboard generation integrat
 app.on('web-contents-created', (_event, contents) => contents.once('did-finish-load', () => {
   if (started || !contents.getURL().endsWith('/renderer/index.html')) return;
   started = true;
-  run(contents).then(() => { clearTimeout(watchdog); console.log('Clipboard restart drops stale reads; permission requests restore floating; panel reset reports write failure and retries'); app.exit(0); })
+  run(contents).then(() => { clearTimeout(watchdog); console.log('Clipboard restart drops stale reads; permission requests restore the panel layer; panel reset reports write failure and retries'); app.exit(0); })
     .catch(error => { console.error(error); app.exit(1); });
 }));
 async function run(contents) {
@@ -70,7 +70,7 @@ async function run(contents) {
       systemPreferences.askForMediaAccess = async () => true;
       win.setAlwaysOnTop = (...args) => { calls.push(args); return setTop(...args); };
       assert.equal(await js('notchAPI.ensureMicrophone()'), true);
-      assert.deepEqual(calls.at(-1), [true, 'floating']);
+      assert.deepEqual(calls.at(-1), [true, 'status']);
       assert.equal(win.isAlwaysOnTop(), true);
     } finally {
       systemPreferences.getMediaAccessStatus = status;

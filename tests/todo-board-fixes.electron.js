@@ -1,8 +1,7 @@
 'use strict';
 
 /**
- * Acceptance: sun default city, recorder quick-entry placement,
- * custom todo time pickers, and dynamic todo categories.
+ * Acceptance: sun default city, custom todo time pickers, and dynamic todo categories.
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -100,8 +99,6 @@ async function main() {
   await until(`document.getElementById('app').classList.contains('expanded')`);
   await js(`setActiveTab('home')`);
   await until(`!!document.querySelector('#home-sun [data-sun-place]')`);
-  await until(`!!document.getElementById('ui-open-recordings')`);
-
   const sunPlace = await js(`document.querySelector('#home-sun [data-sun-place]')?.textContent || ''`);
   assert.match(sunPlace, /上海|Shanghai|北京|Beijing|[\\u4e00-\\u9fff]/, `sun place: ${sunPlace}`);
   assert.equal(
@@ -109,35 +106,8 @@ async function main() {
     false,
     'sun must not show empty set-location card after seed'
   );
-
-  const recorder = await js(`(() => {
-    const btn = document.getElementById('ui-open-recordings');
-    const tile = document.getElementById('home-recorder');
-    const head = document.querySelector('#home-recorder .recorder-head');
-    const title = document.getElementById('home-recording-state');
-    const time = document.getElementById('home-recording-time');
-    if (!btn || !tile || !head || !title || !time) return { ok: false };
-    const br = btn.getBoundingClientRect();
-    const tr = title.getBoundingClientRect();
-    const timeR = time.getBoundingClientRect();
-    const headR = head.getBoundingClientRect();
-    const overlaps = (a, b) => !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
-    return {
-      ok: true,
-      inTile: tile.contains(btn),
-      inHead: head.contains(btn),
-      overlapTitle: overlaps(br, tr),
-      overlapTime: overlaps(br, timeR),
-      belowHead: br.top >= headR.bottom - 1,
-      btnBottom: br.bottom,
-      tileBottom: tile.getBoundingClientRect().bottom,
-    };
-  })()`);
-  assert.equal(recorder.inTile, true, 'quick-entry must be on the recorder tile');
-  assert.equal(recorder.inHead, false, 'quick-entry must not crowd the title row');
-  assert.equal(recorder.overlapTitle, false, `quick-entry overlaps title: ${JSON.stringify(recorder)}`);
-  assert.equal(recorder.overlapTime, false, `quick-entry overlaps time: ${JSON.stringify(recorder)}`);
-  assert.equal(recorder.belowHead, true, `quick-entry should sit below the head: ${JSON.stringify(recorder)}`);
+  assert.equal(await js(`document.getElementById('ui-open-recordings')`), null, 'home recorder has no open-in-recordings button');
+  assert.equal(await js(`document.querySelectorAll('#home-recorder .recorder-controls .record-control').length`), 3);
   await capture('01-home-sun-recorder');
 
   await js(`document.querySelector('.ui-capsule-hint button')?.click()`);
@@ -155,44 +125,49 @@ async function main() {
     '02 shot must be on todo tab'
   );
 
-  assert.equal(await js(`!!document.querySelector('.todo-board-toolbar')`), false, 'top toolbar row must be gone');
+  assert.equal(await js(`!!document.querySelector('.todo-page-heading')`), true, 'todo heading provides a stable title and category action');
   const fill = await js(`(() => {
     const tab = document.getElementById('tab-todo').getBoundingClientRect();
     const sections = document.getElementById('todo-sections').getBoundingClientRect();
+    const heading = document.querySelector('.todo-page-heading').getBoundingClientRect();
     const cards = [...document.querySelectorAll('#todo-sections .quadrant')].map((el) => el.getBoundingClientRect());
     const bottom = Math.max(...cards.map((r) => r.bottom));
     const right = Math.max(...cards.map((r) => r.right));
     return {
-      heightFill: sections.height / tab.height,
+      heightFill: sections.height / Math.max(1, tab.bottom - sections.top),
+      belowHeading: sections.top >= heading.bottom - 1,
       widthFill: sections.width / tab.width,
       cardsReachBottom: (tab.bottom - bottom) <= 16,
       cardsReachRight: (tab.right - right) <= 16,
       cardCount: cards.length,
     };
   })()`);
-  assert.ok(fill.heightFill >= 0.92, `todo grid must fill tab height: ${JSON.stringify(fill)}`);
+  assert.ok(fill.heightFill >= 0.92, `todo grid must fill remaining content height: ${JSON.stringify(fill)}`);
+  assert.equal(fill.belowHeading, true, 'todo categories follow their page heading');
   assert.ok(fill.widthFill >= 0.92, `todo grid must fill tab width: ${JSON.stringify(fill)}`);
   assert.equal(fill.cardsReachBottom, true, `4 cards must reach panel bottom: ${JSON.stringify(fill)}`);
   assert.equal(fill.cardsReachRight, true, `4 cards must reach panel right: ${JSON.stringify(fill)}`);
-  const fab = await js(`(() => {
+  const categoryAction = await js(`(() => {
     const b = document.getElementById('todo-add-category');
     if (!b) return null;
     const r = b.getBoundingClientRect();
-    const tab = document.getElementById('tab-todo').getBoundingClientRect();
+    const heading = document.querySelector('.todo-page-heading').getBoundingClientRect();
     return {
       hidden: b.hidden,
       aria: b.getAttribute('aria-label'),
-      rightGap: tab.right - r.right,
-      bottomGap: tab.bottom - r.bottom,
+      inHeading: b.closest('.todo-page-heading') !== null,
+      visible: r.left >= heading.left && r.right <= heading.right + 1 && r.top >= heading.top && r.bottom <= heading.bottom + 1,
+      hittable: document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('#todo-add-category') === b,
       w: r.width,
       h: r.height,
     };
   })()`);
-  assert.equal(fab.hidden, false);
-  assert.equal(fab.aria, '添加分类');
-  assert.ok(fab.w >= 36 && fab.w <= 44, `fab size ${fab.w}`);
-  assert.ok(fab.rightGap >= 18 && fab.rightGap <= 30, `fab right ${fab.rightGap}`);
-  assert.ok(fab.bottomGap >= 60 && fab.bottomGap <= 90, `fab bottom ${fab.bottomGap}`);
+  assert.equal(categoryAction.hidden, false);
+  assert.equal(categoryAction.aria, '添加分类');
+  assert.equal(categoryAction.inHeading, true);
+  assert.equal(categoryAction.visible, true, JSON.stringify(categoryAction));
+  assert.equal(categoryAction.hittable, true, 'category action is directly clickable in the heading');
+  assert.ok(categoryAction.w >= 28 && categoryAction.h >= 28, 'category action keeps a usable pointer target');
   await js(`document.getElementById('todo-add-category').click()`);
   await until(`document.querySelectorAll('#todo-sections .quadrant').length === 5`);
   assert.equal(await js(`document.querySelectorAll('#todo-sections .quadrant').length`), 5);
@@ -265,7 +240,14 @@ async function main() {
   const minutes = await js(`document.querySelectorAll('#todo-editor-minute button[data-value]').length`);
   assert.equal(hours, 24);
   assert.equal(minutes, 12);
-  // Pick a late-evening time so "must be later than now" validation still passes.
+  // Pick a future calendar day first: 23:45 today is already past in late runs.
+  await js(`(() => {
+    const future = new Date(); future.setDate(future.getDate() + 2);
+    const targetMonth = future.getFullYear() * 12 + future.getMonth();
+    while (todoEditorYear * 12 + todoEditorMonthIndex < targetMonth) document.getElementById('todo-calendar-next').click();
+    while (todoEditorYear * 12 + todoEditorMonthIndex > targetMonth) document.getElementById('todo-calendar-previous').click();
+    document.querySelector('#todo-calendar-grid button[data-day="' + future.getDate() + '"]').click();
+  })()`);
   await js(`document.querySelector('#todo-editor-hour button[data-value="23"]').click()`);
   await js(`document.querySelector('#todo-editor-minute button[data-value="45"]').click()`);
   const picked = await js(`({

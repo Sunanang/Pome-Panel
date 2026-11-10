@@ -1,0 +1,13 @@
+{
+  "node": {
+    "total": 983,
+    "passed": 982,
+    "skipped": 1,
+    "failed": 0
+  },
+  "electronInvocations": 50,
+  "npmTestExitCode": 0,
+  "localization": "passed",
+  "platform": "darwin",
+  "windowsHardwareVerified": false
+}

@@ -16,10 +16,16 @@ const primary = { endpointId: 'main', baseUrl: 'https://nas.example/sync', kind:
 const backup = { endpointId: 'backup', baseUrl: 'https://outside.example/sync', kind: 'frp', priority: 1, enabled: true };
 let credentials = { bound: false, baseUrl: null, recovery: { paused: false } };
 let settings = { endpoints: [], lastSuccessAt: null }, uiState = 'unbound', contents = {}, schemaMessage = null;
-let pairFailure = null, retryFailure = null, confirmation = 0;
+let pairFailure = null, retryFailure = null, confirmation = 0, migrationDecision = null;
+const backupCalls=[];
 const claims = [], updates = [], additions = [], confirmations = [], recoveryCalls = [];
 dialog.showMessageBox = async (...args) => { confirmations.push(args.at(-1)); return { response: confirmation }; };
 const handlers = {
+  'sync:classify-migration': () => ({ok:true,decision:migrationDecision}),
+  'sync:run-migration': () => ({ok:true,migrationId:'isolated-fixture'}),
+  'sync:export-todos-backup': () => {backupCalls.push('export');return {ok:false,message:'fixture backup export failed'};},
+  'backup:preview': () => ({ok:true,previewId:'isolated-backup',currentCounts:{todos:{P0:2}},manifest:{collections:{todos:{P0:3}}},paired:true}),
+  'backup:restore': () => {backupCalls.push('restore');return {ok:true};},
   'sync:get-status': () => ({ ...credentials, schemaIncompatible: uiState === 'schema_incompatible', schemaMessage }),
   'sync:get-dashboard': () => ({ ok: true, credentials: handlers['sync:get-status'](), settings,
     uiState, uiLabel: syncUiStateLabel(uiState), recovery: credentials.recovery, contentResults: contents,
@@ -48,7 +54,7 @@ const handlers = {
 };
 const originalHandle = ipcMain.handle.bind(ipcMain);
 ipcMain.handle = (channel, handler) => originalHandle(channel, handlers[channel] || handler);
-const errors = [], artifacts = path.join(__dirname, '../dist.noindex/nas-settings-card'); fs.mkdirSync(artifacts, { recursive: true });
+const errors = [], artifacts = process.env.POME_SETTINGS_NAS_SHOTS || path.join(__dirname, '../dist.noindex/nas-settings-card'); fs.mkdirSync(artifacts, { recursive: true });
 let started = false;
 const watchdog = setTimeout(() => { console.error('NAS settings card timed out', errors); app.exit(1); }, 90000);
 app.on('web-contents-created', (_event, c) => {
@@ -63,23 +69,26 @@ async function run(c) {
   const js = code => c.executeJavaScript(code), sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   async function until(expression) { for (let i = 0; i < 300; i++) { if (await js(expression).catch(() => false)) return; await sleep(20); } throw new Error('Timeout: ' + expression); }
   async function emit(label) { c.send('sync:status', handlers['sync:get-status']()); await until(`document.getElementById('settings-nas-sync-status').textContent==='${label}'`); await sleep(50); }
-  async function capture(name) { await js(`document.getElementById('settings-nas-sync-card').scrollIntoView({block:'start'})`); await sleep(300); fs.writeFileSync(path.join(artifacts, name + '.png'), (await c.capturePage()).toPNG()); }
+  async function shot(name) { await js('document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))'); fs.writeFileSync(path.join(artifacts,name+'.png'),(await c.capturePage()).toPNG()); }
+  async function capture(name) { await js(`NotchSettings.reveal('settings-nas-sync-card',{block:'start'})`); await sleep(300); fs.writeFileSync(path.join(artifacts, name + '.png'), (await c.capturePage()).toPNG()); }
   await until('!!window.NotchWorkspace'); await js(`setMode(true)`); await sleep(650); await js(`setActiveTab('settings')`);
   await until(`document.getElementById('settings-nas-content-results').children.length===10`);
-  const placement = await js(`(()=>({left:!!document.querySelector('.settings-column-primary #settings-nas-sync-card'),right:!!document.querySelector('.settings-column-secondary #settings-nas-sync-card'),cards:document.querySelectorAll('#settings-nas-sync-card').length,first:document.getElementById('settings-nas-sync-card').previousElementSibling===null,after:document.getElementById('settings-nas-sync-card').nextElementSibling.classList.contains('settings-display-card')}))()`);
-  assert.deepEqual(placement, { left: false, right: true, cards: 1, first: true, after: true });
-  assert.equal(await js(`document.getElementById('settings-nas-advanced').open || document.getElementById('settings-nas-details').open`), false);
+  await js(`NotchSettings.select('nas')`);
+  assert.equal(await js(`document.getElementById('settings-nas-sync-card').closest('[data-settings-group]').dataset.settingsGroup`),'nas');
+  assert.equal(await js(`['ui-nas-troubleshoot','settings-nas-advanced','settings-nas-details'].every(id=>document.getElementById(id).tagName==='SECTION'&&document.getElementById(id).checkVisibility())`),true);
   assert.equal(await js(`document.getElementById('settings-nas-sync-open').disabled`), true);
   await capture('unpaired');
-  await js(`document.getElementById('settings-nas-sync-base-url').value='https://nas.example/sync';document.getElementById('settings-nas-pair-submit').click()`);
-  await until(`!document.getElementById('ui-error-bar').hidden && document.querySelector('#ui-error-details pre').textContent.includes('请输入配对码')`);
-  assert.equal(await js(`document.getElementById('settings-nas-sync-hint').textContent`),'');
+  await js(`document.getElementById('ui-nas-main').click();document.getElementById('settings-nas-sync-base-url').value='https://nas.example/sync';document.getElementById('settings-nas-pair-submit').click()`);
+  await until(`document.getElementById('settings-nas-sync-hint').textContent===PomeI18n.t('ux.nas.fields')`);
+  assert.equal(await js(`document.getElementById('ui-error-bar').hidden`),true,'invalid pairing fields are inline validation');
+  assert.equal(await js('document.activeElement.id'),'settings-nas-pair-code');
   pairFailure = { ok: false, error: 'code_expired' };
   await js(`document.getElementById('settings-nas-pair-code').value='123456';document.getElementById('settings-nas-pair-submit').click()`);
   await until(`!document.getElementById('ui-error-bar').hidden && document.querySelector('#ui-error-details pre').textContent.includes('配对码已过期')`);
   pairFailure = null;
   await js(`document.getElementById('settings-nas-pair-submit').click()`);
   await until(`!document.getElementById('settings-nas-sync-options').hidden`);
+  await shot('dialog-sync-options');
   await js(`document.getElementById('settings-nas-sync-options-cancel').click()`);
   credentials = { bound: true, baseUrl: primary.baseUrl, recovery: { paused: false } };
   settings = { endpoints: [primary, backup], currentEndpointId: backup.endpointId, currentEndpoint: backup, lastSuccessAt: 1700007200000 };
@@ -113,7 +122,7 @@ async function run(c) {
   confirmation = 1;
   await js(`document.getElementById('settings-nas-recovery').click()`); await until(`document.getElementById('ui-data-confirm').open`); await js(`document.querySelector('#ui-data-confirm button.primary').click()`); await until(`document.getElementById('settings-nas-recovery').hidden`);
   assert.deepEqual(recoveryCalls, ['preview', 'preview', 'execute']);
-  await js(`document.getElementById('settings-nas-rollback').click()`); await until(`document.getElementById('ui-data-confirm').open`); await js(`document.querySelector('#ui-data-confirm button.primary').click()`); await until(`document.getElementById('settings-nas-sync-status').textContent==='同步已暂停'`);
+  await js(`document.getElementById('settings-nas-rollback').click()`); await until(`document.getElementById('ui-data-confirm').open`); await shot('dialog-rollback'); await js(`document.querySelector('#ui-data-confirm button.primary').click()`); await until(`document.getElementById('settings-nas-sync-status').textContent==='同步已暂停'`);
   assert.equal(recoveryCalls.at(-1), 'rollback');
   credentials.recovery = { paused: false }; retryFailure = { ok: false, error: 'timeout' };
   await emit('已同步'); await js(`document.getElementById('settings-nas-details').open=true;document.getElementById('settings-nas-sync-retry').click()`);
@@ -130,7 +139,7 @@ async function run(c) {
   const before = claims.length;
   await js(`document.getElementById('settings-nas-pair-submit').click()`);
   await until(`!document.getElementById('settings-nas-dialog-root').hidden`);
-  assert.equal(await js(`document.getElementById('settings-nas-dialog-title').textContent`), '允许明文 HTTP 配对？');
+  assert.equal(await js(`document.getElementById('settings-nas-dialog-title').textContent`), '允许明文 HTTP 配对？');await shot('dialog-http-pair');
   assert.equal(claims.length, before);
   await js(`document.getElementById('settings-nas-dialog-cancel').click()`); await sleep(50); assert.equal(claims.length, before);
   await js(`document.getElementById('settings-nas-pair-submit').click()`); await until(`!document.getElementById('settings-nas-dialog-root').hidden`);
@@ -142,7 +151,7 @@ async function run(c) {
   await emit('已同步');
   await js(`document.getElementById('settings-nas-advanced').open=true;document.getElementById('settings-nas-endpoint-url').value='http://192.0.2.6:31880';document.getElementById('settings-nas-endpoint-url').dispatchEvent(new Event('input'));document.getElementById('settings-nas-endpoint-add').click()`);
   await until(`!document.getElementById('settings-nas-dialog-root').hidden`);
-  await js(`document.getElementById('settings-nas-dialog-cancel').click()`); assert.equal(additions.length, 0);
+  await shot('dialog-endpoint-http');await js(`document.getElementById('settings-nas-dialog-cancel').click()`); assert.equal(additions.length, 0);
   await js(`document.getElementById('settings-nas-endpoint-add').click()`); await until(`!document.getElementById('settings-nas-dialog-root').hidden`);
   await js(`document.getElementById('settings-nas-dialog-confirm').click()`); await until(`document.getElementById('settings-nas-endpoint-hint').textContent.includes('持续警告')`);
   assert.equal(additions.length, 1); assert.equal(updates.at(-1).httpConfirmAccepted, true);
@@ -154,7 +163,7 @@ async function run(c) {
   await js(`document.getElementById('settings-nas-sync-base-url').value='https://nas.example/sync';document.getElementById('settings-nas-pair-code').value='123456';document.getElementById('settings-nas-pair-submit').click()`);
   await until(`!document.getElementById('settings-nas-dialog-root').hidden`);
   assert.equal(await js(`document.getElementById('settings-nas-dialog-title').textContent`), '信任此 NAS 证书？');
-  assert(await js(`document.getElementById('settings-nas-dialog-body').textContent.includes('AA:BB')`));
+  assert(await js(`document.getElementById('settings-nas-dialog-body').textContent.includes('AA:BB')`));await shot('dialog-certificate');
   await js(`document.getElementById('settings-nas-dialog-cancel').click()`);
   credentials = { bound: true, baseUrl: primary.baseUrl, recovery: { paused: false } }; settings = { endpoints: [primary] };
   uiState = 'schema_incompatible'; schemaMessage = '协议不兼容：请升级桌面端 Pome Panel 后再同步';
@@ -165,6 +174,40 @@ async function run(c) {
   uiState = 'migration_failed'; await emit('迁移失败');
   assert.equal(await js(`document.getElementById('settings-nas-migration-retry').hidden || document.getElementById('settings-nas-migration-actions').hidden`), false);
   assert.equal(await js(`document.getElementById('settings-nas-migration-restore').hidden`), false); await capture('migration-failed');
+  await js(`document.getElementById('settings-nas-migration-restore').click()`);
+  await until(`!document.getElementById('settings-nas-dialog-root').hidden`);await shot('dialog-migration-restore');
+  assert.equal(await js(`document.getElementById('settings-nas-dialog').dataset.controlId`),'migration.failed.restore');
+  await js(`document.getElementById('settings-nas-dialog-cancel').click()`);
+  uiState='synced';await emit('已同步');
+  await js(`document.getElementById('settings-nas-pair-reauth').click()`);
+  await until(`!document.getElementById('settings-nas-dialog-root').hidden`);await shot('dialog-reauth');
+  assert.equal(await js(`document.getElementById('settings-nas-dialog').dataset.controlId`),'pair.reauth');
+  await js(`document.getElementById('settings-nas-dialog-cancel').click()`);
+  settings.endpoints=[primary,backup];await emit('已同步');
+  await js(`document.getElementById('settings-nas-endpoint-url').value='';document.getElementById('settings-nas-endpoint-url').dispatchEvent(new Event('input'));document.getElementById('settings-nas-endpoint-add').click()`);
+  await until(`!document.getElementById('settings-nas-dialog-root').hidden`);await shot('dialog-endpoint-delete');
+  assert.equal(await js(`document.getElementById('settings-nas-dialog').dataset.controlId`),'endpoint.delete');
+  await js(`document.getElementById('settings-nas-dialog-cancel').click()`);
+  for(const choice of ['both_live_confirm','history_empty_choice']) {
+    migrationDecision={decision:choice,needsUserChoice:true,localLive:2,nas:{live:3,serverRev:7}};
+    await js(`document.getElementById('settings-nas-sync-open').click()`);
+    await until(`!document.getElementById('settings-nas-sync-options').hidden`);
+    await js(`document.getElementById('settings-nas-sync-options-start').click()`);
+    await until(`!document.getElementById('settings-nas-dialog-root').hidden`);await shot('dialog-'+choice);
+    assert.equal(await js(`document.getElementById('settings-nas-dialog').dataset.controlId`),choice==='both_live_confirm'?'migration.both-live.confirm':'migration.history-empty.choice');
+    await js(`document.getElementById('settings-nas-dialog-cancel').click()`);await sleep(80);
+  }
+  await js(`NotchSettings.select('data');document.getElementById('settings-data-export').click()`);
+  await until(`document.getElementById('settings-inline-note').textContent==='fixture backup export failed'`);
+  assert.equal(await js(`document.getElementById('settings-inline-note').checkVisibility()`),true,'Data export error remains visible outside hidden NAS');
+  assert.deepEqual(backupCalls,['export']);await shot('data-export-error');
+  confirmation=0;const beforeRestore=confirmations.length;
+  await js(`document.getElementById('settings-data-restore').click()`);
+  for(let i=0;i<200&&confirmations.length===beforeRestore;i++)await sleep(20);
+  assert.equal(confirmations.length,beforeRestore+1,'Data restore still opens the native comparison confirmation');
+  assert.match(confirmations.at(-1).detail,/2/);assert.match(confirmations.at(-1).detail,/3/);
+  assert.deepEqual(backupCalls,['export'],'canceling restore never writes backup data');
+  fs.writeFileSync(path.join(artifacts,'restore-confirmation.json'),JSON.stringify(confirmations.at(-1),null,2));
   assert.equal(await js(`Array.from(document.querySelectorAll('[id]')).length===new Set(Array.from(document.querySelectorAll('[id]'),node=>node.id)).size`), true);
   assert.deepEqual(errors, []);
 }

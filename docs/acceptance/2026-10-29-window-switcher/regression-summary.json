@@ -1,0 +1,37 @@
+{
+  "branch": "dev",
+  "node": {
+    "total": 1013,
+    "passed": 1012,
+    "skipped": 1,
+    "failed": 0
+  },
+  "focusedNode": {
+    "total": 143,
+    "passed": 142,
+    "skipped": 1,
+    "failed": 0
+  },
+  "electronFlows": [
+    "windows-widget",
+    "windows-native",
+    "workspace-lifecycle",
+    "home-layout-swap",
+    "home-card-hover",
+    "ui-simplify",
+    "normal-startup"
+  ],
+  "restartPhases": [
+    "ui-simplify"
+  ],
+  "syntaxChecks": 129,
+  "nativeFinal": "two independent fixture processes; five terminal-labelled standard windows; separate browser A/B and two same-title windows",
+  "widgetFinal": "passed including keyboard Space and retained focus after native failure",
+  "localization": "passed",
+  "diffWhitespace": "passed",
+  "unverified": [
+    "the exact original live Terminal/WeChat incident",
+    "Windows hardware",
+    "macOS multi-Space and fullscreen behavior"
+  ]
+}

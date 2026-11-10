@@ -1,0 +1,54 @@
+{
+  "recording": {
+    "saved": {
+      "duration": "Infinity",
+      "mime": "blob:",
+      "seekDisabled": true,
+      "metadata": "—:—"
+    },
+    "playing": {
+      "duration": "Infinity",
+      "paused": false,
+      "ready": 4,
+      "seekDisabled": true
+    },
+    "geometry": {
+      "stop": {
+        "x": 509,
+        "y": 303,
+        "width": 27,
+        "height": 27,
+        "top": 303,
+        "right": 536,
+        "bottom": 330,
+        "left": 509
+      },
+      "entry": {
+        "x": 509,
+        "y": 303,
+        "width": 92,
+        "height": 30,
+        "top": 303,
+        "right": 601,
+        "bottom": 333,
+        "left": 509
+      },
+      "hit": "ui-open-recordings",
+      "size": "small"
+    }
+  },
+  "invalidUrls": [
+    {
+      "value": "not a url",
+      "result": "https://not%20a%20url/"
+    },
+    {
+      "value": "hello",
+      "result": "https://hello/"
+    },
+    {
+      "value": "http://127.0.0.1/admin",
+      "result": null
+    }
+  ]
+}

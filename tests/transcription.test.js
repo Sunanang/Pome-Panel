@@ -25,6 +25,7 @@ function harness(language = 'zh') {
     TRANSCRIPTION_MODEL: 'qwen3-asr-flash-realtime', TRANSCRIPTION_SAMPLE_RATE: 16000,
     TRANSCRIPTION_FINISH_TIMEOUT_MS: 7000, transcriptionSessions: new Map(),
     resolveTranscriptionConfig: () => ({ apiKey: 'test', region: 'beijing', language }),
+    retryStoredSecretReads() {},
     publicTranscriptionConfig: () => ({}),
     ipcMain: { handle: (name, fn) => handlers.set(name, fn), on: (name, fn) => handlers.set(name, fn) },
     setTimeout: (fn, ms) => { timers.set(++timerId, { fn, at: now + ms }); return timerId; },

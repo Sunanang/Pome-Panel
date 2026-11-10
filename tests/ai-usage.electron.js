@@ -311,12 +311,15 @@ async function main() {
           assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
           if (size === 'medium') {
             // Native input catches hover state lost when refresh replaces the DOM.
+            win.show();win.focus();win.webContents.focus();
+            await settle();
             const point = await js(`(()=>{const r=document.getElementById('ai-provider-cursor').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`);
             const move = (x, y) => win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
             await move(1230, 690);
             await move(point.x, point.y);
             await new Promise(r => setTimeout(r, 1100));
-            assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`), true);
+            assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`), true,
+              'native hover opens details: '+JSON.stringify(await js(`({focus:document.hasFocus(),hidden:document.hidden,hover:document.querySelector('.ai-usage-provider:hover')?.dataset.provider})`)));
             await js(`NotchAiUsage.refresh({force:true})`);
             await settle();
             assert.equal(await js(`document.querySelector('.ai-usage-provider:hover')?.dataset.provider`), 'cursor');
@@ -339,8 +342,8 @@ async function main() {
     await supply({cursor:{...cursor,stale:true},codex:{...codex,manualTokenInvalid:true},grokbot});
     await resize('small',currentSizes);
     assert.deepEqual((await inspect()).contentOverflow,[],'stale and local-fallback values stay in their cells');
-    assert.equal(await js(`!!document.querySelector('#ai-provider-cursor .q-ring .q-pct')&&!!document.querySelector('#ai-provider-codex .q-alert')`),true,'status text must not squeeze remaining values into an unreadable row');
-    assert.equal(await js(`(()=>{const f=document.querySelector('#ai-provider-codex .cursor-usage-footnote');return f.textContent==='失效去设置'&&f.scrollWidth<=f.clientWidth+1})()`),true,'fallback status and repair action remain complete');
+    assert.equal(await js(`!!document.querySelector('#ai-provider-cursor .q-ring .q-pct')&&!!document.querySelector('#ai-provider-codex .q-ring .q-pct')&&!document.querySelector('#ai-provider-codex .q-alert')`),true,'usable local quotas remain visible when only the manual token expires');
+    assert.match(await js(`document.querySelector('#ai-provider-codex').getAttribute('aria-description')`),/Token 失效 · 已改用本机/,'fallback warning remains accessible without hiding the quota');
     await capture('small-status-regression');
     await supply({...five,copilot:absent});await resize('mini');
     assert.equal(await js(`(()=>{const f=document.getElementById('ai-usage-footer');return f.scrollWidth<=f.clientWidth+1&&!f.title&&f.getAttribute('aria-label')?.includes('Claude')})()`),true,'mini summary fits without native title tooltip');
@@ -442,14 +445,15 @@ async function main() {
     await supply({codex:{...codex,configured:true,manualTokenInvalid:true,authSource:'local'}});
     assert.match(await js(`document.getElementById('ai-provider-codex').getAttribute('aria-description')`),/Token 失效 · 已改用本机/);
     assert.equal(await js(`document.querySelector('#codex-usage-rows strong').textContent`),'41%');
-    assert.equal(await js(`document.getElementById('ai-provider-codex').dataset.state`),'error');
-    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring-track').hasAttribute('stroke-dasharray')`),true);
-    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring .q-pct')`),null,'invalid credentials keep quota values only in details');
-    assert.equal(await js(`!!document.querySelector('#ai-provider-codex .q-alert')`),true,'invalid credentials always show the centered alert');
+    assert.equal(await js(`document.getElementById('ai-provider-codex').dataset.state`),'ok');
+    assert.equal(await js(`document.querySelector('#ai-provider-codex .q-ring-track').hasAttribute('stroke-dasharray')`),false);
+    assert.equal(await js(`!!document.querySelector('#ai-provider-codex .q-ring .q-pct')`),true,'a valid local fallback displays its current quota');
+    assert.equal(await js(`!!document.querySelector('#ai-provider-codex .q-alert')`),false,'manual-token failure does not invalidate the local account');
     await resize('medium');
     await capture('state-token-local');
     await supply({codex:{ok:true,detected:true,configured:true,manualTokenInvalid:true}});
     assert.match(await js(`document.getElementById('ai-provider-codex').getAttribute('aria-description')`),/Token 失效/);
+    assert.equal(await js(`document.getElementById('ai-provider-codex').dataset.state`),'error','without usable local quotas, expired credentials still require repair');
     await supply({codex:{...codex,authSource:'manual',configured:true,detected:false}});
     assert.match(await js(`document.getElementById('ai-provider-codex').getAttribute('aria-description')`),/手动 Token/);
     assert.match(await js(`document.getElementById('ai-provider-codex').getAttribute('aria-description')`),/Plus/);
@@ -480,6 +484,18 @@ async function main() {
         await capture(`${Object.keys(snapshots)[0]||'empty'}-${size}`);
       }
     }
+    // The empty-state action must fit as a complete hit target, not just exist in DOM.
+    for(const locale of ['zh-CN','en-US','de-DE']) {
+      await js(`PomeI18n.setState(PomeI18n.snapshot('${locale}',['${locale}']));window.dispatchEvent(new Event('pome:language-changed'))`);
+      await supply({});
+      for(const dimensions of [designSizes,currentSizes]) for(const size of ['mini','small','medium','large']) {
+        await resize(size,dimensions);
+        const action=await js(`(()=>{const e=document.querySelector('.ai-open-settings'),r=e.getBoundingClientRect(),t=document.querySelector('#home-cursor').getBoundingClientRect(),h=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {fits:r.top>=t.top+2&&r.bottom<=t.bottom-2&&r.left>=t.left+2&&r.right<=t.right-2,hit:h===e||e.contains(h),height:r.height};})()`);
+        assert(action.fits,locale+'/'+size+' complete settings button remains within the card: '+JSON.stringify(action));
+      }
+      await resize('small',currentSizes);await capture('empty-action-'+locale);
+    }
+    await js(`PomeI18n.setState(PomeI18n.snapshot('zh-CN',['zh-CN']));window.dispatchEvent(new Event('pome:language-changed'))`);
     await js(`document.querySelector('.ai-open-settings').click();new Promise(r=>setTimeout(r,250))`);
     assert.equal(await js(`document.getElementById('tab-settings').getAttribute('aria-hidden')`),'false');
     await supply(three);await resize('medium');await js(`document.documentElement.dataset.liquidGlass='1'`);await capture('medium-3ai-glass');assert.equal((await inspect()).overflow,false);await js(`document.documentElement.dataset.liquidGlass='0'`);

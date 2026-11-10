@@ -48,10 +48,47 @@ jobs:
           fs.appendFileSync(GITHUB_OUTPUT,'website_only='+websiteOnly+String.fromCharCode(10));
           console.log('Website-only update:',websiteOnly);
           NODE
+  tag:
+    # main 驱动：合并到 main 后，若 package.json 的版本还没有对应 tag，就打一个。
+    # 真正的构建与发布由这次 tag push 触发（on.push.tags），所以 main 上不重复构建。
+    name: Tag version on main
+    needs:
+      - changes
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.website_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create vX.Y.Z tag when this version has none
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="v${VERSION}"
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::notice::${TAG} 已存在，本次不重复发版"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "${TAG}" -m "Pome Panel ${TAG}"
+          git push origin "${TAG}"
+          echo "::notice::已创建 ${TAG}，由它触发三平台构建与发布"
+
   mac:
     name: Build Apple Silicon DMG
     runs-on: macos-14
-    timeout-minutes: 45
+    if: github.ref_type == 'tag' || github.event_name == 'pull_request'
+    # macOS arm64 的 hosted runner 容量紧张，抢不到机器时 GitHub 会连续重试约 15 分钟再放弃。
+    # 原来 45 分钟的超时里大半耗在排队，把上限抬高让它能等到机器。真正的失败仍由重试
+    # workflow（retry-release.yml）兜底。
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -68,12 +105,17 @@ jobs:
           npm run i18n:check
           npm run test:i18n
           npm run build
-          npm run test:sites
+          npm test
       - run: node scripts/release-policy.js
         if: needs.changes.outputs.website_only != 'true'
       - run: npm ci
         if: needs.changes.outputs.website_only != 'true'
       - run: npm test
+        env:
+          # CI runner 没有真实桌面尺寸（Windows 只有 1024x768），tests/*.electron.js 那批
+          # 交互验收脚本会因此误报，且它们还要生成人工核对的截图。
+          # 单元测试与语法检查照常跑；交互验收在本地或真机执行。
+          POME_SKIP_ELECTRON_ACCEPTANCE: '1'
         if: needs.changes.outputs.website_only != 'true'
       - name: Build DMG
         run: npm run build
@@ -109,6 +151,7 @@ jobs:
   windows:
     name: Build and test Windows installer
     runs-on: windows-latest
+    if: github.ref_type == 'tag' || github.event_name == 'pull_request'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -126,12 +169,17 @@ jobs:
           npm run i18n:check
           npm run test:i18n
           npm run build
-          npm run test:sites
+          npm test
       - run: node scripts/release-policy.js
         if: needs.changes.outputs.website_only != 'true'
       - run: npm ci
         if: needs.changes.outputs.website_only != 'true'
       - run: npm test
+        env:
+          # CI runner 没有真实桌面尺寸（Windows 只有 1024x768），tests/*.electron.js 那批
+          # 交互验收脚本会因此误报，且它们还要生成人工核对的截图。
+          # 单元测试与语法检查照常跑；交互验收在本地或真机执行。
+          POME_SKIP_ELECTRON_ACCEPTANCE: '1'
         if: needs.changes.outputs.website_only != 'true'
       - run: npm run build:win
         if: needs.changes.outputs.website_only != 'true'
@@ -157,6 +205,7 @@ jobs:
   nas:
     name: Build fnOS FPK
     runs-on: ubuntu-24.04
+    if: github.ref_type == 'tag' || github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -172,7 +221,7 @@ jobs:
           npm run i18n:check
           npm run test:i18n
           npm run build
-          npm run test:sites
+          npm test
       - run: node scripts/release-policy.js
         if: needs.changes.outputs.website_only != 'true'
       - name: Install NAS test dependencies
@@ -216,6 +265,10 @@ jobs:
       - windows
       - nas
     runs-on: ubuntu-latest
+    # 只改官网时不发布；真正发版只在 tag 上（release-policy.js 里 publish 也判 tag）
+    if: >-
+      (github.ref_type == 'tag' || github.event_name == 'pull_request') &&
+      needs.changes.outputs.website_only != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -246,4 +299,34 @@ jobs:
 
           gh release create "${GITHUB_REF_NAME}" release-assets/*.dmg release-assets/*.exe release-assets/*.fpk release-assets/*.sha256 --title "Pome Panel
           ${GITHUB_REF_NAME}" --notes-file release-notes.rendered.md
-    if: needs.changes.outputs.website_only != 'true'
+      - name: Checkout dev for the manifest commit
+        if: steps.release.outputs.publish == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+      - name: Generate website download manifest and open a pull request
+        if: steps.release.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |-
+          node scripts/gen-downloads-json.mjs "$TAG"
+          if [ -z "$(git status --porcelain website/public/downloads.json)" ]; then
+            echo '下载清单没有变化，不需要提 PR'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add website/public/downloads.json
+          git commit -m "chore(website): 更新下载清单 $TAG"
+          # main 有「要求 PR」的保护，bot 推不上去，所以走 dev + PR，合并由人点
+          git push origin dev
+          if gh pr list --base main --head dev --state open --json title -q '.[].title' | grep -qF "更新下载清单 $TAG"; then
+            echo '同标题 PR 已存在，跳过'
+            exit 0
+          fi
+          gh pr create --base main --head dev \
+            --title "更新下载清单 $TAG" \
+            --body "发版流水线生成了官网的下载清单（website/public/downloads.json），指向 $TAG 的安装包。合并后 EdgeOne 自动构建，官网下载弹窗就会列出这个版本的安装包。"

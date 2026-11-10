@@ -26,6 +26,14 @@ const statusToast = document.getElementById('status-toast');
 const statusToastMessage = document.getElementById('status-toast-message');
 const statusToastAction = document.getElementById('status-toast-action');
 
+// macOS can keep Chromium's page visibility "visible" after a native hide.
+// Preserve that browser state and separately track the actual panel window.
+window.notchAPI?.onWindowVisibilityChanged?.(visible => {
+  document.documentElement.dataset.windowVisible = String(visible);
+  if (!visible) stopMirror();
+  document.dispatchEvent(new CustomEvent('notch:window-visibility', { detail: { visible } }));
+});
+
 function collectLocalStorageSnapshot() {
   const result = {};
   for (let index = 0; index < localStorage.length; index += 1) {
@@ -38,6 +46,7 @@ function collectLocalStorageSnapshot() {
 let workspaceReloadPending = false;
 let workspacePersistenceTimer = null;
 let workspacePersistenceRoot = null;
+let todoReminderWorkspaceReady = !window.notchAPI?.loadWorkspaceData;
 let applyingSyncTodosProjection = false;
 let todosSyncBound = false;
 
@@ -77,6 +86,7 @@ function applyTodosSyncProjectionPayload(projection) {
   } finally {
     applyingSyncTodosProjection = false;
   }
+  rescheduleTodoReminders();
   return true;
 }
 
@@ -189,6 +199,11 @@ async function hydratePortableWorkspace() {
     renderClipFavs();
     // Bound startup: hydratePortableWorkspace → SQLite projection overrides workspace.
     await hydrateTodosSyncProjectionAfterWorkspace();
+    if (workspaceReloadPending) return;
+    // Only a fully hydrated workspace can declare tasks absent and prune their
+    // durable reminder receipts. Parser-time data may still be empty or stale.
+    todoReminderWorkspaceReady = true;
+    rescheduleTodoReminders();
     workspacePersistenceTimer = setInterval(() => {
       if (!workspaceReloadPending) window.notchAPI.saveWorkspaceData(collectLocalStorageSnapshot(), workspacePersistenceRoot).catch(() => {});
     }, 2000);
@@ -201,6 +216,7 @@ if (document.readyState === 'loading') {
   hydratePortableWorkspace();
 }
 window.notchAPI?.onWorkspaceChanged?.(() => {
+  todoReminderWorkspaceReady = false;
   workspaceReloadPending = true;
   clearInterval(workspacePersistenceTimer);
   sessionStorage.removeItem('notch-workspace-hydrated');
@@ -253,11 +269,12 @@ function showStatusToast(message, options = {}) {
   statusToastHideTimer = null;
   statusToast.hidden = false;
   statusToast.setAttribute('aria-hidden', 'false');
-  statusToastMessage.textContent = message;
+  if(options.messageKey)pomeLocaleRendererApp.bind(statusToastMessage,'textContent',()=>pomeLocaleRendererApp.t(options.messageKey));
+  else statusToastMessage.textContent = message;
   statusToastActionHandler = typeof onAction === 'function' ? onAction : null;
   statusToastExpireHandler = typeof onExpire === 'function' ? onExpire : null;
   if (statusToastAction && statusToastActionHandler) {
-    pomeLocaleRendererApp.bind(statusToastAction, "textContent", () => (actionLabel || pomeLocaleRendererApp.t("copy.undo.926a50")));
+    pomeLocaleRendererApp.bind(statusToastAction, "textContent", () => (options.actionLabelKey?pomeLocaleRendererApp.t(options.actionLabelKey):actionLabel || pomeLocaleRendererApp.t("copy.undo.926a50")));
     statusToastAction.hidden = false;
   }
   statusToast.classList.add('visible');
@@ -352,7 +369,7 @@ function saveData(data) {
   }
   if (window.notchAPI && typeof window.notchAPI.scheduleTodoReminders === 'function') {
     const reminders = PRIORITIES.flatMap((priority) => data[priority] || []);
-    window.notchAPI.scheduleTodoReminders(reminders).catch(() => {});
+    rescheduleTodoReminders(reminders);
   }
   return true;
 }
@@ -587,27 +604,35 @@ async function removeTodoCategory(priority) {
   });
   renderTodoBoard();
 }
-if (window.notchAPI && typeof window.notchAPI.scheduleTodoReminders === 'function') {
-  window.notchAPI
-    .scheduleTodoReminders(PRIORITIES.flatMap((priority) => data[priority] || []))
-    .catch(() => {});
+function applyTodoReminderReceipts(receipts) {
+  let changed = false;
+  const byId = new Map(PRIORITIES.flatMap(priority => data[priority] || []).map(item => [item.id, item]));
+  for (const payload of receipts || []) {
+    const item = byId.get(payload?.id), stamp = Number(payload?.remindedAt);
+    if (!item || Date.parse(item.deadline) !== Date.parse(payload.deadline)
+      || !Number.isFinite(stamp) || stamp <= Number(item.remindedAt || 0)) continue;
+    item.remindedAt = stamp;
+    changed = true;
+  }
+  if (changed) saveData(data);
 }
 
-if (window.notchAPI && typeof window.notchAPI.onTodoReminder === 'function') {
-  window.notchAPI.onTodoReminder((payload) => {
-    if (!payload || !payload.id) return;
-    let changed = false;
-    PRIORITIES.forEach((priority) => {
-      const item = (data[priority] || []).find((todo) => (
-        todo.id === payload.id && String(todo.deadline || '') === String(payload.deadline || '')
-      ));
-      if (!item) return;
-      item.remindedAt = Math.max(0, Number(payload.remindedAt) || Date.now());
-      changed = true;
-    });
-    if (changed) saveData(data);
-  });
+function rescheduleTodoReminders(items = PRIORITIES.flatMap(priority => data[priority] || [])) {
+  if (!todoReminderWorkspaceReady || workspaceReloadPending) return;
+  window.notchAPI?.scheduleTodoReminders?.(items, workspacePersistenceRoot)
+    .then(result => { if (result?.ok) applyTodoReminderReceipts(result.reminded); })
+    .catch(() => {});
 }
+rescheduleTodoReminders();
+window.notchAPI?.onTodoReminder?.(payload => applyTodoReminderReceipts(payload?.items || [payload]));
+window.notchAPI?.onTodoReminderError?.(payload => {
+  if (payload?.cleared) { window.NotchUi?.clearError('todo-reminders'); return; }
+  showStatusToast(payload?.diagnostic || payload?.message || pomeLocaleRendererApp.t('todo.reminderStorageError'), {
+    kind: 'error', scope: 'todo-reminders',
+    messageKey: ['todo.reminderStorageError', 'todo.reminderSyncError'].includes(payload?.messageKey) ? payload.messageKey : 'todo.reminderStorageError',
+    repairKey: 'todo.reminderRetry', onRepair: () => rescheduleTodoReminders(),
+  });
+});
 
 if (window.notchAPI && typeof window.notchAPI.onSyncTodosProjection === 'function') {
   window.notchAPI.onSyncTodosProjection((projection) => {
@@ -656,7 +681,7 @@ function todoItemHtml(priority, item) {
   const isEditing = editingTodo?.priority === priority && editingTodo?.id === item.id;
   const contentHtml = isEditing
     ? ("<div class=\"todo-inline-editor\"><input class=\"todo-inline-name\" value=\"" + (safeText) + "\" maxlength=\"80\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.editTaskName.44f8a7")) + "\" data-i18n-aria-label=\"copy.editTaskName.44f8a7\" />" + (batteryHtml) + "<button class=\"todo-inline-deadline\" type=\"button\" data-action=\"edit-deadline\">" + (deadline || pomeLocaleRendererApp.t("copy.date.70d0c1")) + "</button><button class=\"todo-inline-save\" type=\"button\" data-action=\"save-edit\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.saveChanges.991bb7")) + "\" data-i18n-aria-label=\"copy.saveChanges.991bb7\">✓</button></div>")
-    : ("<button class=\"todo-copy\" type=\"button\" data-action=\"edit\" title=\"" + (safeText) + "\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.edit.fe62a2", { arg2: (safeText) })) + "\"><span class=\"todo-text\">" + (safeText) + "</span>" + (batteryHtml) + (deadline ? `<time class="todo-ddl" datetime="${escapeHtml(item.deadline)}">${escapeHtml(deadline)}</time>` : '') + "</button>");
+    : ("<button class=\"todo-copy\" type=\"button\" data-action=\"edit\" title=\"" + (safeText) + "\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.edit.fe62a2", { arg2: (safeText) })) + "\"><span class=\"todo-text\">" + (safeText) + "</span>" + ((batteryHtml || deadline) ? `<span class="todo-meta">${batteryHtml}${deadline ? `<time class="todo-ddl" datetime="${escapeHtml(item.deadline)}">${escapeHtml(deadline)}</time>` : ''}</span>` : '') + "</button>");
   return ("\n    <li class=\"todo-item" + (doneClass) + (selectedClass) + "\" data-id=\"" + (safeId) + "\" data-priority=\"" + (priority) + "\">\n      <button class=\"checkbox\" type=\"button\" data-action=\"toggle\" aria-label=\"" + (toggleLabel) + "\" aria-pressed=\"" + (item.done) + "\">" + (checkSvg()) + "</button>\n      " + (contentHtml) + "\n      <button class=\"delete\" type=\"button\" data-action=\"delete\" aria-label=\"" + (pomeLocaleRendererApp.attribute("copy.delete.322a6b", { arg9: (safeText) })) + "\">×</button>\n    </li>\n  ");
 }
 
@@ -669,7 +694,7 @@ function captureTodoPositions(priority) {
 }
 
 function animateTodoOrder(priority, previousPositions) {
-  if (!previousPositions?.size || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (!previousPositions?.size || (document.documentElement.classList.contains('experience-reduced-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
   const list = document.querySelector(`.todo-list[data-priority="${priority}"]`);
   if (!list) return;
   requestAnimationFrame(() => {
@@ -732,6 +757,20 @@ function updateCount(priority) {
   const items = data[priority] || [];
   const pending = items.filter((t) => !t.done).length;
   countEl.textContent = String(pending);
+  updateTodoBoardSummary();
+}
+
+function updateTodoBoardSummary() {
+  const summary = document.getElementById('todo-board-summary');
+  if (!summary) return;
+  const items = todoCategoryOrder.flatMap(priority => data[priority] || []);
+  const pending = items.filter(item => !item.done).length;
+  pomeLocaleRendererApp.bind(summary, 'textContent', () => {
+    const number = new Intl.NumberFormat(pomeLocaleRendererApp.getState().formatLocale);
+    return pomeLocaleRendererApp.t('wb.todo.summary', {
+      pending: number.format(pending), total: number.format(items.length),
+    });
+  });
 }
 
 function renderAll() {
@@ -785,7 +824,7 @@ function addTodo(priority, text, deadline) {
   );
   if (added) {
     requestAnimationFrame(() => {
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const reduceMotion = (document.documentElement.classList.contains('experience-reduced-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches);
       added.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
     });
   }
@@ -1123,8 +1162,9 @@ notch.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (event) => {
   if (document.querySelector('dialog[open]')) return;
   const target = event.target instanceof Element ? event.target : null;
+  // Native controls keep their Space activation; only the background toggles Pome.
   const editable = Boolean(target && target.closest(
-    'input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video'
+    'button, summary, a[href], input, textarea, select, [contenteditable]:not([contenteditable="false"]), audio, video, #notes-preview, .window-item'
   ));
   if (!window.NotchDomain.shouldTogglePanelForSpace({
     key: event.key,
@@ -1188,6 +1228,11 @@ document.addEventListener('compositionend', () => {
 if (window.notchAPI && typeof window.notchAPI.onEscape === 'function') {
   window.notchAPI.onEscape(() => {
     if (window.PomeDeleteConfirm?.closeOnEscape()) return;
+    if (closeShortcutRecorderOnEscape()) return;
+    if (todoEditorContext) { closeTodoEditor(); return; }
+    if (window.NotchWorkspace?.closeTranscriptionOnEscape?.()) return;
+    if (window.PomeExperience?.closeOverlayOnEscape?.()) return;
+    if (window.NotchWorkspace?.closeCredentialCreateOnEscape?.()) return;
     if (window.closeWorkHubOverlay?.()) return;
     const el = document.activeElement;
     if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
@@ -1221,8 +1266,42 @@ if (window.notchAPI && typeof window.notchAPI.onCollapseRequest === 'function') 
 // 全局快捷键召唤也走同一套 Tab 与展开状态机，避免出现另一种突兀的入场路径。
 if (window.notchAPI && typeof window.notchAPI.onOpenClip === 'function') {
   window.notchAPI.onOpenClip(async () => {
-    await setActiveTab('clip');
+    // Expand first: setMode(true) resets to the default launch tab.
     if (!isExpanded) await setMode(true);
+    await setActiveTab('clip');
+  });
+}
+
+let todoReminderFocusTimer = null;
+function focusTodoFromReminder(payload) {
+  const ids = new Set((Array.isArray(payload?.ids) ? payload.ids : [payload?.id]).map(String));
+  const rows = [...document.querySelectorAll('.todo-item[data-id]')].filter(el => ids.has(el.dataset.id));
+  const target = rows.find(el => el.getBoundingClientRect().width > 0);
+  if (!target) return false;
+  document.querySelectorAll('.todo-item.is-reminder-focus').forEach(el => el.classList.remove('is-reminder-focus'));
+  rows.forEach(el => el.classList.add('is-reminder-focus'));
+  const reduceMotion = (document.documentElement.classList.contains('experience-reduced-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  target.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+  target.querySelector('[data-action="toggle"]')?.focus({ preventScroll: true });
+  if (todoReminderFocusTimer) clearTimeout(todoReminderFocusTimer);
+  todoReminderFocusTimer = setTimeout(() => {
+    todoReminderFocusTimer = null;
+    rows.forEach(el => el.classList.remove('is-reminder-focus'));
+  }, 2400);
+  return true;
+}
+
+if (window.notchAPI && typeof window.notchAPI.onOpenTodo === 'function') {
+  window.notchAPI.onOpenTodo(async (payload) => {
+    // Expand first: setMode(true) resets to the default launch tab, so Tasks
+    // must be selected after the panel is open.
+    if (!isExpanded) await setMode(true);
+    await setActiveTab('todo');
+    const tryFocus = (attempt = 0) => {
+      if (!isExpanded || activeTab !== 'todo' || focusTodoFromReminder(payload) || attempt >= 4) return;
+      setTimeout(() => tryFocus(attempt + 1), 120 + attempt * 80);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(() => tryFocus(0)));
   });
 }
 
@@ -1292,6 +1371,7 @@ function applyIslandClipVars(edge, align) {
 function applyLayoutMetrics(metrics) {
   if (!metrics) return;
   layoutMetrics = metrics;
+  window.NotchHome?.setPanelSize?.(metrics.panelSize);
   if (metrics.stripHeight) {
     document.documentElement.style.setProperty('--notch-h', `${metrics.stripHeight}px`);
   }
@@ -1501,10 +1581,21 @@ const shortcutRecorder = document.getElementById('shortcut-recorder');
 const shortcutRecorderValue = document.getElementById('shortcut-recorder-value');
 const shortcutRecorderCancel = document.getElementById('shortcut-recorder-cancel');
 let shortcutRecorderActive = false;
+let shortcutRecorderEscapeAt = -Infinity;
+
+document.addEventListener('notch:will-collapse', () => closeShortcutRecorder());
+document.addEventListener('notch:tabchange', () => closeShortcutRecorder());
 
 function closeShortcutRecorder() {
   shortcutRecorderActive = false;
   if (shortcutRecorder) shortcutRecorder.hidden = true;
+}
+
+function closeShortcutRecorderOnEscape() {
+  if (!shortcutRecorderActive) return performance.now() - shortcutRecorderEscapeAt < 150;
+  shortcutRecorderEscapeAt = performance.now();
+  closeShortcutRecorder();
+  return true;
 }
 
 function keyEventToAccelerator(event) {
@@ -1543,7 +1634,7 @@ shortcutRecorder?.addEventListener('keydown', async (event) => {
   event.preventDefault();
   event.stopPropagation();
   if (event.key === 'Escape') {
-    closeShortcutRecorder();
+    closeShortcutRecorderOnEscape();
     return;
   }
   const accelerator = keyEventToAccelerator(event);
@@ -1768,7 +1859,7 @@ function applyTodoEditorSelection(userChanged = true) {
     trigger.dataset.deadline = deadline;
     trigger.dataset.deadlineSource = userChanged ? 'manual' : (trigger.dataset.deadlineSource || 'default');
     trigger.querySelector('span').textContent = new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
-      day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+      month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
     }).format(new Date(deadline));
     trigger.classList.add('selected');
     trigger.classList.remove('invalid');
@@ -1855,7 +1946,7 @@ function applyDefaultTodoDeadline(trigger, now = new Date()) {
   trigger.dataset.deadline = deadline;
   trigger.dataset.deadlineSource = 'default';
   trigger.querySelector('span').textContent = new Intl.DateTimeFormat(pomeLocaleRendererApp.getState().formatLocale, {
-    day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(new Date(deadline));
   trigger.classList.add('selected');
 }
@@ -2227,8 +2318,6 @@ const notesDetail = document.getElementById('notes-detail');
 const notesCount = document.getElementById('notes-count');
 const notesNewButton = document.getElementById('notes-new');
 const noteFormatActions = document.getElementById('note-format-actions');
-const noteModeButtons = Array.from(document.querySelectorAll('[data-note-mode]'));
-const noteEditButton = document.getElementById('note-edit-btn');
 const homeNote = document.querySelector('.home-note');
 
 const NOTE_INLINE_PATTERNS = [
@@ -2274,10 +2363,15 @@ function safeMarkdownUrl(rawUrl) {
   }
 }
 
-function appendInlineMarkdown(parent, source, depth = 0) {
+function appendNoteText(parent, text, sourceOffset) {
+  const node=document.createTextNode(text);
+  window.PomeNoteView?.markText(node,sourceOffset);parent.append(node);
+}
+
+function appendInlineMarkdown(parent, source, depth = 0, sourceOffset = 0) {
   const text = String(source || '');
   if (!text || depth > 6) {
-    if (text) parent.append(document.createTextNode(text));
+    if (text) appendNoteText(parent,text,sourceOffset);
     return;
   }
 
@@ -2285,36 +2379,36 @@ function appendInlineMarkdown(parent, source, depth = 0) {
   while (cursor < text.length) {
     const token = findNextInlineToken(text, cursor);
     if (!token) {
-      parent.append(document.createTextNode(text.slice(cursor)));
+      appendNoteText(parent,text.slice(cursor),sourceOffset+cursor);
       break;
     }
 
     const { type, match } = token;
     if (match.index > cursor) {
-      parent.append(document.createTextNode(text.slice(cursor, match.index)));
+      appendNoteText(parent,text.slice(cursor,match.index),sourceOffset+cursor);
     }
 
     if (type === 'code') {
       const code = document.createElement('code');
-      code.textContent = match[1];
+      appendNoteText(code,match[1],sourceOffset+match.index+1);
       parent.append(code);
     } else if (type === 'link') {
       const href = safeMarkdownUrl(match[2]);
       if (!href) {
-        parent.append(document.createTextNode(match[0]));
+        appendNoteText(parent,match[0],sourceOffset+match.index);
       } else {
         const link = document.createElement('a');
         link.dataset.noteHref = href;
         link.setAttribute('role', 'link');
         link.tabIndex = 0;
         link.rel = 'noreferrer';
-        appendInlineMarkdown(link, match[1], depth + 1);
+        appendInlineMarkdown(link,match[1],depth+1,sourceOffset+match.index+1);
         parent.append(link);
       }
     } else {
       const tagName = type === 'strong' ? 'strong' : type === 'delete' ? 'del' : 'em';
       const formatted = document.createElement(tagName);
-      appendInlineMarkdown(formatted, match[1], depth + 1);
+      appendInlineMarkdown(formatted,match[1],depth+1,sourceOffset+match.index+(type==='emphasis'?1:2));
       parent.append(formatted);
     }
 
@@ -2322,10 +2416,10 @@ function appendInlineMarkdown(parent, source, depth = 0) {
   }
 }
 
-function appendMarkdownLines(parent, lines) {
+function appendMarkdownLines(parent, lines, offsets = []) {
   lines.forEach((line, index) => {
     if (index > 0) parent.append(document.createElement('br'));
-    appendInlineMarkdown(parent, line);
+    appendInlineMarkdown(parent,line,0,offsets[index]||0);
   });
 }
 
@@ -2351,10 +2445,12 @@ function buildMarkdownPreview(source) {
   }
 
   const lines = normalized.split('\n');
+  let sourceOffset=0;const offsets=lines.map(line=>{const start=sourceOffset;sourceOffset+=line.length+1;return start;});
   let index = 0;
 
   while (index < lines.length) {
     const line = lines[index];
+    const blockStart=index;
     if (!line.trim()) {
       index += 1;
       continue;
@@ -2375,7 +2471,7 @@ function buildMarkdownPreview(source) {
       const pre = document.createElement('pre');
       const code = document.createElement('code');
       if (fenceMatch[2]) code.dataset.language = fenceMatch[2];
-      code.textContent = codeLines.join('\n');
+      appendNoteText(code,codeLines.join('\n'),offsets[blockStart+1]??normalized.length);
       pre.append(code);
       fragment.append(pre);
       continue;
@@ -2384,7 +2480,7 @@ function buildMarkdownPreview(source) {
     const headingMatch = line.match(NOTE_HEADING_RE);
     if (headingMatch) {
       const heading = document.createElement('h' + headingMatch[1].length);
-      appendInlineMarkdown(heading, headingMatch[2]);
+      appendInlineMarkdown(heading,headingMatch[2],0,offsets[index]+line.length-headingMatch[2].length);
       fragment.append(heading);
       index += 1;
       continue;
@@ -2398,15 +2494,15 @@ function buildMarkdownPreview(source) {
 
     const quoteMatch = line.match(NOTE_QUOTE_RE);
     if (quoteMatch) {
-      const quoteLines = [];
+      const quoteLines = [],quoteOffsets=[];
       while (index < lines.length) {
         const match = lines[index].match(NOTE_QUOTE_RE);
         if (!match) break;
-        quoteLines.push(match[1]);
+        quoteLines.push(match[1]);quoteOffsets.push(offsets[index]+lines[index].length-match[1].length);
         index += 1;
       }
       const quote = document.createElement('blockquote');
-      appendMarkdownLines(quote, quoteLines);
+      appendMarkdownLines(quote,quoteLines,quoteOffsets);
       fragment.append(quote);
       continue;
     }
@@ -2428,7 +2524,7 @@ function buildMarkdownPreview(source) {
         box.setAttribute('aria-hidden', 'true');
         box.textContent = done ? '✓' : '';
         const content = document.createElement('span');
-        appendInlineMarkdown(content, match[2]);
+        appendInlineMarkdown(content,match[2],0,offsets[index]+lines[index].length-match[2].length);
         item.append(box, content);
         list.append(item);
         index += 1;
@@ -2446,7 +2542,7 @@ function buildMarkdownPreview(source) {
         const match = lines[index].match(NOTE_ORDERED_RE);
         if (!match) break;
         const item = document.createElement('li');
-        appendInlineMarkdown(item, match[2]);
+        appendInlineMarkdown(item,match[2],0,offsets[index]+lines[index].length-match[2].length);
         list.append(item);
         index += 1;
       }
@@ -2462,7 +2558,7 @@ function buildMarkdownPreview(source) {
         const match = lines[index].match(NOTE_BULLET_RE);
         if (!match) break;
         const item = document.createElement('li');
-        appendInlineMarkdown(item, match[1]);
+        appendInlineMarkdown(item,match[1],0,offsets[index]+lines[index].length-match[1].length);
         list.append(item);
         index += 1;
       }
@@ -2477,7 +2573,7 @@ function buildMarkdownPreview(source) {
       index += 1;
     }
     const paragraph = document.createElement('p');
-    appendMarkdownLines(paragraph, paragraphLines);
+    appendMarkdownLines(paragraph,paragraphLines,offsets.slice(blockStart,index));
     fragment.append(paragraph);
   }
 
@@ -2645,61 +2741,27 @@ function applyNoteFormat(type) {
 }
 
 let noteMode = 'edit';
-let noteSelection = { start: 0, end: 0, direction: 'none', scrollTop: 0 };
-
-function setNoteMode(mode, focusTarget = true) {
-  if (!noteInput || !notePreview) return;
-  const previousMode = noteMode;
-  noteMode = mode === 'preview' ? 'preview' : 'edit';
-  const isPreview = noteMode === 'preview';
-
-  if (isPreview) {
-    noteSelection = {
-      start: noteInput.selectionStart,
-      end: noteInput.selectionEnd,
-      direction: noteInput.selectionDirection,
-      scrollTop: noteInput.scrollTop,
-    };
-    renderNotePreview();
-  } else if (previousMode === 'edit') {
-    // 重复点击已选中的“编辑”时保留用户当下光标，而不是恢复旧选区。
-    noteSelection = {
-      start: noteInput.selectionStart,
-      end: noteInput.selectionEnd,
-      direction: noteInput.selectionDirection,
-      scrollTop: noteInput.scrollTop,
-    };
-  }
-
-  noteInput.hidden = isPreview;
-  notePreview.hidden = !isPreview;
-  if (noteFormatActions) noteFormatActions.hidden = isPreview;
-  if (homeNote) homeNote.classList.toggle('is-preview', isPreview);
-  noteModeButtons.forEach((button) => {
-    const active = button.dataset.noteMode === noteMode;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', String(active));
-  });
-  if (noteEditButton) {
-    noteEditButton.classList.toggle('active', !isPreview);
-    pomeLocaleRendererApp.bind(noteEditButton, "textContent", () => (isPreview ? pomeLocaleRendererApp.t("copy.edit.051836") : pomeLocaleRendererApp.t("copy.done.c0b3fb")));
-    noteEditButton.setAttribute('aria-pressed', String(!isPreview));
-  }
-
-  if (!focusTarget) return;
-  requestAnimationFrame(() => {
-    if (isPreview) {
-      notePreview.focus({ preventScroll: true });
-    } else {
-      noteInput.focus({ preventScroll: true });
-      noteInput.setSelectionRange(
-        noteSelection.start,
-        noteSelection.end,
-        noteSelection.direction
-      );
-      noteInput.scrollTop = noteSelection.scrollTop;
-    }
-  });
+let homeDraftTimer = null;
+let homeDraftDirty = false;
+let homeCollecting = false;
+const NOTE_COLLECTION_KEY = 'notch-note-collection-pending-v1';
+function setNoteMode(_mode, focusTarget = true) {
+  noteMode='edit';
+  if(noteInput)noteInput.hidden=false;
+  if(notePreview)notePreview.hidden=true;
+  homeNote?.classList.remove('is-preview');
+  if(focusTarget)noteInput?.focus({preventScroll:true});
+}
+function reportNoteFailure(scope,error) {
+  window.NotchUi?.showError({messageKey:scope==='notes:collect'?'notes.collectFailed':'notes.saveFailed',
+    diagnostic:`Notes: ${error?.message||'storage_failed'}`,scope,
+    onRepair:()=>scope==='notes:collect'?saveHomeNote():scope==='notes:home-draft'?persistHomeNoteDraft():saveNotesDetail()});
+}
+function persistHomeNoteDraft() {
+  clearTimeout(homeDraftTimer);homeDraftTimer=null;
+  if(workspaceReloadPending)return false;
+  try {localStorage.setItem(NOTE_KEY,noteInput.value);window.NotchUi?.clearError('notes:home-draft');return true;}
+  catch(error){reportNoteFailure('notes:home-draft',error);return false;}
 }
 
 function continueNoteList(event) {
@@ -2773,25 +2835,13 @@ if (noteInput) {
     // ignore
   }
 
-  let noteTimer = null;
-  const saveNote = () => {
-    if (noteTimer) clearTimeout(noteTimer);
-    noteTimer = null;
-    if (workspaceReloadPending) return;
-    try {
-      localStorage.setItem(NOTE_KEY, noteInput.value);
-    } catch (e) {
-      // ignore quota errors
-    }
-  };
-
   noteInput.addEventListener('input', () => {
     if (!noteInput.value.trim()) localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
-    renderNotePreview();
-    clearTimeout(noteTimer);
-    noteTimer = setTimeout(saveNote, 300);
+    homeDraftDirty=true;
+    clearTimeout(homeDraftTimer);
+    homeDraftTimer=setTimeout(persistHomeNoteDraft,300);
   });
-  noteInput.addEventListener('blur', saveNote);
+  noteInput.addEventListener('blur',persistHomeNoteDraft);
   noteInput.addEventListener('compositionstart', () => {
     noteComposing = true;
   });
@@ -2802,14 +2852,15 @@ if (noteInput) {
     if (continueNoteList(event)) return;
     if (!(event.metaKey || event.ctrlKey) || event.altKey || event.isComposing) return;
     const key = event.key.toLowerCase();
+    if(key==='s'){event.preventDefault();saveHomeNote();return;}
     if (key !== 'b' && key !== 'i') return;
     event.preventDefault();
     applyNoteFormat(key === 'b' ? 'bold' : 'italic');
   });
 
-  window.addEventListener('beforeunload', saveNote);
+  window.addEventListener('beforeunload',persistHomeNoteDraft);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) saveNote();
+    if (document.hidden) persistHomeNoteDraft();
   });
 
   noteInput.hidden = false;
@@ -2847,45 +2898,43 @@ function noteArchiveTime(timestamp) {
 
 let notesDetailMode = 'edit';
 
+const notesViewStates = new Map();
 function syncNotesDetailModeButtons() {
-  if (!notesDetail) return;
-  notesDetail.querySelectorAll('[data-notes-mode]').forEach((button) => {
-    const active = button.dataset.notesMode === notesDetailMode;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', String(active));
-  });
+  const button=notesDetail?.querySelector('.notes-save');
+  if(button){button.style.visibility=notesDetailMode==='edit'?'visible':'hidden';button.disabled=notesDetailMode!=='edit';}
 }
-
-function setNotesDetailMode(mode, focusTarget = true) {
-  if (!notesDetail) return;
-  const next = mode === 'preview' ? 'preview' : 'edit';
-  const editor = notesDetail.querySelector('#notes-editor');
-  const preview = notesDetail.querySelector('#notes-preview');
-  if (!editor || !preview) {
-    notesDetailMode = next;
-    return;
-  }
-
-  if (next === 'preview') {
-    flushNotesEditorSave();
+function saveNotesDetail() {
+  const editor=notesDetail?.querySelector('#notes-editor');
+  if(!editor || editor.dataset.composing==='true')return false;
+  clearTimeout(notesSaveTimer);notesSaveTimer=null;
+  if(!persistNotesEditor(editor))return false;
+  setNotesDetailMode('preview');return true;
+}
+function setNotesDetailMode(mode, focusTarget = true, event = null) {
+  if(!notesDetail)return;
+  const next=mode==='preview'?'preview':'edit',editor=notesDetail.querySelector('#notes-editor'),preview=notesDetail.querySelector('#notes-preview');
+  if(!editor||!preview){notesDetailMode=next;return;}
+  if(next==='preview'&&!flushNotesEditorSave())return;
+  window.PomeNoteView.transfer(editor,preview,next==='preview',{focus:focusTarget,event,render:()=>{
     preview.replaceChildren(buildMarkdownPreview(editor.value));
-  }
-
-  notesDetailMode = next;
-  const isPreview = notesDetailMode === 'preview';
-  editor.hidden = isPreview;
-  preview.hidden = !isPreview;
-  notesDetail.classList.toggle('is-preview', isPreview);
-  syncNotesDetailModeButtons();
-
-  if (!focusTarget) return;
-  requestAnimationFrame(() => {
-    if (isPreview) preview.focus({ preventScroll: true });
-    else editor.focus({ preventScroll: true });
-  });
+    syncNotesPreviewTitle(preview,notesDetail.querySelector('.notes-detail-title')?.value);
+  }});
+  notesDetailMode=next;notesDetail.classList.toggle('is-preview',next==='preview');syncNotesDetailModeButtons();
 }
 
 let notesDetailOpenedId = '';
+
+function syncNotesPreviewTitle(preview, title) {
+  const heading = preview?.firstElementChild;
+  if (heading?.tagName !== 'H1') return;
+  // The editable document title already represents this heading. Collapse only
+  // that identical first H1 in preview; links and other interactive content
+  // must remain reachable. The stored Markdown and editor stay intact.
+  const normalizedTitle = String(title || '').trim().replace(/\s+/g, ' ');
+  const interactive = heading.querySelector('a, button, input, select, textarea, [role="link"], [role="button"], [tabindex], [contenteditable]:not([contenteditable="false"]), audio, video');
+  heading.hidden = !interactive && Boolean(normalizedTitle)
+    && heading.textContent.trim().replace(/\s+/g, ' ') === normalizedTitle;
+}
 
 function defaultNotesDetailMode(note) {
   return String(note?.content || '').trim() ? 'preview' : 'edit';
@@ -2893,9 +2942,18 @@ function defaultNotesDetailMode(note) {
 
 function renderNotesDetail(notes = loadNoteArchive()) {
   if (!notesDetail) return;
-  notesDetail.replaceChildren();
-  notesDetail.classList.remove('is-preview');
-  const note = notes.find((item) => item.id === selectedNoteId);
+  const note=notes.find(item=>item.id===selectedNoteId);
+  const oldEditor=notesDetail.querySelector('#notes-editor'),oldPreview=notesDetail.querySelector('#notes-preview');
+  if(oldEditor&&oldPreview&&activeTab==='notes'&&isExpanded)notesViewStates.set(oldEditor.dataset.noteId,window.PomeNoteView.snapshot(oldEditor,oldPreview,notesDetailMode));
+  if(note&&oldEditor?.dataset.noteId===note.id){
+    if(notesDetailMode==='preview'&&oldEditor.value!==note.content){
+      const anchor=window.PomeNoteView.capturePreview(oldPreview);oldEditor.value=note.content;
+      oldPreview.replaceChildren(buildMarkdownPreview(note.content));syncNotesPreviewTitle(oldPreview,note.title);
+      window.PomeNoteView.restorePreview(oldPreview,anchor);
+    }
+    updateSavedNotePresentation(note);return;
+  }
+  notesDetail.replaceChildren();notesDetail.classList.remove('is-preview');
   if (!note) {
     notesDetailOpenedId = '';
     const empty = document.createElement('div');
@@ -2910,7 +2968,7 @@ function renderNotesDetail(notes = loadNoteArchive()) {
 
   if (notesDetailOpenedId !== note.id) {
     notesDetailOpenedId = note.id;
-    notesDetailMode = defaultNotesDetailMode(note);
+    notesDetailMode = notesViewStates.get(note.id)?.mode || defaultNotesDetailMode(note);
   }
 
   const header = document.createElement('header');
@@ -2926,29 +2984,22 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   title.autocomplete = 'off';
   title.spellcheck = false;
   title.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.noteTitleEditDirectly.abb0d0"));
+  const documentHeading = document.createElement('div');
+  documentHeading.className = 'notes-document-heading';
+  documentHeading.setAttribute('role', 'heading');
+  documentHeading.setAttribute('aria-level', '1');
+  documentHeading.setAttribute('aria-label', noteArchiveTitle(note));
+  documentHeading.append(title);
   const time = document.createElement('time');
   time.className = 'notes-detail-time';
   pomeLocaleRendererApp.bind(time, "textContent", () => (pomeLocaleRendererApp.t("copy.updated.7114c0", { arg1: (noteArchiveTime(note.updatedAt)) })));
-  heading.append(title, time);
+  heading.append(documentHeading, time);
   const actions = document.createElement('div');
   actions.className = 'notes-detail-actions';
 
-  const modeSwitch = document.createElement('div');
-  modeSwitch.className = 'note-mode-switch notes-detail-mode-switch';
-  modeSwitch.setAttribute('role', 'group');
-  modeSwitch.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.previewOrEdit.566766"));
-  ;[
-    ['preview', pomeLocaleRendererApp.t("copy.preview.13d61f")],
-    ['edit', pomeLocaleRendererApp.t("copy.edit.051836")],
-  ].forEach(([mode, label]) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'note-mode' + (notesDetailMode === mode ? ' active' : '');
-    button.dataset.notesMode = mode;
-    button.textContent = label;
-    button.setAttribute('aria-pressed', String(notesDetailMode === mode));
-    modeSwitch.append(button);
-  });
+  const save=document.createElement('button');save.type='button';save.className='workspace-button compact primary notes-save';
+  save.dataset.action='save-note';pomeLocaleRendererApp.bind(save,'textContent',()=>pomeLocaleRendererApp.t('copy.save.a3030b'));
+  save.style.visibility=notesDetailMode==='edit'?'visible':'hidden';save.disabled=notesDetailMode!=='edit';
 
   const remove = document.createElement('button');
   remove.type = 'button';
@@ -2957,7 +3008,7 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   remove.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.deleteNote.07a619"));
   pomeLocaleRendererApp.bind(remove, "title", () => (pomeLocaleRendererApp.t("copy.deleteNote.07a619")));
   remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h10l1-12"/></svg>';
-  actions.append(modeSwitch, remove);
+  actions.append(save, remove);
   header.append(heading, actions);
 
   const body = document.createElement('div');
@@ -2978,14 +3029,17 @@ function renderNotesDetail(notes = loadNoteArchive()) {
   preview.tabIndex = 0;
   preview.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.previewNote.aa5b1d", { arg1: (noteArchiveTitle(note)) }));
   preview.replaceChildren(buildMarkdownPreview(note.content));
+  syncNotesPreviewTitle(preview, note.title);
 
   const isPreview = notesDetailMode === 'preview';
   editor.hidden = isPreview;
   preview.hidden = !isPreview;
   notesDetail.classList.toggle('is-preview', isPreview);
 
+  pomeLocaleRendererApp.bind(preview,'title',()=>pomeLocaleRendererApp.t('notes.clickToEdit'));
   body.append(editor, preview);
   notesDetail.append(header, body);
+  window.PomeNoteView.restore(editor,preview,notesViewStates.get(note.id));
   requestNoteTitle(note);
 }
 
@@ -3011,7 +3065,7 @@ async function requestNoteTitle(note) {
   }
   // A model reply can arrive inside the editor's save debounce. Commit that
   // draft before comparing content, then update labels without rebuilding it.
-  flushNotesEditorSave();
+  if(flushNotesEditorSave()===false)return;
   const next = window.NotchDomain.applyGeneratedNoteTitle(
     loadNoteArchive(),
     note.id,
@@ -3032,8 +3086,11 @@ function updateSavedNotePresentation(note) {
   const title = noteArchiveTitle(note);
   const detailTitle = notesDetail?.querySelector('.notes-detail-title');
   const detailTime = notesDetail?.querySelector('.notes-detail-time');
+  const documentHeading = notesDetail?.querySelector('.notes-document-heading');
+  if (documentHeading && selectedNoteId === note.id) documentHeading.setAttribute('aria-label', title);
   if (detailTitle?.dataset.noteId === note.id && document.activeElement !== detailTitle) detailTitle.value = note.title || '';
   if (detailTime && selectedNoteId === note.id) pomeLocaleRendererApp.bind(detailTime, "textContent", () => (pomeLocaleRendererApp.t("copy.saved.983d08", { arg1: (noteArchiveTime(note.updatedAt)) })));
+  if (selectedNoteId === note.id) syncNotesPreviewTitle(notesDetail?.querySelector('#notes-preview'), note.title);
   const row = notesList?.querySelector(`[data-note-id="${CSS.escape(note.id)}"]`);
   if (!row) return;
   const rowTitle = row.querySelector('strong');
@@ -3045,31 +3102,21 @@ function updateSavedNotePresentation(note) {
 }
 
 function persistNotesEditor(editor) {
-  if (!editor || !editor.dataset.noteId) return;
-  const notes = window.NotchDomain.updateNoteInArchive(
-    loadNoteArchive(),
-    editor.dataset.noteId,
-    editor.value,
-    Date.now()
-  );
-  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
-  const updated = notes.find((note) => note.id === editor.dataset.noteId);
-  if (localStorage.getItem(NOTE_ACTIVE_ARCHIVE_KEY) === editor.dataset.noteId && noteInput) {
-    noteInput.value = editor.value;
-    localStorage.setItem(NOTE_KEY, editor.value);
-    renderNotePreview();
-  }
-  updateSavedNotePresentation(updated);
-  if (pendingNotesEditor === editor) pendingNotesEditor = null;
+  if(!editor?.dataset.noteId)return false;
+  try {
+    const archive=loadNoteArchive(),previous=archive.find(note=>note.id===editor.dataset.noteId);
+    if(!previous)throw new Error('note_missing');
+    const notes=previous.content===editor.value?archive:window.NotchDomain.updateNoteInArchive(archive,editor.dataset.noteId,editor.value,Date.now());
+    localStorage.setItem(NOTE_ARCHIVE_KEY,JSON.stringify(notes));
+    updateSavedNotePresentation(notes.find(note=>note.id===editor.dataset.noteId));
+    if(pendingNotesEditor===editor)pendingNotesEditor=null;
+    window.NotchUi?.clearError('notes:save');return true;
+  } catch(error){pendingNotesEditor=editor;reportNoteFailure('notes:save',error);return false;}
 }
-
 function flushNotesEditorSave() {
-  if (workspaceReloadPending) return;
-  if (notesSaveTimer) clearTimeout(notesSaveTimer);
-  notesSaveTimer = null;
-  const editor = pendingNotesEditor;
-  pendingNotesEditor = null;
-  if (editor) persistNotesEditor(editor);
+  if(workspaceReloadPending)return false;
+  clearTimeout(notesSaveTimer);notesSaveTimer=null;
+  return pendingNotesEditor?persistNotesEditor(pendingNotesEditor):true;
 }
 
 function scheduleNotesEditorSave(editor) {
@@ -3129,7 +3176,7 @@ function renderNotesLibrary() {
 }
 
 notesNewButton?.addEventListener('click', () => {
-  flushNotesEditorSave();
+  if(!flushNotesEditorSave())return;
   const now = Date.now();
   const note = {
     id: generateId(),
@@ -3142,7 +3189,6 @@ notesNewButton?.addEventListener('click', () => {
   const notes = [note, ...loadNoteArchive()];
   localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
   selectedNoteId = note.id;
-  notesDetailMode = 'edit';
   if (notesSearch) notesSearch.value = '';
   renderNotesLibrary();
   requestAnimationFrame(() => {
@@ -3151,40 +3197,59 @@ notesNewButton?.addEventListener('click', () => {
   showStatusToast(pomeLocaleRendererApp.t("copy.noteCreated.246d61"));
 });
 
-noteSaveButton?.addEventListener('click', () => {
-  const content = noteInput?.value.trim() || '';
-  if (!content) {
-    showStatusToast(pomeLocaleRendererApp.t("copy.writeSomethingBeforeArchiving.9a3119"));
-    return;
+async function saveHomeNote() {
+  if(homeCollecting||noteComposing||workspaceReloadPending)return;
+  const content=noteInput?.value||'';
+  if(!content.trim()){showStatusToast(pomeLocaleRendererApp.t('copy.writeSomethingBeforeArchiving.9a3119'));return;}
+  if(!flushNotesEditorSave())return;
+  // Freeze this draft only while the compositor snapshots the whole module.
+  // It becomes writable again before the flight starts, so the next draft is
+  // independent of the pixels being absorbed into Notes.
+  homeCollecting=true;noteSaveButton.disabled=true;
+  const wasReadOnly=noteInput.readOnly;noteInput.readOnly=true;
+  let prepared=null,captureTimeout;
+  try {
+    prepared=await Promise.race([
+      window.PomeNoteFlight.prepare(noteInput),
+      new Promise(resolve=>{captureTimeout=setTimeout(()=>{window.PomeNoteFlight.stop();resolve(null);},250);})
+    ]);
+  } catch {} finally {clearTimeout(captureTimeout);noteInput.readOnly=wasReadOnly;}
+  if(workspaceReloadPending||noteInput.value!==content){homeCollecting=false;noteSaveButton.disabled=false;return;}
+  const note={id:generateId(),content,createdAt:Date.now(),updatedAt:Date.now()};
+  const keys=[NOTE_ARCHIVE_KEY,NOTE_KEY,NOTE_ACTIVE_ARCHIVE_KEY,NOTE_COLLECTION_KEY];
+  let previous;
+  try {
+    previous=keys.map(key=>localStorage.getItem(key));
+    const archive=JSON.parse(previous[0]||'[]');if(!Array.isArray(archive))throw new Error('invalid_note_archive');
+    localStorage.setItem(NOTE_ARCHIVE_KEY,JSON.stringify([note,...window.NotchDomain.normalizeNoteArchive(archive)]));
+    localStorage.setItem(NOTE_KEY,'');localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
+    const records=JSON.parse(previous[3]||'[]');
+    // Keep only the identity in the guard; the archive owns the note content.
+    localStorage.setItem(NOTE_COLLECTION_KEY,JSON.stringify([...(Array.isArray(records)?records:records?[records]:[]),{note:{id:note.id},home:content}]));
+  } catch(error){
+    if(previous)keys.forEach((key,index)=>{try{if(previous[index]===null)localStorage.removeItem(key);else localStorage.setItem(key,previous[index]);}catch{}});
+    homeCollecting=false;noteSaveButton.disabled=false;reportNoteFailure('notes:collect',error);return;
   }
-  const notes = loadNoteArchive();
-  let activeId = localStorage.getItem(NOTE_ACTIVE_ARCHIVE_KEY) || '';
-  const existing = notes.find((item) => item.id === activeId);
-  if (existing) {
-    existing.content = content;
-    existing.updatedAt = Date.now();
-  } else {
-    activeId = generateId();
-    notes.unshift({ id: activeId, content, createdAt: Date.now(), updatedAt: Date.now() });
-  }
-  localStorage.setItem(NOTE_ACTIVE_ARCHIVE_KEY, activeId);
-  localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes));
-  localStorage.setItem(NOTE_KEY, noteInput.value);
-  selectedNoteId = activeId;
-  renderNotesLibrary();
-  showStatusToast(pomeLocaleRendererApp.t("copy.noteSaved.6d1bf9"));
-});
+  clearTimeout(homeDraftTimer);homeDraftTimer=null;homeDraftDirty=true;homeCollecting=true;
+  noteInput.value='';noteInput.scrollTop=0;setNoteMode('edit',false);selectedNoteId=note.id;
+  noteInput.focus({preventScroll:true});noteSaveButton.disabled=true;
+  window.NotchUi?.clearError('notes:collect');renderNotesLibrary();
+  showStatusToast(pomeLocaleRendererApp.t('copy.noteSaved.6d1bf9'),{messageKey:'copy.noteSaved.6d1bf9',actionLabelKey:'ux.notes.view',onAction:()=>setActiveTab('notes')});
+  let flight;try{flight=window.PomeNoteFlight.start(prepared);}catch{flight=Promise.resolve();}
+  Promise.resolve(flight).finally(()=>{homeCollecting=false;if(noteSaveButton?.isConnected)noteSaveButton.disabled=false;});
+}
+noteSaveButton?.addEventListener('click',saveHomeNote);
 
 notesList?.addEventListener('click', (event) => {
   const row = event.target.closest('[data-note-id]');
   if (!row) return;
-  flushNotesEditorSave();
+  if(!flushNotesEditorSave())return;
   selectedNoteId = row.dataset.noteId;
   renderNotesLibrary();
 });
 
 notesSearch?.addEventListener('input', () => {
-  flushNotesEditorSave();
+  if(!flushNotesEditorSave())return;
   renderNotesLibrary();
 });
 
@@ -3215,11 +3280,7 @@ notesDetail?.addEventListener('focusout', (event) => {
 });
 
 notesDetail?.addEventListener('click', async (event) => {
-  const modeButton = event.target.closest('[data-notes-mode]');
-  if (modeButton) {
-    setNotesDetailMode(modeButton.dataset.notesMode);
-    return;
-  }
+  if(event.target.closest('[data-action="save-note"]')){saveNotesDetail();return;}
 
   const link = event.target.closest('#notes-preview [data-note-href]');
   if (link) {
@@ -3232,9 +3293,14 @@ notesDetail?.addEventListener('click', async (event) => {
     return;
   }
 
+  if(event.target.closest('#notes-preview')){
+    const selection=window.getSelection();
+    if(!selection||selection.isCollapsed)setNotesDetailMode('edit',true,event);
+    return;
+  }
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (!action) return;
-  flushNotesEditorSave();
+  if(!flushNotesEditorSave())return;
   const notes = loadNoteArchive();
   const note = notes.find((item) => item.id === selectedNoteId);
   if (!note) return;
@@ -3256,6 +3322,13 @@ document.addEventListener('notch:tabchange', (event) => {
   if (event.detail?.tab !== 'notes') flushNotesEditorSave();
 });
 window.addEventListener('beforeunload', flushNotesEditorSave);
+notesDetail?.addEventListener('compositionstart',event=>{if(event.target.matches('#notes-editor'))event.target.dataset.composing='true';});
+notesDetail?.addEventListener('compositionend',event=>{if(event.target.matches('#notes-editor'))event.target.dataset.composing='false';});
+notesDetail?.addEventListener('keydown',event=>{
+  if(event.isComposing)return;
+  if((event.metaKey||event.ctrlKey)&&!event.altKey&&event.key.toLowerCase()==='s'){event.preventDefault();saveNotesDetail();return;}
+  if(event.key==='Enter'&&event.target.matches('#notes-preview')){event.preventDefault();setNotesDetailMode('edit');}
+});
 
 if (noteFormatActions) {
   noteFormatActions.addEventListener('mousedown', (event) => {
@@ -3268,14 +3341,9 @@ if (noteFormatActions) {
   });
 }
 
-noteModeButtons.forEach((button) => {
-  button.addEventListener('click', () => setNoteMode(button.dataset.noteMode));
-});
-noteEditButton?.addEventListener('click', () => setNoteMode(noteMode === 'preview' ? 'edit' : 'preview'));
-
-// 已有内容默认预览，空白速记默认编辑
+// 首页始终是草稿编辑区，保存后收纳到笔记库。
 if (noteInput && notePreview) {
-  setNoteMode(noteInput.value.trim() ? 'preview' : 'edit', false);
+  setNoteMode('edit', false);
 }
 
 if (notePreview) {
@@ -3329,7 +3397,13 @@ window.notchAPI?.onCapabilitiesChanged?.((capabilities) => {
   unavailableHomeModules.splice(0, unavailableHomeModules.length, ...capabilities.unavailableHomeModules);
   document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
 });
-const HOME_ORDER_DEFAULTS = ['music', 'pomodoro', 'cursor', 'recorder', 'inbox', 'commands', 'mirror', 'note', 'windows', 'sun', 'almanac'];
+const HOME_ORDER_DEFAULTS = ['sun', 'pomodoro', 'cursor', 'almanac', 'inbox', 'commands', 'mirror', 'note', 'windows', 'music', 'recorder'];
+const HOME_DEFAULT_HIDDEN = ['music', 'recorder'];
+let homePanelSize = window.NotchPlatform.layout.normalizePanelSize(window.notchAPI?.panelSize);
+function homeCapacity(hidden = hiddenHomeModules, order = homeOrder, sizes = homeSizes, limit = null) {
+  return window.NotchDomain.projectHomeCapacity(order, sizes, effectiveHomeHidden(hidden),
+    limit ?? window.NotchPlatform.layout.panelSizePreset(homePanelSize).capacity);
+}
 const HOME_SIZE_DEFAULTS = {
   music: 'small',
   windows: 'medium',
@@ -3341,22 +3415,19 @@ const HOME_SIZE_DEFAULTS = {
   pomodoro: 'mini',
   cursor: 'small',
   sun: 'medium',
-  // Small keeps the Windows first-run 12×4 fill at exactly 48 cells with sun enabled.
+  // Preserve the existing small footprint; panel capacity never changes it.
   almanac: 'small',
 };
 const HOME_SIZE_LABELS = { get mini() { return pomeLocaleRendererApp.t("copy.mini.43d4ba"); }, get small() { return pomeLocaleRendererApp.t("copy.small.6a7339"); }, get medium() { return pomeLocaleRendererApp.t("copy.medium.a567bd"); }, get large() { return pomeLocaleRendererApp.t("copy.large.7d4ca7"); } };
 const homeBento = document.getElementById('home-bento');
 const homeContextMenu = document.getElementById('home-context-menu');
 const homeTabPanel = document.getElementById('tab-home');
-// New profiles and an exact old Windows default get platform defaults.
-// Customized visibility, sizes and deliberate gaps remain the user's choices.
-let freshWindowsHome = false;
+// New default visibility/order applies only to fresh or explicitly reset profiles.
+let freshHomeProfile = false;
 try {
-  freshWindowsHome = readPlatformCapabilities().homeDefaults?.showSun === true
-    && [HOME_ORDER_KEY, HOME_SIZES_KEY, HOME_PLACEMENTS_KEY, HOME_HIDDEN_MODULES_KEY, 'notch-home-layout-v2']
-      .every((key) => localStorage.getItem(key) === null);
+  freshHomeProfile = [HOME_ORDER_KEY, HOME_SIZES_KEY, HOME_PLACEMENTS_KEY, HOME_HIDDEN_MODULES_KEY, 'notch-home-layout-v2']
+    .every(key => localStorage.getItem(key) === null);
 } catch {}
-
 function bindHomeTilePointerGlow(bento) {
   if (!bento || bento.dataset.tileGlowBound === 'true') return () => {};
   bento.dataset.tileGlowBound = 'true';
@@ -3383,21 +3454,21 @@ function bindHomeTilePointerGlow(bento) {
     active = null;
     bounds = null;
   };
-  const eligible = (tile, target) => {
-    if (!tile || tile.hidden || !isExpanded || activeTab !== 'home' || modeBusy || reducedMotion.matches
+  const eligible = (tile) => {
+    // Keep tilt while crossing buttons/links inside the card. Resetting on every
+    // interactive child caused the 3D motion to snap flat mid-hover. Click and
+    // focus still flatten via pointerdown / focusin / :focus-within.
+    if (!tile || tile.hidden || !isExpanded || activeTab !== 'home' || modeBusy || reducedMotion.matches || document.documentElement.classList.contains('experience-reduced-motion')
       || bento.dataset.layoutEditing === 'true' || bento.classList.contains('layout-motion-active')
       || bento.classList.contains('layout-dragging') || tile.contains(document.activeElement)) return false;
-    const control = target.closest?.('input, textarea, select, button, a, [role="button"], [contenteditable]');
-    // The mirror cover is the whole card. Other controls keep a stationary hit
-    // target, including command tooltips, timer inputs and nested popovers.
-    return !control || control.id === 'mirror-stage';
+    return true;
   };
   const paint = () => {
     frame = null;
     const point = pending;
     pending = null;
     const tile = point?.target.closest?.('.home-bento > .tile');
-    if (!point || !eligible(tile, point.target)) { reset(); return; }
+    if (!point || !eligible(tile)) { reset(); return; }
     if (active !== tile) {
       if (active) clearTile(active);
       clearTile(tile, true);
@@ -3416,7 +3487,7 @@ function bindHomeTilePointerGlow(bento) {
   };
   bento.addEventListener('pointermove', (event) => {
     const tile = event.target.closest?.('.home-bento > .tile');
-    if (event.pointerType === 'touch' || event.buttons || !eligible(tile, event.target)) { reset(); return; }
+    if (event.pointerType === 'touch' || event.buttons || !eligible(tile)) { reset(); return; }
     pending = { target: event.target, x: event.clientX, y: event.clientY };
     if (frame === null) frame = requestAnimationFrame(paint);
   });
@@ -3428,6 +3499,7 @@ function bindHomeTilePointerGlow(bento) {
   window.addEventListener('blur', () => reset({ immediate: true }));
   window.addEventListener('resize', () => reset({ immediate: true }));
   reducedMotion.addEventListener('change', () => reset({ immediate: true }));
+  document.addEventListener('notch:motion-preference', () => reset({ immediate: true }));
   document.addEventListener('visibilitychange', () => { if (document.hidden) reset({ immediate: true }); });
   document.addEventListener('notch:will-collapse', () => reset({ immediate: true }));
   document.addEventListener('notch:tabchange', event => { if (event.detail?.tab !== 'home') reset({ immediate: true }); });
@@ -3494,7 +3566,7 @@ function loadHomeSizes() {
 function loadHiddenHomeModules() {
   try {
     const rawText = localStorage.getItem(HOME_HIDDEN_MODULES_KEY);
-    if (rawText === null) return { hiddenIds: [], needsRepair: false };
+    if (rawText === null) return { hiddenIds: freshHomeProfile ? [...HOME_DEFAULT_HIDDEN] : [], needsRepair: false };
     const parsed = JSON.parse(rawText);
     const hiddenIds = window.NotchDomain.normalizeHiddenHomeModules(parsed, HOME_MODULE_REGISTRY);
     return {
@@ -3576,25 +3648,19 @@ if (!homeInboxSavedPlacement) {
     if (slot && window.NotchDomain.validateHomeWidgetLayout({ allowGaps: true, placements: { inbox: slot } }, ['inbox'], 12, 4)) homeInboxSavedPlacement = slot;
   } catch {}
 }
-if (legacyDefaultHome) { homeOrder = [...HOME_ORDER_DEFAULTS]; homeSizes = {...HOME_SIZE_DEFAULTS}; homeWorkingLayout = null; }
+if (legacyDefaultHome) {
+  // Preserve the established legacy migration; the new priority list is for
+  // default/reset paths only, not a replacement for existing profiles.
+  homeOrder = ['music','pomodoro','cursor','recorder','inbox','commands','mirror','note','windows','sun','almanac'];
+  homeSizes = {...HOME_SIZE_DEFAULTS}; homeWorkingLayout = null;
+}
 const loadedHomeVisibility = loadHiddenHomeModules();
 let hiddenHomeModules = loadedHomeVisibility.hiddenIds;
-const repairWindowsDefaultHome = readPlatformCapabilities().homeDefaults?.showSun === true
-  && window.NotchDomain.isLegacyWindowsDefaultHomeLayout({
-    order: homeOrder, defaultOrder: HOME_ORDER_DEFAULTS, sizes: homeSizes, defaults: HOME_SIZE_DEFAULTS,
-    placements: homeWorkingLayout?.placements, hiddenIds: hiddenHomeModules,
-    unavailableIds: effectiveHomeHidden([]), registry: HOME_MODULE_REGISTRY,
-  });
-const useWindowsHomeDefaults = freshWindowsHome || repairWindowsDefaultHome;
-if (repairWindowsDefaultHome) {
-  hiddenHomeModules = hiddenHomeModules.filter(id => id !== 'sun');
-  homeWorkingLayout = null;
-}
 let homeVisibilityPersisted = true;
 let homeLayoutReadOnly = false;
 let homeLayoutMotionGeneration = 0;
 let homeLayoutMotionAnimations = [];
-const HOME_LAYOUT_MOTION_MS = 780;
+const HOME_LAYOUT_MOTION_MS = 300;
 const HOME_LAYOUT_MOTION_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 function saveHomeLayout() {
@@ -3603,7 +3669,10 @@ function saveHomeLayout() {
     localStorage.setItem(HOME_SIZES_KEY, JSON.stringify(homeSizes));
     if (homeWorkingLayout?.placements) {
       if (homeWorkingLayout.placements.inbox) homeInboxSavedPlacement = { ...homeWorkingLayout.placements.inbox };
-      localStorage.setItem(HOME_PLACEMENTS_KEY, JSON.stringify(homeWorkingLayout.placements));
+      const previous = loadHomePlacements()?.placements || {};
+      const overflow = new Set(homeCapacity(hiddenHomeModules, homeOrder, homeSizes, 48).overflowIds);
+      const retained = Object.fromEntries(Object.entries(previous).filter(([id]) => overflow.has(id)));
+      localStorage.setItem(HOME_PLACEMENTS_KEY, JSON.stringify({ ...retained, ...homeWorkingLayout.placements }));
       if (homeInboxSavedPlacement) localStorage.setItem(HOME_INBOX_SLOT_KEY, JSON.stringify(homeInboxSavedPlacement));
     }
     return true;
@@ -3624,7 +3693,7 @@ function saveHiddenHomeModules() {
   }
 }
 
-if (loadedHomeVisibility.needsRepair) saveHiddenHomeModules();
+if (loadedHomeVisibility.needsRepair || freshHomeProfile) saveHiddenHomeModules();
 
 function sealResolvedHomeLayout(layout, visibleIds, {
   preferredIds = [],
@@ -3662,6 +3731,10 @@ function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSi
   persistSeal = false,
 } = {}) {
   hiddenIds = effectiveHomeHidden(hiddenIds);
+  // Master placements always use the standard 48-unit canvas. The selected
+  // window's smaller capacity is a render mask in applyHomeLayout, never saved.
+  const capacity = window.NotchDomain.projectHomeCapacity(order, sizes, hiddenIds, 48);
+  hiddenIds = [...new Set([...hiddenIds, ...capacity.overflowIds])];
   const visibleIds = HOME_MODULE_REGISTRY.filter((id) => !hiddenIds.includes(id));
 
   if (!forcePack && homeWorkingLayout?.placements) {
@@ -3682,7 +3755,7 @@ function resolveValidatedHomeLayout(hiddenIds, order = homeOrder, sizes = homeSi
           : { layout: candidate, changed: false };
         const resolved = sealed.layout || candidate;
         homeWorkingLayout = cloneHomeLayout(resolved);
-        // Fresh Windows fill must persist the sealed pack even when sealing is a no-op,
+        // Persist a sealed pack even when sealing is a no-op,
         // otherwise reload re-packs without sealGaps and can reshuffle cards.
         if (persistSeal) saveHomeLayout();
         return resolved;
@@ -3738,12 +3811,12 @@ function captureHomeLayoutVisualState() {
 function animateCommittedHomeLayout(reason, beforeState, { draggedId = null } = {}) {
   if (!homeBento || !beforeState || reason === 'initial' || reason === 'rollback'
     || reason === 'size-preview' || reason === 'drag-commit'
-    || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    || (document.documentElement.classList.contains('experience-reduced-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
   const generation = homeLayoutMotionGeneration;
   const isPreview = reason === 'reorder-preview';
   const isDragRelease = reason === 'drag-release';
   const duration = isDragRelease ? 260 : isPreview
-    ? 560
+    ? 240
     : reason === 'reorder'
       ? Math.round(HOME_LAYOUT_MOTION_MS * 1.2)
       : HOME_LAYOUT_MOTION_MS;
@@ -3808,8 +3881,50 @@ function animateCommittedHomeLayout(reason, beforeState, { draggedId = null } = 
     });
 }
 
+function projectHomeLayoutForPanel(layout, order = homeOrder, sizes = homeSizes) {
+  const projection = homeCapacity(hiddenHomeModules, order, sizes);
+  let columns = homePanelSize === 'compact' ? 8 : homePanelSize === 'medium' ? 10 : 12;
+  let rows = homePanelSize === 'compact' ? 3 : 4;
+  let renderLayout = layout;
+  const slot = homeInboxSavedPlacement;
+  const placeholderId = '__inbox-placeholder';
+  const showPlaceholder = homePanelSize === 'standard' && hiddenHomeModules.includes('inbox') && slot
+    && !Object.values(layout.placements).some(p => p.column < slot.column + slot.width && p.column + p.width > slot.column
+      && p.row < slot.row + slot.height && p.row + p.height > slot.row);
+  const viewOrder = showPlaceholder
+    ? order.filter(id => projection.visibleIds.includes(id) || id === 'inbox').map(id => id === 'inbox' ? placeholderId : id)
+    : projection.visibleIds;
+  const viewSizes = showPlaceholder ? { ...sizes, [placeholderId]: window.NotchDomain.sizeNameFromPlacement(slot) } : sizes;
+  const displayed = Object.keys(layout.placements).filter(id => projection.visibleIds.includes(id));
+  const fullStandard = homePanelSize === 'standard' && !showPlaceholder
+    && displayed.length === projection.visibleIds.length
+    && displayed.reduce((sum,id) => sum + layout.placements[id].width * layout.placements[id].height, 0) === 48;
+  if (fullStandard) {
+    // A full authored grid already fills the surface. Keep its exact origins.
+    renderLayout = { ...layout, rects: Object.fromEntries(displayed.map(id => {
+      const p = layout.placements[id];return [id,{x:p.column/12,y:p.row/4,width:p.width/12,height:p.height/4}];
+    })) };
+  } else {
+    const preset=window.NotchPlatform.layout.panelSizePreset(homePanelSize);
+    renderLayout=window.NotchDomain.fitHomeWidgetView(viewOrder,viewSizes,columns,rows,(preset.width-40)/preset.panelHeight);
+    if(!renderLayout)throw new Error('Homepage preset projection failed.');
+    ({columns,rows}=renderLayout);
+  }
+  return { renderLayout, projection, columns, rows };
+}
+
+function applyHomeFillRect(element, rect) {
+  for(const [property,value,isSize] of [['left',rect.x,false],['top',rect.y,false],['width',rect.width,true],['height',rect.height,true]]) {
+    element.style.setProperty('--home-fill-'+property, `calc(${value*100}% + ${value-(isSize?1:0)} * var(--home-fill-gap))`);
+  }
+}
+
 function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   if (!homeBento || !layout) throw new Error('A validated homepage layout is required.');
+  const { renderLayout, projection, columns, rows } = projectHomeLayoutForPanel(layout);
+  homeBento.dataset.fillLayout=String(Boolean(renderLayout.rects));
+  homeBento.style.setProperty('--home-grid-columns', String(columns));
+  homeBento.style.setProperty('--home-grid-rows', String(rows));
   resetHomeTilePointerMotion({ immediate: true });
   // 先采样当前可见位置（含进行中的 FLIP），再取消旧动画，避免先闪回再起步。
   const beforeState = reason === 'initial' || reason === 'rollback'
@@ -3819,10 +3934,12 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
   cancelHomeLayoutMotion();
   const placeholder = document.getElementById('home-inbox-placeholder');
   if (placeholder) {
-    const slot = homeInboxSavedPlacement;
-    const overlaps = slot && Object.values(layout.placements).some(p => p.column < slot.column + slot.width && p.column + p.width > slot.column && p.row < slot.row + slot.height && p.row + p.height > slot.row);
-    placeholder.hidden = !hiddenHomeModules.includes('inbox') || !slot || overlaps;
-    if (!placeholder.hidden) placeholder.style.gridArea = `${slot.row + 1} / ${slot.column + 1} / span ${slot.height} / span ${slot.width}`;
+    const rect = renderLayout.rects?.['__inbox-placeholder'];
+    placeholder.hidden = !rect;
+    if(rect) {
+      placeholder.style.gridColumn='1 / -1';placeholder.style.gridRow='1 / -1';
+      applyHomeFillRect(placeholder,rect);
+    }
   }
   const automaticLayout = !homeLayoutReadOnly && effectiveHomeHidden(hiddenHomeModules).length > 0;
   homeBento.dataset.layoutMode = homeLayoutReadOnly ? 'safe' : automaticLayout ? 'automatic' : 'preferred';
@@ -3830,20 +3947,21 @@ function applyHomeLayout(layout, { reason = 'initial' } = {}) {
     const moduleId = tile.dataset.homeModule;
     const orderIndex = Math.max(0, homeOrder.indexOf(moduleId));
     const size = homeSizes[moduleId] || HOME_SIZE_DEFAULTS[moduleId];
-    const placement = layout.placements[moduleId];
+    const placement = projection.visibleIds.includes(moduleId) ? renderLayout.placements[moduleId] : null;
     tile.style.order = String(orderIndex);
     tile.dataset.widgetSize = size;
     tile.style.setProperty('--bento-index', String(orderIndex));
     tile.hidden = !placement;
     tile.setAttribute('aria-hidden', String(!placement));
     if (placement) {
-      tile.dataset.layoutVariant = layout.variants[moduleId];
+      tile.dataset.layoutVariant = renderLayout.variants[moduleId];
       tile.dataset.layoutColumn = String(placement.column);
       tile.dataset.layoutRow = String(placement.row);
       tile.dataset.layoutWidth = String(placement.width);
       tile.dataset.layoutHeight = String(placement.height);
-      tile.style.gridColumn = `${placement.column + 1} / span ${placement.width}`;
-      tile.style.gridRow = `${placement.row + 1} / span ${placement.height}`;
+      tile.style.gridColumn = renderLayout.rects ? '1 / -1' : `${placement.column + 1} / span ${placement.width}`;
+      tile.style.gridRow = renderLayout.rects ? '1 / -1' : `${placement.row + 1} / span ${placement.height}`;
+      if(renderLayout.rects)applyHomeFillRect(tile,renderLayout.rects[moduleId]);
     } else {
       delete tile.dataset.layoutVariant;
       delete tile.dataset.layoutColumn;
@@ -3887,7 +4005,9 @@ if (!HOME_ORDER_DEFAULTS.every((id) => homeOrder.includes(id))
   || homeOrder.length !== HOME_ORDER_DEFAULTS.length) {
   homeOrder = loadHomeOrder();
 }
-const introducedSunLayout = useWindowsHomeDefaults ? {
+let sunAlreadyKnown = false;
+try { sunAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'sun'); } catch {}
+const introducedSunLayout = (freshHomeProfile || sunAlreadyKnown) ? {
   order: homeOrder, sizes: homeSizes, hiddenIds: hiddenHomeModules, placements: null,
 } : window.NotchDomain.introduceHomeModule({
   order: homeOrder,
@@ -3914,7 +4034,7 @@ if (introducedSunLayout.placements) {
 }
 let almanacAlreadyKnown = false;
 try { almanacAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'almanac'); } catch {}
-const introducedAlmanacLayout = (almanacAlreadyKnown || useWindowsHomeDefaults) ? {
+const introducedAlmanacLayout = (freshHomeProfile || almanacAlreadyKnown) ? {
   order: homeOrder, sizes: homeSizes, hiddenIds: hiddenHomeModules,
   placements: homeWorkingLayout?.placements || null,
 } : window.NotchDomain.introduceHomeModule({
@@ -3942,7 +4062,7 @@ if (introducedAlmanacLayout.placements) {
 }
 let inboxAlreadyKnown = false;
 try { inboxAlreadyKnown = Object.hasOwn(JSON.parse(localStorage.getItem(HOME_SIZES_KEY) || '{}'), 'inbox'); } catch {}
-const introducedInboxLayout = inboxAlreadyKnown ? { sizes: homeSizes, placements: homeWorkingLayout?.placements, hiddenIds: effectiveHomeHidden(hiddenHomeModules) } : window.NotchDomain.normalizeHomeInboxLayout({
+const introducedInboxLayout = (freshHomeProfile || inboxAlreadyKnown) ? { sizes: homeSizes, placements: homeWorkingLayout?.placements, hiddenIds: effectiveHomeHidden(hiddenHomeModules) } : window.NotchDomain.normalizeHomeInboxLayout({
   order: homeOrder, sizes: homeSizes, placements: homeWorkingLayout?.placements,
   hiddenIds: effectiveHomeHidden(hiddenHomeModules), registry: HOME_MODULE_REGISTRY,
 });
@@ -3951,12 +4071,10 @@ const inboxHiddenChanged = !hiddenHomeModules.includes('inbox') && introducedInb
 if (inboxHiddenChanged) hiddenHomeModules.push('inbox');
 if (introducedInboxLayout.placements) homeWorkingLayout = { allowGaps: true, placements: introducedInboxLayout.placements };
 saveHomeLayout();
-if (repairWindowsDefaultHome || sunHiddenChanged || almanacHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
+if (sunHiddenChanged || almanacHiddenChanged || inboxHiddenChanged) saveHiddenHomeModules();
 
 let initialHomeLayout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
-  forcePack: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
-  sealGaps: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
-  persistSeal: useWindowsHomeDefaults && readPlatformCapabilities().homeDefaults.fillGrid,
+  forcePack: freshHomeProfile,
 });
 if (!initialHomeLayout) {
   // Repair once without entering safe mode: keep visibility prefs, reset packable sizes.
@@ -3978,13 +4096,24 @@ if (!initialHomeLayout) {
   console.error('Homepage layout validation failed; using read-only defaults.');
 }
 if (!initialHomeLayout) throw new Error('Default homepage layout validation failed.');
+if (freshHomeProfile) saveHomeLayout();
 applyHomeLayout(initialHomeLayout, { reason: 'initial' });
 
 function visibilitySnapshot() {
-  const effectiveHiddenIds = effectiveHomeHidden(homeLayoutReadOnly ? [] : hiddenHomeModules);
+  const capacity = homeCapacity(homeLayoutReadOnly ? [] : hiddenHomeModules);
+  const area = { mini: 2, small: 4, medium: 8, large: 16 };
+  capacity.blockedIds = HOME_MODULE_REGISTRY.filter(id => !capacity.visibleIds.includes(id) && (
+    (area[homeSizes[id]] || 8) > capacity.remaining
+    || !homeCapacity(hiddenHomeModules.filter(hidden => hidden !== id)).visibleIds.includes(id)
+  ));
+  const effectiveHiddenIds = HOME_MODULE_REGISTRY.filter(id => !capacity.visibleIds.includes(id));
   return {
     hiddenIds: [...effectiveHiddenIds],
-    visibleIds: HOME_MODULE_REGISTRY.filter((id) => !effectiveHiddenIds.includes(id)),
+    visibleIds: [...capacity.visibleIds],
+    order: [...homeOrder],
+    sizes: { ...homeSizes },
+    enabledIds: capacity.enabledIds,
+    capacity: { ...capacity, panelSize: homePanelSize },
     storedHiddenIds: [...hiddenHomeModules],
     automaticLayout: !homeLayoutReadOnly && effectiveHiddenIds.length > 0,
     unavailableIds: [...unavailableHomeModules],
@@ -4005,134 +4134,55 @@ function setHomeModuleVisible(moduleId, visible) {
 }
 function setHomeModuleVisibleCore(moduleId, visible, force = false) {
   const current = [...hiddenHomeModules];
-  if (unavailableHomeModules.includes(moduleId)) return { ok: false, changed: false, error: 'unsupported', hiddenIds: current, persisted: homeVisibilityPersisted };
-  const currentlyVisible = visibilitySnapshot().visibleIds;
-  if (!visible && currentlyVisible.includes(moduleId) && currentlyVisible.length === 1) {
-    return { ok: false, changed: false, error: 'at_least_one_required', hiddenIds: current, persisted: homeVisibilityPersisted };
-  }
-  if (homeLayoutReadOnly) {
-    return { ok: false, changed: false, error: 'layout_read_only', hiddenIds: current, persisted: homeVisibilityPersisted };
-  }
-  const next = window.NotchDomain.updateHomeModuleVisibility(
-    current,
-    HOME_MODULE_REGISTRY,
-    moduleId,
-    visible
-  );
+  const failed = error => ({ ok: false, changed: false, error, hiddenIds: current, persisted: homeVisibilityPersisted });
+  if (unavailableHomeModules.includes(moduleId)) return failed('unsupported');
+  if (homeLayoutReadOnly) return failed('layout_read_only');
+  const before = homeCapacity();
+  if (!visible && before.visibleIds.includes(moduleId) && before.visibleIds.length === 1) return failed('at_least_one_required');
+  const next = window.NotchDomain.updateHomeModuleVisibility(current, HOME_MODULE_REGISTRY, moduleId, visible);
   if (!next.ok) return { ...next, changed: false, persisted: homeVisibilityPersisted };
-  const changed = force || JSON.stringify(next.hiddenIds) !== JSON.stringify(current);
-  if (!changed) {
-    return { ok: true, changed: false, hiddenIds: current, persisted: homeVisibilityPersisted };
+  if (moduleId === 'recorder' && !visible && window.NotchWorkspace?.isRecordingActive?.()) return failed('recording_active');
+  if (visible && !before.visibleIds.includes(moduleId)) {
+    const area = { mini: 2, small: 4, medium: 8, large: 16 };
+    const after = homeCapacity(next.hiddenIds);
+    if ((area[homeSizes[moduleId]] || 8) > before.remaining || !after.visibleIds.includes(moduleId)) return failed('capacity_exceeded');
   }
-  if (moduleId === 'recorder' && visible === false
-    && window.NotchWorkspace?.isRecordingActive?.()) {
-    return { ok: false, changed: false, error: 'recording_active', hiddenIds: current, persisted: homeVisibilityPersisted };
-  }
-  const previousWorking = cloneHomeLayout(homeWorkingLayout);
-  const previousSizes = { ...homeSizes };
-  if (moduleId === 'inbox') {
-    const currentLayout = previousWorking || resolveValidatedHomeLayout(current);
-    if (!currentLayout) return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
-    const previousSlot = homeInboxSavedPlacement;
-    if (currentLayout.placements.inbox) homeInboxSavedPlacement = { ...currentLayout.placements.inbox };
-    const retained = Object.fromEntries(Object.entries(currentLayout.placements).filter(([id]) => id !== 'inbox'));
-    const result = window.NotchDomain.normalizeHomeInboxLayout({
-      order: homeOrder, sizes: homeSizes, placements: retained,
-      hiddenIds: effectiveHomeHidden(next.hiddenIds), registry: HOME_MODULE_REGISTRY,
-      preservePositions: true, preferredInboxPlacement: homeInboxSavedPlacement,
-    });
-    const visibleIds = HOME_MODULE_REGISTRY.filter(id => !effectiveHomeHidden(next.hiddenIds).includes(id));
-    const layout = { allowGaps: true, placements: result.placements,
-      variants: Object.fromEntries(Object.entries(result.placements || {}).map(([id, item]) => [id, window.NotchDomain.layoutVariantForPlacement(item)])) };
-    if ((visible && result.hiddenIds.includes('inbox')) || !window.NotchDomain.validateHomeWidgetLayout(layout, visibleIds, 12, 4)) {
-      homeInboxSavedPlacement = previousSlot;
-      return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
-    }
-    try {
-      if (!visible && document.getElementById('home-inbox')?.contains(document.activeElement)) document.activeElement.blur();
-      hiddenHomeModules = next.hiddenIds;
-      homeSizes = result.sizes;
-      homeWorkingLayout = cloneHomeLayout(layout);
-      applyHomeLayout(layout, { reason: 'visibility' });
-    } catch {
-      hiddenHomeModules = current; homeSizes = previousSizes;
-      homeWorkingLayout = previousWorking; homeInboxSavedPlacement = previousSlot;
-      try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch {}
-      return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
-    }
-    const visibilityPersisted = saveHiddenHomeModules();
-    const layoutPersisted = saveHomeLayout();
-    const persisted = visibilityPersisted && layoutPersisted;
-    document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
-    return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
-  }
-  const areaOf = { mini: 2, small: 4, medium: 8, large: 16 };
-  homeWorkingLayout = null;
-  let preferredIds = [];
-  let layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, homeSizes, {
-    forcePack: true,
-    sealGaps: true,
-  });
-  let fittedSizes = false;
-  if (!layout && visible === true) {
-    const visibleIds = HOME_MODULE_REGISTRY.filter((id) => !next.hiddenIds.includes(id));
-    const visibleDefaults = Object.fromEntries(visibleIds.map((id) => [id, HOME_SIZE_DEFAULTS[id] || 'medium']));
-    const visibleSizes = Object.fromEntries(visibleIds.map((id) => (
-      [id, previousSizes[id] || HOME_SIZE_DEFAULTS[id] || 'medium']
-    )));
-    const fittedVisible = window.NotchDomain.normalizeHomeWidgetSizes(
-      visibleSizes,
-      visibleDefaults,
-      moduleId,
-      48
-    );
-    preferredIds = visibleIds.filter((id) => (
-      id !== moduleId && (areaOf[fittedVisible[id]] || 0) < (areaOf[visibleSizes[id]] || 0)
-    ));
-    const fitted = { ...previousSizes, ...fittedVisible };
-    homeWorkingLayout = null;
-    homeSizes = fitted;
-    layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, fitted, {
-      forcePack: true,
-      preferredIds,
-      sealGaps: true,
-    });
-    if (layout) {
-      fittedSizes = JSON.stringify(homeSizes) !== JSON.stringify(previousSizes);
-    } else {
-      homeSizes = previousSizes;
-    }
-  }
-  const currentLayout = previousWorking
-    || resolveValidatedHomeLayout(current, homeOrder, previousSizes, { forcePack: true });
-  if (!layout || !currentLayout) {
-    homeSizes = previousSizes;
-    homeWorkingLayout = previousWorking;
-    return { ok: false, changed: false, error: 'layout_invalid', hiddenIds: current, persisted: homeVisibilityPersisted };
-  }
-  if (moduleId === 'mirror' && visible === false) stopMirror();
+  if (!force && JSON.stringify(next.hiddenIds) === JSON.stringify(current)) return { ok: true, changed: false, hiddenIds: current, persisted: homeVisibilityPersisted };
+  const previous = cloneHomeLayout(homeWorkingLayout);
+  const previousSlot = homeInboxSavedPlacement;
+  if (previous?.placements.inbox) homeInboxSavedPlacement = { ...previous.placements.inbox };
+  // Preserve selected footprints. Visibility changes may repack positions, but
+  // never shrink another tile to admit a new module or fill unused capacity.
+  const layout = resolveValidatedHomeLayout(next.hiddenIds, homeOrder, homeSizes);
+  if (!layout) { homeWorkingLayout = previous; return failed('layout_invalid'); }
   try {
-    const activeElement = document.activeElement;
-    const changingTile = homeTiles.find((tile) => tile.dataset.homeModule === moduleId);
-    if (visible === false && changingTile?.contains(activeElement)) activeElement.blur();
     hiddenHomeModules = next.hiddenIds;
+    if (!visible && document.getElementById('home-' + moduleId)?.contains(document.activeElement)) document.activeElement.blur();
+    if (moduleId === 'mirror' && !visible) stopMirror();
     applyHomeLayout(layout, { reason: 'visibility' });
-  } catch (error) {
-    hiddenHomeModules = current;
-    homeSizes = previousSizes;
-    homeWorkingLayout = previousWorking;
-    try { applyHomeLayout(currentLayout, { reason: 'rollback' }); } catch (rollbackError) {}
-    return { ok: false, changed: false, error: 'dom_apply_failed', hiddenIds: current, persisted: homeVisibilityPersisted };
+  } catch {
+    hiddenHomeModules = current; homeWorkingLayout = previous; homeInboxSavedPlacement = previousSlot;
+    try { applyHomeLayout(previous, { reason: 'rollback' }); } catch {}
+    return failed('dom_apply_failed');
   }
-  const visibilityPersisted = saveHiddenHomeModules();
-  const layoutPersisted = fittedSizes || JSON.stringify(homeSizes) !== JSON.stringify(previousSizes) ? saveHomeLayout() : true;
-  const persisted = visibilityPersisted && layoutPersisted;
-  const detail = visibilitySnapshot();
-  document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail }));
+  const persisted = saveHiddenHomeModules() && saveHomeLayout();
+  document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
   return { ok: true, changed: true, hiddenIds: [...hiddenHomeModules], persisted };
 }
 
 window.NotchHome = Object.freeze({
+  setPanelSize(value) {
+    const next = window.NotchPlatform.layout.normalizePanelSize(value);
+    if (homePanelSize === next) return;
+    document.dispatchEvent(new CustomEvent('notch:cancel-home-layout-edit'));
+    homePanelSize = next;
+    document.documentElement.dataset.panelSize = next;
+    if (homeContextMenu) homeContextMenu.hidden = true;
+    closeTodoEditor();
+    applyHomeLayout(homeWorkingLayout, { reason: 'panel-size' });
+    if (!homeCapacity().visibleIds.includes('mirror')) stopMirror();
+    document.dispatchEvent(new CustomEvent('notch:home-modules-changed', { detail: visibilitySnapshot() }));
+  },
   getVisibility: visibilitySnapshot,
   isVisible: (moduleId) => visibilitySnapshot().visibleIds.includes(String(moduleId || '')),
   setModuleVisible: setHomeModuleVisible,
@@ -4146,12 +4196,13 @@ window.NotchHome = Object.freeze({
 document.getElementById('home-inbox-placeholder')?.addEventListener('click', async () => {
   await setActiveTab('settings');
   const input = document.querySelector('[data-settings-home-module="inbox"]');
-  input?.scrollIntoView({ block: 'center' }); input?.focus({ preventScroll: true });
+  window.NotchSettings?.reveal(input, { block: 'center' }); input?.focus({ preventScroll: true });
 });
 
 document.dispatchEvent(new CustomEvent('notch:home-modules-changed', {
   detail: visibilitySnapshot(),
 }));
+document.documentElement.dataset.panelSize = homePanelSize;
 if (homeLayoutReadOnly) document.dispatchEvent(new CustomEvent('notch:home-layout-error'));
 
 if (homeBento) {
@@ -4188,7 +4239,8 @@ if (homeBento) {
       : '';
     homeContextMenu.querySelectorAll('[data-home-ctx-size]').forEach((btn) => {
       const value = btn.dataset.homeCtxSize;
-      const enabled = Boolean(contextModuleId) && !homeLayoutReadOnly;
+      const fits = homeCapacity(hiddenHomeModules, homeOrder, { ...homeSizes, [contextModuleId]: value }).visibleIds.includes(contextModuleId);
+      const enabled = Boolean(contextModuleId) && !homeLayoutReadOnly && fits;
       btn.disabled = !enabled;
       btn.setAttribute('aria-pressed', String(enabled && value === size));
       btn.hidden = !contextModuleId;
@@ -4241,6 +4293,7 @@ if (homeBento) {
     homeContextMenu.style.visibility = '';
   };
 
+  document.addEventListener('notch:edit-home-layout', () => setHomeLayoutEditing(true));
   const setHomeLayoutEditing = (editing, { silent = false, action = 'enter' } = {}) => {
     resetHomeTilePointerMotion({ immediate: true });
     const next = Boolean(editing) && !homeLayoutReadOnly;
@@ -4291,6 +4344,9 @@ if (homeBento) {
     }
   };
   setHomeLayoutEditing(false, { silent: true });
+  document.addEventListener('notch:cancel-home-layout-edit', () => {
+    if (homeLayoutEditing) setHomeLayoutEditing(false, { silent: true, action: 'cancel' });
+  });
 
   const clearDropTarget = () => {
     homeTiles.forEach((tile) => tile.classList.remove('layout-drop-target'));
@@ -4311,12 +4367,10 @@ if (homeBento) {
     const current = cloneHomeLayout(homeWorkingLayout);
     if (!current?.placements?.[sourceId] || !current?.placements?.[targetId]) return false;
 
-    const next = window.NotchDomain.swapHomeWidgetPlacements(current, sourceId, targetId, { order: homeOrder });
+    const next = window.NotchDomain.swapHomeWidgetPlacements(current, sourceId, targetId, { order: homeOrder, fillGaps: false });
     if (!next) return false;
 
-    const visibleIds = HOME_MODULE_REGISTRY.filter(
-      (id) => !effectiveHomeHidden(hiddenHomeModules).includes(id)
-    );
+    const visibleIds = Object.keys(current.placements);
     if (!window.NotchDomain.validateHomeWidgetLayout(next, visibleIds, 12, 4)) return false;
 
     // The gap filler can resize siblings only; exchanged cards keep their saved sizes.
@@ -4370,20 +4424,29 @@ if (homeBento) {
     if (!targetId) { clearDisplacePreview(); return; }
     const original = dragState.originLayout;
     if (!dragState.previewPlans.has(targetId)) {
-      dragState.previewPlans.set(targetId, window.NotchDomain.swapHomeWidgetPlacements(
-        original, sourceId, targetId, { order: dragState.originOrder }
-      ));
+      const plan = window.NotchDomain.swapHomeWidgetPlacements(original, sourceId, targetId, { order: dragState.originOrder, fillGaps: false });
+      const nextSizes = { ...homeSizes };
+      if (plan) Object.entries(plan.placements).forEach(([id, p]) => {
+        if (id !== sourceId && id !== targetId) nextSizes[id] = sizeFromPlacement(p);
+      });
+      const projected = plan ? projectHomeLayoutForPanel(plan, swappedOrderFrom(dragState.originOrder, sourceId, targetId), nextSizes).renderLayout : null;
+      dragState.previewPlans.set(targetId, projected);
     }
     const preview = dragState.previewPlans.get(targetId);
-    if (!preview) { clearDisplacePreview(); return; }
+    if (!preview?.placements[sourceId]) { clearDisplacePreview(); return; }
+    const origin = dragState.originRenderLayout;
     const targetTile = homeBento.querySelector(`[data-home-module="${targetId}"]`);
     if (!targetTile) return;
     const { pitchX, pitchY } = dragState;
     homeTiles.forEach((item) => {
       const id = item.dataset.homeModule;
-      if (id === sourceId || !original.placements[id] || !preview.placements[id]) return;
-      const dx = (preview.placements[id].column - original.placements[id].column) * pitchX;
-      const dy = (preview.placements[id].row - original.placements[id].row) * pitchY;
+      if (item.hidden || id === sourceId || !origin.placements[id] || !preview.placements[id]) return;
+      const dx = preview.rects
+        ? (preview.rects[id].x-origin.rects[id].x)*Number(homeBento.style.getPropertyValue('--home-grid-columns'))*pitchX
+        : (preview.placements[id].column - origin.placements[id].column) * pitchX;
+      const dy = preview.rects
+        ? (preview.rects[id].y-origin.rects[id].y)*Number(homeBento.style.getPropertyValue('--home-grid-rows'))*pitchY
+        : (preview.placements[id].row - origin.placements[id].row) * pitchY;
       item.classList.toggle('layout-displacing', Boolean(dx || dy));
       if (dx || dy) {
         item.style.setProperty('--home-displace-x', `${dx}px`);
@@ -4399,6 +4462,10 @@ if (homeBento) {
     placeholder.setAttribute('aria-hidden', 'true');
     placeholder.style.gridColumn = `${destination.column + 1} / span ${destination.width}`;
     placeholder.style.gridRow = `${destination.row + 1} / span ${destination.height}`;
+    if(preview.rects) {
+      placeholder.style.gridColumn='1 / -1';placeholder.style.gridRow='1 / -1';
+      applyHomeFillRect(placeholder,preview.rects[sourceId]);
+    }
     if (!placeholder.isConnected) homeBento.append(placeholder);
     dragState.target = targetTile;
   };
@@ -4451,8 +4518,8 @@ if (homeBento) {
     if (nextTargetId !== dragState.previewTargetId) {
       previewDisplaceTarget(tile.dataset.homeModule, nextTargetId);
     }
-    tile.style.setProperty('--home-drag-x', `${clientX - dragState.startX}px`);
-    tile.style.setProperty('--home-drag-y', `${clientY - dragState.startY}px`);
+    tile.style.setProperty('--home-drag-x', `${dragState.offsetX + clientX - dragState.startX}px`);
+    tile.style.setProperty('--home-drag-y', `${dragState.offsetY + clientY - dragState.startY}px`);
   };
 
   const flushHomeDragFrame = () => {
@@ -4463,6 +4530,7 @@ if (homeBento) {
 
   const applyContextSize = (moduleId, requested) => {
     if (!moduleId || homeLayoutReadOnly) return;
+    if (!homeCapacity(hiddenHomeModules, homeOrder, { ...homeSizes, [moduleId]: requested }).visibleIds.includes(moduleId)) return;
     const previousSizes = homeSizes;
     const previousLayout = cloneHomeLayout(homeWorkingLayout);
     homeSizes = window.NotchDomain.normalizeHomeWidgetSizes({
@@ -4472,7 +4540,7 @@ if (homeBento) {
     homeWorkingLayout = null;
     const layout = resolveValidatedHomeLayout(hiddenHomeModules, homeOrder, homeSizes, {
       forcePack: true,
-      sealGaps: true,
+      sealGaps: false,
       frozenIds: [moduleId],
     });
     if (!layout) {
@@ -4538,6 +4606,7 @@ if (homeBento) {
       tile.classList.remove('is-dragging', 'hit-test-off');
       tile.style.removeProperty('--home-drag-x');
       tile.style.removeProperty('--home-drag-y');
+      tile.style.removeProperty('transform-origin');
       homeBento.classList.remove('layout-dragging');
       suppressHomeClickUntil = Date.now() + 280;
     } else {
@@ -4611,6 +4680,7 @@ if (homeBento) {
     tile.classList.remove('is-dragging', 'hit-test-off');
     tile.style.removeProperty('--home-drag-x');
     tile.style.removeProperty('--home-drag-y');
+    tile.style.removeProperty('transform-origin');
     homeBento.classList.remove('layout-dragging');
     dragState = null;
     suppressHomeClickUntil = Date.now() + 280;
@@ -4642,17 +4712,28 @@ if (homeBento) {
       pendingLongPress = null;
       return;
     }
+    const liftedRect = tile.getBoundingClientRect();
     cancelHomeLayoutMotion();
     const originRects = captureOriginRects();
+    const baseRect = originRects.get(tile.dataset.homeModule);
+    // Preserve the visible grip if the preceding landing is still in flight.
+    const offsetX = liftedRect.left - baseRect.left;
+    const offsetY = liftedRect.top - baseRect.top;
+    tile.style.transformOrigin = `${startX - liftedRect.left}px ${startY - liftedRect.top}px`;
+    tile.style.setProperty('--home-drag-x', `${offsetX}px`);
+    tile.style.setProperty('--home-drag-y', `${offsetY}px`);
     const bounds = homeBento.getBoundingClientRect();
     const style = getComputedStyle(homeBento);
     const columnGap = parseFloat(style.columnGap) * bounds.width / homeBento.offsetWidth;
     const rowGap = parseFloat(style.rowGap) * bounds.height / homeBento.offsetHeight;
     dragState = {
-      tile, target: null, pointerId, startX, startY,
+      tile, target: null, pointerId, startX, startY, offsetX, offsetY,
       originOrder: [...homeOrder], originRects,
       originLayout: cloneHomeLayout(homeWorkingLayout), previewTargetId: null,
-      previewPlans: new Map(), pitchX: (bounds.width + columnGap) / 12, pitchY: (bounds.height + rowGap) / 4,
+      originRenderLayout: projectHomeLayoutForPanel(homeWorkingLayout).renderLayout,
+      previewPlans: new Map(),
+      pitchX: (bounds.width + columnGap) / Number(style.getPropertyValue('--home-grid-columns') || 12),
+      pitchY: (bounds.height + rowGap) / Number(style.getPropertyValue('--home-grid-rows') || 4),
     };
     homeBento.classList.add('layout-dragging');
     tile.classList.add('is-dragging');
@@ -4667,9 +4748,7 @@ if (homeBento) {
     const tile = event.target.closest('[data-home-module]');
     if (!tile || tile.hidden || !homeBento.contains(tile)) return;
     // 编辑布局时整卡可拖（含随笔记 textarea、镜子 button、工具条）
-    if (event.target.closest('input, textarea, select, [contenteditable]')) {
-      event.preventDefault();
-    }
+    event.preventDefault();
 
     if (pendingLongPress) clearTimeout(pendingLongPress.timer);
     // Short delay so click/press still feels intentional, but whole-tile drag in edit mode
@@ -4767,13 +4846,7 @@ function bindDockSurface(surface, selector, maxScale = 1.14) {
   });
 }
 
-[
-  ['#window-list', '.window-item', 1.12],
-].forEach(([surfaceSelector, itemSelector, scale]) => {
-  document.querySelectorAll(surfaceSelector).forEach((surface) => {
-    bindDockSurface(surface, itemSelector, scale);
-  });
-});
+// Window rows keep a steady hit area; they do not use Dock magnification.
 
 
 function syncPomodoroBgSrc(tile) {
@@ -4826,6 +4899,7 @@ function setMirrorZoom(value) {
 }
 
 function stopMirror() {
+  window.notchAPI?.setOwnCameraState?.([]);
   mirrorGeneration += 1;
   if (mirrorStream) {
     mirrorStream.getTracks().forEach((track) => track.stop());
@@ -4860,10 +4934,11 @@ async function showMediaPermissionToast(kind, isCurrent = () => true) {
 }
 
 async function startMirror() {
-  if (mirrorStarting || mirrorStream || !mirrorVideo) return;
+  if (mirrorStarting || mirrorStream || !mirrorVideo || document.documentElement.dataset.windowVisible === 'false') return;
   const generation = ++mirrorGeneration;
   const isCurrent = () => generation === mirrorGeneration;
-  const canContinue = () => isCurrent() && mirrorStarting && isExpanded && activeTab === 'home' && !homeMirror?.hidden;
+  const canContinue = () => isCurrent() && mirrorStarting && isExpanded && activeTab === 'home' && !homeMirror?.hidden
+    && document.documentElement.dataset.windowVisible !== 'false';
   mirrorStarting = true;
   homeMirror?.classList.add('camera-starting');
   mirrorStage?.setAttribute('aria-busy', 'true');
@@ -4887,6 +4962,7 @@ async function startMirror() {
       return;
     }
     mirrorStream = stream;
+    window.notchAPI?.setOwnCameraState?.(stream.getVideoTracks().map(track => track.label));
     mirrorVideo.srcObject = stream;
     await mirrorVideo.play();
     // stop / restart may happen while permission, capture or play is pending.
@@ -5217,6 +5293,12 @@ function clipEntryHtml(entry, faved) {
 }
 
 function getFilteredClipItems() {
+  const query = document.getElementById('clip-search')?.value.trim().toLocaleLowerCase() || '';
+  const matches = entry => !query || String(entry.text || '').toLocaleLowerCase().includes(query);
+  return getClipItemsByType().filter(matches);
+}
+
+function getClipItemsByType() {
   if (clipFilter === 'all') return clipHistory;
   if (clipFilter === 'text') return clipHistory.filter((e) => e.type === 'text' || e.type === 'url');
   if (clipFilter === 'image') return clipHistory.filter((e) => e.type === 'image');
@@ -5270,11 +5352,35 @@ function renderClipList() {
 }
 
 // ---- 工具栏事件委托 ----
+let clipFilterMotion = null;
+let clipContentMotion = null;
+function stopClipFilterMotion() {
+  clipFilterMotion?.cancel(); clipFilterMotion = null;
+  clipContentMotion?.cancel(); clipContentMotion = null;
+}
+function syncClipFilterIndicator(animate = false) {
+  const wrap = document.getElementById('clip-filter-switch');
+  const indicator = wrap?.querySelector('.clip-filter-indicator');
+  const selected = wrap?.querySelector('.clip-filter.active');
+  if (!indicator || !selected || !wrap.getClientRects().length) return;
+  const previous = indicator.getBoundingClientRect(), parent = wrap.getBoundingClientRect();
+  stopClipFilterMotion();
+  const left = selected.offsetLeft, width = selected.offsetWidth;
+  indicator.style.left = `${left}px`; indicator.style.width = `${width}px`;
+  const reduce = document.documentElement.classList.contains('experience-reduced-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!animate || reduce || !previous.width) return;
+  clipFilterMotion = indicator.animate([
+    { left: `${previous.left-parent.left}px`, width: `${previous.width}px` },
+    { left: `${left}px`, width: `${width}px` },
+  ], { duration: 200, easing: 'cubic-bezier(.22,1,.36,1)' });
+  clipContentMotion = clipListEl.animate([{opacity: .55, transform: 'translateY(3px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 160, easing: 'ease-out'});
+}
 if (clipToolbarEl) {
   clipToolbarEl.addEventListener('click', (e) => {
     e.stopPropagation();
     const filterBtn = e.target.closest('.clip-filter');
     if (filterBtn) {
+      if (clipFilter === filterBtn.dataset.filter) return;
       clipFilter = filterBtn.dataset.filter || 'all';
       clipToolbarEl.querySelectorAll('.clip-filter').forEach((b) => {
         const selected = b === filterBtn;
@@ -5283,6 +5389,7 @@ if (clipToolbarEl) {
       });
       clipDataVersion++; // clipFilter 已变 → 输出变化
       renderClipList();
+      syncClipFilterIndicator(true);
       return;
     }
     if (e.target.closest('#clip-clear-btn')) {
@@ -5292,6 +5399,14 @@ if (clipToolbarEl) {
   clipToolbarEl.querySelectorAll('.clip-filter').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.classList.contains('active')));
   });
+  new ResizeObserver(() => syncClipFilterIndicator()).observe(document.getElementById('clip-filter-switch'));
+  document.addEventListener('notch:tabchange', event => {
+    if (event.detail?.tab === 'clip') syncClipFilterIndicator();
+    else stopClipFilterMotion();
+  });
+  document.addEventListener('notch:modechange', event => { if (!event.detail?.expanded) stopClipFilterMotion(); });
+  document.addEventListener('notch:motion-preference', () => syncClipFilterIndicator());
+  matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => syncClipFilterIndicator());
 }
 
 // ---- 列表事件委托 ----
@@ -5411,24 +5526,19 @@ function resetClipClearConfirmation() {
   }
 }
 
-function requestClearClipHistory() {
-  if (clipHistory.length === 0) {
-    showStatusToast(pomeLocaleRendererApp.t("copy.clipboardHistoryIsAlreadyEmpty.d4a211"));
+async function requestClearClipHistory() {
+  if (!clipHistory.length) {
+    showStatusToast(pomeLocaleRendererApp.t('copy.clipboardHistoryIsAlreadyEmpty.d4a211'));
     return;
   }
-  if (!clipClearArmed) {
-    clipClearArmed = true;
-    if (clipClearBtn) {
-      clipClearBtn.classList.add('confirming');
-      clipClearBtn.setAttribute('aria-label', pomeLocaleRendererApp.t("copy.clickAgainToClearHistoryEntries.04c46d", { arg1: (clipHistory.length) }));
-    }
-    showStatusToast(pomeLocaleRendererApp.t("copy.clickTheBinAgainToClearEntries.8ef455", { arg1: (clipHistory.length) }), {
-      duration: 3000,
-      onExpire: resetClipClearConfirmation,
-    });
-    return;
-  }
-  resetClipClearConfirmation();
+  const snapshot = JSON.stringify({history: clipHistory, favorites: clipFavorites});
+  const approved = await window.PomeDeleteConfirm.open({
+    titleKey: 'copy.clearHistory.17ac4a',
+    messageKey: 'ux.clip.clearScope',
+    args: {count: clipHistory.length, favorites: clipFavorites.length},
+    items: clipHistory.map(e => e.type === 'image' ? pomeLocaleRendererApp.t('copy.image.d24c10') : e.text),
+  });
+  if (!approved || snapshot !== JSON.stringify({history: clipHistory, favorites: clipFavorites})) return;
   clearClipHistory();
 }
 
@@ -5486,6 +5596,7 @@ async function copyClipEntry(id) {
   // 视觉反馈：800ms 后移除 copied 类
   const itemEl = clipListEl && clipListEl.querySelector(`.clip-item[data-id="${CSS.escape(id)}"]`);
   if (itemEl) {
+    document.dispatchEvent(new CustomEvent('notch:copied',{detail:{target:itemEl}}));
     itemEl.classList.add('copied');
     setTimeout(() => itemEl.classList.remove('copied'), 800);
   }
@@ -5550,21 +5661,31 @@ function getWorkspaceSnapshotForSync() {
 window.getWorkspaceSnapshotForSync = getWorkspaceSnapshotForSync;
 
 function applyWorkspaceNotes(notes) {
-  if (!notes || typeof notes !== 'object') return;
-  if (typeof notes.home === 'string') {
-    if (notes.home) localStorage.setItem(NOTE_KEY, notes.home);
-    else localStorage.removeItem(NOTE_KEY);
-    if (noteInput) noteInput.value = notes.home;
+  if(!notes||typeof notes!=='object')return;
+  let pending=[];try{const records=JSON.parse(localStorage.getItem(NOTE_COLLECTION_KEY)||'[]');pending=Array.isArray(records)?records:records?[records]:[];}catch{}
+  const incomingHome=typeof notes.home==='string'?notes.home:null;
+  const staleCollection=pending.some(record=>incomingHome===record.home);
+  if(incomingHome!==null&&!staleCollection&&(!homeDraftDirty||incomingHome===noteInput?.value)){
+    localStorage.setItem(NOTE_KEY,incomingHome);if(noteInput)noteInput.value=incomingHome;homeDraftDirty=false;
+  } else if(noteInput)localStorage.setItem(NOTE_KEY,noteInput.value);
+  if(Array.isArray(notes.archive)){
+    let archive=notes.archive;
+    for(const record of pending){if(!archive.some(note=>note.id===record.note.id)){
+      const local=loadNoteArchive().find(note=>note.id===record.note.id);if(local)archive=[local,...archive];
+    }}
+    // An editor owns the text being typed, including while a sync reply arrives.
+    const editor=notesDetail?.querySelector('#notes-editor');
+    if(editor&&notesDetailMode==='edit'){
+      const local=loadNoteArchive().find(note=>note.id===editor.dataset.noteId);
+      if(local)archive=archive.map(note=>note.id===local.id&&Number(note.updatedAt)<Number(local.updatedAt)?local:note);
+    }
+    localStorage.setItem(NOTE_ARCHIVE_KEY,JSON.stringify(archive));
+    const remaining=pending.filter(record=>incomingHome===record.home||!notes.archive.some(note=>note.id===record.note.id));
+    if(remaining.length)localStorage.setItem(NOTE_COLLECTION_KEY,JSON.stringify(remaining));else localStorage.removeItem(NOTE_COLLECTION_KEY);
   }
-  if (Array.isArray(notes.archive)) {
-    localStorage.setItem(NOTE_ARCHIVE_KEY, JSON.stringify(notes.archive));
-  }
-  if (notes.activeId) localStorage.setItem(NOTE_ACTIVE_ARCHIVE_KEY, String(notes.activeId));
-  else localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
-  if (typeof renderNotesLibrary === 'function') renderNotesLibrary();
-  if (noteInput && typeof setNoteMode === 'function') {
-    setNoteMode(noteInput.value.trim() ? 'preview' : 'edit', false);
-  }
+  localStorage.removeItem(NOTE_ACTIVE_ARCHIVE_KEY);
+  if(typeof renderNotesLibrary==='function')renderNotesLibrary();
+  setNoteMode('edit',false);
 }
 
 function applyWorkspaceClipboard(clipboard) {
@@ -5603,6 +5724,7 @@ document.addEventListener('nas-sync:todos-projection', (event) => {
   data = loadData();
   reconcileTodoCategoryOrderFromData();
   renderTodoBoard();
+  rescheduleTodoReminders();
 });
 renderClipList(); // 首屏确保 clip-list DOM 就绪时渲染一次（幂等）
 renderClipFavs(); // 首屏渲染收藏剪贴块
@@ -5632,6 +5754,8 @@ window.addEventListener('pome:language-changed', () => {
     const addInput = document.querySelector(`.add-row input[data-priority="${priority}"]`);
     if (addInput) addInput.setAttribute('aria-label', pomeLocaleRendererApp.t('copy.addATaskTo.efb0ec', { arg1: todoCategoryNames[priority] }));
   }
+  clipDataVersion++;
+  if (activeTab === 'clip') renderClipList();
   for (const button of document.querySelectorAll('.todo-bulk-delete')) {
     button.textContent = pomeLocaleRendererApp.t('copy.delete.2f9daa');
   }
@@ -5641,7 +5765,7 @@ window.addEventListener('pome:language-changed', () => {
     if (!label) continue;
     // Keep selected deadlines reformatted; empty triggers need the localized "日期/Date" label.
     if (deadline && trigger.classList.contains('selected')) {
-      label.textContent = pomeLocaleRendererApp.date(deadline, { day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+      label.textContent = pomeLocaleRendererApp.date(deadline, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     } else {
       label.textContent = pomeLocaleRendererApp.t('copy.date.70d0c1');
     }

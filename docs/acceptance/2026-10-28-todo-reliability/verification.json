@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-28",
+  "branch": "dev",
+  "fullNpmTest": {
+    "exitCode": 0,
+    "nodeTests": 1000,
+    "pass": 999,
+    "skip": 1,
+    "electronInvocations": 53,
+    "syntax": true
+  },
+  "finalNodeTests": {
+    "exitCode": 0,
+    "tests": 1001,
+    "pass": 1000,
+    "skip": 1,
+    "fail": 0
+  },
+  "finalAffectedElectron": [
+    "todo-reminders: live IPC, storage failure and repair button",
+    "todo-reminders: second-process restart",
+    "localization: ten-language production UI"
+  ],
+  "newCoverage": [
+    "atomic receipt failure and post-rename adoption",
+    "corrupt file preservation",
+    "workspace separation and stale workspace IPC",
+    "deadline identity and reset",
+    "SQLite pull and stale local writes",
+    "NAS stale device writes and persistent restart",
+    "production batch sync rollback and readonly/recovery guards",
+    "ten-language summary normalization",
+    "unseen queue off/on recovery",
+    "fast deadline edit within old dedupe window",
+    "queued item deletion",
+    "summary live language switch and multi-task focus",
+    "storage failure retry retaining error until success",
+    "durable restart with stale persisted projection"
+  ],
+  "limits": [
+    "Windows hardware not tested",
+    "Production NAS not deployed or changed",
+    "Two offline devices may independently display before syncing",
+    "Receipt corruption preserves the file and blocks reminders until backup restoration; repair retries do not silently rebuild it"
+  ]
+}

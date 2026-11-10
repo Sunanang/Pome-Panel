@@ -1,0 +1,248 @@
+[
+  {
+    "preset": "standard",
+    "group": "common",
+    "active": "common",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      1034
+    ],
+    "scroll": 93
+  },
+  {
+    "preset": "standard",
+    "group": "appearance",
+    "active": "appearance",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      1034,
+      1034
+    ],
+    "scroll": 36
+  },
+  {
+    "preset": "standard",
+    "group": "display",
+    "active": "display",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      1034
+    ],
+    "scroll": 163
+  },
+  {
+    "preset": "standard",
+    "group": "ai",
+    "active": "ai",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      1034,
+      1034
+    ],
+    "scroll": 1047
+  },
+  {
+    "preset": "standard",
+    "group": "data",
+    "active": "data",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      1034,
+      1034,
+      1034
+    ],
+    "scroll": 0
+  },
+  {
+    "preset": "standard",
+    "group": "nas",
+    "active": "nas",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      1034
+    ],
+    "scroll": 439.5
+  },
+  {
+    "preset": "medium",
+    "group": "common",
+    "active": "common",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      834
+    ],
+    "scroll": 151
+  },
+  {
+    "preset": "medium",
+    "group": "appearance",
+    "active": "appearance",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      834,
+      834
+    ],
+    "scroll": 94
+  },
+  {
+    "preset": "medium",
+    "group": "display",
+    "active": "display",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      834
+    ],
+    "scroll": 221
+  },
+  {
+    "preset": "medium",
+    "group": "ai",
+    "active": "ai",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      834,
+      834
+    ],
+    "scroll": 1105
+  },
+  {
+    "preset": "medium",
+    "group": "data",
+    "active": "data",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      834,
+      834,
+      834
+    ],
+    "scroll": 0
+  },
+  {
+    "preset": "medium",
+    "group": "nas",
+    "active": "nas",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      834
+    ],
+    "scroll": 497.5
+  },
+  {
+    "preset": "compact",
+    "group": "common",
+    "active": "common",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      702
+    ],
+    "scroll": 211
+  },
+  {
+    "preset": "compact",
+    "group": "appearance",
+    "active": "appearance",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      702,
+      702
+    ],
+    "scroll": 154
+  },
+  {
+    "preset": "compact",
+    "group": "display",
+    "active": "display",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      702
+    ],
+    "scroll": 281
+  },
+  {
+    "preset": "compact",
+    "group": "ai",
+    "active": "ai",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      702,
+      702
+    ],
+    "scroll": 1165
+  },
+  {
+    "preset": "compact",
+    "group": "data",
+    "active": "data",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      702,
+      702,
+      702
+    ],
+    "scroll": 6.5
+  },
+  {
+    "preset": "compact",
+    "group": "nas",
+    "active": "nas",
+    "selected": 1,
+    "groupCount": 1,
+    "overflow": false,
+    "navVisible": true,
+    "cardWidths": [
+      702
+    ],
+    "scroll": 557.5
+  }
+]

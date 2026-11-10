@@ -51,6 +51,8 @@ async function run(c) {
   async function until(expression) {
     for (let i = 0; i < 250; i++) { if (await js(expression).catch(() => false)) return; await sleep(20); }
     const state = await js('({hidden:document.hidden,app:document.getElementById("app")?.className,home:document.getElementById("tab-home")?.className,weather:window.PomeSun?.getWeather()})').catch(() => null);
+    if (state) state.native = { visible: BrowserWindow.fromWebContents(c).isVisible(),
+      backgroundThrottling: c.getBackgroundThrottling() };
     throw new Error(`Timed out: ${expression}; ${JSON.stringify(state)}`);
   }
   const tick = async () => { clock += 30 * 60 * 1000 + 1; await js(`window.weatherClock=${clock}`); };
@@ -197,9 +199,9 @@ async function run(c) {
   }
   await js('PomeSun.render();setActiveTab("settings")');await sleep(250);
   assert.equal(await js('document.getElementById("settings-weather-effects").checked'),true);
-  assert.equal(await js('document.querySelector(".settings-device-card #settings-weather-effects")!==null'),true);
+  assert.equal(await js('document.querySelector(".settings-appearance-card #settings-weather-effects")!==null'),true);
   assert.equal(await js('document.querySelector(".settings-weather-attribution a").href'),'https://open-meteo.com/');
-  await js('document.getElementById("settings-weather-effects").scrollIntoView({block:"center"})');await capture('settings',false);
+  await js('NotchSettings.reveal(document.getElementById("settings-weather-effects"),{block:"center"})');await capture('settings',false);
   rejectWeatherSetting=true;
   await js('document.querySelector(".settings-weather-effects-row").click()');
   await until('!document.getElementById("settings-weather-effects").disabled && document.getElementById("settings-weather-effects").checked');
@@ -218,6 +220,16 @@ async function run(c) {
   await until('!PomeSun.getWeather().effects.active');assert.equal(await js('!!document.querySelector("#home-sun .wx-fx")'),false);
   await c.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
   await until('PomeSun.getWeather().effects.active');
+  await js(`{const select=document.getElementById('pome-interface-motion');select.value='reduce';select.dispatchEvent(new Event('change'));}`);
+  await until('!PomeSun.getWeather().effects.active');assert.equal(await js('PomeSun.getWeather().effects.count'),0,'local reduced motion also stops continuous weather effects');
+  await js(`{const select=document.getElementById('pome-interface-motion');select.value='system';select.dispatchEvent(new Event('change'));}`);
+  await until('PomeSun.getWeather().effects.active');
+  const sourceTemperature=await js('PomeSun.getWeather().data.temperature');
+  await js(`{const select=document.getElementById('pome-weather-unit');select.value='f';select.dispatchEvent(new Event('change'));}`);
+  assert.match(await js('document.querySelector("#home-sun .wx-reading").textContent'),/°F/);
+  assert.equal(await js('PomeSun.getWeather().data.temperature'),sourceTemperature,'display units never mutate weather source');
+  await capture('fahrenheit');
+  await js(`{const select=document.getElementById('pome-weather-unit');select.value='c';select.dispatchEvent(new Event('change'));}`);
   await js('setActiveTab("notes")');await until('!PomeSun.getWeather().effects.active');
   await js('setActiveTab("home")');await until('PomeSun.getWeather().effects.active');
   await js('setMode(false)');await until('!PomeSun.getWeather().effects.active');
@@ -238,10 +250,18 @@ async function run(c) {
   assert.equal(await js('PomeSun.getLocation().lat'),2);assert.equal(calls,formCalls,'invalid manual input never requests weather');
   await capture('location-validation',false);await js('PomeSun.closeLocation()');
   // Hiding also triggers the normal asynchronous blur/collapse workflow.
+  assert.equal(BrowserWindow.fromWebContents(c).webContents.getBackgroundThrottling(), true,
+    'the visibility lifecycle fixture must enable background throttling before hiding');
   BrowserWindow.fromWebContents(c).hide();
-  await until('document.hidden && !PomeSun.getWeather().effects.active');
+  await until('document.documentElement.dataset.windowVisible === "false" && !PomeSun.getWeather().effects.active');
+  assert.equal(BrowserWindow.fromWebContents(c).isVisible(), false);
   BrowserWindow.fromWebContents(c).show();
-  await until('!document.hidden');
+  // Native hide may finish collapsing before show. Weather remains paused in
+  // the capsule; explicitly reopen after that transition instead of depending
+  // on the hide/show race leaving the panel expanded.
+  await until('document.documentElement.dataset.windowVisible === "true" && !modeBusy');
+  await js('setMode(true)');
+  await until('document.documentElement.dataset.windowVisible === "true" && PomeSun.getWeather().effects.active');
   c.debugger.detach();
   assert.deepEqual(errors,[]);
 }

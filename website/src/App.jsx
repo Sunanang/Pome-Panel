@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUpRight, ArrowRight, CaretDown, CaretLeft, CaretRight, CaretUp, ArrowCounterClockwise, Play, X, SquaresFour, ListChecks, NotePencil, PlugsConnected, Globe } from '@phosphor-icons/react';
 import { useLanguage } from './i18n/context.jsx';
 import { readmeFilename } from './i18n/core.mjs';
+import { isDialogBackdropEvent } from './dialog.mjs';
 
 const REPO = 'https://github.com/Sunanang/Pome-Panel';
 const sections = [
@@ -124,15 +125,40 @@ function Story({ reduced }) {
   </section>;
 }
 
+const PLATFORM_LABEL={'mac-arm64':'macOS · Apple Silicon','mac-x64':'macOS · Intel','win-x64':'Windows · x64','fnos-fpk':'fnOS · FPK'};
+/* 下载弹窗固定给三行：macOS / Windows / fnOS·FPk。清单里没有对应产物时按钮提示「敬请期待」 */
+const DOWNLOADS=[{id:'mac',label:'macOS'},{id:'win',label:'Windows'},{id:'fnos',label:'fnOS · FPK'}];
+function assetFor(manifest,id){
+  if(!manifest||!Array.isArray(manifest.assets))return null;
+  const pick=platform=>manifest.assets.find(a=>a.platform===platform);
+  if(id==='mac')return pick('mac-arm64')||pick('mac-x64');
+  if(id==='win')return pick('win-x64');
+  return pick('fnos-fpk');
+}
+
 export function App(){
   const {t,locale}=useLanguage();
   const reduced=useReducedMotion();
   const [tab,setTab]=useState(0), [download,setDownload]=useState(false), [nas,setNas]=useState(false);
-  const dialog=useRef(null),lastFocus=useRef(null);
+  /* 下载清单由发版 CI 生成到 /downloads.json；没有这个文件说明还没发过版 */
+  const [manifest,setManifest]=useState(undefined);
+  const [soonId,setSoonId]=useState('');
+  const soonTimer=useRef(null);
+  const flashSoon=id=>{setSoonId(id);clearTimeout(soonTimer.current);soonTimer.current=setTimeout(()=>setSoonId(''),1600);};
+  const dialog=useRef(null),lastFocus=useRef(null),backdropPressed=useRef(false);
   useEffect(()=>{
-    if(download){lastFocus.current=document.activeElement;dialog.current.showModal();}
+    if(download){backdropPressed.current=false;lastFocus.current=document.activeElement;dialog.current.showModal();}
     else if(dialog.current?.open){dialog.current.close();lastFocus.current?.focus();}
   },[download]);
+  useEffect(()=>{
+    if(!download||manifest!==undefined)return;
+    let alive=true;
+    fetch('/downloads.json',{cache:'no-store'})
+      .then(r=>r.ok?r.json():null)
+      .then(data=>{if(alive)setManifest(data&&Array.isArray(data.assets)&&data.assets.length?data:null);})
+      .catch(()=>{if(alive)setManifest(null);});
+    return()=>{alive=false;};
+  },[download,manifest]);
   const changeTab=i=>setTab((i+tabs.length)%tabs.length);
   return <>
     <Header onDownload={()=>setDownload(true)}/>
@@ -170,9 +196,16 @@ export function App(){
         <details><summary><span>{t('faq.nas.question')}</span><CaretDown size={18} aria-hidden="true"/></summary><p>{t('faq.nas.answer')}</p></details>
         <details><summary><span>{t('faq.platform.question')}</span><CaretDown size={18} aria-hidden="true"/></summary><p>{t('faq.platform.answer')}</p></details>
         <details><summary><span>{t('faq.demo.question')}</span><CaretDown size={18} aria-hidden="true"/></summary><p>{t('faq.demo.answer')}</p></details>
+        <details><summary><span>{t('faq.ai.question')}</span><CaretDown size={18} aria-hidden="true"/></summary><p>{t('faq.ai.answer')}</p></details>
       </section>
     </main>
     <footer><a className="brand" href="#top"><img src="/assets/pome-icon.webp" alt=""/><span>Pome Panel</span></a><span>{t('footer.tagline')}</span><div><a href={REPO} target="_blank" rel="noreferrer">GitHub</a><a href={REPO+'/blob/dev/LICENSE'} target="_blank" rel="noreferrer">{t('footer.license')}</a><a href="https://github.com/xiaopu-ai/TO-DO-Panel" target="_blank" rel="noreferrer">{t('footer.credit')}</a></div></footer>
-    <dialog ref={dialog} className="download-dialog" onCancel={e=>{e.preventDefault();setDownload(false);}} onClick={e=>{if(e.target===dialog.current)setDownload(false);}} aria-labelledby="download-title"><div className="dialog-heading"><img src="/assets/pome-icon.webp" alt=""/><button className="icon-button" aria-label={t('action.closeDownload')} title={t('action.close')} onClick={()=>setDownload(false)}><X size={19} aria-hidden="true"/></button></div><span className="eyebrow">{t('download.eyebrow')}</span><h2 id="download-title">{t('download.title')}</h2><p>{t('download.description')}</p><a className="button primary" href={REPO+'/releases'} target="_blank" rel="noreferrer"><span>{t('download.releases')}</span><ArrowUpRight size={17} aria-hidden="true"/></a><a className="button quiet" href={REPO+'/blob/dev/'+readmeFilename(locale)} target="_blank" rel="noreferrer"><span>{t('download.source')}</span><ArrowUpRight size={16} aria-hidden="true"/></a><small>{t('download.platforms')}</small></dialog>
+    <dialog ref={dialog} className="download-dialog" onCancel={e=>{e.preventDefault();setDownload(false);}} onPointerDown={e=>{backdropPressed.current=isDialogBackdropEvent(e);}} onClick={e=>{if(backdropPressed.current&&isDialogBackdropEvent(e))setDownload(false);backdropPressed.current=false;}} aria-labelledby="download-title"><div className="dialog-heading"><img src="/assets/pome-icon.webp" alt=""/><button className="icon-button" aria-label={t('action.closeDownload')} title={t('action.close')} onClick={()=>setDownload(false)}><X size={19} aria-hidden="true"/></button></div><span className="eyebrow">{t('download.eyebrow')}</span><h2 id="download-title">{t('download.title')}</h2><p>{t('download.description')}</p><div className="download-list">{DOWNLOADS.map(p=>{
+          const a=assetFor(manifest,p.id);
+          return a
+            ?<a key={p.id} className="download-row" href={a.url} rel="noreferrer"><span className="download-row-name">{p.label}</span><span className="download-row-meta mono">{PLATFORM_LABEL[a.platform]||a.name} · {a.sizeHuman}</span><ArrowDown size={16} aria-hidden="true"/></a>
+            :<button key={p.id} className="download-row download-row--soon" type="button" aria-live="polite" onClick={()=>flashSoon(p.id)}><span className="download-row-name">{p.label}</span><span className="download-row-meta mono">{soonId===p.id?t('download.soon'):t('download.soonHint')}</span><ArrowDown size={16} aria-hidden="true"/></button>;
+        })}</div>
+        {manifest?.assets?.length?<small className="download-version mono">{t('download.version',{version:manifest.tag})}</small>:null}<a className="button quiet" href={REPO+'/releases'} target="_blank" rel="noreferrer"><span>{t('download.allReleases')}</span><ArrowUpRight size={17} aria-hidden="true"/></a><a className="button quiet" href={REPO+'/blob/dev/'+readmeFilename(locale)} target="_blank" rel="noreferrer"><span>{t('download.source')}</span><ArrowUpRight size={16} aria-hidden="true"/></a><small>{t('download.platforms')}</small></dialog>
   </>;
 }

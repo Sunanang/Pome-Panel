@@ -448,11 +448,30 @@ const pomeLocaleRendererSun = typeof module === 'object' && module.exports ? req
       .map((item) => item.city);
   }
 
+  let countryCodes;
+  const countryNames = new Map();
+  function localizedCountry(admin, locale) {
+    if (!admin || !Intl.DisplayNames) return admin;
+    if (!countryCodes) {
+      countryCodes = new Map();
+      const chinese = new Intl.DisplayNames(['zh-CN'], {type:'region'});
+      for (let a=65;a<=90;a++) for(let b=65;b<=90;b++) {
+        const code=String.fromCharCode(a,b), name=chinese.of(code);
+        if(name && name!==code) countryCodes.set(name,code);
+      }
+    }
+    const code=countryCodes.get(admin);
+    if (!code) return admin;
+    if (!countryNames.has(locale)) countryNames.set(locale,new Intl.DisplayNames([locale],{type:'region'}));
+    return countryNames.get(locale).of(code) || admin;
+  }
   function cityLabel(city) {
     if (!city || !city.name) return '';
-    const english = !pomeLocaleRendererSun.getState().effectiveLocale.startsWith('zh-');
-    const name = english && city.source !== 'manual' ? city.en || city.name : city.name;
-    const admin = english ? city.adminEn || pomeLocaleRendererSun.systemText(city.admin) : city.admin;
+    const locale=pomeLocaleRendererSun.getState().effectiveLocale;
+    const english = !locale.startsWith('zh-');
+    const manual=city.source==='manual';
+    const name = english && !manual ? city.en || city.name : city.name;
+    const admin = manual ? city.admin : city.adminEn && english ? city.adminEn : localizedCountry(city.admin,locale);
     return admin ? `${name}, ${admin}` : String(name);
   }
 

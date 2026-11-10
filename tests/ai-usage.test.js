@@ -6,6 +6,15 @@ const absent = { ok: true, detected: false, configured: false };
 const cursor = { detected: true, auto: { percent: 30 }, other: { percent: 45 } };
 const codex = { detected: true, primary: { percent: 86 }, secondary: { percent: 15 } };
 const grokbot = { detected: true, ok: true, primary: { percent: 90 } };
+test('an invalid manual Codex token does not hide usable local quotas or their stale state', () => {
+  const local = { ok: true, detected: true, authSource: 'local', manualTokenInvalid: true,
+    primary: { percent: 30 }, updatedAt: new Date().toISOString() };
+  assert.equal(D.invalidToken(local), true, 'settings still need to repair the saved token');
+  assert.equal(D.status(local, 'codex'), 'ok');
+  assert.equal(D.status({ ...local, stale: true }, 'codex'), 'stale');
+  assert.equal(D.status({ ...local, primary: null }, 'codex'), 'error');
+  assert.equal(D.status({ ...local, ok: false }, 'codex'), 'error');
+});
 test('AI usage four visibility combinations and titles have no empty provider', () => {
   for (const [snapshots, ids, title] of [
     [{ cursor: absent, codex: absent }, [], 'AI 额度'],
