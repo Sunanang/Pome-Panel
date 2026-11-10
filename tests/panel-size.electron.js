@@ -44,7 +44,16 @@ async function run(c){
    await js(`NotchSettings.reveal(document.querySelector('[data-panel-size="${preset}"]'),{block:'center'}); document.querySelector('#settings-panel-size [data-panel-size="${preset}"]').click()`);
    await until(async()=> (await js('notchAPI.getAppSettings()')).panelSize===preset,preset+' saved');
    await until(()=>js(`document.documentElement.dataset.panelSize===${JSON.stringify(preset)}`),'render preset');
-   assert.deepEqual(win.getContentSize(),[width,height]);
+   // 窗口尺寸受屏幕工作区限制：CI 的 Windows runner 只有 1024x768，
+   // standard(1240) 与 medium(1040) 都会被系统压窄，这不是回归。
+   // 屏幕放得下就严格校验，放不下只校验没超出屏宽、以及设置与布局都按预设生效。
+   const workArea=screen.getPrimaryDisplay().workAreaSize;
+   if(width<=workArea.width&&height<=workArea.height){
+     assert.deepEqual(win.getContentSize(),[width,height]);
+   }else{
+     assert.ok(win.getContentSize()[0]<=workArea.width,preset+' 窗口宽不应超过屏幕工作区');
+     assert.ok(win.getContentSize()[1]<=workArea.height,preset+' 窗口高不应超过屏幕工作区');
+   }
    const visibility=await current();assert.equal(visibility.capacity.used,used);assert.deepEqual(visibility.visibleIds,ids);
    const row=await js(`(()=>{const block=document.getElementById('settings-panel-size-row'),controls=document.getElementById('settings-panel-size'),language=document.getElementById('settings-language');const b=block.getBoundingClientRect(),l=language.getBoundingClientRect(),r=controls.getBoundingClientRect();return {overlap:b.top<l.bottom&&b.bottom>l.top,contained:r.left>=b.left&&r.right<=b.right,selected:controls.querySelectorAll('[aria-pressed="true"]').length}})()`);
    assert.equal(row.overlap,false);assert.equal(row.contained,true);assert.equal(row.selected,1);
