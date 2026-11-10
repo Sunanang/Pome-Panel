@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test",
     "dev": "vite",
-    "build": "vite build && node scripts/prepare-sites-build.mjs",
+    "build": "ulimit -n 65535 2>/dev/null || true; vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "i18n:check": "node scripts/check-locales.mjs",
