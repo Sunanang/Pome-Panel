@@ -265,8 +265,15 @@ jobs:
       - windows
       - nas
     runs-on: ubuntu-latest
-    # 只改官网时不发布；真正发版只在 tag 上（release-policy.js 里 publish 也判 tag）
+    # 只改官网时不发布；真正发版只在 tag 上（release-policy.js 里 publish 也判 tag）。
+    # macOS 构建在 GitHub hosted runner 上经常拿不到机器（1 秒 cancelled、runner_name 为空），
+    # 所以它不参与发版门禁：Windows 与 fnOS 必须成功，macOS 产物有就一起发、
+    # 没有就跳过并在日志里说明，等能在别处构建出来后手动补传到同一个 Release。
     if: >-
+      always() &&
+      needs.changes.result == 'success' &&
+      needs.windows.result == 'success' &&
+      needs.nas.result == 'success' &&
       (github.ref_type == 'tag' || github.event_name == 'pull_request') &&
       needs.changes.outputs.website_only != 'true'
     steps:
@@ -286,19 +293,35 @@ jobs:
         if: steps.release.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
+        run: |
+          set -euo pipefail
           cd release-assets
 
-          sha256sum --check *.sha256
-
+          # 校验已有的校验和（macOS 缺失时这里只剩 exe/fpk）
+          shopt -s nullglob
+          sha_files=(*.sha256)
+          if [ ${#sha_files[@]} -eq 0 ]; then echo '::error::没有任何校验和文件，产物不完整'; exit 1; fi
+          sha256sum --check "${sha_files[@]}"
           cd ..
 
-          sed "s/{{VERSION}}/${{ steps.release.outputs.version }}/g" docs/release-notes.md > release-notes.rendered.md
+          # 只上传实际存在的资产：macOS 构建拿不到 runner 时就没有 .dmg
+          shopt -s nullglob
+          assets=(release-assets/*.dmg release-assets/*.exe release-assets/*.fpk release-assets/*.sha256)
+          if [ ${#assets[@]} -eq 0 ]; then echo '::error::没有可发布的产物'; exit 1; fi
+          has_dmg=0
+          for a in "${assets[@]}"; do case "$a" in *.dmg) has_dmg=1;; esac; done
+          if [ "$has_dmg" -eq 0 ]; then
+            echo '::warning::本次没有 macOS 产物（构建拿不到 runner），Release 只含 Windows 与 fnOS；'
+            echo '::warning::macOS 包构建出来后可用 gh release upload '"${GITHUB_REF_NAME}"' 补传。'
+          fi
+          echo "发布资产：${assets[*]}"
 
+          sed "s/{{VERSION}}/${{ steps.release.outputs.version }}/g" docs/release-notes.md > release-notes.rendered.md
           if grep -q '{{VERSION}}' release-notes.rendered.md; then echo 'release notes placeholder not rendered' >&2; exit 1; fi
 
-          gh release create "${GITHUB_REF_NAME}" release-assets/*.dmg release-assets/*.exe release-assets/*.fpk release-assets/*.sha256 --title "Pome Panel
-          ${GITHUB_REF_NAME}" --notes-file release-notes.rendered.md
+          gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
+            --title "Pome Panel ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.rendered.md
       - name: Checkout dev for the manifest commit
         if: steps.release.outputs.publish == 'true'
         uses: actions/checkout@v4
