@@ -338,13 +338,13 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |-
           node scripts/gen-downloads-json.mjs "$TAG"
-          if [ -z "$(git status --porcelain website/public/downloads.json)" ]; then
+          if [ -z "$(git status --porcelain website/public/downloads.json website/public/downloads)" ]; then
             echo '下载清单没有变化，不需要提 PR'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add website/public/downloads.json
+          git add website/public/downloads.json website/public/downloads
           git commit -m "chore(website): 更新下载清单 $TAG"
           # main 有「要求 PR」的保护，bot 推不上去，所以走 dev + PR，合并由人点
           git push origin dev
