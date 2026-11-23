@@ -39,6 +39,7 @@ const { createAiNotificationScheduler } = require('./aiNotificationScheduler');
 const { createMeetingModeMonitor } = require('./meetingMode');
 const { createMeetingProbe } = require('./platform-adapters/meetingProbe');
 const { createClaudeAttentionAdapter } = require('./claudeAttentionAdapter');
+const { createCodexAttentionBridge } = require('./codexAttentionBridge');
 const { expandMcpAuthSessionResolution, isMcpAuthSessionResolution } = require('./scripts/cursor-mcp-auth-notify');
 const claudeAttentionAdapter = createClaudeAttentionAdapter();
 let aiSourceHooks;
@@ -567,6 +568,39 @@ function refreshAttentionNotifications(preferredKey = null) {
   else if (!activeTaskNotification) showNextTaskNotification();
   else { scheduleTaskNotificationDismiss(); sendTaskNotificationQueueCount(); }
 }
+// Codex 的等待状态只能从 app-server 的状态通知里读（notify 只有回合结束）。
+// 观察者是只读的：不接 turn/start、不 resume 线程、也绝不回答服务端请求；
+// 默认关闭，用 POME_CODEX_APPSERVER=1 才连，等真实样本验收后再做成设置项。
+let codexAttentionBridge = null;
+function startCodexAttentionBridge() {
+  if (process.env.POME_CODEX_APPSERVER !== '1' || codexAttentionBridge) return;
+  const binary = process.env.POME_CODEX_BINARY || [
+    '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex',
+    '/Applications/Codex.app/Contents/Resources/codex-cli/bin/codex',
+  ].find(candidate => { try { return fs.existsSync(candidate); } catch { return false; } });
+  if (!binary) return;
+  codexAttentionBridge = createCodexAttentionBridge({
+    codexBinary: binary,
+    socketPath: process.env.POME_CODEX_APPSERVER_SOCK || '',
+    onRequest: request => console.warn('codex app-server request left to its own client:', request.method),
+    onEvents: events => {
+      try {
+        for (const event of events) {
+          const policy = classifyAiEvent(event, 'codex');
+          if (policy.category === 'invalid') continue;
+          if (policy.event) getAiAttention().apply(policy.event);
+        }
+        refreshAttentionNotifications();
+      } catch { reportTaskEventFailure(PomeI18n.t('attention.storageError')); }
+    },
+  });
+  codexAttentionBridge.start();
+}
+function stopCodexAttentionBridge() {
+  try { codexAttentionBridge?.stop(); } catch {}
+  codexAttentionBridge = null;
+}
+
 function replaceAiTaskNotification() {
   if (!taskNotificationsEnabled()) {
     if (activeTaskNotification) dismissActiveTaskNotificationShell();
@@ -6578,6 +6612,8 @@ app.whenReady().then(() => {
   ensureRecordingsDir();
   applyAppSettings();
   scheduleTodosSyncCycle();
+  // 仅在 POME_CODEX_APPSERVER=1 时启用；观察者只读，见 startCodexAttentionBridge。
+  if (!testUserData) startCodexAttentionBridge();
 
   app.on('activate', () => {
     localizationRevision += 1;
@@ -6597,6 +6633,7 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  stopCodexAttentionBridge();
   meetingMonitor.stop(); meetingProbe.stop();
   cancelCollapseWatchdog();
   platformAdapter.paste.stopTracking();

@@ -1,6 +1,6 @@
 [nas]
 packageDescription="View your Pome Panel workspace on the NAS and pair with the desktop app. The interface uses the unified gateway /app/pome-panel. The gateway starts even without a configured port. Device sync defaults to 127.0.0.1, with optional LAN listening on 0.0.0.0."
-packageChangelog="0.9.14: Device sync supports optional LAN listening (0.0.0.0), with localhost (127.0.0.1) as the default. App Settings adds Listen scope. The startup entry remains TRIM_APPDEST/server and the sync protocol remains in target/packages/sync-protocol. Uninstall can keep or delete app data."
+packageChangelog="0.11.1: The app-market developer and publisher links now point at the official sites; AI sources can be hidden after disconnecting, and Codex can be disconnected even when its notify command is wrapped by another tool.\n0.9.14: Device sync supports optional LAN listening (0.0.0.0), with localhost (127.0.0.1) as the default. App Settings adds Listen scope. The startup entry remains TRIM_APPDEST/server and the sync protocol remains in target/packages/sync-protocol. Uninstall can keep or delete app data."
 
 [wizard]
 allAppDataFilesWillBePermanently_c0cd34="All app data files will be permanently deleted. This action cannot be undone"

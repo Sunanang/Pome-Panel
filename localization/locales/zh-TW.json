@@ -1228,7 +1228,7 @@
   "mac.NSAppleEventsUsageDescription": "Pome Panel 需要控制「系統事件」來列舉並聚焦當前視窗、傳送汽水音樂快捷鍵。",
   "mac.NSLocalNetworkUsageDescription": "Pome Panel 需要訪問區域網中的飛牛 NAS 以同步資料。",
   "nas.packageDescription": "在飛牛上檢視 Pome Panel 工作區，並與桌面配對。介面走統一閘道器 /app/pome-panel。沒配埠時閘道器仍會啟動；配好後預設監聽 127.0.0.1，可選區域網 0.0.0.0。",
-  "nas.packageChangelog": "0.9.14：裝置同步埠可選區域網監聽（0.0.0.0）。預設僅監聽 127.0.0.1（僅本機）。應用設定新增監聽範圍。啟動入口仍是 TRIM_APPDEST/server。同步協議仍在 target/packages/sync-protocol。解除安裝仍可保留或刪除資料。",
+  "nas.packageChangelog": "0.11.1：應用市場裡的開發者、發佈者連結改為官方網站；AI 來源可在斷開後隱藏，Codex 通知被其它工具包裹時也能斷開。\n0.9.14：裝置同步埠可選區域網監聽（0.0.0.0）。預設僅監聽 127.0.0.1（僅本機）。應用設定新增監聽範圍。啟動入口仍是 TRIM_APPDEST/server。同步協議仍在 target/packages/sync-protocol。解除安裝仍可保留或刪除資料。",
   "status.NotPaired.e026c6": "未繫結",
   "status..aa4c0e": "遷移中",
   "status..bb429d": "同步中",

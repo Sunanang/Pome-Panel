@@ -6,6 +6,12 @@
 
 ## [未发布]
 
+- 版本升到 **0.11.1**：应用市场里的开发者（Lando）链接改为 https://www.lndo.top/，发布者（Lando）链接改为 https://www.pome.lndo.top/，需下一次打包发版生效。
+
+- Codex 等待提醒打通第一段（默认关闭）：新增 `codexAttentionBridge.js`，通过 `codex app-server proxy` 只读订阅线程状态，把 app-server 的 `ThreadActiveFlag`（`waitingOnApproval` / `waitingOnUserInput`）转成顶部「等你授权 / 等你选择」并自动撤销。观察者不接 turn、不 resume 线程、绝不回答服务端请求。用 `POME_CODEX_APPSERVER=1` 启用；诊断工具 `scripts/codex-appserver-probe.js` 可在 Codex 等待时打印真实状态通知，验收后再生效为设置项。证据与边界见 `docs/plans/2026-11-23-codex-appserver-bridge.md`。
+
+- 修复用户数据目录迁移在新版 Node 上直接报 EEXIST 的问题：`cpSync` 拷贝到 mkdtemp 建好的空 stage 时传了 `force:false, errorOnExist:true`，Node 会把"目标目录已存在"当成冲突，整段迁移失败（Electron 旧版 Node 不报）。改为默认覆盖写入这个空 stage，两种运行时下 7 条迁移用例全过。
+
 - AI 来源可以「断开并隐藏」：本机装了很多家 AI 但只想看常用的几家时，未接通的来源可一键隐藏，设置列表与首页额度面板都不再显示它们，来源计数只算显示出来的；隐藏项收进一行统计，随时可以全部显示回来。隐藏只是本机显示偏好，不改任何工具配置。
 
 - 修复 Codex 的 notify 被其它工具（如 Computer Use）包裹后，设置里只剩「修复」没有「断开」的问题：只要配置里还有 Pome 的项，就一定给出断开入口，状态报错、脚本缺失时同样可用。

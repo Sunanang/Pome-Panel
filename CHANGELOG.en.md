@@ -6,6 +6,12 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- Version **0.11.1**: the app-market developer (Lando) link now points at https://www.lndo.top/ and the publisher (Lando) link at https://www.pome.lndo.top/; this takes effect with the next packaged release.
+
+- First half of Codex waiting reminders (off by default): `codexAttentionBridge.js` subscribes read-only to the app-server over `codex app-server proxy` and turns the app-server `ThreadActiveFlag` values (`waitingOnApproval` / `waitingOnUserInput`) into the top bubble, clearing it automatically. The observer never starts turns, never resumes threads and never answers a server request. Enable with `POME_CODEX_APPSERVER=1`; `scripts/codex-appserver-probe.js` prints the real status notifications while Codex waits, and the setting graduates after that acceptance. Evidence and limits: `docs/plans/2026-11-23-codex-appserver-bridge.md`.
+
+- Fixed user-data migration failing with EEXIST on newer Node: the copy into the freshly created staging directory passed `force:false, errorOnExist:true`, so Node treated the existing target directory as a conflict and aborted the whole migration (older Electron Node did not). Copying into that empty staging directory now uses default overwrite; all 7 migration cases pass on both runtimes.
+
 - AI sources can be disconnected and hidden: with many AI tools installed locally but only a few in use, sources that are not connected can be hidden in one click. Hidden sources drop out of the settings list and the home quota widget, the connected count only covers what is shown, and a single summary row brings them back at any time. Hiding is a device-local display preference and never edits a tool's configuration.
 
 - Fixed the missing Disconnect option when Codex's notify command is wrapped by another tool (for example Computer Use): whenever the configuration still contains Pome entries, the row now offers Disconnect, including while the state reports a configuration error or a missing script.

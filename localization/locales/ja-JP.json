@@ -1255,7 +1255,7 @@
   "mac.NSAppleEventsUsageDescription": "Pome Panel は、システム イベントを使用してウィンドウをリストおよびフォーカスし、Soda Music のショートカットを送信します。",
   "mac.NSLocalNetworkUsageDescription": "Pome Panel は、ローカル ネットワーク上の NAS にアクセスして、ワークスペースを同期します。",
   "nas.packageDescription": "NAS 上の Pome Panel ワークスペースを表示し、デスクトップ アプリとペアリングします。インターフェイスは、統合ゲートウェイ /app/pome-panel を使用します。 The gateway starts even without a configured port. Device sync defaults to 127.0.0.1, with optional LAN listening on 0.0.0.0.",
-  "nas.packageChangelog": "0.9.14: デバイス同期は、ローカルホスト (127.0.0.1) をデフォルトとして、オプションの LAN リスニング (0.0.0.0) をサポートします。アプリ設定により、リッスンスコープが追加されます。起動エントリは TRIM_APPDEST/server に残り、同期プロトコルは target/packages/sync-protocol に残ります。アンインストールすると、アプリのデータが保持または削除される場合があります。",
+  "nas.packageChangelog": "0.11.1：アプリマーケットの開発者・公開元リンクを公式サイトに変更。AI ソースは切断後に非表示にでき、Codex は通知コマンドが他ツールに包まれていても切断できます。\n0.9.14: デバイス同期は、ローカルホスト (127.0.0.1) をデフォルトとして、オプションの LAN リスニング (0.0.0.0) をサポートします。アプリ設定により、リッスンスコープが追加されます。起動エントリは TRIM_APPDEST/server に残り、同期プロトコルは target/packages/sync-protocol に残ります。アンインストールすると、アプリのデータが保持または削除される場合があります。",
   "status.NotPaired.e026c6": "ペアリングされていません",
   "status..aa4c0e": "移行中…",
   "status..bb429d": "同期中…",

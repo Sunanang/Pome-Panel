@@ -1255,7 +1255,7 @@
   "mac.NSAppleEventsUsageDescription": "Pome Panel uses System Events to list and focus windows and send Soda Music shortcuts.",
   "mac.NSLocalNetworkUsageDescription": "Pome Panel accesses your NAS on the local network to sync your workspace.",
   "nas.packageDescription": "View your Pome Panel workspace on the NAS and pair with the desktop app. The interface uses the unified gateway /app/pome-panel. The gateway starts even without a configured port. Device sync defaults to 127.0.0.1, with optional LAN listening on 0.0.0.0.",
-  "nas.packageChangelog": "0.9.14: Device sync supports optional LAN listening (0.0.0.0), with localhost (127.0.0.1) as the default. App Settings adds Listen scope. The startup entry remains TRIM_APPDEST/server and the sync protocol remains in target/packages/sync-protocol. Uninstall can keep or delete app data.",
+  "nas.packageChangelog": "0.11.1: The app-market developer and publisher links now point at the official sites; AI sources can be hidden after disconnecting, and Codex can be disconnected even when its notify command is wrapped by another tool.\n0.9.14: Device sync supports optional LAN listening (0.0.0.0), with localhost (127.0.0.1) as the default. App Settings adds Listen scope. The startup entry remains TRIM_APPDEST/server and the sync protocol remains in target/packages/sync-protocol. Uninstall can keep or delete app data.",
   "status.NotPaired.e026c6": "Not paired",
   "status..aa4c0e": "Migrating…",
   "status..bb429d": "Syncing…",

@@ -1255,7 +1255,7 @@
   "mac.NSAppleEventsUsageDescription": "Pome Panel usa eventos do sistema para listar e focar janelas e enviar atalhos do Soda Music.",
   "mac.NSLocalNetworkUsageDescription": "Pome Panel acessa seu NAS na rede local para sincronizar seu espaço de trabalho.",
   "nas.packageDescription": "Visualize seu espaço de trabalho Pome Panel no NAS e emparelhe com o aplicativo de desktop. A interface usa o gateway unificado /app/pome-panel. O gateway inicia mesmo sem uma porta configurada. O padrão de sincronização do dispositivo é 127.0.0.1, com escuta de LAN opcional em 0.0.0.0.",
-  "nas.packageChangelog": "0.9.14: A sincronização de dispositivos suporta escuta LAN opcional (0.0.0.0), com localhost (127.0.0.1) como padrão. As configurações do aplicativo adicionam escopo de escuta. A entrada de inicialização permanece TRIM_APPDEST/server e o protocolo de sincronização permanece em target/packages/sync-protocol. A desinstalação pode manter ou excluir dados do aplicativo.",
+  "nas.packageChangelog": "0.11.1: os links de desenvolvedor e publicador da loja de aplicativos agora apontam para os sites oficiais; as fontes de IA podem ser ocultadas após desconectar, e o Codex pode ser desconectado mesmo quando o comando notify é envolvido por outra ferramenta.\n0.9.14: A sincronização de dispositivos suporta escuta LAN opcional (0.0.0.0), com localhost (127.0.0.1) como padrão. As configurações do aplicativo adicionam escopo de escuta. A entrada de inicialização permanece TRIM_APPDEST/server e o protocolo de sincronização permanece em target/packages/sync-protocol. A desinstalação pode manter ou excluir dados do aplicativo.",
   "status.NotPaired.e026c6": "Não pareado",
   "status..aa4c0e": "Migrando…",
   "status..bb429d": "Sincronizando…",

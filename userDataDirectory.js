@@ -66,7 +66,10 @@ function prepareUserDataDirectory({ appDataPath, overridePath, copy = fs.cpSync 
   const expected = profileManifest(source);
   const stage = fs.mkdtempSync(path.join(appDataPath, '.pome-panel-migration-'));
   try {
-    copy(source, stage, { recursive: true, force: false, errorOnExist: true,
+    // stage 是 mkdtempSync 刚建好的空目录：不要再传 errorOnExist/force:false，
+    // 新版 Node 会因"目标目录已存在"直接 EEXIST（Electron 旧版 Node 不会），
+    // 迁移会在这一步整段失败。合并写入这个空 stage 不会覆盖任何用户文件。
+    copy(source, stage, { recursive: true,
       filter: file => !DISPOSABLE.has(path.relative(source, file)) });
     // A running old app may change its SQLite/WAL or Chromium storage during
     // the copy. Never publish a mixed snapshot or silently fall back to sharing.
