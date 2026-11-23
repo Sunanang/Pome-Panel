@@ -544,6 +544,10 @@
                       </div>
                     </div>
                     <div id="settings-ai-sources-list" class="ai-source-list"></div>
+                    <p class="ai-source-hidden-summary" id="ai-sources-hidden" hidden>
+                      <span id="ai-sources-hidden-count"></span>
+                      <button class="workspace-button compact" id="ai-sources-hidden-toggle" type="button"></button>
+                    </p>
                     <!-- Initial mount; existing controls move into their provider rows. -->
                     <div id="settings-ai-token-controls" hidden>
                       <section class="ai-source-token" id="settings-cursor-token-card">
@@ -812,6 +816,7 @@
     <script src="note-view.js"></script>
     <script src="note-flight.js"></script>
     <script src="app.js"></script>
+    <script src="ai-source-visibility.js"></script>
     <script src="ai-usage-animation.js"></script>
     <script src="ai-usage.js"></script>
     <script src="weather-domain.js"></script>

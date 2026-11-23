@@ -1645,5 +1645,11 @@
   "settings.nav.common": "일반",
   "settings.nav.appearance": "모양",
   "settings.nav.data": "데이터",
-  "settings.data.local": "로컬 데이터"
+  "settings.data.local": "로컬 데이터",
+  "copy.hide.8c1d4e": "숨기기",
+  "copy.show.4b7a2f": "표시",
+  "settings.ai.hiddenCount": "{arg1}개 소스 숨김",
+  "settings.ai.showHidden": "숨긴 소스 표시",
+  "settings.ai.hideHidden": "숨긴 소스 접기",
+  "sources.attentionUnavailable": "이 클라이언트는 완료 알림만 지원하며 입력·선택 대기는 자동 감지할 수 없습니다."
 }

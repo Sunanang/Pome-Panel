@@ -1612,5 +1612,11 @@
   "settings.nav.common": "常用",
   "settings.nav.appearance": "外观",
   "settings.nav.data": "数据",
-  "settings.data.local": "本地资料"
+  "settings.data.local": "本地资料",
+  "copy.hide.8c1d4e": "隐藏",
+  "copy.show.4b7a2f": "显示",
+  "settings.ai.hiddenCount": "{arg1} 个来源已隐藏",
+  "settings.ai.showHidden": "显示已隐藏来源",
+  "settings.ai.hideHidden": "收起已隐藏来源",
+  "sources.attentionUnavailable": "该客户端只支持完成提醒，等待输入或选择的提醒暂时无法自动检测。"
 }

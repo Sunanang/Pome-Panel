@@ -310,20 +310,20 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
       if (!(await runtimeReady()) || !fs.existsSync(runtimePath) || !fs.existsSync(script(source))
         || (newEvents[source] || source === 'grok') && !fs.existsSync(path.join(appDir, 'scripts/completion-forwarder.js'))
         || source === 'claude' && !fs.existsSync(script('claude-attention'))) {
-        return { ...base, state: 'error', message: pomeLocaleAiSourceHooks.t("copy.theScriptPathIsMissingOrThe.a57f6c"), repairable: false };
+        return { ...base, state: 'error', installed: items.length > 0, message: pomeLocaleAiSourceHooks.t("copy.theScriptPathIsMissingOrThe.a57f6c"), repairable: false };
       }
       if (newEvents[source]) {
         const matches = newMatches(config, source);
-        return { ...base, state: matches ? 'connected' : items.length ? 'error' : 'disconnected', repairable: true,
+        return { ...base, state: matches ? 'connected' : items.length ? 'error' : 'disconnected', repairable: true, installed: items.length > 0,
           attentionCapabilities: capabilities(source, matches, false),
           message: matches ? pomeLocaleAiSourceHooks.t('copy.connectedListeningForLocalCompletionEvents.256f7f') : pomeLocaleAiSourceHooks.t('copy.appendTheHookWhilePreservingExistingConfiguration.429226', { arg1: newEvents[source].join(' + ') }) };
       }
       const eventLabel = source === 'claude' || source === 'grok' ? 'Stop' : 'stop';
-      if (!items.length) return { ...base, state: 'disconnected', message: source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.writeNotifyWhilePreservingAndForwardingThe.416e9e") : pomeLocaleAiSourceHooks.t("copy.appendTheHookWhilePreservingExistingConfiguration.429226", { arg1: (source === 'grok' ? 'Stop + StopFailure' : eventLabel) }) };
+      if (!items.length) return { ...base, state: 'disconnected', installed: false, message: source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.writeNotifyWhilePreservingAndForwardingThe.416e9e") : pomeLocaleAiSourceHooks.t("copy.appendTheHookWhilePreservingExistingConfiguration.429226", { arg1: (source === 'grok' ? 'Stop + StopFailure' : eventLabel) }) };
       if (source === 'codex') {
         const matches = JSON.stringify(config.value.notify) === JSON.stringify(codexCommand(chain.command));
         const nested = chain.pomeCount > 1 || codexPomeMarkerIndex(config.value.notify) < 0;
-        return { ...base, state: matches ? 'connected' : 'error', repairable: true,
+        return { ...base, state: matches ? 'connected' : 'error', repairable: true, installed: true,
           notifyWrapped: nested, attentionCapabilities: capabilities(source, matches, false),
           message: matches ? pomeLocaleAiSourceHooks.t('copy.connectedListeningForLocalCompletionEvents.256f7f')
             : nested ? pomeLocaleAiSourceHooks.t('sources.codexNotifyWrapped') : pomeLocaleAiSourceHooks.t('copy.thePomeHookPathOrRuntimeHas.8f7c1e') };
@@ -331,7 +331,7 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
       const expected = shellCommand(source);
       if (source === 'grok') {
         const matches = grokMatches(config, expected);
-        return { ...base, state: matches ? 'connected' : 'error', repairable: true,
+        return { ...base, state: matches ? 'connected' : 'error', repairable: true, installed: true,
           attentionCapabilities: capabilities(source, matches, false),
           message: matches ? pomeLocaleAiSourceHooks.t("copy.connectedListeningForLocalCompletionEvents.256f7f") : pomeLocaleAiSourceHooks.t("copy.thePomeHookPathOrRuntimeHas.8f7c1e") };
       }
@@ -339,12 +339,12 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
       const responseMatches = !responseItems.length || responseItems.length === 1 && responseItems[0].command === expected && (!responseItems[0].type || responseItems[0].type === 'command');
       const matches = responseMatches && items.length === 1 && items[0].command === expected && (source === 'claude' ? items[0].type === 'command' : !items[0].type || items[0].type === 'command');
       const attentionReady = source === 'claude' && attentionComplete(config);
-      return { ...base, state: matches ? 'connected' : 'error', repairable: true,
+      return { ...base, state: matches ? 'connected' : 'error', repairable: true, installed: true,
         attentionHookMissing: source === 'claude' && !attentionReady,
         attentionCapabilities: capabilities(source, matches, attentionReady),
         ...(source === 'cursor' ? { summaryHookMissing: !responseItems.length } : {}),
         message: matches ? source === 'cursor' && !responseItems.length ? pomeLocaleAiSourceHooks.t("copy.connectedCompletionSummaryHookCanBeAdded.99cb5c") : pomeLocaleAiSourceHooks.t("copy.connectedListeningForLocalCompletionEvents.256f7f") : pomeLocaleAiSourceHooks.t("copy.thePomeHookPathOrRuntimeHas.8f7c1e") };
-    } catch (error) { return { ...base, state: 'error', repairable: false, message: pomeLocaleAiSourceHooks.t("copy.configurationError.8c36aa", { arg1: (error.message) }) }; }
+    } catch (error) { return { ...base, state: 'error', repairable: false, installed: false, message: pomeLocaleAiSourceHooks.t("copy.configurationError.8c36aa", { arg1: (error.message) }) }; }
   }
   async function list() { return Promise.all(SOURCES.map(status)); }
   async function preview(source, action = 'connect') {

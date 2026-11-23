@@ -1645,5 +1645,11 @@
   "settings.nav.common": "Général",
   "settings.nav.appearance": "Apparence",
   "settings.nav.data": "Données",
-  "settings.data.local": "Données locales"
+  "settings.data.local": "Données locales",
+  "copy.hide.8c1d4e": "Masquer",
+  "copy.show.4b7a2f": "Afficher",
+  "settings.ai.hiddenCount": "{arg1} masquées",
+  "settings.ai.showHidden": "Afficher les sources masquées",
+  "settings.ai.hideHidden": "Les masquer à nouveau",
+  "sources.attentionUnavailable": "Ce client ne signale que les fins de tâche ; une attente de saisie ou de choix ne peut pas encore être détectée."
 }

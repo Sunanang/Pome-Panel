@@ -1645,5 +1645,11 @@
   "settings.nav.common": "Geral",
   "settings.nav.appearance": "Aparência",
   "settings.nav.data": "Dados",
-  "settings.data.local": "Dados locais"
+  "settings.data.local": "Dados locais",
+  "copy.hide.8c1d4e": "Ocultar",
+  "copy.show.4b7a2f": "Mostrar",
+  "settings.ai.hiddenCount": "{arg1} ocultas",
+  "settings.ai.showHidden": "Mostrar fontes ocultas",
+  "settings.ai.hideHidden": "Ocultar novamente",
+  "sources.attentionUnavailable": "Este cliente só informa conclusões; a espera por entrada ou escolha ainda não pode ser detectada."
 }

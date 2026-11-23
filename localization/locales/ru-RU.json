@@ -1667,5 +1667,11 @@
   "settings.nav.common": "Основные",
   "settings.nav.appearance": "Оформление",
   "settings.nav.data": "Данные",
-  "settings.data.local": "Локальные данные"
+  "settings.data.local": "Локальные данные",
+  "copy.hide.8c1d4e": "Скрыть",
+  "copy.show.4b7a2f": "Показать",
+  "settings.ai.hiddenCount": "Скрыто: {arg1}",
+  "settings.ai.showHidden": "Показать скрытые источники",
+  "settings.ai.hideHidden": "Скрыть снова",
+  "sources.attentionUnavailable": "Этот клиент сообщает только о завершении; ожидание ввода или выбора пока не определяется."
 }

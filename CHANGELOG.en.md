@@ -6,6 +6,14 @@ Important features, fixes and release changes. Unreleased changes are archived u
 
 ## [Unreleased]
 
+- AI sources can be disconnected and hidden: with many AI tools installed locally but only a few in use, sources that are not connected can be hidden in one click. Hidden sources drop out of the settings list and the home quota widget, the connected count only covers what is shown, and a single summary row brings them back at any time. Hiding is a device-local display preference and never edits a tool's configuration.
+
+- Fixed the missing Disconnect option when Codex's notify command is wrapped by another tool (for example Computer Use): whenever the configuration still contains Pome entries, the row now offers Disconnect, including while the state reports a configuration error or a missing script.
+
+- Added `scripts/ai-attention-notify.js` as a generic waiting reminder: Codex only reports turn completion and Cursor's hook list has no question event, so their waiting-for-input/choice/approval states had no local signal. Any local wrapper or MCP tool can now push `--source codex --action select --question "…"` to the top bubble and clear it with `--resolved --request <id>`; secret-bearing text is masked automatically. Settings now state plainly which sources only support completion reminders.
+
+- App market metadata: the developer link for Lando is now https://www.lndo.top/ and the publisher link for Lando is https://www.pome.lndo.top/.
+
 - Quota credentials are read on demand: after each launch, choose “Read quotas / retry access” in Settings → AI to enable local sign-ins and saved-token reads for that run. Saving a token enables only its source. Credential-free local Codex readings remain available. Token/transcription status displays do not decrypt secrets; the vault loads when opened. Background quota refresh does not repeatedly request failed credentials; retry explicitly. macOS handles authorization: Pome never receives the Mac login password or scans the entire Keychain. Previously enabled NAS auto-sync and Manus completion alerts still read their credentials at startup; system locks, permissions or signature changes can still prompt.
 
 - Polish Settings: remove the local-folder trailing divider, align backup descriptions and actions, and separate General rows. Nest each token form in its own AI source with a collapsed disclosure, preserving inputs, status and existing acquisition/save/completion controls across refreshes and locale changes. Share action/select styles across the desktop while retaining navigation, segmented and transport layouts; native Space activation on buttons and disclosure headings no longer collapses the panel.

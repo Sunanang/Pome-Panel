@@ -1612,5 +1612,11 @@
   "settings.nav.common": "常用",
   "settings.nav.appearance": "外觀",
   "settings.nav.data": "資料",
-  "settings.data.local": "本機資料"
+  "settings.data.local": "本機資料",
+  "copy.hide.8c1d4e": "隱藏",
+  "copy.show.4b7a2f": "顯示",
+  "settings.ai.hiddenCount": "{arg1} 個來源已隱藏",
+  "settings.ai.showHidden": "顯示已隱藏來源",
+  "settings.ai.hideHidden": "收起已隱藏來源",
+  "sources.attentionUnavailable": "該用戶端只支援完成提醒，等待輸入或選擇的提醒暫時無法自動偵測。"
 }

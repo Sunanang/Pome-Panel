@@ -1645,5 +1645,11 @@
   "settings.nav.common": "一般",
   "settings.nav.appearance": "外観",
   "settings.nav.data": "データ",
-  "settings.data.local": "ローカルデータ"
+  "settings.data.local": "ローカルデータ",
+  "copy.hide.8c1d4e": "非表示",
+  "copy.show.4b7a2f": "表示",
+  "settings.ai.hiddenCount": "{arg1} 件のソースを非表示中",
+  "settings.ai.showHidden": "非表示のソースを表示",
+  "settings.ai.hideHidden": "非表示のソースを閉じる",
+  "sources.attentionUnavailable": "このクライアントは完了通知のみ対応で、入力待ちや選択待ちは自動検出できません。"
 }

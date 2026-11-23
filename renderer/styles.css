@@ -8004,6 +8004,7 @@ html[data-liquid-glass='1'] .tile.home-inbox.inbox-highlight { border-color:colo
 .ai-source-copy small { display:block; color:var(--text-3); font-size:var(--fs-caption); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; line-height:1.5; }
 .ai-source-copy .ai-source-restart-hint { color:var(--accent-blue); white-space:normal; overflow-wrap:anywhere; }
 .ai-source-copy .ai-source-repair-hint { color:var(--p1); white-space:normal; overflow-wrap:anywhere; }
+.ai-source-copy .ai-source-attention-hint { color:var(--text-3); white-space:normal; overflow-wrap:anywhere; }
 .ai-source-state { display:inline-flex; align-items:center; gap:4px; font-size:var(--fs-caption); color:var(--text-3); white-space:nowrap; }
 .ai-source-state::before { content:''; width:4px; height:4px; border-radius:50%; background:currentColor; }
 .ai-source-row[data-state='connected'] .ai-source-state { color:var(--accent-blue); }
@@ -8011,6 +8012,9 @@ html[data-liquid-glass='1'] .tile.home-inbox.inbox-highlight { border-color:colo
 .ai-source-actions { display:flex; align-items:center; gap:5px; flex-shrink:0; }
 .ai-source-actions button { white-space:nowrap; }
 .ai-source-row[data-state='error'] button { color:var(--p1); }
+.ai-source-hidden-summary { display:flex; align-items:center; gap:8px; margin:10px 0 0; padding-top:10px; border-top:1px solid var(--hairline-soft); color:var(--text-3); font-size:var(--fs-caption); }
+.ai-source-hidden-summary[hidden] { display:none; }
+.ai-source-hidden-summary button { margin-left:auto; }
 #settings-ai-sources-count { font-size:var(--fs-caption); color:var(--text-3); white-space:nowrap; }
 #ai-sources-status:empty { display:none; }
 #ai-sources-status { overflow-wrap:anywhere; color:var(--text-2); }
@@ -8108,6 +8112,8 @@ html:not([lang="zh-CN"]):not([lang="zh-TW"]) .settings-nas-content-row > span { 
 .settings-page .ai-source-scope { margin-top: 5px; }
 .settings-page .ai-source-list { margin-top: 10px; border-top: 1px solid var(--settings-rule); }
 .settings-page .ai-source-row { display: block; padding: 12px 0; }
+/* 收起来的来源要真的不占位置：display:flex/block 会盖掉 [hidden] 的默认样式。 */
+.settings-page .ai-source-row[hidden] { display: none; }
 .settings-page .ai-source-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .settings-page .ai-source-icon { box-sizing: border-box; width: 30px; height: 30px; padding: 6px; border-radius: 9px; background: rgba(255,255,255,.065); }
 .settings-page .ai-source-row[data-source='claude'] .ai-source-icon { filter: none; background: rgba(255,255,255,.065); }

@@ -22,6 +22,25 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   let ready = false, busy = false, plan = null, anchor = null, checkedAt = 0;
   let dismissed = [];
   try { const value = JSON.parse(localStorage.getItem(dismissKey) || '[]'); if (Array.isArray(value)) dismissed = value; } catch {}
+  // 隐藏是本机显示偏好：不碰工具配置，和"断开"（移除 Pome 的 hook）分开。
+  const visibility = window.NotchAiSourceVisibility || null;
+  let showHidden = false;
+  const isHidden = source => Boolean(visibility?.has(source));
+  // 有 Pome 配置或已接通的来源不能藏起来，免得把要修的问题藏掉。
+  const canHide = row => !isHidden(row.source) && row.state !== 'connected' && !row.apiConnected && !row.installed;
+  function setHidden(source, hidden) {
+    if (!visibility) return;
+    if (hidden) {
+      visibility.hide(source);
+      // 藏起来的来源若正显示各来源的隐藏入口，保持列表稳定
+    } else {
+      visibility.show(source);
+      if (!visibility.list().length) showHidden = false;
+    }
+    announce();
+    render();
+    window.NotchAiUsage?.refresh?.({ force: true })?.catch?.(() => {});
+  }
   const el = id => document.getElementById(id);
   const credentialEnable = el('settings-ai-credential-enable');
   async function refreshCredentialAccess() {
@@ -297,10 +316,18 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       if (row.state === 'connected') {
         if (row.attentionHookMissing || row.summaryHookMissing) definitions.push(['repair', 'copy.repair.37a693']);
         definitions.push(['test', 'notifications.test'], ['disconnect', 'copy.disconnect.f33ac0']);
+      } else if (row.state === 'error') {
+        // 配置里还有 Pome 的项，就必须能断开：Codex 的 notify 被其它工具（如
+        // Computer Use）包裹时状态是"配置有误"，只在有配置时报错，不能因此没有断开。
+        if (row.repairable) definitions.push(['repair', 'copy.repair.37a693']);
+        if (row.installed) definitions.push(['disconnect', 'copy.disconnect.f33ac0']);
+        else definitions.push(['connect', 'copy.connect.f3b392']);
       } else {
-        definitions.push(row.state === 'error' ? ['repair', 'copy.repair.37a693'] : ['connect', 'copy.connect.f3b392']);
+        definitions.push(['connect', 'copy.connect.f3b392']);
       }
     }
+    if (isHidden(row.source)) definitions.push(['unhide', 'copy.show.4b7a2f']);
+    else if (canHide(row)) definitions.push(['hide', 'copy.hide.8c1d4e']);
     // Updating busy or language must not detach the button anchoring a preview.
     for (const child of [...actions.children]) {
       if (!definitions.some(([action]) => child.dataset.sourceAction === action)) child.remove();
@@ -309,6 +336,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       let button = actions.querySelector(`[data-source-action="${action}"]`);
       if (!button) {
         button = makeButton('', async event => {
+          if (action === 'hide' || action === 'unhide') return setHidden(row.source, action === 'hide');
           if (action !== 'test') return void request(row.source, action, event.currentTarget);
           button.disabled = true;
           try { const result = await api.testAiSource(row.source); status.textContent = result.message || ''; }
@@ -319,7 +347,9 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
       }
       button.textContent = pomeLocaleRendererAiSources.t(key);
       button.classList.toggle('primary', action === 'connect');
-      button.disabled = busy || row.state === 'undetected' || (row.state === 'error' && !row.repairable);
+      // 只有"接入/修复"会被未检测、不可修复挡住；断开与隐藏必须始终可用。
+      const blocked = row.state === 'undetected' || (row.state === 'error' && !row.repairable);
+      button.disabled = busy || (['connect', 'repair'].includes(action) && blocked);
       if (actions.children[index] !== button) actions.insertBefore(button, actions.children[index] || null);
     });
     if (!row.hookable) {
@@ -332,7 +362,9 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     const order = ['cursor', 'codex', 'grokbot', 'claude', 'grok', 'copilot', 'antigravity', 'manus'];
     const rank = source => order.includes(source) ? order.indexOf(source) : order.length;
     const rows = mergedRows().sort((a, b) => rank(a.source) - rank(b.source));
-    const connectable = rows.filter((row) => row.hookable || row.source === 'manus');
+    // 计数只算列出来的来源：隐藏的不占名额，用户配了几个就看到几。
+    const shown = rows.filter((row) => showHidden || !isHidden(row.source));
+    const connectable = shown.filter((row) => row.hookable || row.source === 'manus');
     const connected = connectable.filter((row) => row.state === 'connected' || row.apiConnected).length;
     pomeLocaleRendererAiSources.bind(el('settings-ai-sources-count'), 'textContent', () => (
       pomeLocaleRendererAiSources.t('settings.ai.connectedCount', { arg1: connected, arg2: connectable.length })
@@ -361,6 +393,9 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         if (form.parentElement !== item) item.append(form);
       }
       item.dataset.state = row.state;
+      // 保持表单挂载，只收起来（display:none），避免丢失未保存的 token 编辑；
+      // 打开"显示已隐藏来源"时按原顺序回到列表里。
+      item.hidden = !showHidden && isHidden(row.source);
       const copy = item.querySelector('.ai-source-copy'); copy.replaceChildren();
       const heading = document.createElement('div');
       const name = document.createElement('strong'); name.textContent = row.label;
@@ -385,9 +420,34 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         const hint = document.createElement('small'); hint.className = 'ai-source-restart-hint';
         hint.textContent = restartMessage(row.source); copy.append(hint);
       }
+      // 如实说明能力边界：Codex / Cursor 目前只能拿到回合结束，拿不到等待输入或选择。
+      if (row.state === 'connected' && row.attentionCapability === 'unsupported') {
+        const hint = document.createElement('small'); hint.className = 'ai-source-attention-hint';
+        hint.textContent = pomeLocaleRendererAiSources.t('sources.attentionUnavailable'); copy.append(hint);
+      }
       const note = item.querySelector('.ai-source-local-quota');
       if (note) note.textContent = pomeLocaleRendererAiSources.t(row.source === 'claude' ? 'settings.ai.localQuota' : 'ui.grokbot.quota');
       renderActions(row, item.querySelector('.ai-source-actions'));
+    }
+    renderHiddenSummary(rows);
+  }
+  // 收紧列表：隐藏的来源收进一行统计，点一下可以临时显示出来取消隐藏。
+  function renderHiddenSummary(rows) {
+    const host = el('ai-sources-hidden');
+    if (!host) return;
+    const hiddenRows = rows.filter((row) => isHidden(row.source));
+    if (!hiddenRows.length) showHidden = false;
+    host.hidden = !hiddenRows.length;
+    if (!hiddenRows.length) return;
+    pomeLocaleRendererAiSources.bind(el('ai-sources-hidden-count'), 'textContent', () => (
+      pomeLocaleRendererAiSources.t('settings.ai.hiddenCount', { arg1: hiddenRows.length })
+    ));
+    const toggle = el('ai-sources-hidden-toggle');
+    if (toggle) {
+      pomeLocaleRendererAiSources.bind(toggle, 'textContent', () => (
+        pomeLocaleRendererAiSources.t(showHidden ? 'settings.ai.hideHidden' : 'settings.ai.showHidden')
+      ));
+      toggle.setAttribute('aria-expanded', String(showHidden));
     }
   }
   function localizeTokenCards() {
@@ -458,6 +518,7 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     } catch (error) { reportFailure(source, 'source_preview_failed', status, `source:${source}`, 'ui.error.generic', error.message); }
     finally { busy = false; render(); }
   }
+  el('ai-sources-hidden-toggle')?.addEventListener('click', () => { showHidden = !showHidden; render(); });
   el('ai-source-confirm-cancel')?.addEventListener('click', () => { dialog.close(); plan = null; anchor?.focus({ preventScroll: true }); });
   dialog?.addEventListener('cancel', event => {
     event.preventDefault(); dialog.close(); plan = null; anchor?.focus({ preventScroll: true });
@@ -492,11 +553,14 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
   api?.onManusCompletionStatus?.(applyManusCompletionStatus);
   api?.onNotificationListenerChanged?.(state => { listener = state; announce(); });
   window.NotchAiSources = Object.freeze({ refresh, request, openSettings, dismiss, icons, compactPath,
+    hide: source => setHidden(source, true),
+    show: source => setHidden(source, false),
     getState: () => ({
       sources: mergedRows().filter(row => row.hookable || row.source === 'manus').map(row => ({ ...row })),
       providers: mergedRows().map((row) => ({ ...row })),
+      hidden: visibility ? visibility.list() : [],
       ready, listener,
-      suggestion: hookRows.find((row) => row.state === 'disconnected' && !dismissed.includes(row.source)),
+      suggestion: hookRows.find((row) => row.state === 'disconnected' && !dismissed.includes(row.source) && !isHidden(row.source)),
     }) });
   try {
     renderTokenCards();

@@ -1651,5 +1651,11 @@
   "settings.nav.common": "General",
   "settings.nav.appearance": "Appearance",
   "settings.nav.data": "Data",
-  "settings.data.local": "Local data"
+  "settings.data.local": "Local data",
+  "copy.hide.8c1d4e": "Hide",
+  "copy.show.4b7a2f": "Show",
+  "settings.ai.hiddenCount": "{arg1} hidden",
+  "settings.ai.showHidden": "Show hidden sources",
+  "settings.ai.hideHidden": "Hide them again",
+  "sources.attentionUnavailable": "This client only reports completions; waiting for input or a choice cannot be detected yet."
 }

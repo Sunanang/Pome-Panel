@@ -25,9 +25,16 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     // Backward-compatible (cursor, codex) signature used by older tests/callers.
     return { cursor: first, codex: second };
   }
+  // 用户只关心自己配的那些来源：隐藏起来的来源不占额度面板的位置。
+  const globalRoot = typeof window === 'object' ? window : globalThis;
+  function hiddenSources() {
+    try { return new Set(globalRoot.NotchAiSourceVisibility?.list?.() || []); } catch { return new Set(); }
+  }
   function providers(first, second) {
     const snapshots = asSnapshots(first, second);
-    return registry.usageProviders().map((provider) => provider.id).filter((id) => available(snapshots[id]));
+    const hidden = hiddenSources();
+    return registry.usageProviders().map((provider) => provider.id)
+      .filter((id) => !hidden.has(id) && available(snapshots[id]));
   }
   function title() { return pomeLocaleRendererAiUsageDomain.t('copy.aiQuota.faa20c'); }
   function percent(value) {

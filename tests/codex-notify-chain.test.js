@@ -23,6 +23,21 @@ function fixture(t, platform = process.platform) {
   return { home, file, service, write };
 }
 
+test('installed tells the settings UI whether a disconnect is possible', async t => {
+  const { service, write } = fixture(t, 'darwin');
+  const empty = await service.status('codex');
+  assert.equal(empty.state, 'disconnected');
+  assert.equal(empty.installed, false);
+  // Desktop 把 notify 包一层：状态变成"配置有误"，但 Pome 的项仍在，仍可断开。
+  write(sky(pome(['other-notifier'])));
+  const wrapped = await service.status('codex');
+  assert.equal(wrapped.state, 'error');
+  assert.equal(wrapped.installed, true);
+  const plan = await service.preview('codex', 'disconnect');
+  assert.equal((await service.apply(plan.token)).ok, true);
+  assert.equal((await service.status('codex')).installed, false);
+});
+
 for (const platform of ['darwin', 'win32']) {
   test(`${platform}: wrapped hook is repairable, flattened, idempotent and disconnect preserves other commands`, async t => {
     const { file, service, write } = fixture(t, platform);
@@ -35,6 +50,8 @@ for (const platform of ['darwin', 'win32']) {
     const status = await service.status('codex');
     assert.equal(status.state, 'error'); assert.equal(status.repairable, true);
     assert.equal(status.notifyWrapped, true); assert.equal(status.attentionCapabilities.completion, 'unsupported');
+    // 配置里还有 Pome 的项，设置页必须给出"断开"，不能只有"修复"。
+    assert.equal(status.installed, true);
     assert.match(status.message, /Computer Use/);
     const plan = await service.preview('codex', 'repair');
     assert.equal(fs.readFileSync(file, 'utf8'), before, 'preview must not write');

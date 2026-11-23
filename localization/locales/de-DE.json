@@ -1645,5 +1645,11 @@
   "settings.nav.common": "Allgemein",
   "settings.nav.appearance": "Darstellung",
   "settings.nav.data": "Daten",
-  "settings.data.local": "Lokale Daten"
+  "settings.data.local": "Lokale Daten",
+  "copy.hide.8c1d4e": "Ausblenden",
+  "copy.show.4b7a2f": "Einblenden",
+  "settings.ai.hiddenCount": "{arg1} ausgeblendet",
+  "settings.ai.showHidden": "Ausgeblendete Quellen zeigen",
+  "settings.ai.hideHidden": "Wieder ausblenden",
+  "sources.attentionUnavailable": "Dieser Client meldet nur Abschlüsse; ein Warten auf Eingabe oder Auswahl lässt sich noch nicht erkennen."
 }
