@@ -1651,5 +1651,8 @@
   "settings.ai.hiddenCount": "{arg1}개 소스 숨김",
   "settings.ai.showHidden": "숨긴 소스 표시",
   "settings.ai.hideHidden": "숨긴 소스 접기",
-  "sources.attentionUnavailable": "이 클라이언트는 완료 알림만 지원하며 입력·선택 대기는 자동 감지할 수 없습니다."
+  "sources.attentionUnavailable": "이 클라이언트는 완료 알림만 지원하며 입력·선택 대기는 자동 감지할 수 없습니다.",
+  "copy.damagedConfigWillBeCleared.c0ef31": "구성 파일이 손상되었습니다. 백업한 뒤 빈 구성을 기록해 Pome 흔적을 제거합니다.",
+  "copy.aiSourcesHidden.cb826a": "AI 소스가 숨겨져 있습니다",
+  "copy.unhideAiSourcesInSettings.b01a22": "설정 → AI 소스에서 다시 표시할 수 있습니다."
 }

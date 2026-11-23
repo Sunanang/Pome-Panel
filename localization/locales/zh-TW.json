@@ -1618,5 +1618,8 @@
   "settings.ai.hiddenCount": "{arg1} 個來源已隱藏",
   "settings.ai.showHidden": "顯示已隱藏來源",
   "settings.ai.hideHidden": "收起已隱藏來源",
-  "sources.attentionUnavailable": "該用戶端只支援完成提醒，等待輸入或選擇的提醒暫時無法自動偵測。"
+  "sources.attentionUnavailable": "該用戶端只支援完成提醒，等待輸入或選擇的提醒暫時無法自動偵測。",
+  "copy.damagedConfigWillBeCleared.c0ef31": "設定檔已損壞。將先備份，再寫入空設定以清除 Pome 痕跡。",
+  "copy.aiSourcesHidden.cb826a": "AI 來源已隱藏",
+  "copy.unhideAiSourcesInSettings.b01a22": "可在「設定 → AI 來源」中重新顯示。"
 }

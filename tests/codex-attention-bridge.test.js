@@ -33,6 +33,9 @@ test('the app-server active flags map to Pome actions', () => {
   assert.equal(waitingAction([]), null);
   assert.equal(waitingAction(undefined), null);
   assert.equal(waitingAction(['somethingElse']), null);
+  // 多 flag 同时出现时授权优先，避免气泡动作随数组顺序抖动。
+  assert.equal(waitingAction(['waitingOnUserInput', 'waitingOnApproval']), 'approve');
+  assert.equal(waitingAction(['waitingOnApproval', 'waitingOnUserInput']), 'approve');
 });
 
 test('a thread entering a waiting flag produces one reminder, repeats do not stack', () => {
@@ -109,6 +112,83 @@ test('the bridge handshakes, never answers server requests, and forwards waiting
   assert.equal(events[0].action, 'input');
   bridge.stop();
   assert.equal(bridge.running, false);
+});
+
+test('unexpected proxy exit resolves announced waits so the bubble can clear', () => {
+  const child = fakeChild();
+  const events = [];
+  let exited = 0;
+  const bridge = createCodexAttentionBridge({
+    codexBinary: '/fixture/codex', now: () => 1_700_000_000_000,
+    spawnProcess: () => child, onEvents: list => events.push(...list), onExit: () => { exited += 1; },
+  });
+  bridge.start();
+  child.stdout.emit('data', Buffer.from(JSON.stringify({ jsonrpc: '2.0', method: 'thread/status/changed',
+    params: { threadId: 't-exit', status: { type: 'active', activeFlags: ['waitingOnApproval'] } } }) + '\n'));
+  assert.equal(events.length, 1);
+  assert.equal(events[0].kind, 'attention.required');
+  child.emit('exit', 1);
+  assert.equal(exited, 1);
+  assert.equal(events.length, 2);
+  assert.equal(events[1].kind, 'attention.resolved');
+  assert.equal(events[1].requestId, events[0].requestId);
+  assert.equal(bridge.running, false);
+});
+
+test('spawn error without exit also resolves waits and asks for reconnect', () => {
+  const child = fakeChild();
+  const events = [];
+  let exited = 0;
+  const bridge = createCodexAttentionBridge({
+    codexBinary: '/fixture/codex', now: () => 1_700_000_000_000,
+    spawnProcess: () => child, onEvents: list => events.push(...list), onExit: () => { exited += 1; },
+  });
+  bridge.start();
+  child.stdout.emit('data', Buffer.from(JSON.stringify({ jsonrpc: '2.0', method: 'thread/status/changed',
+    params: { threadId: 't-err', status: { type: 'active', activeFlags: ['waitingOnUserInput'] } } }) + '\n'));
+  child.emit('error', new Error('spawn failed'));
+  assert.equal(exited, 1);
+  assert.equal(events.at(-1).kind, 'attention.resolved');
+  child.emit('exit', 1);
+  assert.equal(exited, 1, 'error+exit must not double-fire onExit');
+});
+
+test('intentional stop resolves waits without scheduling a reconnect via onExit', () => {
+  const child = fakeChild();
+  const events = [];
+  let exited = 0;
+  const bridge = createCodexAttentionBridge({
+    codexBinary: '/fixture/codex', now: () => 1_700_000_000_000,
+    spawnProcess: () => child, onEvents: list => events.push(...list), onExit: () => { exited += 1; },
+  });
+  bridge.start();
+  child.stdout.emit('data', Buffer.from(JSON.stringify({ jsonrpc: '2.0', method: 'thread/status/changed',
+    params: { threadId: 't-stop', status: { type: 'active', activeFlags: ['waitingOnUserInput'] } } }) + '\n'));
+  bridge.stop();
+  assert.equal(exited, 0);
+  assert.equal(events.at(-1).kind, 'attention.resolved');
+  assert.equal(bridge.running, false);
+});
+
+test('stop escalates to SIGKILL and still resolves when the proxy ignores SIGTERM', async () => {
+  const child = fakeChild();
+  const signals = [];
+  child.kill = (signal) => { signals.push(signal || 'SIGTERM'); };
+  const events = [];
+  let exited = 0;
+  const bridge = createCodexAttentionBridge({
+    codexBinary: '/fixture/codex', now: () => 1_700_000_000_000, stopKillMs: 20,
+    spawnProcess: () => child, onEvents: list => events.push(...list), onExit: () => { exited += 1; },
+  });
+  bridge.start();
+  child.stdout.emit('data', Buffer.from(JSON.stringify({ jsonrpc: '2.0', method: 'thread/status/changed',
+    params: { threadId: 't-hang', status: { type: 'active', activeFlags: ['waitingOnApproval'] } } }) + '\n'));
+  bridge.stop();
+  assert.deepEqual(signals, ['SIGTERM']);
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.deepEqual(signals, ['SIGTERM', 'SIGKILL']);
+  assert.equal(exited, 0);
+  assert.equal(events.at(-1).kind, 'attention.resolved');
 });
 
 test('thread list responses feed the project name shown next to the reminder', () => {

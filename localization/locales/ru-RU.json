@@ -1673,5 +1673,8 @@
   "settings.ai.hiddenCount": "Скрыто: {arg1}",
   "settings.ai.showHidden": "Показать скрытые источники",
   "settings.ai.hideHidden": "Скрыть снова",
-  "sources.attentionUnavailable": "Этот клиент сообщает только о завершении; ожидание ввода или выбора пока не определяется."
+  "sources.attentionUnavailable": "Этот клиент сообщает только о завершении; ожидание ввода или выбора пока не определяется.",
+  "copy.damagedConfigWillBeCleared.c0ef31": "Файл конфигурации повреждён. Pome создаст резервную копию и запишет пустой файл, чтобы удалить следы Pome.",
+  "copy.aiSourcesHidden.cb826a": "Источники ИИ скрыты",
+  "copy.unhideAiSourcesInSettings.b01a22": "Снова покажите их в «Настройки → Источники ИИ»."
 }

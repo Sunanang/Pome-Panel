@@ -1651,5 +1651,8 @@
   "settings.ai.hiddenCount": "{arg1} 件のソースを非表示中",
   "settings.ai.showHidden": "非表示のソースを表示",
   "settings.ai.hideHidden": "非表示のソースを閉じる",
-  "sources.attentionUnavailable": "このクライアントは完了通知のみ対応で、入力待ちや選択待ちは自動検出できません。"
+  "sources.attentionUnavailable": "このクライアントは完了通知のみ対応で、入力待ちや選択待ちは自動検出できません。",
+  "copy.damagedConfigWillBeCleared.c0ef31": "設定ファイルが破損しています。バックアップ後、空の設定を書き込んで Pome の痕跡を削除します。",
+  "copy.aiSourcesHidden.cb826a": "AI ソースは非表示です",
+  "copy.unhideAiSourcesInSettings.b01a22": "「設定 → AI ソース」で再表示できます。"
 }

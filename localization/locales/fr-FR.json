@@ -1651,5 +1651,8 @@
   "settings.ai.hiddenCount": "{arg1} masquées",
   "settings.ai.showHidden": "Afficher les sources masquées",
   "settings.ai.hideHidden": "Les masquer à nouveau",
-  "sources.attentionUnavailable": "Ce client ne signale que les fins de tâche ; une attente de saisie ou de choix ne peut pas encore être détectée."
+  "sources.attentionUnavailable": "Ce client ne signale que les fins de tâche ; une attente de saisie ou de choix ne peut pas encore être détectée.",
+  "copy.damagedConfigWillBeCleared.c0ef31": "Le fichier de configuration est endommagé. Pome le sauvegardera puis écrira un fichier vide pour effacer les traces Pome.",
+  "copy.aiSourcesHidden.cb826a": "Les sources d’IA sont masquées",
+  "copy.unhideAiSourcesInSettings.b01a22": "Réaffichez-les dans Réglages → Sources d’IA."
 }

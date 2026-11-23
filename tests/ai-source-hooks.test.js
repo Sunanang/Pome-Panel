@@ -65,6 +65,23 @@ for(const source of ['codex','claude','cursor','grok']){
   const {service,files}=fixture(t);if(source==='grok')fs.mkdirSync(path.dirname(files.grok),{recursive:true});
   fs.writeFileSync(files[source],'not [ valid { config');assert.equal((await service.status(source)).state,'error');await assert.rejects(service.preview(source));assert.equal(fs.readFileSync(files[source],'utf8'),'not [ valid { config');assert.equal(fs.readdirSync(path.dirname(files[source])).length,1);
  });
+ test(`${source}: damaged config with Pome traces still offers a best-effort disconnect`,async t=>{
+  const {service,files}=fixture(t);if(source==='grok')fs.mkdirSync(path.dirname(files.grok),{recursive:true});
+  const damaged=source==='codex'
+    ? 'not [ valid { config\nnotify = ["node", "/tmp/codex-notify.js", "--pome-panel-hook=codex"]\n'
+    : `not [ valid { config --pome-panel-hook=${source} ${source}-notify.js`;
+  fs.writeFileSync(files[source],damaged);
+  const status=await service.status(source);
+  assert.equal(status.state,'error');
+  assert.equal(status.installed,true,'Pome traces must keep the disconnect entry');
+  await assert.rejects(service.preview(source),'connect must still refuse a damaged file');
+  const plan=await service.preview(source,'disconnect');
+  const result=await service.apply(plan.token);
+  assert.equal(result.ok,true);
+  assert.equal(fs.readFileSync(result.backupPath,'utf8'),damaged);
+  assert.equal(fs.readFileSync(files[source],'utf8'),source==='codex'?'':'{}\n');
+  assert.equal((await service.status(source)).installed,false);
+ });
  test(`${source}: expired preview cannot overwrite an external edit`,async t=>{
   const {service,files}=fixture(t);const plan=await service.preview(source);if(source==='grok')fs.mkdirSync(path.dirname(files.grok),{recursive:true});
   fs.writeFileSync(files[source],source==='codex'?'# external\na=1\n':'{"external":true}');assert.equal((await service.apply(plan.token)).error,'preview_expired');

@@ -21,10 +21,36 @@ const quote = (value, platform) => platform === 'win32'
   ? `"${String(value).replace(/"/g, '\\"')}"`
   : `'${String(value).replace(/'/g, "'\\''")}'`;
 
-function readConfig(filePath, source) {
+function readRawConfigText(filePath, source) {
   const exists = fs.existsSync(filePath);
   if (exists && fs.lstatSync(filePath).isSymbolicLink()) throw new Error(pomeLocaleAiSourceHooks.t("copy.theConfigurationFileIsASymbolicLink.22a9d4"));
-  const text = exists ? fs.readFileSync(filePath, 'utf8') : source === 'codex' ? '' : '{}\n';
+  return { exists, text: exists ? fs.readFileSync(filePath, 'utf8') : source === 'codex' ? '' : '{}\n' };
+}
+
+function emptyConfigText(source) {
+  return source === 'codex' ? '' : '{}\n';
+}
+
+// 配置损坏无法结构化解析时，仍用原文痕迹判断是否还能「断开」。
+function textHasPomeTraces(text, source) {
+  if (!text) return false;
+  if (source === 'claude') {
+    return /(?:^|[\s"'])(?:--)?pome-panel-hook=claude(?:-attention)?(?:$|[\s"'])/.test(text)
+      || /(?:^|[\\/])claude-(?:notify|attention)\.js(?:$|[\s"'])/.test(text);
+  }
+  if (source === 'codex') {
+    return /(?:^|[\s"'])(?:--)?pome-panel-hook=codex(?:$|[\s"'])/.test(text)
+      || /(?:^|[\\/])codex-notify\.js(?:$|[\s"'])/.test(text);
+  }
+  if (source === 'antigravity') {
+    return /"pome-panel"/.test(text) && /pome-panel-hook=antigravity|antigravity-notify\.js/.test(text);
+  }
+  return new RegExp(`(?:^|[\\s"'])(?:--)?pome-panel-hook=${source}(?:$|[\\s"'])`).test(text)
+    || new RegExp(`(?:^|[\\\\/])${source}-notify\\.js(?:$|[\\s"'])`).test(text);
+}
+
+function readConfig(filePath, source) {
+  const { exists, text } = readRawConfigText(filePath, source);
   const ast = source === 'codex' ? toml.parseTOML(text) : null;
   const value = ast ? toml.getStaticTOMLValue(ast) : JSON.parse(text);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(pomeLocaleAiSourceHooks.t("copy.configurationMustBeAnObject.5af957"));
@@ -350,7 +376,14 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
         attentionCapabilities: capabilities(source, matches, attentionReady),
         ...(source === 'cursor' ? { summaryHookMissing: !responseItems.length } : {}),
         message: matches ? source === 'cursor' && !responseItems.length ? pomeLocaleAiSourceHooks.t("copy.connectedCompletionSummaryHookCanBeAdded.99cb5c") : pomeLocaleAiSourceHooks.t("copy.connectedListeningForLocalCompletionEvents.256f7f") : pomeLocaleAiSourceHooks.t("copy.thePomeHookPathOrRuntimeHas.8f7c1e") };
-    } catch (error) { return { ...base, state: 'error', repairable: false, installed: false, message: pomeLocaleAiSourceHooks.t("copy.configurationError.8c36aa", { arg1: (error.message) }) }; }
+    } catch (error) {
+      let installed = false;
+      try {
+        const raw = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+        installed = textHasPomeTraces(raw, source);
+      } catch { /* status must still return */ }
+      return { ...base, state: 'error', repairable: false, installed, message: pomeLocaleAiSourceHooks.t("copy.configurationError.8c36aa", { arg1: (error.message) }) };
+    }
   }
   async function list() { return Promise.all(SOURCES.map(status)); }
   async function preview(source, action = 'connect') {
@@ -359,7 +392,31 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
     const current = await status(source);
     if (current.state === 'undetected') throw new Error(pomeLocaleAiSourceHooks.t("copy.toolNotDetectedInstallAndRunIt.42fced"));
     if (action !== 'disconnect' && (current.state === 'error' && !current.repairable)) throw new Error(current.message);
-    const config = readConfig(files[source], source);
+    let config;
+    try {
+      config = readConfig(files[source], source);
+    } catch (error) {
+      // 整文件损坏时仍允许「尽力断开」：备份原文后写入空骨架，清掉 Pome 痕迹。
+      if (action !== 'disconnect') throw error;
+      const raw = readRawConfigText(files[source], source);
+      if (!textHasPomeTraces(raw.text, source)) throw error;
+      const text = emptyConfigText(source);
+      const token = randomUUID();
+      const backupPath = `${files[source]}.pome-backup-${new Date(now()).toISOString().replace(/[:.]/g, '-')}-${token}`;
+      const plan = {
+        source, action, filePath: files[source], backupPath, token,
+        added: pomeLocaleAiSourceHooks.t('copy.damagedConfigWillBeCleared.c0ef31'),
+        hash: digest(raw.exists ? raw.text : '<absent>'), text, expires: now() + 300000,
+        removeFile: false, damaged: true,
+      };
+      previews.set(token, plan);
+      for (const [id, row] of previews) if (row.expires < now()) previews.delete(id);
+      return {
+        source, action, filePath: plan.filePath, backupPath, token, added: plan.added,
+        unchanged: false,
+        message: pomeLocaleAiSourceHooks.t('copy.damagedConfigWillBeCleared.c0ef31'),
+      };
+    }
     const chain = source === 'codex' ? codexNotifyChain(config.value.notify ?? null) : null;
     const owned = installedItems(config, source, chain);
     let text = config.text, added;
@@ -476,11 +533,13 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
         const current = await status(plan.source);
         if (current.state === 'error' && !current.repairable) return { ok: false, error: 'source_unavailable', message: current.message };
       }
-      const config = readConfig(plan.filePath, plan.source);
-      if (config.hash !== plan.hash) return { ok: false, error: 'preview_expired', message: pomeLocaleAiSourceHooks.t("copy.theConfigurationFileHasChangedReviewAnd.a3ef34") };
-      const changing = plan.removeFile || plan.text !== config.text;
+      const raw = readRawConfigText(plan.filePath, plan.source);
+      const hash = digest(raw.exists ? raw.text : '<absent>');
+      if (hash !== plan.hash) return { ok: false, error: 'preview_expired', message: pomeLocaleAiSourceHooks.t("copy.theConfigurationFileHasChangedReviewAnd.a3ef34") };
+      if (!plan.damaged) readConfig(plan.filePath, plan.source);
+      const changing = plan.removeFile || plan.text !== raw.text;
       if (changing) {
-        const original = config.exists ? Buffer.from(config.text) : Buffer.alloc(0);
+        const original = raw.exists ? Buffer.from(raw.text) : Buffer.alloc(0);
         writeAtomic(plan.backupPath, original);
         if (!fs.readFileSync(plan.backupPath).equals(original)) throw new Error(pomeLocaleAiSourceHooks.t("copy.backupVerificationFailedConfigurationWasNotChanged.0a6000"));
         if (plan.removeFile) {
@@ -490,7 +549,7 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
           writeAtomic(plan.filePath, plan.text);
         }
       }
-      return { ok: true, source: plan.source, action: plan.action, backupPath: changing ? plan.backupPath : null, message: plan.source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.quitAndReopenCodexToApplyThe.46b626") : pomeLocaleAiSourceHooks.t("copy.sourceConfigurationUpdated.3181cd"), statuses: await list() };
+      return { ok: true, source: plan.source, action: plan.action, backupPath: changing ? plan.backupPath : null, message: plan.damaged ? plan.added : plan.source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.quitAndReopenCodexToApplyThe.46b626") : pomeLocaleAiSourceHooks.t("copy.sourceConfigurationUpdated.3181cd"), statuses: await list() };
     } catch (error) { return { ok: false, error: 'config_write_failed', message: error.message }; }
   }
   async function runTest(source, { token, port = 43821 } = {}) {
@@ -522,4 +581,4 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
   return { list, status, preview, apply, runTest };
 }
 
-module.exports = { SOURCES, createAiSourceHooks, editNotify, readConfig, originalNotify, codexNotifyChain };
+module.exports = { SOURCES, createAiSourceHooks, editNotify, readConfig, readRawConfigText, textHasPomeTraces, emptyConfigText, originalNotify, codexNotifyChain };

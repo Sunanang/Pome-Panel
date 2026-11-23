@@ -32,7 +32,8 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
     if (!visibility) return;
     if (hidden) {
       visibility.hide(source);
-      // 藏起来的来源若正显示各来源的隐藏入口，保持列表稳定
+      // 隐藏 Manus 时同步停掉完成轮询，避免「藏起来了却还在打 API」。
+      if (source === 'manus') api?.setManusCompletionEnabled?.(false)?.catch?.(() => {});
     } else {
       visibility.show(source);
       if (!visibility.list().length) showHidden = false;

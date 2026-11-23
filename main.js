@@ -572,8 +572,30 @@ function refreshAttentionNotifications(preferredKey = null) {
 // 观察者是只读的：不接 turn/start、不 resume 线程、也绝不回答服务端请求；
 // 默认关闭，用 POME_CODEX_APPSERVER=1 才连，等真实样本验收后再做成设置项。
 let codexAttentionBridge = null;
+let codexAttentionRestartTimer = null;
+let codexAttentionRestartAttempt = 0;
+function applyCodexAttentionEvents(events) {
+  try {
+    for (const event of events) {
+      const policy = classifyAiEvent(event, 'codex');
+      if (policy.category === 'invalid') continue;
+      if (policy.event) getAiAttention().apply(policy.event);
+    }
+    refreshAttentionNotifications();
+  } catch { reportTaskEventFailure(PomeI18n.t('attention.storageError')); }
+}
+function scheduleCodexAttentionBridgeRestart() {
+  if (process.env.POME_CODEX_APPSERVER !== '1' || isQuitting || process.env.TODO_TEST_USER_DATA) return;
+  if (codexAttentionRestartTimer) return;
+  const delay = Math.min(30_000, 1000 * (2 ** Math.min(codexAttentionRestartAttempt, 4)));
+  codexAttentionRestartAttempt += 1;
+  codexAttentionRestartTimer = setTimeout(() => {
+    codexAttentionRestartTimer = null;
+    startCodexAttentionBridge();
+  }, delay);
+}
 function startCodexAttentionBridge() {
-  if (process.env.POME_CODEX_APPSERVER !== '1' || codexAttentionBridge) return;
+  if (process.env.POME_CODEX_APPSERVER !== '1' || codexAttentionBridge || isQuitting) return;
   const binary = process.env.POME_CODEX_BINARY || [
     '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex',
     '/Applications/Codex.app/Contents/Resources/codex-cli/bin/codex',
@@ -583,20 +605,21 @@ function startCodexAttentionBridge() {
     codexBinary: binary,
     socketPath: process.env.POME_CODEX_APPSERVER_SOCK || '',
     onRequest: request => console.warn('codex app-server request left to its own client:', request.method),
-    onEvents: events => {
-      try {
-        for (const event of events) {
-          const policy = classifyAiEvent(event, 'codex');
-          if (policy.category === 'invalid') continue;
-          if (policy.event) getAiAttention().apply(policy.event);
-        }
-        refreshAttentionNotifications();
-      } catch { reportTaskEventFailure(PomeI18n.t('attention.storageError')); }
+    onEvents: applyCodexAttentionEvents,
+    onExit: () => {
+      codexAttentionBridge = null;
+      scheduleCodexAttentionBridgeRestart();
     },
   });
-  codexAttentionBridge.start();
+  if (codexAttentionBridge.start()) codexAttentionRestartAttempt = 0;
+  else codexAttentionBridge = null;
 }
 function stopCodexAttentionBridge() {
+  if (codexAttentionRestartTimer) {
+    clearTimeout(codexAttentionRestartTimer);
+    codexAttentionRestartTimer = null;
+  }
+  codexAttentionRestartAttempt = 0;
   try { codexAttentionBridge?.stop(); } catch {}
   codexAttentionBridge = null;
 }
@@ -1236,7 +1259,8 @@ ipcMain.handle('pomodoro:notify', (event, minutes) => {
 });
 
 function getTaskNotificationBounds(display) {
-  const d = display || getTargetDisplay();
+  // 气泡跟面板同屏，不跟光标——避免多屏时提示跑到另一块显示器。
+  const d = display || getWindowDisplay();
   const width = Math.min(
     process.platform === 'win32' && activeTaskNotification?.attentionKey ? 384 : TASK_NOTIFICATION_WIDTH,
     Math.max(280, d.bounds.width - TASK_NOTIFICATION_SCREEN_MARGIN * 2)
@@ -1391,7 +1415,7 @@ function showNextTaskNotification() {
   taskNotificationRemainingMs = notificationScheduler.budget(activeTaskNotification);
   taskNotificationStarted = false;
   taskNotificationHeight = activeTaskNotification.attentionKey ? (process.platform === 'win32' ? 114 : 146) : TASK_NOTIFICATION_HEIGHT;
-  targetWindow.setBounds(getTaskNotificationBounds(getTargetDisplay()));
+  targetWindow.setBounds(getTaskNotificationBounds());
   const replace = taskNotificationSwitching && targetWindow.isVisible();
   taskNotificationSwitching = false;
   targetWindow.showInactive();
@@ -1671,7 +1695,7 @@ ipcMain.on('task-notification:resize', (event, value) => {
   const heights = activeTaskNotification.attentionKey ? [process.platform === 'win32' ? 114 : 146] : [TASK_NOTIFICATION_HEIGHT, TASK_NOTIFICATION_HEIGHT + 18];
   if (!heights.includes(value.height)) return;
   taskNotificationHeight = value.height;
-  notificationWindow.setBounds(getTaskNotificationBounds(getTargetDisplay()));
+  notificationWindow.setBounds(getTaskNotificationBounds());
 });
 
 ipcMain.on('task-notification:hover', (event, value) => {
@@ -2047,6 +2071,60 @@ function showOwnedOpenDialog(options) {
   );
 }
 
+function mediaFileExists(root, directory, relativeOrName) {
+  if (typeof relativeOrName !== 'string' || !relativeOrName.trim()) return false;
+  const resolved = path.isAbsolute(relativeOrName)
+    ? path.resolve(relativeOrName)
+    : path.resolve(root, relativeOrName);
+  const dir = path.resolve(root, directory);
+  if (path.dirname(resolved) !== dir) return false;
+  try {
+    const stat = fs.lstatSync(resolved);
+    return !stat.isSymbolicLink() && stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
+// 目标目录已有同名文件时 force:false 会跳过；把工作区元数据里指向缺失媒体的条目清掉，避免坏链。
+function pruneMissingWorkspaceMedia(root) {
+  const file = path.join(root, WORKSPACE_DATA_FILE);
+  if (!fs.existsSync(file)) return;
+  let payload;
+  try { payload = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return; }
+  if (!payload?.localStorage || typeof payload.localStorage !== 'object') return;
+  const storage = { ...payload.localStorage };
+  let changed = false;
+  try {
+    const rows = JSON.parse(storage['notch-recordings'] || '[]');
+    if (Array.isArray(rows)) {
+      const next = rows.filter((row) => row && mediaFileExists(root, RECORDINGS_DIR_NAME, row.audioPath));
+      if (next.length !== rows.length) {
+        storage['notch-recordings'] = JSON.stringify(next);
+        changed = true;
+      }
+    }
+  } catch { /* keep original bytes */ }
+  try {
+    const rows = JSON.parse(storage['notch-clip-history'] || '[]');
+    if (Array.isArray(rows)) {
+      const next = rows.filter((row) => {
+        if (!row || row.type !== 'image') return true;
+        return mediaFileExists(root, CLIP_IMAGES_DIR_NAME, row.imagePath);
+      });
+      if (next.length !== rows.length) {
+        storage['notch-clip-history'] = JSON.stringify(next);
+        const favorites = parseJsonArray(storage['notch-clip-favorites']);
+        const ids = new Set(next.map((row) => row && row.id).filter(Boolean));
+        storage['notch-clip-favorites'] = JSON.stringify(favorites.filter((id) => ids.has(id)));
+        changed = true;
+      }
+    }
+  } catch { /* keep original bytes */ }
+  if (!changed) return;
+  writeJsonFile(file, { ...payload, localStorage: storage, updatedAt: Date.now() });
+}
+
 function copyWorkspaceAssets(sourceRoot, targetRoot) {
   if (!sourceRoot || !targetRoot || path.resolve(sourceRoot) === path.resolve(targetRoot)) return;
   for (const directory of [RECORDINGS_DIR_NAME, CLIP_IMAGES_DIR_NAME]) {
@@ -2067,6 +2145,7 @@ function copyWorkspaceAssets(sourceRoot, targetRoot) {
       }
     } catch (error) { throw new Error('workspace_assets_copy_failed', { cause: error }); }
   }
+  pruneMissingWorkspaceMedia(targetRoot);
 }
 
 async function chooseWorkspaceFolder() {
@@ -2512,6 +2591,7 @@ ipcMain.handle('settings:set-language', (event, value) => {
   return { ok: true, localization: broadcastLocalization() };
 });
 ipcMain.handle('settings:set-feature', (event, payload) => {
+  requireWorkspaceOwner(event);
   const current = readAppSettings();
   const features = updateFeaturePreference(current.features, payload && payload.featureId, payload && payload.enabled);
   if (!features) return { ok: false, error: 'invalid_feature' };
@@ -2524,6 +2604,7 @@ ipcMain.handle('settings:set-feature', (event, payload) => {
 // Windows 原生能力开关（P4-1 / D16）：默认关（WIN_NATIVE_DEFAULT），用户在设置页
 // 「实验功能」里打开后才解析出 windowSwitcher / windowFocus / automaticPaste。
 ipcMain.handle('settings:set-win-native', (event, enabled) => {
+  requireWorkspaceOwner(event);
   if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
   if (process.platform !== 'win32') return { ok: false, error: 'unsupported' };
   const next = { ...readAppSettings(), winNative: enabled };
@@ -2539,6 +2620,7 @@ ipcMain.handle('settings:set-win-native', (event, enabled) => {
   };
 });
 ipcMain.handle('settings:set-default-tab', (event, defaultTab) => {
+  requireWorkspaceOwner(event);
   const next = updateDefaultTabPreference(readAppSettings(), defaultTab);
   if (!next) return { ok: false, error: 'invalid_default_tab' };
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed' };
@@ -2546,6 +2628,7 @@ ipcMain.handle('settings:set-default-tab', (event, defaultTab) => {
   return { ok: true, settings: publicAppSettings() };
 });
 ipcMain.handle('settings:set-auto-launch', (event, enabled) => {
+  requireWorkspaceOwner(event);
   if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
   if (!setAutoLaunch(enabled)) return { ok: false, error: 'save_failed', autoLaunch: isAutoLaunchEnabled() };
   const settings = publicAppSettings();
@@ -2567,6 +2650,7 @@ ipcMain.handle('settings:set-panel-size', (event, preset) => {
   return { ok: true, settings: updated };
 });
 ipcMain.handle('settings:set-task-notifications', (event, enabled) => {
+  requireWorkspaceOwner(event);
   if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid' };
   const next = { ...readAppSettings(), taskNotifications: enabled };
   if (!saveAppSettings(next)) return { ok: false, error: 'save_failed', taskNotifications: taskNotificationsEnabled() };
@@ -2618,6 +2702,7 @@ ipcMain.handle('sun:weather', (event, location) => {
   return sunWeatherService.get(location);
 });
 ipcMain.handle('settings:set-shortcut', (event, accelerator) => {
+  requireWorkspaceOwner(event);
   if (!isValidPanelShortcut(accelerator)) return { ok: false, error: 'invalid' };
   let saveFailed = false;
   if (!setPanelShortcut(accelerator, () => {
@@ -2633,7 +2718,8 @@ ipcMain.handle('settings:set-shortcut', (event, accelerator) => {
 });
 ipcMain.handle('workspace:get', () => ({ path: workspaceRoot(), portable: workspaceRoot() !== app.getPath('userData'),
   ...(workspaceRoot() === app.getPath('userData') && previousDefaultDataPath ? { previousDefaultPath: previousDefaultDataPath } : {}) }));
-ipcMain.handle('workspace:load-data', () => {
+ipcMain.handle('workspace:load-data', (event) => {
+  requireWorkspaceOwner(event);
   const payload = readJsonFile(workspacePath(WORKSPACE_DATA_FILE), {});
   return payload && payload.localStorage && typeof payload.localStorage === 'object'
     ? (previousDefaultDataPath ? normalizePortableStorage(payload.localStorage) : payload.localStorage)
@@ -2682,6 +2768,7 @@ function persistWorkspaceStorage(storage, root = workspaceRoot()) {
 }
 
 ipcMain.handle('workspace:save-data', (event, storage, expectedRoot) => {
+  requireWorkspaceOwner(event);
   if (workspaceSwitching || (expectedRoot && path.resolve(expectedRoot) !== path.resolve(workspaceRoot()))) return false;
   return persistWorkspaceStorage(storage);
 });
@@ -2766,8 +2853,8 @@ ipcMain.handle('backup:restore', async (event, id) => {
   finally { workspaceSwitching = false; await mainWindow.webContents.executeJavaScript('document.getElementById("panel").inert = false').catch(() => {}); }
 });
 
-ipcMain.handle('workspace:open', () => shell.openPath(workspaceRoot()));
-ipcMain.handle('workspace:choose', () => chooseWorkspaceFolder());
+ipcMain.handle('workspace:open', (event) => { requireWorkspaceOwner(event); return shell.openPath(workspaceRoot()); });
+ipcMain.handle('workspace:choose', (event) => { requireWorkspaceOwner(event); return chooseWorkspaceFolder(); });
 
 function getLayoutMetrics(display) {
   return platformPolicy.layout.layoutMetrics(layoutContext(display));
@@ -2824,7 +2911,7 @@ ipcMain.handle('media:access-status', (event, mediaType) => {
   return { type, status, ...platformPolicy.mediaAccessPrompt(type, status, platformCapabilities) };
 });
 
-ipcMain.handle('tasks:recent', () => getTaskInbox().list().items);
+ipcMain.handle('tasks:recent', (event) => { requireWorkspaceOwner(event); return getTaskInbox().list().items; });
 ipcMain.handle('tasks:inbox', (event, options) => { requireWorkspaceOwner(event); return taskInboxState(options); });
 ipcMain.handle('ai-attention:list', event => {
   requireWorkspaceOwner(event);
@@ -2837,8 +2924,9 @@ ipcMain.handle('ai-attention:show', (event, key) => {
     if (!taskNotificationsEnabled()) {
       return { ok: false, message: PomeI18n.t('attention.topBubbleDisabled') };
     }
+    // get() 已限定 pending/unverified；重启后未再确认的等待仍允许用户手动打开气泡。
     const row = getAiAttention().get(key);
-    if (row?.state !== 'pending') return { ok: false, message: PomeI18n.t('attention.unverified') };
+    if (!row) return { ok: false, message: PomeI18n.t('attention.unverified') };
     const result = getAiAttention().display(key, false); refreshAttentionNotifications(key); return result;
   } catch { return { ok: false, message: PomeI18n.t('attention.storageError') }; }
 });
@@ -2873,6 +2961,10 @@ ipcMain.handle('tasks:sources-apply', async (event, token) => {
   if (result.ok && result.action === 'disconnect') {
     try { getAiAttention().disconnect(result.source); refreshAttentionNotifications(); }
     catch { reportTaskEventFailure(PomeI18n.t('attention.storageError')); }
+    // 断开 Codex notify 后同步停掉 app-server 观察者，避免「已断开却仍弹等待」。
+    if (result.source === 'codex') stopCodexAttentionBridge();
+  } else if (result.ok && result.source === 'codex' && result.action !== 'disconnect') {
+    startCodexAttentionBridge();
   }
   return result;
 });
@@ -3260,7 +3352,8 @@ function publicCredential(item) {
 
 function credentialFailure(error) { return { ok: false, error: error?.code || 'credentials_unreadable' }; }
 
-ipcMain.handle('credentials:list', (_event, options = {}) => {
+ipcMain.handle('credentials:list', (event, options = {}) => {
+  requireWorkspaceOwner(event);
   if (options.retry === true) retryStoredSecretReads();
   if (!fs.existsSync(getCredentialsVaultPath())) return { ok: true, secureStorage: secureStorageAvailability, items: [] };
   const secureStorage = checkSecureStorageAvailability();
@@ -3270,6 +3363,7 @@ ipcMain.handle('credentials:list', (_event, options = {}) => {
 });
 
 ipcMain.handle('credentials:get', (event, id) => {
+  requireWorkspaceOwner(event);
   try {
     const item = readCredentialsVault().find((row) => row.id === String(id || ''));
     return item ? { ok: true, item: { ...item } } : { ok: false, error: 'not_found' };
@@ -3277,6 +3371,7 @@ ipcMain.handle('credentials:get', (event, id) => {
 });
 
 ipcMain.handle('credentials:save', (event, payload) => {
+  requireWorkspaceOwner(event);
   retryStoredSecretReads();
   if (!checkSecureStorageAvailability()) return { ok: false, error: 'secure_storage_unavailable' };
   try {
@@ -3298,6 +3393,7 @@ ipcMain.handle('credentials:save', (event, payload) => {
 });
 
 ipcMain.handle('credentials:delete-many', (event, ids) => {
+  requireWorkspaceOwner(event);
   const targets = new Set(Array.isArray(ids) ? ids.map(String) : []);
   if (!targets.size) return { ok: true, deleted: 0 };
   try {
@@ -3309,6 +3405,7 @@ ipcMain.handle('credentials:delete-many', (event, ids) => {
 });
 
 ipcMain.handle('credentials:copy', async (event, payload) => {
+  requireWorkspaceOwner(event);
   const id = String(payload && payload.id || '');
   const field = payload && payload.field === 'password' ? 'password' : payload && payload.field === 'account' ? 'account' : '';
   if (!id || !field) return false;
@@ -4003,37 +4100,44 @@ ipcMain.handle('sync:get-dashboard', () => buildNasSyncDashboard());
 ipcMain.handle('sync:list-endpoints', () => syncSettingsStore.getPublicView());
 
 ipcMain.handle('sync:add-endpoint', (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const result = syncSettingsStore.addEndpoint(payload);
   return result;
 });
 
 ipcMain.handle('sync:update-endpoint', (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const endpointId = String(payload.endpointId || '');
   if (!endpointId) return { ok: false, error: 'endpoint_id_required' };
   return syncSettingsStore.updateEndpoint(endpointId, payload);
 });
 
 ipcMain.handle('sync:delete-endpoint', (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const endpointId = String(payload.endpointId || '');
   if (!endpointId) return { ok: false, error: 'endpoint_id_required' };
   return syncSettingsStore.deleteEndpoint(endpointId);
 });
 
 ipcMain.handle('sync:reorder-endpoint', (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const endpointId = String(payload.endpointId || '');
   if (!endpointId) return { ok: false, error: 'endpoint_id_required' };
   return syncSettingsStore.reorderEndpoint(endpointId, payload.direction === 'up' ? 'up' : 'down');
 });
 
 ipcMain.handle('sync:set-current-endpoint', (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   return syncSettingsStore.setCurrentEndpoint(String(payload.endpointId || ''));
 });
 
 ipcMain.handle('sync:set-gateway-bearer-blocked', (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   return syncSettingsStore.setGatewayBearerBlocked(payload && payload.blocked === true);
 });
 
 ipcMain.handle('sync:test-endpoint', async (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const endpointId = String(payload.endpointId || '');
   const view = syncSettingsStore.getPublicView();
   const endpoint = (view.endpoints || []).find((ep) => ep.endpointId === endpointId);
@@ -4151,7 +4255,8 @@ ipcMain.handle('recovery:rollback', async (event, operationId) => {
   } catch (error) { return { ok: false, message: PomeI18n.t("copy.rollbackFailedSyncRemainsPaused.377389", { arg1: (error.message) }) }; }
 });
 
-ipcMain.handle('sync:retry', async () => {
+ipcMain.handle('sync:retry', async (event) => {
+  requireWorkspaceOwner(event);
   const result = await runBoundTodosSyncCycle({ broadcast: true });
   return { ...result, dashboard: buildNasSyncDashboard() };
 });
@@ -4159,6 +4264,7 @@ ipcMain.handle('sync:retry', async () => {
 ipcMain.handle('sync:export-todos-backup', exportLocalBackup);
 
 ipcMain.handle('sync:pair-http-policy', (event, baseUrl) => {
+  requireWorkspaceOwner(event);
   const policy = syncPairHttpPolicy(baseUrl);
   return {
     ...policy,
@@ -4168,6 +4274,7 @@ ipcMain.handle('sync:pair-http-policy', (event, baseUrl) => {
 });
 
 ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const codeCheck = validatePairingCodeInput(payload.pairingCode || payload.code);
   if (!codeCheck.ok) return { ok: false, error: codeCheck.error };
 
@@ -4322,7 +4429,8 @@ ipcMain.handle('sync:pair-claim', async (event, payload = {}) => {
   return { ok: true, status: { ...saved.status, ...buildSyncPublicStatus() } };
 });
 
-ipcMain.handle('sync:clear-binding', () => {
+ipcMain.handle('sync:clear-binding', (event) => {
+  requireWorkspaceOwner(event);
   const cleared = syncCredentialsStore.clear();
   clearSyncSchemaRuntime();
   closeTodosSyncStore();
@@ -4331,6 +4439,7 @@ ipcMain.handle('sync:clear-binding', () => {
 });
 
 ipcMain.handle('sync:todos-local-write', (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const ctx = readBoundSyncContext();
   if (!ctx.ok) {
     return { ok: false, error: ctx.error, unbound: ctx.error === 'not_bound' };
@@ -4381,7 +4490,8 @@ ipcMain.handle('sync:todos-local-write', (event, payload = {}) => {
   };
 });
 
-ipcMain.handle('sync:todos-run-cycle', async () => {
+ipcMain.handle('sync:todos-run-cycle', async (event) => {
+  requireWorkspaceOwner(event);
   const result = await runBoundTodosSyncCycle({ broadcast: true });
   if (!result.ok) {
     return {
@@ -4430,6 +4540,7 @@ ipcMain.handle('sync:todos-get-projection', () => {
 });
 
 ipcMain.handle('sync:list-devices', async (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
   const token = syncCredentialsStore.getDeviceToken();
@@ -4449,6 +4560,7 @@ ipcMain.handle('sync:list-devices', async (event, payload = {}) => {
 });
 
 ipcMain.handle('sync:revoke-device', async (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
   const token = syncCredentialsStore.getDeviceToken();
@@ -4988,6 +5100,7 @@ function latestWorkspaceChanges(changes) {
 }
 
 ipcMain.handle('sync:classify-migration', async (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
   const support = await checkCompletionSyncSupport();
@@ -5011,6 +5124,7 @@ ipcMain.handle('sync:classify-migration', async (event, payload = {}) => {
 });
 
 ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
+  requireWorkspaceOwner(event);
   if (recoveryStore().read().paused) return { ok: false, error: 'sync_paused_after_restore' };
   const status = syncCredentialsStore.getStatus();
   if (!status.bound) return { ok: false, error: 'not_bound' };
@@ -5197,7 +5311,8 @@ ipcMain.handle('sync:run-migration', async (event, payload = {}) => {
   };
 });
 
-ipcMain.handle('sync:ack-migration-projection', () => {
+ipcMain.handle('sync:ack-migration-projection', (event) => {
+  requireWorkspaceOwner(event);
   migrationSession.pendingProjection = null;
   return { ok: true };
 });

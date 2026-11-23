@@ -76,6 +76,8 @@ test('the quota widget stops polling hidden sources and ships the entry points',
   assert.match(usage, /const activeProviders = \(\) => \{/, 'hidden sources are filtered before polling');
   assert.match(usage, /await Promise\.all\(activeProviders\(\)\.map/, 'refresh skips hidden sources');
   assert.match(usage, /const needs = activeProviders\(\)\.some/, 'tick skips hidden sources');
+  assert.match(usage, /allHidden/, 'empty state distinguishes fully hidden sources');
+  assert.match(usage, /FALLBACK\.hiddenTitle|FALLBACK\.hiddenMiniTitle/, 'hidden empty state uses dedicated copy');
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   assert.ok(pkg.build.files.includes('scripts/ai-attention-notify.js'), 'the reminder script ships with the app');
   const macFiles = pkg.build.mac.files;

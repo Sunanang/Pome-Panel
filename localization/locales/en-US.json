@@ -1657,5 +1657,8 @@
   "settings.ai.hiddenCount": "{arg1} hidden",
   "settings.ai.showHidden": "Show hidden sources",
   "settings.ai.hideHidden": "Hide them again",
-  "sources.attentionUnavailable": "This client only reports completions; waiting for input or a choice cannot be detected yet."
+  "sources.attentionUnavailable": "This client only reports completions; waiting for input or a choice cannot be detected yet.",
+  "copy.damagedConfigWillBeCleared.c0ef31": "The configuration file is damaged. Pome will back it up and write an empty file to clear Pome traces.",
+  "copy.aiSourcesHidden.cb826a": "AI sources are hidden",
+  "copy.unhideAiSourcesInSettings.b01a22": "Unhide them in Settings → AI sources."
 }

@@ -10,6 +10,10 @@ const pomeLocaleRendererAiUsageDomain = typeof module === 'object' && module.exp
     get body() { return pomeLocaleRendererAiUsageDomain.t("copy.signInToCursorLocallyOrUse.3b099a"); },
     get miniTitle() { return pomeLocaleRendererAiUsageDomain.t("copy.noAiToolsConnected.116356"); },
     get miniBody() { return pomeLocaleRendererAiUsageDomain.t("copy.neitherCursorNorCodexWasDetected.243e58"); },
+    get hiddenTitle() { return pomeLocaleRendererAiUsageDomain.t("copy.aiSourcesHidden.cb826a"); },
+    get hiddenBody() { return pomeLocaleRendererAiUsageDomain.t("copy.unhideAiSourcesInSettings.b01a22"); },
+    get hiddenMiniTitle() { return pomeLocaleRendererAiUsageDomain.t("copy.aiSourcesHidden.cb826a"); },
+    get hiddenMiniBody() { return pomeLocaleRendererAiUsageDomain.t("copy.unhideAiSourcesInSettings.b01a22"); },
   };
   function available(data) {
     if (!data) return false;

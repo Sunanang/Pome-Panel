@@ -149,6 +149,8 @@ test('fallback has calm copy for full and mini layouts', () => {
   assert.equal(D.FALLBACK.miniTitle, '未连接 AI 工具');
   assert.equal(D.FALLBACK.miniBody, '尚未检测到已连接的 AI 工具');
   assert.match(D.FALLBACK.body, /在本机登录 Cursor，或用过一次 Codex/);
+  assert.equal(D.FALLBACK.hiddenTitle, 'AI 来源已隐藏');
+  assert.match(D.FALLBACK.hiddenBody, /设置 → AI 来源/);
 });
 
 test('dynamic quota labels use actual cadence including weekly-only primary and unknown windows', () => {

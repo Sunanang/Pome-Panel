@@ -1651,5 +1651,8 @@
   "settings.ai.hiddenCount": "{arg1} ausgeblendet",
   "settings.ai.showHidden": "Ausgeblendete Quellen zeigen",
   "settings.ai.hideHidden": "Wieder ausblenden",
-  "sources.attentionUnavailable": "Dieser Client meldet nur Abschlüsse; ein Warten auf Eingabe oder Auswahl lässt sich noch nicht erkennen."
+  "sources.attentionUnavailable": "Dieser Client meldet nur Abschlüsse; ein Warten auf Eingabe oder Auswahl lässt sich noch nicht erkennen.",
+  "copy.damagedConfigWillBeCleared.c0ef31": "Die Konfigurationsdatei ist beschädigt. Pome sichert sie und schreibt eine leere Datei, um Pome-Spuren zu entfernen.",
+  "copy.aiSourcesHidden.cb826a": "KI-Quellen sind ausgeblendet",
+  "copy.unhideAiSourcesInSettings.b01a22": "Blenden Sie sie unter Einstellungen → KI-Quellen wieder ein."
 }

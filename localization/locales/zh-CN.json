@@ -1618,5 +1618,8 @@
   "settings.ai.hiddenCount": "{arg1} 个来源已隐藏",
   "settings.ai.showHidden": "显示已隐藏来源",
   "settings.ai.hideHidden": "收起已隐藏来源",
-  "sources.attentionUnavailable": "该客户端只支持完成提醒，等待输入或选择的提醒暂时无法自动检测。"
+  "sources.attentionUnavailable": "该客户端只支持完成提醒，等待输入或选择的提醒暂时无法自动检测。",
+  "copy.damagedConfigWillBeCleared.c0ef31": "配置文件已损坏。将先备份，再写入空配置以清除 Pome 痕迹。",
+  "copy.aiSourcesHidden.cb826a": "AI 来源已隐藏",
+  "copy.unhideAiSourcesInSettings.b01a22": "可在「设置 → AI 来源」中重新显示。"
 }

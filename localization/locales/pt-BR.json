@@ -1651,5 +1651,8 @@
   "settings.ai.hiddenCount": "{arg1} ocultas",
   "settings.ai.showHidden": "Mostrar fontes ocultas",
   "settings.ai.hideHidden": "Ocultar novamente",
-  "sources.attentionUnavailable": "Este cliente só informa conclusões; a espera por entrada ou escolha ainda não pode ser detectada."
+  "sources.attentionUnavailable": "Este cliente só informa conclusões; a espera por entrada ou escolha ainda não pode ser detectada.",
+  "copy.damagedConfigWillBeCleared.c0ef31": "O arquivo de configuração está danificado. O Pome fará backup e gravará um arquivo vazio para limpar rastros do Pome.",
+  "copy.aiSourcesHidden.cb826a": "As fontes de IA estão ocultas",
+  "copy.unhideAiSourcesInSettings.b01a22": "Mostre-as novamente em Configurações → Fontes de IA."
 }

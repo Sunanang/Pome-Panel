@@ -557,9 +557,23 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     for (const [id, offset] of rowScroll) if (byId(id)) byId(id).scrollTop = offset;
     providers.hidden = !ids.length;
     byId('ai-usage-empty').hidden = Boolean(ids.length);
-    tile.querySelector('.ai-empty-bars').innerHTML = ids.length ? '' : ['cursor', 'codex'].map(id => `<div><span>${escape(registry.get(id).label)}</span><i></i><small>${escape(t('copy.notDetected.156219'))}</small></div>`).join('');
-    tile.querySelector('.ai-empty-title').textContent = size === 'mini' ? D.FALLBACK.miniTitle : D.FALLBACK.title;
-    tile.querySelector('.ai-empty-body').textContent = size === 'mini' ? D.FALLBACK.miniBody : D.FALLBACK.body;
+    const visibleCatalog = usageProviders().filter(({ id }) => !hiddenSourceIds().has(id));
+    const allHidden = usageProviders().length > 0 && visibleCatalog.length === 0;
+    if (ids.length) {
+      tile.querySelector('.ai-empty-bars').innerHTML = '';
+      tile.querySelector('.ai-empty-title').textContent = '';
+      tile.querySelector('.ai-empty-body').textContent = '';
+    } else if (allHidden) {
+      tile.querySelector('.ai-empty-bars').innerHTML = '';
+      tile.querySelector('.ai-empty-title').textContent = size === 'mini' ? D.FALLBACK.hiddenMiniTitle : D.FALLBACK.hiddenTitle;
+      tile.querySelector('.ai-empty-body').textContent = size === 'mini' ? D.FALLBACK.hiddenMiniBody : D.FALLBACK.hiddenBody;
+    } else {
+      const preferred = ['cursor', 'codex'].filter(id => visibleCatalog.some(row => row.id === id));
+      const emptyIds = (preferred.length ? preferred : visibleCatalog.map(row => row.id)).slice(0, 2);
+      tile.querySelector('.ai-empty-bars').innerHTML = emptyIds.map(id => `<div><span>${escape(registry.get(id).label)}</span><i></i><small>${escape(t('copy.notDetected.156219'))}</small></div>`).join('');
+      tile.querySelector('.ai-empty-title').textContent = size === 'mini' ? D.FALLBACK.miniTitle : D.FALLBACK.title;
+      tile.querySelector('.ai-empty-body').textContent = size === 'mini' ? D.FALLBACK.miniBody : D.FALLBACK.body;
+    }
     const stamps = models.map(m => D.timestamp(m.data)).filter(n => n != null);
     const updated = stamps.length ? t('copy.updated.7114c0', { arg1: D.clock(new Date(Math.min(...stamps)).toISOString()) }) : '';
     const stale = D.staleSummary(state, ['mini', 'small'].includes(size));

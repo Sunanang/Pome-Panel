@@ -12,11 +12,15 @@
 const { spawn } = require('node:child_process');
 
 const WAITING_ACTIONS = Object.freeze({ waitingOnApproval: 'approve', waitingOnUserInput: 'input' });
+// 同时出现多种等待时，授权优先于输入：授权更阻塞、也更敏感。
+const WAITING_FLAG_PRIORITY = Object.freeze(['waitingOnApproval', 'waitingOnUserInput']);
 const ADAPTER = 'codex-app-server-bridge';
+const STOP_KILL_MS = 2000;
 
 function waitingAction(flags) {
   if (!Array.isArray(flags)) return null;
-  for (const flag of flags) if (WAITING_ACTIONS[flag]) return WAITING_ACTIONS[flag];
+  const present = new Set(flags);
+  for (const flag of WAITING_FLAG_PRIORITY) if (present.has(flag)) return WAITING_ACTIONS[flag];
   return null;
 }
 
@@ -44,6 +48,21 @@ function createTracker() {
       return [requiredEvent({ threadId, project, action, occurredAt: at })];
     },
     reset() { announced.clear(); },
+    // 观察者退出时必须把已宣告的等待收成 resolved，否则顶部气泡会挂死。
+    flushResolved({ occurredAt, projects = new Map() } = {}) {
+      const at = Number(occurredAt) > 0 ? Number(occurredAt) : Date.now();
+      const events = [];
+      for (const [threadId, action] of announced) {
+        events.push(resolvedEvent({
+          threadId,
+          project: projects.get(threadId) || '',
+          action,
+          occurredAt: at,
+        }));
+      }
+      announced.clear();
+      return events;
+    },
   };
 }
 
@@ -89,12 +108,29 @@ function eventsFromNotification(message, tracker, { now = Date.now, threadProjec
   return [];
 }
 
-function createCodexAttentionBridge({ codexBinary, socketPath = '', onEvents = () => {}, onRequest = () => {}, now = Date.now, spawnProcess = spawn } = {}) {
+function createCodexAttentionBridge({ codexBinary, socketPath = '', onEvents = () => {}, onRequest = () => {}, onExit = () => {}, now = Date.now, spawnProcess = spawn, stopKillMs = STOP_KILL_MS } = {}) {
   const tracker = createTracker();
   const threadProjects = new Map();
-  let child = null, buffer = '', nextId = 1, running = false, client = {};
+  let child = null, buffer = '', nextId = 1, running = false, client = {}, intentionalStop = false, settled = false, stopTimer = null;
   function send(message) { if (child?.stdin?.writable) child.stdin.write(JSON.stringify(message) + '\n'); }
   function request(method, params) { const id = nextId++; send({ jsonrpc: '2.0', id, method, params }); return id; }
+  function emitResolved() {
+    const events = tracker.flushResolved({ occurredAt: now(), projects: threadProjects });
+    if (events.length) onEvents(events);
+  }
+  function clearStopTimer() {
+    if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
+  }
+  function settle() {
+    if (settled) return;
+    settled = true;
+    running = false;
+    child = null;
+    buffer = '';
+    clearStopTimer();
+    emitResolved();
+    if (!intentionalStop) onExit();
+  }
   function handleLine(line) {
     let message;
     try { message = JSON.parse(line); } catch { return; }
@@ -123,6 +159,9 @@ function createCodexAttentionBridge({ codexBinary, socketPath = '', onEvents = (
     eventsFromNotification: message => eventsFromNotification(message, tracker, { now, threadProjects }),
     start() {
       if (running || !codexBinary) return false;
+      intentionalStop = false;
+      settled = false;
+      clearStopTimer();
       const args = ['app-server', 'proxy'];
       if (socketPath) args.push('--sock', socketPath);
       child = spawnProcess(codexBinary, args, { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -136,15 +175,34 @@ function createCodexAttentionBridge({ codexBinary, socketPath = '', onEvents = (
           if (line) handleLine(line);
         }
       });
-      child.on('error', () => { running = false; });
-      child.on('exit', () => { running = false; tracker.reset(); });
+      // error 与 exit 都可能单独到达；settle 去重，避免气泡挂死或重复 onExit。
+      child.on('error', () => settle());
+      child.on('exit', () => settle());
       request('initialize', { clientInfo: { name: 'pome-panel', title: 'Pome Panel', version: client.version || '0.0.0' } });
       send({ jsonrpc: '2.0', method: 'initialized' });
       request('thread/list', { limit: 50 });
       return true;
     },
-    stop() { running = false; try { child?.kill('SIGTERM'); } catch {} child = null; },
+    stop() {
+      intentionalStop = true;
+      running = false;
+      const active = child;
+      child = null;
+      if (!active) {
+        settle();
+        return;
+      }
+      try { active.kill('SIGTERM'); } catch { settle(); return; }
+      // kill 可能同步触发 exit→settle；只有仍僵住时才升级 SIGKILL。
+      if (settled) return;
+      clearStopTimer();
+      stopTimer = setTimeout(() => {
+        stopTimer = null;
+        try { active.kill('SIGKILL'); } catch { /* already gone */ }
+        settle();
+      }, Math.max(0, Number(stopKillMs) || STOP_KILL_MS));
+    },
   };
 }
 
-module.exports = { WAITING_ACTIONS, waitingAction, createTracker, eventsFromNotification, createCodexAttentionBridge };
+module.exports = { WAITING_ACTIONS, WAITING_FLAG_PRIORITY, waitingAction, createTracker, eventsFromNotification, createCodexAttentionBridge, STOP_KILL_MS };
