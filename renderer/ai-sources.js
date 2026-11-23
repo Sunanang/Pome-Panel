@@ -326,8 +326,11 @@ const pomeLocaleRendererAiSources = typeof module === 'object' && module.exports
         definitions.push(['connect', 'copy.connect.f3b392']);
       }
     }
-    if (isHidden(row.source)) definitions.push(['unhide', 'copy.show.4b7a2f']);
-    else if (canHide(row)) definitions.push(['hide', 'copy.hide.8c1d4e']);
+    // 没有可见性模块（例如升级到一半）时不要摆出点了没反应的按钮。
+    if (visibility) {
+      if (isHidden(row.source)) definitions.push(['unhide', 'copy.show.4b7a2f']);
+      else if (canHide(row)) definitions.push(['hide', 'copy.hide.8c1d4e']);
+    }
     // Updating busy or language must not detach the button anchoring a preview.
     for (const child of [...actions.children]) {
       if (!definitions.some(([action]) => child.dataset.sourceAction === action)) child.remove();

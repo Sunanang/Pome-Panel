@@ -69,6 +69,19 @@ test('the quota widget drops hidden sources but keeps the rest', t => {
   assert.deepEqual(require('../renderer/ai-usage-domain').providers(snapshots).sort(), ['cursor', 'grokbot']);
 });
 
+test('the quota widget stops polling hidden sources and ships the entry points', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const usage = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'ai-usage.js'), 'utf8');
+  assert.match(usage, /const activeProviders = \(\) => \{/, 'hidden sources are filtered before polling');
+  assert.match(usage, /await Promise\.all\(activeProviders\(\)\.map/, 'refresh skips hidden sources');
+  assert.match(usage, /const needs = activeProviders\(\)\.some/, 'tick skips hidden sources');
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  assert.ok(pkg.build.files.includes('scripts/ai-attention-notify.js'), 'the reminder script ships with the app');
+  const macFiles = pkg.build.mac.files;
+  if (Array.isArray(macFiles)) assert.ok(macFiles.includes('scripts/ai-attention-notify.js'), 'macOS packaging keeps the reminder script');
+});
+
 test('the settings list ships the hidden summary and loads the visibility module first', () => {
   const fs = require('node:fs');
   const html = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'index.html'), 'utf8');

@@ -138,7 +138,12 @@ test('connection test rejects a notify command replaced during its async status 
   assert.equal(fs.existsSync(executed), false);
 });
 
-for (const transport of ['stub', 'http']) test(`repaired chain delivers once and preserves exact forwarding (${transport})`, { skip: process.platform === 'win32' }, async t => {
+// These cases invoke the installed command with process.execPath. Under Electron-as-node
+// (ELECTRON_RUN_AS_NODE) that is not a plain node binary: the forwarded script
+// turns into a headless app that never exits, so delivery cannot be counted and
+// every run leaves a stray GUI process behind. Require an actual node runtime.
+const plainNodeRuntime = !process.versions.electron;
+for (const transport of ['stub', 'http']) test(`repaired chain delivers once and preserves exact forwarding (${transport})`, { skip: process.platform === 'win32' || !plainNodeRuntime }, async t => {
   const { home, file, service, write } = fixture(t), seen = [];
   let server;
   const receipt = path.join(home, 'receipt.jsonl'), preload = path.join(home, 'transport-stub.cjs');

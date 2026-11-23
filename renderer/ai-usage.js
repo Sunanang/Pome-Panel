@@ -9,6 +9,14 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   const t = (key, args) => I.t(key, args);
   const registry = D.registry;
   const usageProviders = () => registry.usageProviders();
+  // 隐藏起来的来源不再轮询额度：省掉它没必要的凭据读取与网络请求。
+  const hiddenSourceIds = () => {
+    try { return new Set(window.NotchAiSourceVisibility?.list?.() || []); } catch { return new Set(); }
+  };
+  const activeProviders = () => {
+    const hidden = hiddenSourceIds();
+    return usageProviders().filter(({ id }) => !hidden.has(id));
+  };
   const state = Object.fromEntries(usageProviders().map(({ id }) => [id, null]));
   const A = window.NotchQuotaAnimation;
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -602,7 +610,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
     const visible = usageVisible();
     lastRequest = Date.now();
     inFlight = (async () => {
-      await Promise.all(usageProviders().map(async ({ id, request }) => {
+      await Promise.all(activeProviders().map(async ({ id, request }) => {
         if (!D.shouldRefresh(state[id], { force, visible })) return;
         const revision = revisions[id];
         try {
@@ -681,7 +689,7 @@ const pomeLocaleRendererAiUsage = typeof module === 'object' && module.exports ?
   function softTick() {
     if (!usageVisible()) return;
     const now = Date.now();
-    const needs = usageProviders().some(({ id }) => {
+    const needs = activeProviders().some(({ id }) => {
       const data = state[id];
       if (!data || !D.available(data)) return false;
       const next = D.status(data, id, now);

@@ -79,6 +79,19 @@ test('retransmitting the same request identity dedupes instead of stacking bubbl
   assert.equal(store.list().filter(row => row.state === 'pending').length, 1);
 });
 
+test('a resolve has to carry the same session id, otherwise the request stays pending', t => {
+  const store = tempStore(t);
+  const required = buildAttentionNotification({ source: 'codex', action: 'select', question: '继续吗？',
+    requestId: 'req-8', sessionId: 'thread-a', occurredAt: 1_700_000_004_000 });
+  store.apply(classifyAiEvent(required, 'codex').event);
+  const mismatched = buildResolvedNotification({ source: 'codex', requestId: 'req-8', sessionId: 'thread-b', occurredAt: 1_700_000_005_000 });
+  store.apply(classifyAiEvent(mismatched, 'codex').event);
+  assert.equal(store.list().filter(row => row.state === 'pending').length, 1, 'a different session cannot close the reminder');
+  const matched = buildResolvedNotification({ source: 'codex', requestId: 'req-8', sessionId: 'thread-a', occurredAt: 1_700_000_006_000 });
+  store.apply(classifyAiEvent(matched, 'codex').event);
+  assert.equal(store.list().filter(row => row.state === 'pending').length, 0);
+});
+
 test('unsupported sources are refused, and cli flags parse', () => {
   assert.throws(() => buildAttentionNotification({ source: 'gpt' }), /unsupported_source/);
   assert.deepEqual(parseArgs(['--source', 'cursor', '--action', 'select', '--question', '选哪个？', '--project', 'pome']),

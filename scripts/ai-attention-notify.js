@@ -45,7 +45,7 @@ function parseArgs(argv = process.argv.slice(2)) {
   return out;
 }
 
-function actionFor(source, action) {
+function actionFor(action) {
   if (action && ACTIONS.includes(action)) return action;
   return 'input';
 }
@@ -55,7 +55,7 @@ function actionFor(source, action) {
 function buildAttentionNotification({ source = 'codex', action = 'input', question = '', project = '',
   sessionId = '', requestId = '', occurredAt = Date.now() } = {}) {
   if (!SOURCES.includes(source)) throw new Error('unsupported_source');
-  const resolvedAction = actionFor(source, action);
+  const resolvedAction = actionFor(action);
   const id = String(requestId || randomUUID());
   const safe = safeQuestion(question, resolvedAction);
   return {
@@ -117,7 +117,7 @@ const USAGE = [
   '  --question "<text>"             one-line summary shown in the bubble',
   '  --project "<name>"              project shown next to it',
   '  --request "<id>"                stable request id (same id = same reminder)',
-  '  --session "<id>"                optional session id',
+  '  --session "<id>"                optional session id (must match on --resolved too)',
   '  --resolved [--reason answered|cancelled|continued|terminated]',
   '  --dry-run                       print the event instead of posting it',
 ].join('\n');

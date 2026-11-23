@@ -319,7 +319,13 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
           message: matches ? pomeLocaleAiSourceHooks.t('copy.connectedListeningForLocalCompletionEvents.256f7f') : pomeLocaleAiSourceHooks.t('copy.appendTheHookWhilePreservingExistingConfiguration.429226', { arg1: newEvents[source].join(' + ') }) };
       }
       const eventLabel = source === 'claude' || source === 'grok' ? 'Stop' : 'stop';
-      if (!items.length) return { ...base, state: 'disconnected', installed: false, message: source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.writeNotifyWhilePreservingAndForwardingThe.416e9e") : pomeLocaleAiSourceHooks.t("copy.appendTheHookWhilePreservingExistingConfiguration.429226", { arg1: (source === 'grok' ? 'Stop + StopFailure' : eventLabel) }) };
+      if (!items.length) {
+        // 只留下等待观察 hook（Claude）或摘要 hook（Cursor）也算"配置里还有 Pome 的项"，
+        // 否则用户得先重连一次才能把这些残留清掉。
+        const leftovers = (source === 'claude' && hasAttentionHooks(config))
+          || (source === 'cursor' && (config.value.hooks?.afterAgentResponse || []).some(item => isOwned(item, source)));
+        return { ...base, state: 'disconnected', installed: leftovers, message: source === 'codex' ? pomeLocaleAiSourceHooks.t("copy.writeNotifyWhilePreservingAndForwardingThe.416e9e") : pomeLocaleAiSourceHooks.t("copy.appendTheHookWhilePreservingExistingConfiguration.429226", { arg1: (source === 'grok' ? 'Stop + StopFailure' : eventLabel) }) };
+      }
       if (source === 'codex') {
         const matches = JSON.stringify(config.value.notify) === JSON.stringify(codexCommand(chain.command));
         const nested = chain.pomeCount > 1 || codexPomeMarkerIndex(config.value.notify) < 0;

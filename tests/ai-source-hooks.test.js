@@ -6,6 +6,39 @@ const {createTaskInbox,completionEventId}=require('../taskInbox');
 // This fixture already runs in the selected Node runtime. Launch tests below
 // verify the installed commands; config tests need no extra runtime probes.
 function fixture(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'pome-hooks-test-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));for(const dir of ['.codex','.claude','.cursor','.grok'])fs.mkdirSync(path.join(home,dir));return {home,service:createAiSourceHooks({env:{},homeDir:home,runtimeCheck:()=>true}),files:{codex:path.join(home,'.codex/config.toml'),claude:path.join(home,'.claude/settings.json'),cursor:path.join(home,'.cursor/hooks.json'),grok:path.join(home,'.grok/hooks/pome-panel.json')}};}
+test('claude attention-only leftovers still offer a disconnect', async t => {
+  const { service, files } = fixture(t);
+  const plan = await service.preview('claude');
+  await service.apply(plan.token);
+  // Drop only the completion hook; the waiting-observation hooks stay behind.
+  const config = JSON.parse(fs.readFileSync(files.claude, 'utf8'));
+  delete config.hooks.Stop;
+  fs.writeFileSync(files.claude, JSON.stringify(config, null, 2) + '\n');
+  const status = await service.status('claude');
+  assert.equal(status.state, 'disconnected');
+  assert.equal(status.installed, true, 'leftover Pome hooks must keep the disconnect entry');
+  const disconnect = await service.preview('claude', 'disconnect');
+  await service.apply(disconnect.token);
+  const text = fs.readFileSync(files.claude, 'utf8');
+  assert.equal(text.includes('pome-panel-hook=claude'), false);
+  assert.equal((await service.status('claude')).installed, false);
+});
+
+test('cursor summary-only leftovers still offer a disconnect', async t => {
+  const { service, files } = fixture(t);
+  const plan = await service.preview('cursor');
+  await service.apply(plan.token);
+  const config = JSON.parse(fs.readFileSync(files.cursor, 'utf8'));
+  delete config.hooks.stop;
+  fs.writeFileSync(files.cursor, JSON.stringify(config, null, 2) + '\n');
+  const status = await service.status('cursor');
+  assert.equal(status.state, 'disconnected');
+  assert.equal(status.installed, true);
+  const disconnect = await service.preview('cursor', 'disconnect');
+  await service.apply(disconnect.token);
+  assert.equal(fs.readFileSync(files.cursor, 'utf8').includes('pome-panel-hook=cursor'), false);
+});
+
 for(const source of ['codex','claude','cursor','grok']){
  test(`${source}: isolated HOME connect, repeat connect, repair moved paths, disconnect`,async t=>{
   const {home,service,files}=fixture(t);
