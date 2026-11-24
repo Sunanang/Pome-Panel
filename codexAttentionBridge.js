@@ -10,6 +10,7 @@
 // thread/status/changed therefore yields the waiting state without becoming a
 // driver, answering anything, or reading the UI.
 const { spawn } = require('node:child_process');
+const { randomUUID } = require('node:crypto');
 
 const WAITING_ACTIONS = Object.freeze({ waitingOnApproval: 'approve', waitingOnUserInput: 'input' });
 // 同时出现多种等待时，授权优先于输入：授权更阻塞、也更敏感。
@@ -49,13 +50,19 @@ function createTracker() {
       if (previous) {
         // 解析事件的 requestId 必须与对应 required 的完全一致，否则存储层
         // 关不掉那条提醒（请求键包含 requestId）。
-        events.push(resolvedEvent({ threadId, project, action: previous.action, occurrence: previous.occurrence, occurredAt: at }));
+        events.push(resolvedEvent({
+          threadId, project, action: previous.action, occurrence: previous.occurrence,
+          requestId: previous.requestId, occurredAt: at,
+        }));
         announced.delete(threadId);
       }
       if (action) {
         const occurrence = nextOccurrence(threadId);
-        announced.set(threadId, { action, occurrence });
-        events.push(requiredEvent({ threadId, project, action, occurrence, occurredAt: at }));
+        // UUID 防止「进程内新建桥 / 观察者重建」后 occurrence 从 1 重数，撞上
+        // 存储层 24h 墓碑把第二次提问再次静默丢掉。
+        const requestId = `thread-status:${action}:${occurrence}:${randomUUID()}`;
+        announced.set(threadId, { action, occurrence, requestId });
+        events.push(requiredEvent({ threadId, project, action, occurrence, requestId, occurredAt: at }));
       }
       return events;
     },
@@ -70,6 +77,7 @@ function createTracker() {
           project: projects.get(threadId) || '',
           action: current.action,
           occurrence: current.occurrence,
+          requestId: current.requestId,
           occurredAt: at,
         }));
       }
@@ -79,14 +87,14 @@ function createTracker() {
   };
 }
 
-function requiredEvent({ threadId, action, occurrence = 1, project = '', occurredAt = Date.now() }) {
+function requiredEvent({ threadId, action, occurrence = 1, requestId, project = '', occurredAt = Date.now() }) {
   return baseEvent({ threadId, project, occurredAt, kind: 'attention.required', action, occurrence,
-    requestId: 'thread-status:' + action + ':' + occurrence, signal: 'thread/status/changed:' + action });
+    requestId: requestId || (`thread-status:${action}:${occurrence}`), signal: 'thread/status/changed:' + action });
 }
 
-function resolvedEvent({ threadId, action, occurrence = 1, project = '', occurredAt = Date.now() }) {
+function resolvedEvent({ threadId, action, occurrence = 1, requestId, project = '', occurredAt = Date.now() }) {
   return baseEvent({ threadId, project, occurredAt, kind: 'attention.resolved', reason: 'answered', action, occurrence,
-    requestId: 'thread-status:' + action + ':' + occurrence, signal: 'thread/status/changed:idle' });
+    requestId: requestId || (`thread-status:${action}:${occurrence}`), signal: 'thread/status/changed:idle' });
 }
 
 function baseEvent({ threadId, project, occurredAt, kind, action, occurrence = 1, reason, requestId, signal }) {

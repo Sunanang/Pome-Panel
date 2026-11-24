@@ -60,11 +60,12 @@ test('clearing the flag resolves the same request so the bubble disappears', () 
 
 test('approval turning into a question resolves the first and opens the second', () => {
   const tracker = createTracker();
-  tracker.apply({ threadId: 't3', flags: ['waitingOnApproval'], occurredAt: 1_700_000_000_000 });
+  const [first] = tracker.apply({ threadId: 't3', flags: ['waitingOnApproval'], occurredAt: 1_700_000_000_000 });
   const events = tracker.apply({ threadId: 't3', flags: ['waitingOnUserInput'], occurredAt: 1_700_000_003_000 });
   assert.deepEqual(events.map(event => event.kind), ['attention.resolved', 'attention.required']);
-  assert.equal(events[0].requestId, 'thread-status:approve:1');
-  assert.equal(events[1].requestId, 'thread-status:input:2');
+  assert.equal(events[0].requestId, first.requestId);
+  assert.match(events[1].requestId, /^thread-status:input:2:/);
+  assert.notEqual(events[0].requestId, events[1].requestId);
 });
 
 test('the same thread asking twice produces a second reminder instead of being dropped', t => {
@@ -113,6 +114,31 @@ test('an unexpected exit reconnects with backoff until stop is asked for', async
   children[1].emit('exit', 0);
   await new Promise(resolve => setTimeout(resolve, 60));
   assert.equal(children.length, 2, 'an intentional stop must not reconnect');
+});
+
+test('a brand-new tracker after a resolved tombstone still raises the next wait', t => {
+  const store = tempStore(t);
+  const feed = (tracker, flags) => {
+    for (const event of tracker.apply({ threadId: 'thread-rebuilt', flags, occurredAt: Date.now() })) {
+      store.apply(classifyAiEvent(event, 'codex').event);
+    }
+  };
+  const first = createTracker();
+  feed(first, ['waitingOnUserInput']);
+  feed(first, []);
+  assert.equal(store.list().filter(row => row.state === 'pending').length, 0);
+  // 模拟 main 误把句柄置空后 new 出一个观察者：occurrence 会从 1 重数，
+  // 若 requestId 不含唯一后缀就会撞 24h 墓碑。
+  const rebuilt = createTracker();
+  feed(rebuilt, ['waitingOnUserInput']);
+  assert.equal(store.list().filter(row => row.state === 'pending').length, 1, 'rebuilt observer must not be blocked by the old tombstone');
+});
+
+test('main must not layer a second restart on top of the bridge autoRestart', () => {
+  const mainText = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  assert.match(mainText, /autoRestartMs:/);
+  assert.doesNotMatch(mainText, /scheduleCodexAttentionBridgeRestart/);
+  assert.match(mainText, /internal backoff reconnect owns recovery/);
 });
 
 test('a dead child stdin does not throw out of start()', () => {

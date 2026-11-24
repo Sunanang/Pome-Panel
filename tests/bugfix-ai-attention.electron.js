@@ -27,7 +27,8 @@ fs.mkdirSync(output, { recursive: true });
 
 const mainText = fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8');
 assert.match(mainText, /if \(result\.source === 'codex'\) stopCodexAttentionBridge\(\)/, 'disconnect must stop the app-server observer');
-assert.match(mainText, /scheduleCodexAttentionBridgeRestart/, 'unexpected proxy exit must schedule a reconnect');
+assert.match(mainText, /autoRestartMs:/, 'unexpected proxy exit must reconnect inside the bridge');
+assert.doesNotMatch(mainText, /scheduleCodexAttentionBridgeRestart/, 'a second main-level restart would stack observers');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let started = false;

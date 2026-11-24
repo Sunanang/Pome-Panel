@@ -583,8 +583,6 @@ function refreshAttentionNotifications(preferredKey = null) {
 // 观察者是只读的：不接 turn/start、不 resume 线程、也绝不回答服务端请求；
 // 默认关闭，用 POME_CODEX_APPSERVER=1 才连，等真实样本验收后再做成设置项。
 let codexAttentionBridge = null;
-let codexAttentionRestartTimer = null;
-let codexAttentionRestartAttempt = 0;
 function applyCodexAttentionEvents(events) {
   try {
     for (const event of events) {
@@ -595,16 +593,6 @@ function applyCodexAttentionEvents(events) {
     refreshAttentionNotifications();
   } catch { reportTaskEventFailure(PomeI18n.t('attention.storageError')); }
 }
-function scheduleCodexAttentionBridgeRestart() {
-  if (process.env.POME_CODEX_APPSERVER !== '1' || isQuitting || process.env.TODO_TEST_USER_DATA) return;
-  if (codexAttentionRestartTimer) return;
-  const delay = Math.min(30_000, 1000 * (2 ** Math.min(codexAttentionRestartAttempt, 4)));
-  codexAttentionRestartAttempt += 1;
-  codexAttentionRestartTimer = setTimeout(() => {
-    codexAttentionRestartTimer = null;
-    startCodexAttentionBridge();
-  }, delay);
-}
 function startCodexAttentionBridge() {
   if (process.env.POME_CODEX_APPSERVER !== '1' || codexAttentionBridge || isQuitting) return;
   const binary = process.env.POME_CODEX_BINARY || [
@@ -612,6 +600,8 @@ function startCodexAttentionBridge() {
     '/Applications/Codex.app/Contents/Resources/codex-cli/bin/codex',
   ].find(candidate => { try { return fs.existsSync(candidate); } catch { return false; } });
   if (!binary) return;
+  // 重连只走桥内部的 autoRestartMs。若在 onExit 里把句柄置空再另起一条
+  // scheduleRestart，会与桥内定时器叠成两个观察者（实测一次退出可拉起 3 个子进程）。
   codexAttentionBridge = createCodexAttentionBridge({
     codexBinary: binary,
     socketPath: process.env.POME_CODEX_APPSERVER_SOCK || '',
@@ -622,19 +612,12 @@ function startCodexAttentionBridge() {
     onRequest: request => console.warn('codex app-server request left to its own client:', request.method),
     onEvents: applyCodexAttentionEvents,
     onExit: () => {
-      codexAttentionBridge = null;
-      scheduleCodexAttentionBridgeRestart();
+      console.warn('codex app-server observer exited; internal backoff reconnect owns recovery');
     },
   });
-  if (codexAttentionBridge.start()) codexAttentionRestartAttempt = 0;
-  else codexAttentionBridge = null;
+  if (!codexAttentionBridge.start()) codexAttentionBridge = null;
 }
 function stopCodexAttentionBridge() {
-  if (codexAttentionRestartTimer) {
-    clearTimeout(codexAttentionRestartTimer);
-    codexAttentionRestartTimer = null;
-  }
-  codexAttentionRestartAttempt = 0;
   try { codexAttentionBridge?.stop(); } catch {}
   codexAttentionBridge = null;
 }
