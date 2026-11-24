@@ -1,0 +1,49 @@
+---
+description: AI 卡点（MCP 授权、命令 Run、权限/审批卡）时，同步用 Pome 顶部气泡提醒用户回客户端确认
+alwaysApply: true
+---
+
+# AI 卡点 → Pome 顶部气泡
+
+本仓库对话里，**凡是需要用户在 AI 客户端里点一下才能继续**的卡点，都要先打 Pome 顶部气泡，再继续流程。不要只依赖 Cursor / Codex / Claude 应用内提示；用户可能在看别的窗口。
+
+## 覆盖范围
+
+至少包括：
+
+- MCP / OAuth 授权（`needsAuth`、`mcp_auth`）
+- 需要用户点 **Run** 的命令权限卡（沙箱外权限、`all` / `full_network`、Auto-review / smart mode 审批等）
+- 系统或应用权限确认、其它阻塞式审批卡
+
+Codex、Claude Code、Cursor 等来源一视同仁：用 `--source` 区分。
+
+## 操作顺序
+
+1. **先**弹气泡（不抢焦点）：
+   ```bash
+   node scripts/agent-gate-notify.js --source <cursor|codex|claude|...> --gate <类型> --label "<短标签>"
+   ```
+   类型：
+   - `mcp-auth` — MCP / OAuth
+   - `command-run` — 等用户点 Run 批准命令
+   - `permission` — 权限确认
+   - `review` — Auto-review / 审批卡
+   - `attention` — 其它卡点
+
+   Cursor MCP 也可继续用兼容脚本：
+   ```bash
+   node scripts/cursor-mcp-auth-notify.js --service "<服务显示名>"
+   ```
+
+2. 再发起真正的授权 / 提权 / 等待用户点 Run。
+
+3. **成功后立刻收起**（不要等用户手动关气泡）：
+   ```bash
+   node scripts/agent-gate-notify.js --source <...> --gate <同一类型> --label "<同一标签>" --resolved
+   ```
+   或 MCP 兼容脚本加 `--resolved`。  
+   只会收起该成功时刻及之前已打开的同会话请求；同一成功载荷重投只记 duplicate，不会误关之后新开的卡点。失败或用户取消则不要发 `--resolved`。
+
+4. 气泡走 `/notify/<source>`：弹出用 v2 `attention.required` + `action=approve`，收起用 `attention.resolved` + 会话级 gate done。只进本机待处理，不产生完成历史或未读。点气泡应回到对应客户端；手动关闭气泡不代表卡点已完成。
+
+5. Pome 未运行或端口不可达时，脚本失败不要阻断主流程；在对话里用一句话提醒用户去客户端顶部完成操作。

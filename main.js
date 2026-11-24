@@ -40,7 +40,11 @@ const { createMeetingModeMonitor } = require('./meetingMode');
 const { createMeetingProbe } = require('./platform-adapters/meetingProbe');
 const { createClaudeAttentionAdapter } = require('./claudeAttentionAdapter');
 const { createCodexAttentionBridge } = require('./codexAttentionBridge');
-const { expandMcpAuthSessionResolution, isMcpAuthSessionResolution } = require('./scripts/cursor-mcp-auth-notify');
+const {
+  expandAgentGateSessionResolution,
+  isAgentGateSessionResolution,
+  isGateAdapter,
+} = require('./scripts/agent-gate-notify');
 const claudeAttentionAdapter = createClaudeAttentionAdapter();
 let aiSourceHooks;
 function getAiSourceHooks() {
@@ -522,6 +526,13 @@ function getAiAttention() {
   if (!aiAttentionStore) aiAttentionStore = createAiAttentionStore({ filePath: path.join(app.getPath('userData'), 'ai-attention.json') });
   return aiAttentionStore;
 }
+function attentionWindowApp(source) {
+  if (source === 'cursor') return 'Cursor';
+  if (source === 'codex') return 'Codex';
+  if (source === 'antigravity') return 'Antigravity';
+  if (source === 'claude' || source === 'grok' || source === 'copilot') return 'Terminal';
+  return null;
+}
 function attentionNotification(row) {
   const event = row.event;
   return { source: event.source, status: 'awaiting', eventId: row.key, attentionKey: row.key,
@@ -529,9 +540,9 @@ function attentionNotification(row) {
     title: event.commandPreview ? PomeI18n.t('attention.commandMasked', { command: event.commandPreview }) : event.question || PomeI18n.t(event.sensitive ? 'attention.sensitive' : 'attention.generic'),
     commandPreview: event.commandPreview,
     attentionTitleKey: event.commandPreview ? 'attention.commandMasked' : event.question ? null : event.sensitive ? 'attention.sensitive' : 'attention.generic',
-    manualResolution: event.evidence.adapter === 'cursor-mcp-auth-notify',
+    manualResolution: isGateAdapter(event.evidence?.adapter),
     project: event.project, completedAt: event.occurredAt, occurredAt: event.occurredAt,
-    window: { app: event.source === 'claude' ? 'Terminal' : event.source === 'cursor' ? 'Cursor' : 'Codex' } };
+    window: { app: attentionWindowApp(event.source) } };
 }
 function taskNotificationsEnabled() {
   const settings = readAppSettings();
@@ -604,6 +615,10 @@ function startCodexAttentionBridge() {
   codexAttentionBridge = createCodexAttentionBridge({
     codexBinary: binary,
     socketPath: process.env.POME_CODEX_APPSERVER_SOCK || '',
+    // 版本进 initialize 的 clientInfo，方便在 Codex 侧认出观察者。
+    clientVersion: app.getVersion(),
+    // daemon / Desktop 重启会让 proxy 断开：自动重连，退避 5s→60s。
+    autoRestartMs: Number(process.env.POME_CODEX_APPSERVER_RETRY_MS) || 5000,
     onRequest: request => console.warn('codex app-server request left to its own client:', request.method),
     onEvents: applyCodexAttentionEvents,
     onExit: () => {
@@ -1591,9 +1606,9 @@ function startTaskNotificationServer() {
       if (policy.category === 'ignore') { sendTaskNotificationResponse(response, 202, { ok: true, result: 'ignored', reason: policy.reason }); return; }
       if (policy.event) {
         try {
-          if (isMcpAuthSessionResolution(policy.event)) {
+          if (isAgentGateSessionResolution(policy.event)) {
             const store = getAiAttention();
-            const expansions = expandMcpAuthSessionResolution(policy.event, store.list());
+            const expansions = expandAgentGateSessionResolution(policy.event, store.list());
             // Commit the receipt and its effects together so a failed write
             // remains retryable without weakening replay protection.
             const [receipt] = store.applyBatch([policy.event, ...expansions], { dedupeFirst: true });
@@ -1605,7 +1620,7 @@ function startTaskNotificationServer() {
             sendTaskNotificationResponse(response, 202, {
               ok: true,
               result: expansions.length ? 'accepted' : 'ignored',
-              ...(expansions.length ? {} : { reason: 'no_pending_mcp_auth' }),
+              ...(expansions.length ? {} : { reason: 'no_pending_gate' }),
             });
             return;
           }
