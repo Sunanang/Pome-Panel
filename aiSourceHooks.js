@@ -31,6 +31,17 @@ function emptyConfigText(source) {
   return source === 'codex' ? '' : '{}\n';
 }
 
+// 只有"根本解析不出来"才算损坏。能解析但结构不被当前版本支持（例如别家工具的
+// 新版 hook schema）不能清空——那是用户的有效配置，清了就是数据丢失。
+function textIsParseable(text, source) {
+  if (!text || !text.trim()) return true;
+  try {
+    if (source === 'codex') { toml.getStaticTOMLValue(toml.parseTOML(text)); }
+    else JSON.parse(text);
+    return true;
+  } catch { return false; }
+}
+
 // 配置损坏无法结构化解析时，仍用原文痕迹判断是否还能「断开」。
 function textHasPomeTraces(text, source) {
   if (!text) return false;
@@ -396,9 +407,11 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
     try {
       config = readConfig(files[source], source);
     } catch (error) {
-      // 整文件损坏时仍允许「尽力断开」：备份原文后写入空骨架，清掉 Pome 痕迹。
+      // 只有整文件损坏（解析不了）才允许「尽力断开」：备份原文后写入空骨架、
+      // 清掉 Pome 痕迹。能解析但不被支持的结构一律拒绝，原样保留。
       if (action !== 'disconnect') throw error;
       const raw = readRawConfigText(files[source], source);
+      if (textIsParseable(raw.text, source)) throw error;
       if (!textHasPomeTraces(raw.text, source)) throw error;
       const text = emptyConfigText(source);
       const token = randomUUID();
@@ -581,4 +594,4 @@ function createAiSourceHooks({ homeDir = os.homedir(), appDir = __dirname, runti
   return { list, status, preview, apply, runTest };
 }
 
-module.exports = { SOURCES, createAiSourceHooks, editNotify, readConfig, readRawConfigText, textHasPomeTraces, emptyConfigText, originalNotify, codexNotifyChain };
+module.exports = { SOURCES, createAiSourceHooks, editNotify, readConfig, readRawConfigText, textHasPomeTraces, textIsParseable, emptyConfigText, originalNotify, codexNotifyChain };

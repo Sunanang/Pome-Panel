@@ -27,36 +27,49 @@ function waitingAction(flags) {
 // Per-thread diff of the announced waiting state. Status notifications repeat,
 // so only transitions produce events; a cleared/absent flag resolves.
 function createTracker() {
+  // threadId -> { action, occurrence }
   const announced = new Map();
+  // 同一线程一轮会话里会问很多次：每次「开始等待」都是一个新请求，必须给新的
+  // requestId，否则存储层会把第二次的 required 当成已解决身份的重复投递丢掉。
+  const occurrences = new Map();
+  const nextOccurrence = threadId => {
+    const next = (occurrences.get(threadId) || 0) + 1;
+    occurrences.set(threadId, next);
+    return next;
+  };
   return {
     announced,
     apply({ threadId, flags, project = '', occurredAt }) {
       if (!threadId) return [];
       const action = waitingAction(flags);
       const previous = announced.get(threadId) || null;
-      if (action === previous) return [];
+      if ((previous?.action || null) === action) return [];
       const at = Number(occurredAt) > 0 ? Number(occurredAt) : Date.now();
+      const events = [];
       if (previous) {
-        announced.delete(threadId);
         // 解析事件的 requestId 必须与对应 required 的完全一致，否则存储层
         // 关不掉那条提醒（请求键包含 requestId）。
-        if (!action) return [resolvedEvent({ threadId, project, action: previous, occurredAt: at })];
-        announced.set(threadId, action);
-        return [resolvedEvent({ threadId, project, action: previous, occurredAt: at }), requiredEvent({ threadId, project, action, occurredAt: at })];
+        events.push(resolvedEvent({ threadId, project, action: previous.action, occurrence: previous.occurrence, occurredAt: at }));
+        announced.delete(threadId);
       }
-      announced.set(threadId, action);
-      return [requiredEvent({ threadId, project, action, occurredAt: at })];
+      if (action) {
+        const occurrence = nextOccurrence(threadId);
+        announced.set(threadId, { action, occurrence });
+        events.push(requiredEvent({ threadId, project, action, occurrence, occurredAt: at }));
+      }
+      return events;
     },
-    reset() { announced.clear(); },
+    reset() { announced.clear(); occurrences.clear(); },
     // 观察者退出时必须把已宣告的等待收成 resolved，否则顶部气泡会挂死。
     flushResolved({ occurredAt, projects = new Map() } = {}) {
       const at = Number(occurredAt) > 0 ? Number(occurredAt) : Date.now();
       const events = [];
-      for (const [threadId, action] of announced) {
+      for (const [threadId, current] of announced) {
         events.push(resolvedEvent({
           threadId,
           project: projects.get(threadId) || '',
-          action,
+          action: current.action,
+          occurrence: current.occurrence,
           occurredAt: at,
         }));
       }
@@ -66,22 +79,22 @@ function createTracker() {
   };
 }
 
-function requiredEvent({ threadId, action, project = '', occurredAt = Date.now() }) {
-  return baseEvent({ threadId, project, occurredAt, kind: 'attention.required',
-    action, requestId: 'thread-status:' + action, signal: 'thread/status/changed:' + action });
+function requiredEvent({ threadId, action, occurrence = 1, project = '', occurredAt = Date.now() }) {
+  return baseEvent({ threadId, project, occurredAt, kind: 'attention.required', action, occurrence,
+    requestId: 'thread-status:' + action + ':' + occurrence, signal: 'thread/status/changed:' + action });
 }
 
-function resolvedEvent({ threadId, action, project = '', occurredAt = Date.now() }) {
-  return baseEvent({ threadId, project, occurredAt, kind: 'attention.resolved', reason: 'answered',
-    requestId: 'thread-status:' + action, signal: 'thread/status/changed:idle' });
+function resolvedEvent({ threadId, action, occurrence = 1, project = '', occurredAt = Date.now() }) {
+  return baseEvent({ threadId, project, occurredAt, kind: 'attention.resolved', reason: 'answered', action, occurrence,
+    requestId: 'thread-status:' + action + ':' + occurrence, signal: 'thread/status/changed:idle' });
 }
 
-function baseEvent({ threadId, project, occurredAt, kind, action, reason, requestId, signal }) {
+function baseEvent({ threadId, project, occurredAt, kind, action, occurrence = 1, reason, requestId, signal }) {
   return {
     schemaVersion: 2,
     kind,
     source: 'codex',
-    eventId: 'codex-status:' + threadId + ':' + (kind === 'attention.resolved' ? 'resolved' : action),
+    eventId: 'codex-status:' + threadId + ':' + (kind === 'attention.resolved' ? 'resolved' : 'required') + ':' + (action || 'none') + ':' + occurrence,
     sessionId: threadId,
     turnId: threadId,
     requestId,
@@ -108,11 +121,16 @@ function eventsFromNotification(message, tracker, { now = Date.now, threadProjec
   return [];
 }
 
-function createCodexAttentionBridge({ codexBinary, socketPath = '', onEvents = () => {}, onRequest = () => {}, onExit = () => {}, now = Date.now, spawnProcess = spawn, stopKillMs = STOP_KILL_MS } = {}) {
+function createCodexAttentionBridge({ codexBinary, socketPath = '', onEvents = () => {}, onRequest = () => {}, onExit = () => {},
+  clientVersion = '0.0.0', autoRestartMs = 0, maxRestartMs = 60_000, now = Date.now, spawnProcess = spawn, stopKillMs = STOP_KILL_MS } = {}) {
   const tracker = createTracker();
   const threadProjects = new Map();
   let child = null, buffer = '', nextId = 1, running = false, client = {}, intentionalStop = false, settled = false, stopTimer = null;
-  function send(message) { if (child?.stdin?.writable) child.stdin.write(JSON.stringify(message) + '\n'); }
+  let restartTimer = null, restartDelay = Math.max(0, Number(autoRestartMs) || 0);
+  // 子进程可能已退出而 stdin 仍可写：写入失败只丢这一次请求，不能冒泡出去。
+  function send(message) {
+    try { if (child?.stdin?.writable) child.stdin.write(JSON.stringify(message) + '\n'); } catch { /* child went away */ }
+  }
   function request(method, params) { const id = nextId++; send({ jsonrpc: '2.0', id, method, params }); return id; }
   function emitResolved() {
     const events = tracker.flushResolved({ occurredAt: now(), projects: threadProjects });
@@ -120,6 +138,22 @@ function createCodexAttentionBridge({ codexBinary, socketPath = '', onEvents = (
   }
   function clearStopTimer() {
     if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
+  }
+  function clearRestartTimer() {
+    if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
+  }
+  // Codex Desktop 或 daemon 重启会让 proxy 断开：不退避就再也不会有等待提醒，
+  // 所以按指数退避重连，直到 stop() 明确要求停止。
+  function scheduleRestart() {
+    if (intentionalStop || restartDelay <= 0) return;
+    clearRestartTimer();
+    const delay = restartDelay;
+    restartDelay = Math.min(Math.max(restartDelay * 2, 1000), Math.max(1000, Number(maxRestartMs) || 60_000));
+    restartTimer = setTimeout(() => {
+      restartTimer = null;
+      if (!intentionalStop) start();
+    }, delay);
+    if (typeof restartTimer.unref === 'function') restartTimer.unref();
   }
   function settle() {
     if (settled) return;
@@ -129,11 +163,14 @@ function createCodexAttentionBridge({ codexBinary, socketPath = '', onEvents = (
     buffer = '';
     clearStopTimer();
     emitResolved();
-    if (!intentionalStop) onExit();
+    if (intentionalStop) return;
+    onExit();
+    scheduleRestart();
   }
   function handleLine(line) {
     let message;
     try { message = JSON.parse(line); } catch { return; }
+    noteHealthy();
     if (message.method && message.id !== undefined) {
       // A server request. Pome is an observer: never answer, never authorize.
       onRequest({ method: message.method, id: message.id });
@@ -153,55 +190,61 @@ function createCodexAttentionBridge({ codexBinary, socketPath = '', onEvents = (
       }
     }
   }
+  function start() {
+    if (running || !codexBinary) return false;
+    intentionalStop = false;
+    settled = false;
+    clearStopTimer();
+    clearRestartTimer();
+    const args = ['app-server', 'proxy'];
+    if (socketPath) args.push('--sock', socketPath);
+    child = spawnProcess(codexBinary, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    running = true;
+    child.stdout.on('data', chunk => {
+      buffer += chunk.toString('utf8');
+      let index;
+      while ((index = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        if (line) handleLine(line);
+      }
+    });
+    // error 与 exit 都可能单独到达；settle 去重，避免气泡挂死或重复 onExit。
+    child.on('error', () => settle());
+    child.on('exit', () => settle());
+    request('initialize', { clientInfo: { name: 'pome-panel', title: 'Pome Panel', version: clientVersion } });
+    send({ jsonrpc: '2.0', method: 'initialized' });
+    request('thread/list', { limit: 50 });
+    return true;
+  }
+  function stop() {
+    intentionalStop = true;
+    running = false;
+    clearRestartTimer();
+    const active = child;
+    child = null;
+    if (!active) {
+      settle();
+      return;
+    }
+    try { active.kill('SIGTERM'); } catch { settle(); return; }
+    // kill 可能同步触发 exit→settle；只有仍僵住时才升级 SIGKILL。
+    if (settled) return;
+    clearStopTimer();
+    stopTimer = setTimeout(() => {
+      stopTimer = null;
+      try { active.kill('SIGKILL'); } catch { /* already gone */ }
+      settle();
+    }, Math.max(0, Number(stopKillMs) || STOP_KILL_MS));
+  }
+  // 连上并且收到任何一条消息就算链路健康，退避重置回初始值。
+  function noteHealthy() { restartDelay = Math.max(0, Number(autoRestartMs) || 0); }
   return {
     get running() { return running; },
     get client() { return client; },
     eventsFromNotification: message => eventsFromNotification(message, tracker, { now, threadProjects }),
-    start() {
-      if (running || !codexBinary) return false;
-      intentionalStop = false;
-      settled = false;
-      clearStopTimer();
-      const args = ['app-server', 'proxy'];
-      if (socketPath) args.push('--sock', socketPath);
-      child = spawnProcess(codexBinary, args, { stdio: ['pipe', 'pipe', 'pipe'] });
-      running = true;
-      child.stdout.on('data', chunk => {
-        buffer += chunk.toString('utf8');
-        let index;
-        while ((index = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, index).trim();
-          buffer = buffer.slice(index + 1);
-          if (line) handleLine(line);
-        }
-      });
-      // error 与 exit 都可能单独到达；settle 去重，避免气泡挂死或重复 onExit。
-      child.on('error', () => settle());
-      child.on('exit', () => settle());
-      request('initialize', { clientInfo: { name: 'pome-panel', title: 'Pome Panel', version: client.version || '0.0.0' } });
-      send({ jsonrpc: '2.0', method: 'initialized' });
-      request('thread/list', { limit: 50 });
-      return true;
-    },
-    stop() {
-      intentionalStop = true;
-      running = false;
-      const active = child;
-      child = null;
-      if (!active) {
-        settle();
-        return;
-      }
-      try { active.kill('SIGTERM'); } catch { settle(); return; }
-      // kill 可能同步触发 exit→settle；只有仍僵住时才升级 SIGKILL。
-      if (settled) return;
-      clearStopTimer();
-      stopTimer = setTimeout(() => {
-        stopTimer = null;
-        try { active.kill('SIGKILL'); } catch { /* already gone */ }
-        settle();
-      }, Math.max(0, Number(stopKillMs) || STOP_KILL_MS));
-    },
+    start,
+    stop,
   };
 }
 

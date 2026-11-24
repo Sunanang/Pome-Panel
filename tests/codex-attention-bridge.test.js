@@ -63,8 +63,64 @@ test('approval turning into a question resolves the first and opens the second',
   tracker.apply({ threadId: 't3', flags: ['waitingOnApproval'], occurredAt: 1_700_000_000_000 });
   const events = tracker.apply({ threadId: 't3', flags: ['waitingOnUserInput'], occurredAt: 1_700_000_003_000 });
   assert.deepEqual(events.map(event => event.kind), ['attention.resolved', 'attention.required']);
-  assert.equal(events[0].requestId, 'thread-status:approve');
-  assert.equal(events[1].requestId, 'thread-status:input');
+  assert.equal(events[0].requestId, 'thread-status:approve:1');
+  assert.equal(events[1].requestId, 'thread-status:input:2');
+});
+
+test('the same thread asking twice produces a second reminder instead of being dropped', t => {
+  const store = tempStore(t);
+  const tracker = createTracker();
+  const feed = events => { for (const event of events) { store.apply(classifyAiEvent(event, 'codex').event); } return events; };
+  const pending = () => store.list().filter(row => row.state === 'pending');
+  feed(tracker.apply({ threadId: 'thread-1', flags: ['waitingOnUserInput'], occurredAt: Date.now() }));
+  assert.equal(pending().length, 1);
+  feed(tracker.apply({ threadId: 'thread-1', flags: [], occurredAt: Date.now() }));
+  assert.equal(pending().length, 0);
+  // 同一线程再问一次：必须重新弹，不能被"已解决身份"当成重复投递丢掉。
+  feed(tracker.apply({ threadId: 'thread-1', flags: ['waitingOnUserInput'], occurredAt: Date.now() }));
+  assert.equal(pending().length, 1, 'the second question must raise a new reminder');
+  feed(tracker.apply({ threadId: 'thread-1', flags: [], occurredAt: Date.now() }));
+  assert.equal(pending().length, 0);
+});
+
+test('each waiting occurrence gets its own identity, and the resolve points at it', () => {
+  const tracker = createTracker();
+  const first = tracker.apply({ threadId: 'thread-2', flags: ['waitingOnApproval'], occurredAt: 1_700_000_000_000 });
+  const firstResolve = tracker.apply({ threadId: 'thread-2', flags: [], occurredAt: 1_700_000_001_000 });
+  const second = tracker.apply({ threadId: 'thread-2', flags: ['waitingOnApproval'], occurredAt: 1_700_000_002_000 });
+  const secondResolve = tracker.apply({ threadId: 'thread-2', flags: [], occurredAt: 1_700_000_003_000 });
+  assert.notEqual(first[0].requestId, second[0].requestId, 'two waits are two requests');
+  assert.equal(firstResolve[0].requestId, first[0].requestId);
+  assert.equal(secondResolve[0].requestId, second[0].requestId);
+  assert.notEqual(first[0].eventId, second[0].eventId);
+});
+
+test('an unexpected exit reconnects with backoff until stop is asked for', async () => {
+  const children = [];
+  const makeChild = () => {
+    const child = fakeChild();
+    children.push(child);
+    return child;
+  };
+  const bridge = createCodexAttentionBridge({ codexBinary: '/fixture/codex', autoRestartMs: 10, spawnProcess: makeChild, now: () => 1_700_000_000_000 });
+  assert.equal(bridge.start(), true);
+  assert.equal(children.length, 1);
+  children[0].emit('exit', 1);         // daemon restarted
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.equal(children.length, 2, 'the observer comes back on its own');
+  assert.equal(bridge.running, true);
+  bridge.stop();
+  children[1].emit('exit', 0);
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.equal(children.length, 2, 'an intentional stop must not reconnect');
+});
+
+test('a dead child stdin does not throw out of start()', () => {
+  const child = fakeChild();
+  child.stdin = { writable: true, write: () => { throw new Error('EPIPE'); } };
+  const bridge = createCodexAttentionBridge({ codexBinary: '/fixture/codex', spawnProcess: () => child });
+  assert.doesNotThrow(() => bridge.start());
+  assert.equal(bridge.running, true);
 });
 
 test('the events survive the store round-trip: pending then gone', t => {

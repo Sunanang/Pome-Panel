@@ -82,6 +82,19 @@ for(const source of ['codex','claude','cursor','grok']){
   assert.equal(fs.readFileSync(files[source],'utf8'),source==='codex'?'':'{}\n');
   assert.equal((await service.status(source)).installed,false);
  });
+ test(`${source}: a parseable but unsupported config is never wiped by "disconnect"`,async t=>{
+  const {service,files}=fixture(t);if(source==='grok')fs.mkdirSync(path.dirname(files.grok),{recursive:true});
+  // 语法合法、只是结构不被当前版本支持（例如别家工具的新 schema）。
+  const valid=source==='codex'
+    ? 'notify = "--pome-panel-hook=codex /tmp/codex-notify.js"\n[model]\nname = "keep"\n'
+    : JSON.stringify({ version: 2, hooks: [], note: '--pome-panel-hook=' + source + ' ' + source + '-notify.js' }, null, 2);
+  fs.writeFileSync(files[source],valid);
+  const status=await service.status(source);
+  assert.equal(status.state,'error');
+  assert.equal(status.installed,true);
+  await assert.rejects(service.preview(source,'disconnect'),'a valid file must be left alone');
+  assert.equal(fs.readFileSync(files[source],'utf8'),valid,'the user configuration stays byte-for-byte');
+ });
  test(`${source}: expired preview cannot overwrite an external edit`,async t=>{
   const {service,files}=fixture(t);const plan=await service.preview(source);if(source==='grok')fs.mkdirSync(path.dirname(files.grok),{recursive:true});
   fs.writeFileSync(files[source],source==='codex'?'# external\na=1\n':'{"external":true}');assert.equal((await service.apply(plan.token)).error,'preview_expired');
