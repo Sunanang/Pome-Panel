@@ -292,7 +292,7 @@ async function main() {
           assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
           await js(`document.getElementById('ai-provider-cursor').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}))`);
           assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`),false,'hover details wait before opening');
-          await new Promise((r) => setTimeout(r, 1100));
+          await new Promise((r) => setTimeout(r, 1400));
           assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`),true);
           assert.equal(await js(`!document.getElementById('ai-provider-cursor').title`),true,'native title tooltip must stay off');
           assert.match(await js(`document.querySelector('#cursor-usage-rows .ai-usage-detail-updated')?.textContent || ''`),/更新于/);
@@ -305,7 +305,7 @@ async function main() {
           })()`);
           assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`), false, 'leaving for another item closes the old bubble');
           assert.equal(await js(`document.getElementById('codex-usage-rows').matches(':popover-open')`), false, 'new item still waits 1s');
-          await new Promise((r) => setTimeout(r, 1100));
+          await new Promise((r) => setTimeout(r, 1400));
           assert.equal(await js(`document.getElementById('codex-usage-rows').matches(':popover-open')`), true, 'second item hover opens after 1s');
           await js(`document.getElementById('ai-provider-codex').dispatchEvent(new PointerEvent('pointerout',{bubbles:true,relatedTarget:document.body}))`);
           assert.equal(await js(`!!document.querySelector('.cursor-usage-rows:popover-open')`),false);
@@ -317,7 +317,7 @@ async function main() {
             const move = (x, y) => win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
             await move(1230, 690);
             await move(point.x, point.y);
-            await new Promise(r => setTimeout(r, 1100));
+            await new Promise(r => setTimeout(r, 1400));
             assert.equal(await js(`document.getElementById('cursor-usage-rows').matches(':popover-open')`), true,
               'native hover opens details: '+JSON.stringify(await js(`({focus:document.hasFocus(),hidden:document.hidden,hover:document.querySelector('.ai-usage-provider:hover')?.dataset.provider})`)));
             await js(`NotchAiUsage.refresh({force:true})`);

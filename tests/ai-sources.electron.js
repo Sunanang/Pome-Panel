@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {app}=require('electron');
 const profile=process.env.TODO_TEST_USER_DATA,home=path.join(profile,'isolated-home');fs.mkdirSync(home);
-process.env.POME_HOOK_TEST_HOME=home;process.env.POME_TEST_NOTIFICATIONS='1';
+process.env.POME_HOOK_TEST_HOME=home;process.env.POME_TEST_NOTIFICATIONS='1';fs.writeFileSync(path.join(profile,'.ui-welcome-done'),'1');
 app.commandLine.appendSwitch('user-data-dir',profile);if(process.platform==='darwin')app.commandLine.appendSwitch('use-mock-keychain');
 require('../cursor-usage').readAuthToken=()=>({ok:false});require('../cursor-usage').fetchCursorUsage=async()=>({ok:false});require('../codex-usage').readCodexUsage=async()=>({ok:true,detected:false});require('../codex-auth').readLocalCodexToken=async()=>({ok:false});
 const {readConfig,editNotify}=require('../aiSourceHooks');

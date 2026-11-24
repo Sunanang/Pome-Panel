@@ -29,9 +29,12 @@ env.TODO_TEST_LOG = path.join(root, 'dist.noindex', 'windows-smoke', 'renderer-t
 fs.mkdirSync(path.dirname(env.TODO_TEST_LOG), { recursive: true });
 fs.writeFileSync(env.TODO_TEST_LOG, '');
 env.NODE_OPTIONS = `${env.NODE_OPTIONS || ''} --require=${JSON.stringify(path.join(root, 'tests/provider-usage-fixtures.cjs'))}`.trim();
-if (!skipElectronAcceptance) for (const file of ['notch-focus', 'retained-workspace', 'workspace-lifecycle', 'metadata-races', 'migration-integrity', 'clipboard-generation', 'typing-layer', 'panel-size', 'home-fill', 'home-layout-variant', 'home-layout-regression', 'command-comments', 'deep-review', 'content-delete', 'experience', 'visual-consistency', 'notes-workflow', 'windows-widget', 'windows-native', 'workbench', 'startup', 'desktop-shell', 'cursor-credentials', 'user-data-directory', 'todo-board-fixes', 'ai-usage', 'ai-usage-final', 'quota-refresh', 'codex-usage-accuracy', 'credential-access', 'provider-credentials', 'home-layout-swap', 'home-card-hover', 'sun-home', 'sun-weather', 'almanac-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'notification-listener', 'meeting-mode', 'todo-reminder-hydration', 'todo-reminders', 'ai-attention', 'bugfix-ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'codex-notify-chain', 'settings-slim', 'ui-simplify', 'nas-settings-card', 'localization', 'normal-startup']) {
+if (!skipElectronAcceptance) for (const file of ['notch-focus', 'retained-workspace', 'workspace-lifecycle', 'metadata-races', 'migration-integrity', 'clipboard-generation', 'typing-layer', 'panel-size', 'home-fill', 'home-layout-variant', 'home-layout-regression', 'command-comments', 'deep-review', 'content-delete', 'experience', 'visual-consistency', 'notes-workflow', 'windows-widget', 'windows-native', 'workbench', 'startup', 'desktop-shell', 'cursor-credentials', 'user-data-directory', 'todo-board-fixes', 'ai-usage', 'ai-usage-final', 'quota-refresh', 'codex-usage-accuracy', 'credential-access', 'provider-credentials', 'home-layout-swap', 'home-card-hover', 'sun-home', 'sun-weather', 'almanac-home', 'security-recovery', 'history-retention', 'ai-completion-sync', 'additional-completion', 'manus-completion', 'notification', 'agent-gate-notify', 'notification-listener', 'meeting-mode', 'todo-reminder-hydration', 'todo-reminders', 'ai-attention', 'bugfix-ai-attention', 'work-hub', 'work-hub-nas', 'inbox-bento', 'inbox-pagination', 'inbox-corrupt-startup', 'ai-sources', 'codex-notify-chain', 'settings-slim', 'ui-simplify', 'nas-settings-card', 'localization', 'normal-startup']) {
   const testProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-renderer-test-'));
   env.TODO_TEST_USER_DATA = testProfile;
+  // 全新 profile 会弹出首次引导（modal），把整页盖住：命中测试、聚焦和坐标点击
+  // 全部落在引导层上。除 ui-simplest 这类专门测引导的用例，其余一律标记为已完成。
+  if (file !== 'ui-simplify') fs.writeFileSync(path.join(testProfile, '.ui-welcome-done'), '1');
   if (file === 'ui-simplify') env.POME_TEST_WELCOME = '1';
   run(require('electron'), [`tests/${file}.electron.js`]);
   if (file === 'deep-review') {
@@ -106,6 +109,7 @@ for (const file of [
   'renderer/ai-sources.js',
   'scripts/cursor-notify.js',
   'scripts/cursor-mcp-auth-notify.js',
+  'scripts/agent-gate-notify.js',
   'workspaceBackup.js',
   'syncRecovery.js',
   'renderer/task-inbox.js',
