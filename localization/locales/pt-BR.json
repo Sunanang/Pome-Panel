@@ -1280,6 +1280,7 @@
   "attention.return.manual": "Por favor, retorne ao aplicativo de origem",
   "attention.hint": "Fecha após manipulação no {source}",
   "attention.hint.oauth": "Dispensar após autorizar",
+  "attention.hint.answered": "Dispensar após responder",
   "attention.hint.manual": "Recursos nativos do Windows desativados · Clique para descartar",
   "attention.hide": "Ocultar este lembrete",
   "attention.sensitive": "Conteúdo confidencial oculto. Retorne ao aplicativo de origem.",

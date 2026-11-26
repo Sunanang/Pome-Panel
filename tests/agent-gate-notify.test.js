@@ -55,10 +55,29 @@ test('question copy covers each gate type', () => {
 
 test('cli args accept source, gate, label and resolved', () => {
   assert.deepEqual(parseArgs(['--source', 'codex', '--gate', 'command-run', '--label', 'npm test']), {
-    source: 'codex', gate: 'command-run', label: 'npm test', dryRun: false, resolved: false, help: false,
+    source: 'codex', gate: 'command-run', action: '', label: 'npm test', dryRun: false, resolved: false, help: false,
   });
+  assert.equal(parseArgs(['--gate', 'attention', '--action', 'select', '--label', '方案']).action, 'select');
   assert.equal(parseArgs(['--service', 'Drive', '--resolved']).resolved, true);
   assert.equal(parseArgs(['--service', 'Drive', '--resolved']).label, 'Drive');
+});
+
+test('Cursor choice (AskQuestion) is a select bubble, not an authorization bubble', () => {
+  const payload = buildGateNotification({ source: 'cursor', gate: 'attention', action: 'select', label: '选方案A或B', requestId: 'choice-1' });
+  assert.equal(payload.action, 'select');
+  assert.match(payload.question, /做选择/);
+  const policy = classifyAiEvent(payload, 'cursor');
+  assert.equal(policy.category, 'attention');
+  assert.equal(policy.event.action, 'select');
+  // 同一 attention 标签的 resolve 必须能收起 select 气泡：会话键不随动作变化。
+  const done = buildGateResolvedNotification({ source: 'cursor', gate: 'attention', label: '选方案A或B', requestId: 'done' });
+  const expanded = expandAgentGateSessionResolution(done, [{ event: payload, firstSeenAt: payload.occurredAt }]);
+  assert.equal(expanded.length, 1);
+});
+
+test('default action stays approve and invalid action is rejected', () => {
+  assert.equal(buildGateNotification({ source: 'cursor', gate: 'command-run', label: 'x' }).action, 'approve');
+  assert.throws(() => buildGateNotification({ source: 'cursor', gate: 'attention', action: 'pick', label: 'x' }), /unknown action/);
 });
 
 test('unknown source or gate is rejected instead of silently remapped', () => {

@@ -1280,6 +1280,7 @@
   "attention.return.manual": "Por favor regrese a la aplicación fuente",
   "attention.hint": "Se cierra después de la manipulación en {source}.",
   "attention.hint.oauth": "Despedir después de autorizar",
+  "attention.hint.answered": "Cerrar después de responder",
   "attention.hint.manual": "Funciones nativas de Windows desactivadas · Haga clic para descartar",
   "attention.hide": "Ocultar este recordatorio",
   "attention.sensitive": "Contenido sensible oculto. Regrese a la aplicación fuente.",

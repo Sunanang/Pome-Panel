@@ -56,7 +56,8 @@ const pomeNotificationProviders = typeof module === 'object' && module.exports ?
     return {
       label: t(kind),
       action: canFocus ? t(`return.${kind}`, { source }) : t('return.manual'),
-      hint: canFocus ? t(manualResolution ? 'hint.oauth' : 'hint', { source }) : t('hint.manual'),
+      // 授权完成后才能关；选择/输入是在客户端作答后关，文案不能写成「授权后」。
+      hint: canFocus ? t(manualResolution ? (kind === 'authorization' ? 'hint.oauth' : 'hint.answered') : 'hint', { source }) : t('hint.manual'),
     };
   }
   function normalize(payload, now = Date.now()) {

@@ -1280,6 +1280,7 @@
   "attention.return.manual": "Please return to the source app",
   "attention.hint": "Closes after handling in {source}",
   "attention.hint.oauth": "Dismiss after authorizing",
+  "attention.hint.answered": "Dismiss after answering",
   "attention.hint.manual": "Windows native features off · Click to dismiss",
   "attention.hide": "Hide this reminder",
   "attention.sensitive": "Sensitive content hidden. Return to the source app.",

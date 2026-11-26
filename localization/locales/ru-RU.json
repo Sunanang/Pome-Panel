@@ -1298,6 +1298,7 @@
   "attention.return.manual": "Пожалуйста, вернитесь в исходное приложение.",
   "attention.hint": "Закрывается после обработки в {source}",
   "attention.hint.oauth": "Закрыть после авторизации",
+  "attention.hint.answered": "Закрыть после ответа",
   "attention.hint.manual": "Собственные функции Windows отключены · Нажмите, чтобы закрыть",
   "attention.hide": "Скрыть это напоминание",
   "attention.sensitive": "Деликатный контент скрыт. Вернитесь в исходное приложение.",

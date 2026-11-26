@@ -133,6 +133,23 @@ async function run(mainContents) {
   assert.equal(ignored.code, 2, 'resolve with no pending bubble must exit 2');
   assert.match(ignored.stderr, /no matching pending bubble/);
 
+  // Cursor AskQuestion：必须是「等待选择」气泡，不能显示成「等待授权」。
+  const choiceOpen = await runScript('scripts/agent-gate-notify.js', [
+    '--source', 'cursor', '--gate', 'attention', '--action', 'select', '--label', '方案 A 还是 B',
+  ]);
+  assert.equal(choiceOpen.code, 0, choiceOpen.stderr);
+  win = await shown('请到 Cursor 做选择：方案 A 还是 B');
+  assert.equal(await evaluate(win, 'currentNotification.attentionKind'), 'choice');
+  assert.equal(await evaluate(win, 'document.getElementById("attention-label").textContent'), '等待选择');
+  assert.match(await evaluate(win, 'document.getElementById("attention-action-label").textContent'), /返回 Cursor 选择/);
+  assert.match(await evaluate(win, 'document.getElementById("attention-hint").textContent'), /作答后可关闭此提醒|Dismiss after answering/, 'choice hint must not claim authorization');
+  await capture(win, 'cursor-choice-gate');
+  const choiceClose = await runScript('scripts/agent-gate-notify.js', [
+    '--source', 'cursor', '--gate', 'attention', '--label', '方案 A 还是 B', '--resolved',
+  ]);
+  assert.equal(choiceClose.code, 0, choiceClose.stderr);
+  await until(async () => !notificationWindow() || !notificationWindow().isVisible(), 'choice --resolved dismisses bubble');
+
   const mcpOpen = await runScript('scripts/agent-gate-notify.js', [
     '--source', 'cursor', '--gate', 'mcp-auth', '--label', 'Google Drive',
   ]);

@@ -1280,6 +1280,7 @@
   "attention.return.manual": "Bitte kehren Sie zur Quell-App zurück",
   "attention.hint": "Wird nach der Bearbeitung in {source} geschlossen",
   "attention.hint.oauth": "Nach Genehmigung entlassen",
+  "attention.hint.answered": "Nach Antwort schließen",
   "attention.hint.manual": "Native Windows-Funktionen deaktiviert · Klicken Sie zum Schließen",
   "attention.hide": "Diese Erinnerung ausblenden",
   "attention.sensitive": "Sensible Inhalte werden ausgeblendet. Kehren Sie zur Quell-App zurück.",

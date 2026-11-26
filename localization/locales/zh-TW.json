@@ -1253,6 +1253,7 @@
   "attention.return.manual": "請返回來源軟體",
   "attention.hint": "在 {source} 中處理後自動收起",
   "attention.hint.oauth": "授權後可關閉此提醒",
+  "attention.hint.answered": "作答後可關閉此提醒",
   "attention.hint.manual": "Windows 原生能力關閉 · 點選僅關閉提醒",
   "attention.hide": "隱藏這次提醒",
   "attention.sensitive": "敏感內容已隱藏，請返回來源檢視",

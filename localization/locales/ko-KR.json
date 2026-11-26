@@ -1280,6 +1280,7 @@
   "attention.return.manual": "원본 앱으로 돌아가세요.",
   "attention.hint": "{source}에서 처리 후 종료",
   "attention.hint.oauth": "승인 후 닫기",
+  "attention.hint.answered": "답변 후 닫기",
   "attention.hint.manual": "Windows 기본 기능 꺼짐 · 닫으려면 클릭하세요",
   "attention.hide": "이 알림 숨기기",
   "attention.sensitive": "민감한 콘텐츠가 숨겨져 있습니다. 원본 앱으로 돌아갑니다.",

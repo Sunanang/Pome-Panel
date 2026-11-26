@@ -16,6 +16,8 @@ const { randomUUID } = require('node:crypto');
 
 const SOURCES = Object.freeze(['cursor', 'codex', 'claude', 'grok', 'copilot', 'antigravity']);
 const GATES = Object.freeze(['mcp-auth', 'command-run', 'permission', 'review', 'attention']);
+// approve → 等待授权；select → 等待选择（AskQuestion）；input → 等待输入。
+const ACTIONS = Object.freeze(['approve', 'select', 'input']);
 const SURFACES = Object.freeze({
   cursor: 'ide', codex: 'desktop', claude: 'cli', grok: 'cli', copilot: 'cli', antigravity: 'desktop',
 });
@@ -34,6 +36,7 @@ function parseArgs(argv = process.argv.slice(2)) {
   const out = {
     source: String(process.env.POME_GATE_SOURCE || 'cursor').trim().toLowerCase() || 'cursor',
     gate: String(process.env.POME_GATE_TYPE || 'attention').trim().toLowerCase() || 'attention',
+    action: String(process.env.POME_GATE_ACTION || '').trim().toLowerCase(),
     label: process.env.POME_GATE_LABEL || '',
     dryRun: false,
     resolved: false,
@@ -44,6 +47,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     const next = () => String(argv[++index] || '');
     if (arg === '--source' || arg === '-s') out.source = next().trim().toLowerCase();
     else if (arg === '--gate' || arg === '-g') out.gate = next().trim().toLowerCase();
+    else if (arg === '--action' || arg === '-a') out.action = next().trim().toLowerCase();
     else if (arg === '--label' || arg === '--service' || arg === '-l') out.label = next();
     else if (arg === '--dry-run' || arg === '--dry') out.dryRun = true;
     else if (arg === '--resolved' || arg === '--done' || arg === '--dismiss') out.resolved = true;
@@ -57,6 +61,16 @@ function assertKnownSource(source) {
   const value = String(source || '').trim().toLowerCase();
   if (!SOURCES.includes(value)) {
     throw new Error(`unknown source "${source || ''}"; expected ${SOURCES.join('|')}`);
+  }
+  return value;
+}
+
+// 默认按门类推断：授权类门类走 approve；attention 默认 approve，选择/输入需显式 --action。
+function assertKnownAction(action, gate) {
+  const value = String(action || '').trim().toLowerCase();
+  if (!value) return 'approve';
+  if (!ACTIONS.includes(value)) {
+    throw new Error(`unknown action "${action}"; expected ${ACTIONS.join('|')}`);
   }
   return value;
 }
@@ -98,8 +112,12 @@ function labelText(label, gate) {
   return '待处理事项';
 }
 
-function questionFor(source, gate, label) {
+function questionFor(source, gate, label, action = 'approve') {
   const app = APP_NAMES[source] || '客户端';
+  // 选择 / 输入是 Cursor 等客户端的 AskQuestion 类卡点，文案与气泡类型必须对应，
+  // 否则会显示成「等待授权」，用户会去找根本不存在的授权按钮。
+  if (action === 'select') return `请到 ${app} 做选择：${label}`;
+  if (action === 'input') return `请到 ${app} 填写后继续：${label}`;
   if (gate === 'mcp-auth') return `请到 ${app} 完成 ${label} 授权`;
   if (gate === 'command-run') return `请到 ${app} 点 Run 批准：${label}`;
   if (gate === 'permission') return `请到 ${app} 完成权限确认：${label}`;
@@ -134,12 +152,14 @@ function isGateAdapter(adapter) {
 function buildGateNotification({
   source = 'cursor',
   gate = 'attention',
+  action = '',
   label = '',
   now = Date.now(),
   requestId = randomUUID(),
 } = {}) {
   const resolvedSource = assertKnownSource(source);
   const resolvedGate = assertKnownGate(gate);
+  const resolvedAction = assertKnownAction(action, resolvedGate);
   const resolvedLabel = labelText(label, resolvedGate);
   const id = String(requestId || randomUUID());
   const eventPrefix = resolvedGate === 'mcp-auth' && resolvedSource === 'cursor'
@@ -149,8 +169,8 @@ function buildGateNotification({
     source: resolvedSource,
     schemaVersion: 2,
     kind: 'attention.required',
-    action: 'approve',
-    question: questionFor(resolvedSource, resolvedGate, resolvedLabel),
+    action: resolvedAction,
+    question: questionFor(resolvedSource, resolvedGate, resolvedLabel, resolvedAction),
     project: resolvedLabel,
     eventId: `${eventPrefix}:${id}`,
     sessionId: sessionIdFor(resolvedSource, resolvedGate, resolvedLabel),
@@ -285,6 +305,7 @@ function postNotification(payload, {
 const USAGE = [
   'Usage: node scripts/agent-gate-notify.js --source <cursor|codex|claude|...> --gate <type> --label "<text>"',
   '  --gate mcp-auth|command-run|permission|review|attention',
+  '  --action approve|select|input   approve=等待授权(默认); select=等待选择(AskQuestion); input=等待输入',
   '  --label / --service   human label shown in the bubble',
   '  --resolved            close matching pending bubbles for this gate+label',
   '  --dry-run             print the event instead of posting it',
@@ -300,7 +321,7 @@ async function main(argv = process.argv.slice(2)) {
   const gate = assertKnownGate(args.gate);
   const payload = args.resolved
     ? buildGateResolvedNotification({ source, gate, label: args.label })
-    : buildGateNotification({ source, gate, label: args.label });
+    : buildGateNotification({ source, gate, action: args.action, label: args.label });
   if (args.dryRun) {
     process.stdout.write(`${JSON.stringify(payload)}\n`);
     return;
@@ -330,8 +351,10 @@ module.exports = {
   slug,
   normalizeGate,
   normalizeSource,
+  ACTIONS,
   assertKnownSource,
   assertKnownGate,
+  assertKnownAction,
   questionFor,
   sessionIdFor,
   sessionIdAliases,

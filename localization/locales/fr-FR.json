@@ -1280,6 +1280,7 @@
   "attention.return.manual": "Veuillez revenir à l'application source",
   "attention.hint": "Se ferme après manipulation dans {source}",
   "attention.hint.oauth": "Licencier après autorisation",
+  "attention.hint.answered": "Fermer après avoir répondu",
   "attention.hint.manual": "Fonctionnalités natives Windows désactivées · Cliquez pour ignorer",
   "attention.hide": "Masquer ce rappel",
   "attention.sensitive": "Contenu sensible masqué. Revenez à l’application source.",

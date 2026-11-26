@@ -1280,6 +1280,7 @@
   "attention.return.manual": "ソースアプリに戻ってください",
   "attention.hint": "{source} での処理後に閉じます",
   "attention.hint.oauth": "承認後に却下する",
+  "attention.hint.answered": "回答後に閉じる",
   "attention.hint.manual": "Windows ネイティブ機能がオフになっています · クリックして閉じます",
   "attention.hide": "このリマインダーを非表示にする",
   "attention.sensitive": "機密性の高いコンテンツは非表示になります。ソースアプリに戻ります。",
